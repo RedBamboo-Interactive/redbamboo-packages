@@ -19,6 +19,12 @@
     "publish": "pnpm build && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.4"
+    "@changesets/cli": "^2.29.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "@base-ui/react": "^1.4.1",
+    "lucide-react": "^1.7.0"
   }
 }
