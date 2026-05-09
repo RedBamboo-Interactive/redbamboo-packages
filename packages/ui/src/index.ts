@@ -36,8 +36,6 @@ export {
   SelectGroup,
   SelectItem,
   SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
   SelectSeparator,
   SelectTrigger,
   SelectValue,
@@ -49,7 +47,6 @@ export { Slider } from "./components/slider"
 
 export {
   Popover,
-  PopoverAnchor,
   PopoverContent,
   PopoverDescription,
   PopoverHeader,
@@ -59,7 +56,6 @@ export {
 
 export {
   DropdownMenu,
-  DropdownMenuPortal,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -106,3 +102,30 @@ export type {
   ModalSectionProps,
   ModalFooterProps,
 } from "./components/modal"
+
+export {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "./components/tooltip"
+
+export {
+  ScrollArea,
+  ScrollBar,
+} from "./components/scroll-area"
+
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+} from "./components/dialog"
+
+export { JsonHighlight } from "./components/json-highlight"

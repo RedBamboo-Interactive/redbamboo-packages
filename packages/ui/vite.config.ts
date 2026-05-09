@@ -19,7 +19,7 @@ export default defineConfig({
         'react',
         'react-dom',
         'react/jsx-runtime',
-        'radix-ui',
+        /^@base-ui\/react/,
         'lucide-react',
       ],
     },
