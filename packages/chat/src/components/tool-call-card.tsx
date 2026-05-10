@@ -15,7 +15,7 @@ export function ToolCallCard({ toolName, toolInput, toolResult }: Props) {
     <div className="border border-border-subtle rounded-lg overflow-hidden my-1.5">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-xs bg-contrast/[0.03] hover:bg-contrast/[0.06] transition-colors"
       >
         <i className={`fa-solid fa-chevron-right transition-transform text-[10px] ${expanded ? "rotate-90" : ""}`} />
         <i className="fa-solid fa-wrench text-text-muted" />

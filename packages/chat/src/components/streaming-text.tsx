@@ -10,7 +10,7 @@ function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: string; res
     <>
       <button
         onClick={() => setOpen(true)}
-        className="inline-block rounded-lg overflow-hidden border border-white/10 hover:border-white/30 transition-colors cursor-pointer my-1"
+        className="inline-block rounded-lg overflow-hidden border border-contrast/10 hover:border-contrast/30 transition-colors cursor-pointer my-1"
       >
         <img src={resolved} alt={alt || ""} loading="lazy" className="w-20 h-20 object-cover" />
       </button>

@@ -44,7 +44,7 @@ function FilePath({ path }: { path: string }) {
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-text-muted">
+    <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-contrast/[0.06] text-text-muted">
       {children}
     </span>
   )
@@ -110,7 +110,7 @@ function WriteView({ p }: { p: Record<string, unknown> }) {
     <div className="space-y-2">
       {path && <FilePath path={path} />}
       {content && (
-        <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-muted max-h-48 overflow-y-auto rounded-md bg-white/[0.03] px-3 py-2">
+        <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-muted max-h-48 overflow-y-auto rounded-md bg-contrast/[0.03] px-3 py-2">
           {content.length > 2000 ? content.slice(0, 2000) + "\n..." : content}
         </pre>
       )}
@@ -147,7 +147,7 @@ function GrepView({ p }: { p: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       {pattern && (
-        <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
+        <div className="inline-flex items-center gap-1.5 rounded-md bg-contrast/[0.06] px-2.5 py-1 font-mono text-xs">
           <i className="fa-solid fa-magnifying-glass text-[10px] text-text-disabled" />
           <span className="text-amber-300/90">{pattern}</span>
         </div>
@@ -172,7 +172,7 @@ function GlobView({ p }: { p: Record<string, unknown> }) {
   return (
     <div className="space-y-2">
       {pattern && (
-        <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
+        <div className="inline-flex items-center gap-1.5 rounded-md bg-contrast/[0.06] px-2.5 py-1 font-mono text-xs">
           <i className="fa-solid fa-folder-tree text-[10px] text-text-disabled" />
           <span className="text-amber-300/90">{pattern}</span>
         </div>
@@ -193,7 +193,7 @@ function AgentView({ p }: { p: Record<string, unknown> }) {
         {desc && <span className="text-xs font-medium">{desc}</span>}
       </div>
       {agentPrompt && (
-        <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-muted max-h-48 overflow-y-auto rounded-md bg-white/[0.03] px-3 py-2">
+        <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-muted max-h-48 overflow-y-auto rounded-md bg-contrast/[0.03] px-3 py-2">
           {agentPrompt.length > 2000 ? agentPrompt.slice(0, 2000) + "\n..." : agentPrompt}
         </pre>
       )}
@@ -210,7 +210,7 @@ function AgentView({ p }: { p: Record<string, unknown> }) {
 function WebSearchView({ p }: { p: Record<string, unknown> }) {
   const query = p.query as string | undefined
   return query ? (
-    <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
+    <div className="inline-flex items-center gap-1.5 rounded-md bg-contrast/[0.06] px-2.5 py-1 font-mono text-xs">
       <i className="fa-solid fa-globe text-[10px] text-text-disabled" />
       <span>{query}</span>
     </div>
@@ -220,7 +220,7 @@ function WebSearchView({ p }: { p: Record<string, unknown> }) {
 function WebFetchView({ p }: { p: Record<string, unknown> }) {
   const url = p.url as string | undefined
   return url ? (
-    <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
+    <div className="inline-flex items-center gap-1.5 rounded-md bg-contrast/[0.06] px-2.5 py-1 font-mono text-xs">
       <i className="fa-solid fa-globe text-[10px] text-text-disabled" />
       <span className="text-blue-300/80">{url}</span>
     </div>

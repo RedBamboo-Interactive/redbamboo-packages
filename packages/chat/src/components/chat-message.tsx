@@ -27,13 +27,13 @@ const mutatingTools = new Set([
 const shellTools = new Set(["Bash", "PowerShell"])
 
 const COLOR = {
-  thinking: "#7C4DFF",
-  readOnly: "#26A69A",
-  mutating: "#D4AA4F",
-  shell: "#D4AA4F",
-  result: "#3D7A73",
-  error: "#E55B5B",
-  fallback: "#555",
+  thinking: "var(--color-accent-purple)",
+  readOnly: "var(--color-accent-teal)",
+  mutating: "var(--color-accent-gold)",
+  shell: "var(--color-accent-gold)",
+  result: "color-mix(in oklch, var(--color-accent-teal), black 30%)",
+  error: "var(--color-accent-red)",
+  fallback: "var(--color-text-disabled)",
 }
 
 export function getPartColor(part: MessagePart): string {
@@ -54,16 +54,16 @@ export function getSpinnerColor(messages: MessageBlock[]): string {
     if (block.role !== "assistant") continue
     for (let j = block.parts.length - 1; j >= 0; j--) {
       const part = block.parts[j]
-      if (part.type === "thinking") return "#7C4DFF"
+      if (part.type === "thinking") return COLOR.thinking
       if (part.type === "tool_use" && part.toolName) {
-        if (readOnlyTools.has(part.toolName)) return "#26A69A"
-        if (mutatingTools.has(part.toolName)) return "#D4AA4F"
-        if (shellTools.has(part.toolName)) return "#D4AA4F"
+        if (readOnlyTools.has(part.toolName)) return COLOR.readOnly
+        if (mutatingTools.has(part.toolName)) return COLOR.mutating
+        if (shellTools.has(part.toolName)) return COLOR.shell
       }
-      if (part.type === "text") return "#26A69A"
+      if (part.type === "text") return COLOR.readOnly
     }
   }
-  return "#26A69A"
+  return COLOR.readOnly
 }
 
 function isPlanFile(path: string): boolean {
@@ -121,7 +121,7 @@ export function ChatMessage({
     const images = block.parts[0]?.images
     return (
       <div className="flex justify-end mb-3 msg-enter-user">
-        <div className="max-w-[80%] bg-white/10 rounded-xl rounded-br-sm px-4 py-2.5">
+        <div className="max-w-[80%] bg-contrast/10 rounded-xl rounded-br-sm px-4 py-2.5">
           {images && images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
               {images.map((img: ImageAttachment, i: number) => (
@@ -129,7 +129,7 @@ export function ChatMessage({
                   key={i}
                   src={`data:${img.mediaType};base64,${img.base64}`}
                   alt=""
-                  className="max-h-48 rounded-md border border-white/10"
+                  className="max-h-48 rounded-md border border-contrast/10"
                 />
               ))}
             </div>
@@ -297,7 +297,7 @@ function PartModal({ part, pairedResult, open, onClose }: { part?: MessagePart; 
           />
           <DialogTitle className="text-sm">{partLabel(part)}</DialogTitle>
           {category && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-text-disabled">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-contrast/[0.06] text-text-disabled">
               {category}
             </span>
           )}
@@ -479,7 +479,7 @@ function QuestionCard({ question, answered, onAnswer }: {
             onKeyDown={handleKeyDown}
             placeholder="Type your answer..."
             rows={1}
-            className="flex-1 resize-none bg-white/[0.06] rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500/50"
+            className="flex-1 resize-none bg-contrast/[0.06] rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500/50"
           />
           <button
             onClick={handleSubmit}
