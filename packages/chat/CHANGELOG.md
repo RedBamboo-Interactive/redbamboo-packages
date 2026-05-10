@@ -1,5 +1,11 @@
 # @redbamboo/chat
 
+## 0.2.0
+
+### Minor Changes
+
+- 358b9b5: Add StreamingStatusLine component and onResume prop to Composer
+
 ## 0.1.1
 
 ### Patch Changes
