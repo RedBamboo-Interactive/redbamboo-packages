@@ -200,23 +200,11 @@
 
 /* ── Global styles ─────────────────────────────────────────────────── */
 
-html, body {
-  height: 100%;
-  overflow: hidden;
-  background: var(--background);
-}
-
 body {
   margin: 0;
+  background: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-#root {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  overflow: hidden;
 }
 
 * {
