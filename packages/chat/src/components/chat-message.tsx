@@ -421,7 +421,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
                 onClick={() => { onExecute(); setShowPlan(false) }}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-violet-500/25 hover:bg-violet-500/40 text-violet-200 text-sm font-medium transition-colors"
               >
-                <Play size={12} />
+                <i className="fa-solid fa-play" />
                 Execute Plan
               </button>
             </div>

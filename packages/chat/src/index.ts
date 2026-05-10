@@ -7,6 +7,13 @@ export type {
   ChatEvent,
   ChatBackend,
   ChatPanelProps,
+  SpeechBackend,
+  SpeakOptions,
+  ConversationEntry,
+  VoiceInputState,
+  VoiceInputHandle,
+  ExchangeState,
+  HandsFreeContextValue,
 } from "./types"
 
 export { ChatPanel } from "./components/chat-panel"
@@ -18,3 +25,10 @@ export { ToolInputView } from "./components/tool-input-view"
 export { ToolOutputView } from "./components/tool-output-view"
 export { ToolCallCard } from "./components/tool-call-card"
 export { useChatStream } from "./hooks/use-chat-stream"
+export { useVoiceInput } from "./hooks/use-voice-input"
+export { useGlobalHandsFree } from "./hooks/use-hands-free"
+export type { HandsFreeParams } from "./hooks/use-hands-free"
+export { HandsFreeContext, useHandsFree } from "./contexts/hands-free"
+export { AudioRecorder } from "./lib/audio-recorder"
+export { AudioPlayer } from "./lib/audio-player"
+export { filterConversation } from "./lib/conversation-filter"

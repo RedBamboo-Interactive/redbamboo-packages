@@ -36,6 +36,66 @@ export interface ChatBackend {
   reset?(): Promise<void>
 }
 
+// --- Speech / voice types ---
+
+export interface SpeechBackend {
+  transcribe(audio: Blob, signal?: AbortSignal): Promise<string>
+  speak(text: string, options?: SpeakOptions, signal?: AbortSignal): Promise<ArrayBuffer>
+  reformulate?(rawText: string, context: ConversationEntry[], signal?: AbortSignal): Promise<string>
+  summarize?(context: ConversationEntry[], sessionName: string, signal?: AbortSignal): Promise<string>
+}
+
+export interface SpeakOptions {
+  voice?: string
+  instructions?: string
+}
+
+export interface ConversationEntry {
+  role: "user" | "assistant"
+  content: string
+}
+
+export type VoiceInputState = "idle" | "recording" | "processing" | "error"
+
+export interface VoiceInputHandle {
+  state: VoiceInputState
+  error: string | null
+  transcript: string | null
+  startRecording: () => Promise<void>
+  stopRecording: () => Promise<void>
+  cancelRecording: () => void
+}
+
+export type ExchangeState =
+  | "idle"
+  | "summarizing"
+  | "speaking"
+  | "waiting"
+  | "listening"
+  | "processing"
+  | "sending"
+  | "error"
+
+export interface HandsFreeContextValue {
+  enabled: boolean
+  exchangeState: ExchangeState
+  currentSessionId: string | null
+  currentSessionTitle: string | null
+  queueLength: number
+  lastSummary: string | null
+  lastTranscript: string | null
+  error: string | null
+  sessionCount: number
+  enable: () => Promise<void>
+  disable: () => void
+  skip: () => void
+  startListening: () => Promise<void>
+  stopListening: () => Promise<void>
+  cancelListening: () => void
+}
+
+// --- ChatPanel types ---
+
 export interface ChatPanelProps {
   backend: ChatBackend
   placeholder?: string
