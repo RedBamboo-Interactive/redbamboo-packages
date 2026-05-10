@@ -4,14 +4,18 @@
   "description": "Streaming chat UI with adapter-based backend — for CodeRed, Nova, and beyond",
   "type": "module",
   "license": "MIT",
+  "sideEffects": [
+    "*.css"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./src/index.ts"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build": "vite build",
@@ -24,17 +28,25 @@
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwindcss": "^4.0.0"
+    "tailwindcss": "^4.0.0",
+    "lucide-react": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "lucide-react": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@redbamboo/ui": "workspace:*",
     "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "lucide-react": "^1.14.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "typescript": "~5.9.3",

@@ -20,6 +20,8 @@ export default defineConfig({
         'react-dom',
         'react/jsx-runtime',
         '@redbamboo/ui',
+        'lucide-react',
+        /^highlight\.js/,
       ],
     },
   },
