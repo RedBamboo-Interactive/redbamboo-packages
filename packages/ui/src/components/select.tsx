@@ -1,6 +1,4 @@
 import { Select as SelectPrimitive } from "@base-ui/react/select"
-import { ChevronDownIcon, CheckIcon } from "lucide-react"
-
 import { cn } from "../utils"
 
 function Select({
@@ -35,7 +33,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon data-slot="select-icon">
-        <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
+        <i className="fa-solid fa-chevron-down pointer-events-none size-4 text-muted-foreground" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -88,7 +86,7 @@ function SelectItem({
     >
       <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="pointer-events-none" />
+          <i className="fa-solid fa-check pointer-events-none" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

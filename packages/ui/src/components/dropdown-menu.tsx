@@ -1,7 +1,5 @@
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
-import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
-
 import { cn } from "../utils"
 
 function DropdownMenu({
@@ -88,7 +86,7 @@ function DropdownMenuCheckboxItem({
     >
       <span className="pointer-events-none absolute left-2 flex size-4 items-center justify-center">
         <MenuPrimitive.CheckboxItemIndicator>
-          <CheckIcon className="size-4" />
+          <i className="fa-solid fa-check size-4" />
         </MenuPrimitive.CheckboxItemIndicator>
       </span>
       {children}
@@ -118,7 +116,7 @@ function DropdownMenuRadioItem({
     >
       <span className="pointer-events-none absolute left-2 flex size-4 items-center justify-center">
         <MenuPrimitive.RadioItemIndicator>
-          <CircleIcon className="size-2 fill-current" />
+          <i className="fa-solid fa-circle size-2" />
         </MenuPrimitive.RadioItemIndicator>
       </span>
       {children}
@@ -199,7 +197,7 @@ function DropdownMenuSubTrigger({
       {...props}
     >
       {children}
-      <ChevronRightIcon className="ml-auto size-4" />
+      <i className="fa-solid fa-chevron-right ml-auto size-4" />
     </MenuPrimitive.SubmenuTrigger>
   )
 }

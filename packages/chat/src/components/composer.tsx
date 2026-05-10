@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react"
-import { ImageIcon, Paperclip, Send, Square, Compass, Zap, X } from "lucide-react"
 import type { ImageAttachment } from "../types"
 
 interface ComposerProps {
@@ -241,7 +240,7 @@ export function Composer({
                     onClick={() => removeImage(i)}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500/80 hover:bg-red-500 text-white text-[10px] flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   >
-                    <X size={10} />
+                    <i className="fa-solid fa-xmark" />
                   </button>
                 </div>
               ))}
@@ -269,7 +268,7 @@ export function Composer({
                 className="w-7 h-7 flex items-center justify-center rounded text-text-muted/50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Attach image"
               >
-                <ImageIcon size={12} />
+                <i className="fa-solid fa-image text-xs" />
               </button>
             )}
             {enableFileAttachments && (
@@ -279,7 +278,7 @@ export function Composer({
                 className="w-7 h-7 flex items-center justify-center rounded text-text-muted/50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Attach file"
               >
-                <Paperclip size={12} />
+                <i className="fa-solid fa-paperclip text-xs" />
               </button>
             )}
           </div>
@@ -294,7 +293,7 @@ export function Composer({
               } disabled:opacity-30 disabled:cursor-not-allowed`}
               title="Toggle plan mode (Shift+Tab)"
             >
-              {isPlan ? <Compass size={12} /> : <Zap size={12} />}
+              <i className={`fa-solid ${isPlan ? "fa-compass-drafting" : "fa-bolt"} w-3 inline-block text-center`} />
               {isPlan ? "Plan" : "Act"}
             </button>
           )}
@@ -304,7 +303,7 @@ export function Composer({
               className="w-full px-3 py-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors flex items-center justify-center"
               title="Interrupt (Escape)"
             >
-              <Square size={14} />
+              <i className="fa-solid fa-stop text-sm" />
             </button>
           ) : (
             <button
@@ -312,7 +311,7 @@ export function Composer({
               disabled={disabled || (!value.trim() && images.length === 0)}
               className="w-full px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
-              <Send size={14} />
+              <i className="fa-solid fa-paper-plane text-sm" />
             </button>
           )}
         </div>

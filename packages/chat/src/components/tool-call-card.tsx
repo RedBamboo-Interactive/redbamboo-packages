@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { ChevronRight, Wrench } from "lucide-react"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output-view"
 
@@ -18,8 +17,8 @@ export function ToolCallCard({ toolName, toolInput, toolResult }: Props) {
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
       >
-        <ChevronRight size={10} className={`transition-transform ${expanded ? "rotate-90" : ""}`} />
-        <Wrench size={12} className="text-text-muted" />
+        <i className={`fa-solid fa-chevron-right transition-transform text-[10px] ${expanded ? "rotate-90" : ""}`} />
+        <i className="fa-solid fa-wrench text-text-muted" />
         <span className="font-mono font-medium text-amber-300">{toolName}</span>
         {toolResult && !expanded && (
           <span className="ml-auto text-text-muted truncate max-w-[200px]">

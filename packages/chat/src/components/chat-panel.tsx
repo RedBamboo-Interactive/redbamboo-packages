@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react"
-import { ArrowDown, Terminal } from "lucide-react"
 import type { ChatPanelProps, MessageBlock as MessageBlockType } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { ChatMessage, getSpinnerColor, extractPlanFileContent } from "./chat-message"
@@ -67,7 +66,7 @@ export function ChatPanel({
       <div className={`flex-1 flex flex-col min-h-0 min-w-0 ${className || ""}`}>
         <div className="flex-1 flex items-center justify-center text-text-muted">
           <div className="text-center">
-            <Terminal size={28} className="mx-auto mb-3 opacity-30" />
+            <i className="fa-regular fa-square-terminal text-3xl mx-auto mb-3 opacity-30" />
             <p className="text-sm">Send a message to get started</p>
           </div>
         </div>
@@ -124,7 +123,7 @@ export function ChatPanel({
           className="absolute bottom-20 right-6 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors shadow-lg border border-border-subtle"
           title="Scroll to bottom"
         >
-          <ArrowDown size={12} />
+          <i className="fa-solid fa-arrow-down text-xs" />
         </button>
       )}
 

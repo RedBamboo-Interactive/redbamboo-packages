@@ -1,6 +1,4 @@
 import { useEffect } from "react"
-import { X } from "lucide-react"
-
 import { cn } from "../utils"
 import { Card, CardHeader } from "./card"
 import { Button } from "./button"
@@ -71,7 +69,7 @@ export function ModalHeader({ icon, title, badges, subtitle, onClose, closeLabel
           </div>
         </div>
         <Button variant="ghost" size="icon-xs" onClick={onClose} aria-label={closeLabel ?? "Close"}>
-          <X className="w-4 h-4" />
+          <i className="fa-solid fa-xmark w-4 h-4" />
         </Button>
       </div>
     </CardHeader>

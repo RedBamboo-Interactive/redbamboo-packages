@@ -1,7 +1,5 @@
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
-import { XIcon } from "lucide-react"
-
 import { cn } from "../utils"
 import { Button } from "./button"
 
@@ -68,7 +66,7 @@ function DialogContent({
               />
             }
           >
-            <XIcon />
+            <i className="fa-solid fa-xmark" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

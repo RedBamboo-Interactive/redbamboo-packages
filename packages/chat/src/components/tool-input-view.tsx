@@ -1,4 +1,3 @@
-import { Search, FolderTree, Globe } from "lucide-react"
 import { JsonHighlight } from "@redbamboo/ui"
 
 interface Props {
@@ -149,7 +148,7 @@ function GrepView({ p }: { p: Record<string, unknown> }) {
     <div className="space-y-2">
       {pattern && (
         <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
-          <Search size={10} className="text-text-disabled" />
+          <i className="fa-solid fa-magnifying-glass text-[10px] text-text-disabled" />
           <span className="text-amber-300/90">{pattern}</span>
         </div>
       )}
@@ -174,7 +173,7 @@ function GlobView({ p }: { p: Record<string, unknown> }) {
     <div className="space-y-2">
       {pattern && (
         <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
-          <FolderTree size={10} className="text-text-disabled" />
+          <i className="fa-solid fa-folder-tree text-[10px] text-text-disabled" />
           <span className="text-amber-300/90">{pattern}</span>
         </div>
       )}
@@ -212,7 +211,7 @@ function WebSearchView({ p }: { p: Record<string, unknown> }) {
   const query = p.query as string | undefined
   return query ? (
     <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
-      <Globe size={10} className="text-text-disabled" />
+      <i className="fa-solid fa-globe text-[10px] text-text-disabled" />
       <span>{query}</span>
     </div>
   ) : <JsonHighlight json={JSON.stringify(p, null, 2)} />
@@ -222,7 +221,7 @@ function WebFetchView({ p }: { p: Record<string, unknown> }) {
   const url = p.url as string | undefined
   return url ? (
     <div className="inline-flex items-center gap-1.5 rounded-md bg-white/[0.06] px-2.5 py-1 font-mono text-xs">
-      <Globe size={10} className="text-text-disabled" />
+      <i className="fa-solid fa-globe text-[10px] text-text-disabled" />
       <span className="text-blue-300/80">{url}</span>
     </div>
   ) : <JsonHighlight json={JSON.stringify(p, null, 2)} />

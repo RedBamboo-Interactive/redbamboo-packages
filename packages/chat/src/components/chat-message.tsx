@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react"
-import { Compass, Play, Eye, Check, CircleHelp, Send } from "lucide-react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
@@ -369,7 +368,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
     <>
       <div className="my-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.08] p-3">
         <div className="flex items-center gap-2 mb-2">
-          <Compass size={14} className="text-violet-400" />
+          <i className="fa-solid fa-compass-drafting text-sm text-violet-400" />
           <span className="text-sm font-medium text-violet-300">Plan ready for review</span>
         </div>
         <p className="text-xs text-text-muted mb-3">
@@ -381,7 +380,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
               onClick={onExecute}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500/25 hover:bg-violet-500/40 text-violet-200 text-xs font-medium transition-colors"
             >
-              <Play size={10} />
+              <i className="fa-solid fa-play" />
               Execute Plan
             </button>
           )}
@@ -390,13 +389,13 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
               onClick={() => setShowPlan(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500/15 hover:bg-violet-500/30 text-violet-300 text-xs font-medium transition-colors"
             >
-              <Eye size={10} />
+              <i className="fa-solid fa-eye" />
               View Plan
             </button>
           )}
           {alreadyExecuting && (
             <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-              <Check size={12} className="text-green-400" />
+              <i className="fa-solid fa-check text-xs text-green-400" />
               Plan accepted — executing
             </span>
           )}
@@ -406,7 +405,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
       <Dialog open={showPlan && !!planText} onOpenChange={v => { if (!v) setShowPlan(false) }}>
         <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-            <Compass size={14} className="text-violet-400" />
+            <i className="fa-solid fa-compass-drafting text-sm text-violet-400" />
             <DialogTitle className="text-sm text-violet-300">Plan</DialogTitle>
           </DialogHeader>
 
@@ -462,13 +461,13 @@ function QuestionCard({ question, answered, onAnswer }: {
   return (
     <div className="my-3 rounded-lg border border-teal-500/30 bg-teal-500/[0.08] p-3">
       <div className="flex items-center gap-2 mb-2">
-        <CircleHelp size={14} className="text-teal-400" />
+        <i className="fa-solid fa-circle-question text-sm text-teal-400" />
         <span className="text-sm font-medium text-teal-300">Question</span>
       </div>
       <p className="text-sm text-text-primary mb-3 font-serif">{question}</p>
       {answered ? (
         <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-          <Check size={12} className="text-green-400" />
+          <i className="fa-solid fa-check text-xs text-green-400" />
           Answered
         </span>
       ) : onAnswer ? (
@@ -487,7 +486,7 @@ function QuestionCard({ question, answered, onAnswer }: {
             disabled={!value.trim()}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-teal-500/25 hover:bg-teal-500/40 text-teal-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <Send size={10} />
+            <i className="fa-solid fa-paper-plane" />
             Answer
           </button>
         </div>
