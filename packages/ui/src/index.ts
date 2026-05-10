@@ -129,3 +129,13 @@ export {
 } from "./components/dialog"
 
 export { JsonHighlight } from "./components/json-highlight"
+
+export {
+  AppHeader,
+  AppHeaderBrand,
+} from "./components/app-header"
+
+export type {
+  AppHeaderProps,
+  AppHeaderBrandProps,
+} from "./components/app-header"
