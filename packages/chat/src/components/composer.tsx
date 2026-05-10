@@ -11,6 +11,7 @@ interface ComposerProps {
   onTogglePlanMode?: () => void
   pendingQuestion?: boolean
   onAnswerQuestion?: (answer: string) => void
+  onResume?: () => void | Promise<void>
   sessionId?: string | null
   renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean }) => React.ReactNode
   enableImageAttachments?: boolean
@@ -43,6 +44,7 @@ export function Composer({
   onTogglePlanMode,
   pendingQuestion,
   onAnswerQuestion,
+  onResume,
   sessionId,
   renderInlineAction,
   enableImageAttachments = true,
@@ -51,6 +53,7 @@ export function Composer({
   const [value, setValue] = useState("")
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
+  const [interrupted, setInterrupted] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const draftsRef = useRef<Record<string, { value: string; images: ImageAttachment[] }>>({})
   const prevSessionRef = useRef<string | null | undefined>(undefined)
@@ -85,6 +88,12 @@ export function Composer({
     if (sessionId) textareaRef.current?.focus()
   }, [sessionId])
 
+  useEffect(() => {
+    if (!isStreaming) setInterrupted(false)
+  }, [isStreaming])
+
+  const streaming = isStreaming && !interrupted
+
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -94,9 +103,25 @@ export function Composer({
     if (valid.length) setImages(prev => [...prev, ...valid])
   }, [])
 
+  const doInterrupt = useCallback(() => {
+    setInterrupted(true)
+    onInterrupt()
+    textareaRef.current?.focus()
+  }, [onInterrupt])
+
   const handleSubmit = useCallback(() => {
-    if (isStreaming) {
-      onInterrupt()
+    if (streaming) {
+      const trimmed = value.trim()
+      if (trimmed || images.length > 0) {
+        setInterrupted(true)
+        onSend(trimmed, images.length > 0 ? images : undefined)
+        setValue("")
+        setImages([])
+        if (sessionId) delete draftsRef.current[sessionId]
+        if (textareaRef.current) textareaRef.current.style.height = "auto"
+      } else {
+        doInterrupt()
+      }
       return
     }
     const trimmed = value.trim()
@@ -117,12 +142,12 @@ export function Composer({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
     }
-  }, [value, images, disabled, isStreaming, onSend, onInterrupt, pendingQuestion, onAnswerQuestion, sessionId])
+  }, [value, images, disabled, streaming, onSend, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape" && isStreaming) {
+    if (e.key === "Escape" && streaming) {
       e.preventDefault()
-      onInterrupt()
+      doInterrupt()
       return
     }
     if (e.key === "Tab" && e.shiftKey && onTogglePlanMode) {
@@ -188,12 +213,12 @@ export function Composer({
     if (fileInputRef.current) fileInputRef.current.value = ""
   }, [])
 
-  const inputDisabled = disabled && !isStreaming
+  const inputDisabled = disabled && !streaming
   const isPlan = permissionMode === "plan"
 
   const defaultPlaceholder = inputDisabled
     ? "Session not active"
-    : isStreaming
+    : streaming
       ? "Press Escape to interrupt, or type a follow-up..."
       : pendingQuestion
         ? "Type your answer here..."
@@ -257,7 +282,7 @@ export function Composer({
             rows={1}
             className="message-input-textarea w-full flex-1 resize-none bg-transparent px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none disabled:opacity-50"
           />
-          {renderInlineAction?.({ value, isStreaming, disabled: inputDisabled, hasImages: images.length > 0 })}
+          {renderInlineAction?.({ value, isStreaming: streaming, disabled: inputDisabled, hasImages: images.length > 0 })}
         </div>
         <div className="flex flex-col justify-end gap-1.5 shrink-0 w-16">
           <div className="flex justify-center gap-1">
@@ -297,13 +322,21 @@ export function Composer({
               {isPlan ? "Plan" : "Act"}
             </button>
           )}
-          {isStreaming ? (
+          {streaming ? (
             <button
-              onClick={onInterrupt}
+              onClick={doInterrupt}
               className="w-full px-3 py-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors flex items-center justify-center"
               title="Interrupt (Escape)"
             >
               <i className="fa-solid fa-stop text-sm" />
+            </button>
+          ) : disabled && onResume ? (
+            <button
+              onClick={onResume}
+              className="w-full px-3 py-2 rounded-md bg-accent-gold/20 hover:bg-accent-gold/30 text-accent-gold transition-colors flex items-center justify-center"
+              title="Resume session"
+            >
+              <i className="fa-solid fa-rotate-right text-sm" />
             </button>
           ) : (
             <button

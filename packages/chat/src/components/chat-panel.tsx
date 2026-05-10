@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import type { ChatPanelProps, MessageBlock as MessageBlockType } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
-import { ChatMessage, getSpinnerColor, extractPlanFileContent } from "./chat-message"
+import { ChatMessage, extractPlanFileContent } from "./chat-message"
 import { Composer } from "./composer"
-import { MorphSpinner } from "./morph-spinner"
+import { StreamingStatusLine } from "./streaming-status-line"
 
 export function ChatPanel({
   backend,
@@ -22,7 +22,6 @@ export function ChatPanel({
   const contentRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const spinnerColor = useMemo(() => getSpinnerColor(messages), [messages])
   const planFileContent = useMemo(() => extractPlanFileContent(messages), [messages])
 
   const scrollToEnd = useCallback(() => {
@@ -106,14 +105,10 @@ export function ChatPanel({
               />
             )
           })}
-          {renderStatusLine ? (
-            renderStatusLine({ isStreaming, messages })
-          ) : isStreaming ? (
-            <div className="flex items-center gap-2.5 text-text-muted text-sm py-1">
-              <MorphSpinner color={spinnerColor} />
-              <span>Responding...</span>
-            </div>
-          ) : null}
+          {renderStatusLine
+            ? renderStatusLine({ isStreaming, messages })
+            : <StreamingStatusLine isStreaming={isStreaming} messages={messages} />
+          }
         </div>
       </div>
 

@@ -114,9 +114,26 @@ export function useChatStream(backend: ChatBackend) {
     }
   }, [backend, processEvent])
 
-  const interrupt = useCallback(async () => {
+  const interrupt = useCallback(() => {
+    setIsStreaming(false)
+
+    setMessages(prev => {
+      if (!prev.length) return prev
+      const lastBlock = prev[prev.length - 1]
+      if (lastBlock.role !== "assistant") return prev
+      const hasPartial = lastBlock.parts.some(p => p.isPartial)
+      if (!hasPartial) return prev
+      const updatedParts = lastBlock.parts.map(p => p.isPartial ? { ...p, isPartial: false } : p)
+      return [...prev.slice(0, -1), { ...lastBlock, parts: updatedParts }]
+    })
+
+    if (unsubRef.current) {
+      unsubRef.current()
+      unsubRef.current = null
+    }
+
     if (sessionIdRef.current && backend.interrupt) {
-      await backend.interrupt(sessionIdRef.current)
+      backend.interrupt(sessionIdRef.current).catch(() => {})
     }
   }, [backend])
 
