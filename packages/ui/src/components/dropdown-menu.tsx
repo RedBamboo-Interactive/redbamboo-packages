@@ -19,11 +19,13 @@ function DropdownMenuTrigger({
 function DropdownMenuContent({
   className,
   sideOffset = 4,
+  side,
+  align,
   ...props
-}: MenuPrimitive.Popup.Props & Pick<MenuPrimitive.Positioner.Props, "sideOffset">) {
+}: MenuPrimitive.Popup.Props & Pick<MenuPrimitive.Positioner.Props, "sideOffset" | "side" | "align">) {
   return (
     <MenuPrimitive.Portal>
-      <MenuPrimitive.Positioner sideOffset={sideOffset} className="z-50">
+      <MenuPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} className="z-50">
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(
