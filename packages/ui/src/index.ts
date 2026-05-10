@@ -146,3 +146,29 @@ export type {
   AppHeaderProps,
   AppHeaderBrandProps,
 } from "./components/app-header"
+
+export {
+  ToastProvider,
+  useToast,
+} from "./components/toast"
+
+export type {
+  Toast,
+  ToastUpdate,
+  ToastVariant,
+} from "./components/toast"
+
+export {
+  FeedbackDialog,
+  FeedbackButton,
+  collectSystemInfo,
+} from "./components/feedback-dialog"
+
+export type {
+  FeedbackCategory,
+  FeedbackSubmission,
+  FeedbackResult,
+  SystemInfo,
+  FeedbackDialogProps,
+  FeedbackButtonProps,
+} from "./components/feedback-dialog"
