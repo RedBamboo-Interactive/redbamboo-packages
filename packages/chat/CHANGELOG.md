@@ -1,5 +1,13 @@
 # @redbamboo/chat
 
+## 0.1.1
+
+### Patch Changes
+
+- 6eb9765: Republish with working pipeline (no OIDC provenance)
+- Updated dependencies [6eb9765]
+  - @redbamboo/ui@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes
