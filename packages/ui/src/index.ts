@@ -130,6 +130,13 @@ export {
 
 export { JsonHighlight } from "./components/json-highlight"
 
+export { AboutDialog } from "./components/about-dialog"
+
+export type {
+  AboutApp,
+  AboutDialogProps,
+} from "./components/about-dialog"
+
 export {
   AppHeader,
   AppHeaderBrand,
