@@ -1,6 +1,6 @@
 {
   "name": "@redbamboo/chat",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Streaming chat UI with adapter-based backend — for CodeRed, Nova, and beyond",
   "type": "module",
   "license": "MIT",
