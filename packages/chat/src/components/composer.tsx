@@ -222,7 +222,7 @@ export function Composer({
       )}
       <div className="max-w-3xl mx-auto flex gap-2 items-stretch">
         <div
-          className={`flex-1 flex flex-col rounded-lg bg-contrast/[0.06] shadow-lg transition-colors relative ${dragOver ? "ring-2 ring-accent-gold/50" : ""}`}
+          className={`flex-1 flex flex-col rounded-lg bg-contrast/[0.06] shadow-md transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative focus-within:scale-[1.005] focus-within:shadow-xl ${dragOver ? "ring-2 ring-accent-gold/50" : ""}`}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
