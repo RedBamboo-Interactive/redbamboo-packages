@@ -1,30 +1,22 @@
 import type { MessageBlock, ConversationEntry } from "../types"
 
+const MAX_ENTRIES = 6
+const MAX_CHARS = 200
+
 export function filterConversation(messages: MessageBlock[]): ConversationEntry[] {
-  const result: ConversationEntry[] = []
+  const textOnly: ConversationEntry[] = []
 
   for (const block of messages) {
     const parts: string[] = []
-
     for (const part of block.parts) {
-      switch (part.type) {
-        case "text":
-          if (part.content.trim()) parts.push(part.content.trim())
-          break
-        case "tool_use":
-          if (part.toolName) parts.push(`[Used tool: ${part.toolName}]`)
-          break
-        case "error":
-          if (part.content.trim()) parts.push(`[Error: ${part.content.trim()}]`)
-          break
-      }
+      if (part.type === "text" && part.content.trim()) parts.push(part.content.trim())
     }
-
     const content = parts.join("\n")
     if (content) {
-      result.push({ role: block.role, content })
+      const truncated = content.length > MAX_CHARS ? content.slice(0, MAX_CHARS) + "…" : content
+      textOnly.push({ role: block.role, content: truncated })
     }
   }
 
-  return result
+  return textOnly.slice(-MAX_ENTRIES)
 }

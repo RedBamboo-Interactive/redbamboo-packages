@@ -49,24 +49,9 @@ export const DEFAULT_SUMMARIZE_PROMPT = `You are a calm, confident voice concier
 // Guardrails
 // ---------------------------------------------------------------------------
 
-const REFORMULATE_POISON_PREFIXES = [
-  "sure", "okay", "i'll", "i will", "let me", "here's", "here is",
-  "i understand", "i can", "absolutely", "of course", "no problem",
-  "certainly", "got it",
-]
-
 function sanitizeReformulation(raw: string, input: string): string {
   const result = raw.trim()
-  if (!result) return input
-
-  const lower = result.toLowerCase()
-  for (const prefix of REFORMULATE_POISON_PREFIXES) {
-    if (lower.startsWith(prefix)) return input
-  }
-
-  if (result.length > input.length * 3 && input.length > 10) return input
-
-  return result
+  return result || input
 }
 
 // ---------------------------------------------------------------------------
@@ -104,7 +89,7 @@ export function createSpeechBackend({
       const resp = await transport.prompt({
         model,
         system: reformulatePrompt,
-        messages: [...context, { role: "user" as const, content: rawText }],
+        messages: [...context, { role: "user" as const, content: `Raw speech-to-text transcription to clean up:\n${rawText}` }],
         maxTokens: reformulateMaxTokens,
       }, signal)
       return sanitizeReformulation(resp.text, rawText)
