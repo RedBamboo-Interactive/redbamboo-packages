@@ -43,7 +43,7 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary" }: AppHe
 
 function AppHeader({ brand, children, className }: AppHeaderProps) {
   return (
-    <header className={cn(
+    <header data-slot="app-header" className={cn(
       "shrink-0 flex items-center gap-3 px-4 py-2 border-b border-border/60",
       className,
     )}>
