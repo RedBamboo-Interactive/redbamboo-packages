@@ -7,6 +7,12 @@ export interface AppShellBrand {
   accentClass?: string
 }
 
+export interface AppShellShare {
+  url: () => string | undefined
+  title?: string
+  description?: string
+}
+
 export interface AppShellConfig {
   name: string
   version: string
@@ -21,6 +27,8 @@ export interface AppShellConfig {
   }
 
   latestVersion?: string
+
+  share?: AppShellShare
 
   onFeedbackSubmit?: (submission: FeedbackSubmission) => Promise<FeedbackResult>
   feedbackMetadata?: Record<string, string>
