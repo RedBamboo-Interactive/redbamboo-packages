@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import type { FeedbackSubmission, FeedbackResult } from "@redbamboo/ui"
+import type { FeedbackSubmission, FeedbackResult } from "./feedback-dialog"
 
 export interface AppShellBrand {
   icon: string

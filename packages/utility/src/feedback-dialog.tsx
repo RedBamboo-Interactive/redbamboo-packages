@@ -1,23 +1,21 @@
 import * as React from "react"
-import { cn } from "../utils"
 import {
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./dialog"
-import { Button } from "./button"
-import { Label } from "./label"
-import { Separator } from "./separator"
-import {
+  Button,
+  Label,
+  Separator,
   Collapsible,
   CollapsibleTrigger,
   CollapsibleContent,
-} from "./collapsible"
+} from "@redbamboo/ui"
 
-// ── Types ──────────────────────────────────────────────────────────────
+// -- Types ------------------------------------------------------------------
 
 export type FeedbackCategory = "bug" | "feature" | "suggestion"
 
@@ -58,7 +56,7 @@ export interface FeedbackButtonProps {
   variant?: "menu-item" | "button"
 }
 
-// ── Utilities ──────────────────────────────────────────────────────────
+// -- Utilities --------------------------------------------------------------
 
 function parseBrowser(ua: string): string {
   if (ua.includes("Firefox/")) {
@@ -116,7 +114,7 @@ export function collectSystemInfo(app: { name: string; version: string }): Syste
   }
 }
 
-// ── Components ─────────────────────────────────────────────────────────
+// -- Components -------------------------------------------------------------
 
 const categories: { value: FeedbackCategory; label: string; icon: string }[] = [
   { value: "bug", label: "Bug", icon: "fa-solid fa-bug" },

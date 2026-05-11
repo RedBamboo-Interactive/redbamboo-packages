@@ -9,12 +9,12 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
-  AboutDialog,
-  FeedbackDialog,
   ToastProvider,
   useToast,
 } from "@redbamboo/ui"
-import type { FeedbackSubmission } from "@redbamboo/ui"
+import { AboutDialog } from "./about-dialog"
+import { FeedbackDialog } from "./feedback-dialog"
+import type { FeedbackSubmission } from "./feedback-dialog"
 import { CommandProvider } from "./command-provider"
 import { CommandPalette, openCommandPalette } from "./command-palette"
 import { useCommand } from "./use-command"

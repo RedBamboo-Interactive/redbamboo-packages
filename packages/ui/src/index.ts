@@ -130,13 +130,6 @@ export {
 
 export { JsonHighlight } from "./components/json-highlight"
 
-export { AboutDialog } from "./components/about-dialog"
-
-export type {
-  AboutApp,
-  AboutDialogProps,
-} from "./components/about-dialog"
-
 export {
   AppHeader,
   AppHeaderBrand,
@@ -157,18 +150,3 @@ export type {
   ToastUpdate,
   ToastVariant,
 } from "./components/toast"
-
-export {
-  FeedbackDialog,
-  FeedbackButton,
-  collectSystemInfo,
-} from "./components/feedback-dialog"
-
-export type {
-  FeedbackCategory,
-  FeedbackSubmission,
-  FeedbackResult,
-  SystemInfo,
-  FeedbackDialogProps,
-  FeedbackButtonProps,
-} from "./components/feedback-dialog"

@@ -1,14 +1,14 @@
-import { cn } from "../utils"
 import {
+  cn,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./dialog"
-import { Badge } from "./badge"
-import { Separator } from "./separator"
+  Badge,
+  Separator,
+} from "@redbamboo/ui"
 
 export interface AboutApp {
   name: string
