@@ -334,9 +334,15 @@ function PartModal({ part, pairedResult, open, onClose }: { part?: MessagePart; 
           )}
 
           {!isToolUse && part.type !== "tool_result" && part.type !== "error" && part.content && (
-            <pre className="text-xs font-mono whitespace-pre-wrap break-all">
-              {part.content.slice(0, 5000)}{part.content.length > 5000 ? "\n..." : ""}
-            </pre>
+            part.type === "thinking" ? (
+              <div className="text-sm leading-relaxed font-serif markdown-body">
+                <MarkdownRenderer content={part.content} />
+              </div>
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-all">
+                {part.content.slice(0, 5000)}{part.content.length > 5000 ? "\n..." : ""}
+              </pre>
+            )
           )}
 
           {!part.content && !part.toolInput && (
