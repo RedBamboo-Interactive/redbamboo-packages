@@ -96,7 +96,6 @@
 .voice-input-idle:hover {
   opacity: 1;
   color: var(--color-text, #ccc);
-  background: var(--color-contrast, #fff) / 0.08;
   background: color-mix(in oklch, var(--color-contrast, #fff) 8%, transparent);
 }
 
@@ -138,11 +137,12 @@
   border-radius: 9999px;
   background: color-mix(in oklch, var(--color-accent-teal, #5eead4) 12%, transparent);
   border: 1px solid color-mix(in oklch, var(--color-accent-teal, #5eead4) 25%, transparent);
+  box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent-teal, #5eead4) 20%, transparent);
   font-size: 12px;
   font-weight: 500;
   color: var(--color-accent-teal, #5eead4);
   cursor: pointer;
-  animation: voice-fade-in 0.2s ease-out;
+  animation: voice-fade-in 0.2s ease-out, voice-processing-breathe 2s ease-in-out 0.2s infinite;
 }
 .voice-input-processing .morph-spinner-wrap {
   width: 20px;
@@ -161,9 +161,14 @@
   padding: 4px 10px;
   border-radius: 9999px;
   color: var(--color-accent-red, #f87171);
-  opacity: 0.8;
   font-size: 12px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
   animation: voice-fade-in 0.2s ease-out;
+}
+.voice-input-error:hover {
+  background: color-mix(in oklch, var(--color-accent-red, #f87171) 10%, transparent);
 }
 
 .voice-input-label {
@@ -174,4 +179,15 @@
 @keyframes voice-fade-in {
   from { opacity: 0; transform: scale(0.92); }
   to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes voice-processing-breathe {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent-teal, #5eead4) 20%, transparent);
+    border-color: color-mix(in oklch, var(--color-accent-teal, #5eead4) 25%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 10px 2px color-mix(in oklch, var(--color-accent-teal, #5eead4) 15%, transparent);
+    border-color: color-mix(in oklch, var(--color-accent-teal, #5eead4) 45%, transparent);
+  }
 }

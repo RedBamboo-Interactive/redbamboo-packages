@@ -1,3 +1,4 @@
+import { useCallback } from "react"
 import type { VoiceInputHandle } from "../types"
 import { MorphSpinner } from "./morph-spinner"
 
@@ -18,9 +19,15 @@ export function VoiceInputButton({
 }: VoiceInputButtonProps) {
   const { state, error } = voice
 
+  const retry = useCallback(() => {
+    voice.cancelRecording()
+    voice.startRecording()
+  }, [voice])
+
   if (state === "processing") {
     return (
       <button
+        type="button"
         data-slot="voice-input-button"
         onClick={voice.cancelRecording}
         className={`voice-input-processing ${className}`}
@@ -35,6 +42,7 @@ export function VoiceInputButton({
   if (state === "recording") {
     return (
       <button
+        type="button"
         data-slot="voice-input-button"
         onClick={voice.stopRecording}
         className={`voice-input-recording ${className}`}
@@ -49,18 +57,22 @@ export function VoiceInputButton({
 
   if (state === "error") {
     return (
-      <span
+      <button
+        type="button"
         data-slot="voice-input-button"
+        onClick={retry}
         className={`voice-input-error ${className}`}
+        title="Retry"
       >
         <i className="fa-solid fa-microphone-slash text-xs" />
         {error && <span className="voice-input-label">{error}</span>}
-      </span>
+      </button>
     )
   }
 
   return (
     <button
+      type="button"
       data-slot="voice-input-button"
       onClick={voice.startRecording}
       className={`voice-input-idle ${className}`}
