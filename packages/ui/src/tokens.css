@@ -198,6 +198,88 @@
   --scrollbar-thumb-hover: #555760;
 }
 
+/* ── Low-contrast light override ───────────────────────────────────── */
+
+:root:not(.dark)[data-contrast="low"] {
+  --background: #F2F3F5;
+  --foreground: #4D5259;
+  --card: #F7F8F9;
+  --card-foreground: #4D5259;
+  --popover: #F7F8F9;
+  --popover-foreground: #4D5259;
+  --secondary: #EBEBED;
+  --secondary-foreground: #4D5259;
+  --muted: #EBEBED;
+  --muted-foreground: #8B919A;
+  --accent: #EBEBED;
+  --accent-foreground: #4D5259;
+  --border: #E8E9EC;
+  --input: #E8E9EC;
+  --sidebar: #EBEBED;
+  --sidebar-foreground: #4D5259;
+  --sidebar-accent: #E4E5E8;
+  --sidebar-accent-foreground: #4D5259;
+  --sidebar-border: #E8E9EC;
+
+  --color-surface-deep: #EBEBED;
+  --color-surface-base: #F2F3F5;
+  --color-surface-elevated: #F7F8F9;
+  --color-border-subtle: #E8E9EC;
+  --color-text-primary: #4D5259;
+  --color-text-muted: #8B919A;
+  --color-text-disabled: #B0B4BA;
+  --color-status-idle: #EBEBED;
+
+  --contrast: #2D3239;
+  --strong: #3D4248;
+  --code-bg: #EBEBED;
+  --code-inline-bg: rgba(0, 0, 0, 0.03);
+  --table-header-bg: rgba(0, 0, 0, 0.015);
+  --scrollbar-thumb: #D8DAE0;
+  --scrollbar-thumb-hover: #C8CAD0;
+}
+
+/* ── High-contrast dark override ──────────────────────────────────── */
+
+:root.dark[data-contrast="high"] {
+  --background: #111318;
+  --foreground: #F0F1F4;
+  --card: #1A1C22;
+  --card-foreground: #F0F1F4;
+  --popover: #1A1C22;
+  --popover-foreground: #F0F1F4;
+  --secondary: #2A2C34;
+  --secondary-foreground: #F0F1F4;
+  --muted: #1A1C22;
+  --muted-foreground: #C0C1C6;
+  --accent: #2A2C34;
+  --accent-foreground: #F0F1F4;
+  --border: #5F636C;
+  --input: #3C3E48;
+  --sidebar: #111318;
+  --sidebar-foreground: #F0F1F4;
+  --sidebar-accent: #1E2028;
+  --sidebar-accent-foreground: #F0F1F4;
+  --sidebar-border: #5F636C;
+
+  --color-surface-deep: #111318;
+  --color-surface-base: #1A1C22;
+  --color-surface-elevated: #232530;
+  --color-border-subtle: #5F636C;
+  --color-text-primary: #F0F1F4;
+  --color-text-muted: #C0C1C6;
+  --color-text-disabled: #7D8186;
+  --color-status-idle: #18181E;
+
+  --contrast: #FFFFFF;
+  --strong: #FFFFFF;
+  --code-bg: #0C0E12;
+  --code-inline-bg: rgba(255, 255, 255, 0.14);
+  --table-header-bg: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb: #5F636C;
+  --scrollbar-thumb-hover: #72767E;
+}
+
 /* ── Global styles ─────────────────────────────────────────────────── */
 
 body {
