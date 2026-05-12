@@ -138,3 +138,9 @@ export type {
   ToastUpdate,
   ToastVariant,
 } from "./components/toast"
+
+export { AudioPlayer } from "./components/audio-player"
+export type { AudioPlayerProps } from "./components/audio-player"
+
+export { ImageLightbox } from "./components/image-lightbox"
+export type { ImageLightboxProps } from "./components/image-lightbox"
