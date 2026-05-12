@@ -36,3 +36,6 @@ export { AppHeader, AppHeaderBrand } from "./app-header"
 export type { AppHeaderProps, AppHeaderBrandProps } from "./app-header"
 
 export { JsonHighlight } from "./json-highlight"
+
+export { createLocalStore, useLocalStore } from "./local-store"
+export type { LocalStore } from "./local-store"
