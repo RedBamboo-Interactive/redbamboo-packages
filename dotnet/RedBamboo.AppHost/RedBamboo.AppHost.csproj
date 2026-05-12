@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net9.0;net9.0-windows</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>RedBamboo.AppHost</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>RedBamboo.AppHost</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Shared infrastructure for RedBamboo apps — tunnel, auth, discovery, tray</Description>
+    <UseWPF Condition="'$(TargetFramework)' == 'net9.0-windows'">true</UseWPF>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0-windows'">
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.2.0" />
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
+  </ItemGroup>
+</Project>
