@@ -1,4 +1,4 @@
-import { JsonHighlight } from "@redbamboo/ui"
+import { JsonHighlight } from "@redbamboo/utility"
 
 interface Props {
   content: string

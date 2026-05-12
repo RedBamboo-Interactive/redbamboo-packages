@@ -35,6 +35,9 @@ importers:
       '@redbamboo/ui':
         specifier: workspace:*
         version: link:../ui
+      '@redbamboo/utility':
+        specifier: workspace:*
+        version: link:../utility
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.14)(react@19.2.6)

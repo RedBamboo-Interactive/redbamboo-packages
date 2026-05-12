@@ -1,6 +1,5 @@
 import { useState, useCallback } from "react"
 import {
-  AppHeader,
   Button,
   DropdownMenu,
   DropdownMenuTrigger,
@@ -12,6 +11,7 @@ import {
   ToastProvider,
   useToast,
 } from "@redbamboo/ui"
+import { AppHeader } from "./app-header"
 import { AboutDialog } from "./about-dialog"
 import { FeedbackDialog } from "./feedback-dialog"
 import type { FeedbackSubmission } from "./feedback-dialog"

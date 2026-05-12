@@ -1,5 +1,5 @@
 import "./app-header.css"
-import { cn } from "../utils"
+import { cn } from "@redbamboo/ui"
 
 export interface AppHeaderBrandProps {
   icon: string

@@ -31,3 +31,8 @@ export type {
   FeedbackDialogProps,
   FeedbackButtonProps,
 } from "./feedback-dialog"
+
+export { AppHeader, AppHeaderBrand } from "./app-header"
+export type { AppHeaderProps, AppHeaderBrandProps } from "./app-header"
+
+export { JsonHighlight } from "./json-highlight"
