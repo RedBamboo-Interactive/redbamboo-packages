@@ -39,3 +39,15 @@ export { JsonHighlight } from "./json-highlight"
 
 export { createLocalStore, useLocalStore } from "./local-store"
 export type { LocalStore } from "./local-store"
+
+export { createRemoteConnection, applyConnectionParams } from "./remote-connection"
+export type { ConnectionConfig, RemoteConnectionStore } from "./remote-connection"
+
+export { ConnectPrompt } from "./connect-prompt"
+export type { ConnectPromptProps } from "./connect-prompt"
+
+export { RemoteAccessProvider, useRemoteAccess } from "./remote-access-provider"
+export type { RemoteAccessStatus, RemoteAccessContextValue } from "./remote-access-provider"
+
+export { useServiceDiscovery } from "./use-service-discovery"
+export type { ServiceManifest, CapabilityInfo, EndpointInfo } from "./use-service-discovery"
