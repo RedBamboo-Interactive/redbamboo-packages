@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using RedBamboo.AppHost.Auth;
 using RedBamboo.AppHost.Discovery;
+using RedBamboo.AppHost.Logging;
 using RedBamboo.AppHost.RemoteAccess;
 using RedBamboo.AppHost.Tunnel;
 
@@ -12,6 +13,16 @@ public static class AppHostExtensions
     public static IServiceCollection AddAppHostTunnel(this IServiceCollection services)
     {
         services.AddSingleton<CloudflareTunnelService>();
+        return services;
+    }
+
+    public static IServiceCollection AddAppHostLogging(
+        this IServiceCollection services, Action<LogServiceOptions>? configure = null)
+    {
+        var options = new LogServiceOptions { Source = "app" };
+        configure?.Invoke(options);
+        var logService = new LogService(options);
+        services.AddSingleton(logService);
         return services;
     }
 
@@ -26,10 +37,13 @@ public static class AppHostExtensions
         IServiceDescriptor descriptor,
         CloudflareTunnelService tunnelService,
         string appName,
-        Func<TunnelConfig> getTunnelConfig)
+        Func<TunnelConfig> getTunnelConfig,
+        LogService? logService = null)
     {
         DiscoveryEndpoints.MapDiscoveryEndpoints(app, descriptor, tunnelService);
         RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
+        if (logService is not null)
+            LogEndpoints.MapLogEndpoints(app, logService);
         return app;
     }
 }

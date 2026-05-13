@@ -57,3 +57,19 @@ export type { TunnelSettingsPanelProps, TunnelStatus } from "./tunnel-settings-p
 
 export { createMediaStore, useMediaQuery } from "./media-store"
 export type { MediaStore } from "./media-store"
+
+export type {
+  LogLevel,
+  LogEntry,
+  LogFilter,
+  LogsResponse,
+  LogSummaryResponse,
+  LogStreamEvent,
+} from "./log-types"
+export { LOG_LEVELS, LOG_LEVEL_SEVERITY, LOG_LEVEL_COLORS } from "./log-types"
+
+export { useLogStream } from "./use-log-stream"
+export type { UseLogStreamOptions, UseLogStreamReturn } from "./use-log-stream"
+
+export { LogPanel } from "./log-panel"
+export type { LogPanelProps } from "./log-panel"
