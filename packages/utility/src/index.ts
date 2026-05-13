@@ -54,3 +54,6 @@ export type { ServiceManifest, CapabilityInfo, EndpointInfo } from "./use-servic
 
 export { TunnelSettingsPanel } from "./tunnel-settings-panel"
 export type { TunnelSettingsPanelProps, TunnelStatus } from "./tunnel-settings-panel"
+
+export { createMediaStore, useMediaQuery } from "./media-store"
+export type { MediaStore } from "./media-store"
