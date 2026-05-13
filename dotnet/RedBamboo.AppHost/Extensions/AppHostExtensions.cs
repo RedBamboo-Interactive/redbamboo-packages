@@ -48,10 +48,12 @@ public static class AppHostExtensions
             LogEndpoints.MapLogEndpoints(app, logService);
         if (proxyRoutes is { Count: > 0 })
         {
+            var seenWsUpstreams = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var routes = proxyRoutes.Select(kv => new ProxyRouteConfig
             {
                 PathPrefix = kv.Key,
                 UpstreamBaseUrl = kv.Value,
+                ProxyWebSocket = seenWsUpstreams.Add(kv.Value),
             }).ToList();
             ProxyEndpoints.MapProxyEndpoints(app, routes, logService);
         }
