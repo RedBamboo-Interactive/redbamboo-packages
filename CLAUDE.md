@@ -9,7 +9,9 @@ Shared packages for the RedBamboo ecosystem. Published to npm under the `@redbam
 | Package | Path | Purpose |
 |---|---|---|
 | `@redbamboo/ui` | `packages/ui/` | Design system — tokens (oklch dark/light), Tailwind v4 theme, shadcn-based components |
+| `@redbamboo/utility` | `packages/utility/` | App-level utilities — command palette, remote access, discovery, local/media stores |
 | `@redbamboo/chat` | `packages/chat/` | Streaming chat UI with adapter-based backend |
+| `RedBamboo.AppHost` | `dotnet/RedBamboo.AppHost/` | Shared C# infrastructure — tunnel, auth, remote access endpoints, AI discovery, tray icon |
 
 ## Consumers
 
@@ -60,6 +62,17 @@ pnpm publish          # build + publish to npm
 1. Create `packages/my-package/` with `package.json`, `tsconfig.json`, `vite.config.ts`
 2. Name it `@redbamboo/my-package`
 3. Add to `pnpm-workspace.yaml` (already covered by `packages/*` glob)
+
+## Shared build script
+
+`dotnet/rebuild.ps1` is the shared rebuild script used by all three consumer apps (CodeRed, RedCompute, RedMatter). Each app has a thin `rebuild.ps1` wrapper that calls it with app-specific parameters. The shared script handles: stop running instance, wait for port, build frontend, build backend, launch.
+
+```powershell
+.\rebuild.ps1                  # full rebuild + launch
+.\rebuild.ps1 -SkipFrontend    # backend only
+.\rebuild.ps1 -SkipBackend     # frontend only
+.\rebuild.ps1 -NoLaunch        # build without launching
+```
 
 ## Open source considerations
 
