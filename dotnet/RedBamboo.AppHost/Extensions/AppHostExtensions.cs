@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RedBamboo.AppHost.Auth;
 using RedBamboo.AppHost.Discovery;
 using RedBamboo.AppHost.Logging;
+using RedBamboo.AppHost.Proxy;
 using RedBamboo.AppHost.RemoteAccess;
 using RedBamboo.AppHost.Tunnel;
 
@@ -38,12 +39,22 @@ public static class AppHostExtensions
         CloudflareTunnelService tunnelService,
         string appName,
         Func<TunnelConfig> getTunnelConfig,
-        LogService? logService = null)
+        LogService? logService = null,
+        Dictionary<string, string>? proxyRoutes = null)
     {
         DiscoveryEndpoints.MapDiscoveryEndpoints(app, descriptor, tunnelService);
         RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
         if (logService is not null)
             LogEndpoints.MapLogEndpoints(app, logService);
+        if (proxyRoutes is { Count: > 0 })
+        {
+            var routes = proxyRoutes.Select(kv => new ProxyRouteConfig
+            {
+                PathPrefix = kv.Key,
+                UpstreamBaseUrl = kv.Value,
+            }).ToList();
+            ProxyEndpoints.MapProxyEndpoints(app, routes, logService);
+        }
         return app;
     }
 }
