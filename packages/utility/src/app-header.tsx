@@ -19,7 +19,7 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary" }: AppHe
 
   return (
     <div className={cn("app-header-brand flex items-center gap-2 cursor-default select-none", accentClass)}>
-      <div className="app-header-brand__icon relative w-6 h-6 rounded flex items-center justify-center">
+      <div className="app-header-brand__icon relative size-6 shrink-0 rounded flex items-center justify-center">
         <div className="app-header-brand__bg absolute inset-0 rounded" />
         <i className={cn(icon, "app-header-brand__i relative z-10 text-xs")} />
       </div>
