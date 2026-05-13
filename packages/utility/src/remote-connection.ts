@@ -23,7 +23,7 @@ export function createRemoteConnection(opts: {
     if (!raw) return null
     try {
       const parsed = JSON.parse(raw) as Partial<ConnectionConfig>
-      if (!parsed.token) return null
+      if (parsed.token == null) return null
       return { serverUrl: parsed.serverUrl ?? opts.defaultServerUrl ?? "", token: parsed.token }
     } catch {
       return null
