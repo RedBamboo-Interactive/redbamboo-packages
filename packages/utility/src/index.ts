@@ -51,3 +51,6 @@ export type { RemoteAccessStatus, RemoteAccessContextValue } from "./remote-acce
 
 export { useServiceDiscovery } from "./use-service-discovery"
 export type { ServiceManifest, CapabilityInfo, EndpointInfo } from "./use-service-discovery"
+
+export { TunnelSettingsPanel } from "./tunnel-settings-panel"
+export type { TunnelSettingsPanelProps, TunnelStatus } from "./tunnel-settings-panel"
