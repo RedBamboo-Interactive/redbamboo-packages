@@ -161,6 +161,18 @@ export function Composer({
     }
   }
 
+  useEffect(() => {
+    if (!disabled || streaming || !onResume) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault()
+        onResume()
+      }
+    }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [disabled, streaming, onResume])
+
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items)
     const imageFiles = items
@@ -334,7 +346,7 @@ export function Composer({
             <button
               onClick={onResume}
               className="w-full px-3 py-2 rounded-md bg-accent-gold/20 hover:bg-accent-gold/30 text-accent-gold transition-colors flex items-center justify-center"
-              title="Resume session"
+              title="Resume session (Enter)"
             >
               <i className="fa-solid fa-rotate-right text-sm" />
             </button>
