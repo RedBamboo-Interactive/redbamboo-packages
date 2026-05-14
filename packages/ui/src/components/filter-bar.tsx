@@ -46,10 +46,14 @@ function FilterPillGroup({
           ? opt.color
             ? `${opt.color}33`
             : activeColor
-          : "rgba(255,255,255,0.08)"
+          : opt.color
+            ? `${opt.color}15`
+            : "rgba(255,255,255,0.08)"
         const fg = isActive
           ? opt.color || activeTextColor
-          : "#ADAEB3"
+          : opt.color
+            ? `${opt.color}AA`
+            : "#ADAEB3"
 
         return (
           <button
