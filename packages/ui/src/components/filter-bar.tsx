@@ -69,8 +69,6 @@ interface FilterBarProps {
   onSearch?: (value: string) => void
   placeholder?: string
   children?: ReactNode
-  onClear?: () => void
-  hasActiveFilters?: boolean
   summary?: ReactNode
   className?: string
 }
@@ -80,30 +78,15 @@ function FilterBar({
   onSearch,
   placeholder = "Search...",
   children,
-  onClear,
-  hasActiveFilters,
   summary,
   className,
 }: FilterBarProps) {
   return (
     <div
       data-slot="filter-bar"
-      className={cn(
-        "flex flex-col border-b border-contrast/[0.06]",
-        className,
-      )}
+      className={cn("flex flex-col", className)}
     >
-      <div className="px-3 pt-2 pb-2 flex flex-col gap-2">
-        {hasActiveFilters && onClear && (
-          <div className="flex justify-end px-1">
-            <button
-              onClick={onClear}
-              className="text-accent-teal text-[11px] hover:text-contrast transition-colors px-1.5 py-0.5 rounded hover:bg-contrast/10"
-            >
-              Clear filters
-            </button>
-          </div>
-        )}
+      <div className="px-3 pb-2 flex flex-col gap-2">
         {onSearch != null && (
           <div className="flex items-center gap-1.5 bg-contrast/[0.08] rounded px-2 py-1.5">
             <i className="fa-solid fa-magnifying-glass text-[11px] text-text-disabled" />

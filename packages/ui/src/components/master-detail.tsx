@@ -16,7 +16,7 @@ interface MasterDetailLayoutProps {
 function MasterDetailLayout({
   sidebar,
   detail,
-  sidebarWidth = "w-72",
+  sidebarWidth = "w-80",
   mobileLabels = ["List", "Detail"],
   mobileTab: controlledTab,
   onMobileTabChange,
