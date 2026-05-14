@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect, useMemo, useCallback } from "react"
+import { type ReactNode, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./resizable"
 import { cn } from "../utils"
@@ -23,9 +23,9 @@ function MasterDetailLayout({
   detail,
   sidebarWidth = "w-80",
   layoutKey,
-  sidebarDefault = "25%",
-  sidebarMin = "15%",
-  sidebarMax = "40%",
+  sidebarDefault = "18%",
+  sidebarMin = "12%",
+  sidebarMax = "35%",
   mobileLabels = ["List", "Detail"],
   mobileTab: controlledTab,
   onMobileTabChange,
@@ -59,12 +59,17 @@ function MasterDetailLayout({
     }
   }, [layoutKey])
 
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const handleLayoutChanged = useCallback(
     (layout: Record<string, number>) => {
       if (!layoutKey) return
-      try {
-        localStorage.setItem(layoutKey, JSON.stringify(layout))
-      } catch { /* ignore */ }
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(() => {
+        try {
+          localStorage.setItem(layoutKey, JSON.stringify(layout))
+        } catch { /* ignore */ }
+      }, 300)
     },
     [layoutKey],
   )

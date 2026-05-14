@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from "react"
+import { useMemo, useCallback, useRef } from "react"
 
 interface UseLayoutPersistenceReturn {
   savedLayout: Record<string, number> | undefined
@@ -15,11 +15,16 @@ function useLayoutPersistence(key: string): UseLayoutPersistenceReturn {
     }
   }, [key])
 
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const onLayoutChanged = useCallback(
     (layout: Record<string, number>) => {
-      try {
-        localStorage.setItem(key, JSON.stringify(layout))
-      } catch { /* ignore */ }
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => {
+        try {
+          localStorage.setItem(key, JSON.stringify(layout))
+        } catch { /* ignore */ }
+      }, 300)
     },
     [key],
   )
