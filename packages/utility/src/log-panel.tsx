@@ -1,7 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from "react"
-import { Badge, Button, Input, cn } from "@redbamboo/ui"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { FilterBar, FilterPillGroup, cn } from "@redbamboo/ui"
 import type { LogEntry, LogLevel } from "./log-types"
 import { LOG_LEVELS, LOG_LEVEL_COLORS, LOG_LEVEL_SEVERITY } from "./log-types"
+
+function entrySource(entry: LogEntry): string {
+  return entry.tag || entry.category || entry.source || ""
+}
+
+function entryLevel(entry: LogEntry): LogLevel {
+  return entry.level || "info"
+}
 
 export interface LogPanelProps {
   entries: LogEntry[]
@@ -19,36 +27,66 @@ export function LogPanel({
   entries,
   connected,
   paused = false,
-  onPauseChange,
   onClear,
-  onRefresh,
-  errorCount = 0,
-  warnCount = 0,
   className,
 }: LogPanelProps) {
   const [search, setSearch] = useState("")
-  const [levelFilter, setLevelFilter] = useState<LogLevel | null>(null)
-  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
+  const [levelFilter, setLevelFilter] = useState<string | null>(null)
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const autoScrollRef = useRef(true)
 
-  const filtered = entries.filter(entry => {
-    if (levelFilter && LOG_LEVEL_SEVERITY[entry.level] < LOG_LEVEL_SEVERITY[levelFilter])
+  const levelCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const e of entries) {
+      const l = entryLevel(e)
+      counts[l] = (counts[l] || 0) + 1
+    }
+    return counts
+  }, [entries])
+
+  const levelOptions = useMemo(
+    () => LOG_LEVELS.filter(l => l !== "debug").map(l => ({
+      value: l,
+      count: levelCounts[l] || 0,
+      color: LOG_LEVEL_COLORS[l],
+    })),
+    [levelCounts],
+  )
+
+  const sourceCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const e of entries) {
+      const s = entrySource(e).split(".")[0]
+      if (s) counts[s] = (counts[s] || 0) + 1
+    }
+    return counts
+  }, [entries])
+
+  const sourceOptions = useMemo(
+    () => Object.keys(sourceCounts).sort().map(s => ({
+      value: s,
+      count: sourceCounts[s],
+    })),
+    [sourceCounts],
+  )
+
+  const filtered = useMemo(() => entries.filter(entry => {
+    const level = entryLevel(entry)
+    if (levelFilter && LOG_LEVEL_SEVERITY[level] < LOG_LEVEL_SEVERITY[levelFilter as LogLevel])
       return false
-    if (categoryFilter && !(entry.category ?? "").startsWith(categoryFilter))
+    const source = entrySource(entry)
+    if (sourceFilter && !source.startsWith(sourceFilter))
       return false
     if (search) {
       const q = search.toLowerCase()
       return (
         entry.message.toLowerCase().includes(q) ||
-        entry.tag?.toLowerCase().includes(q) ||
-        (entry.category ?? "").toLowerCase().includes(q)
+        source.toLowerCase().includes(q)
       )
     }
     return true
-  })
-
-  const categories = Array.from(new Set(entries.map(e => (e.category ?? "").split(".")[0]).filter(Boolean))).sort()
+  }), [entries, levelFilter, sourceFilter, search])
 
   useEffect(() => {
     if (!autoScrollRef.current || paused) return
@@ -63,81 +101,51 @@ export function LogPanel({
     autoScrollRef.current = atBottom
   }, [])
 
-  const toggleLevel = useCallback((level: LogLevel) => {
-    setLevelFilter(prev => prev === level ? null : level)
-  }, [])
+  const hasFilters = !!(levelFilter || sourceFilter || search)
 
   return (
     <div data-slot="log-panel" className={cn("flex flex-col h-full", className)}>
-      <div data-slot="log-panel-toolbar" className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0 flex-wrap">
-        <div className="flex items-center gap-1">
-          {connected !== undefined && (
-            <span
-              className="inline-block w-2 h-2 rounded-full shrink-0"
-              style={{ backgroundColor: connected ? "#43A25A" : "#727680" }}
-              title={connected ? "Connected" : "Disconnected"}
-            />
-          )}
-          {LOG_LEVELS.filter(l => l !== "debug").map(level => (
-            <button
-              key={level}
-              className={cn(
-                "px-1.5 py-0.5 rounded text-[10px] font-medium uppercase transition-colors cursor-pointer",
-                levelFilter === level
-                  ? "ring-1 ring-offset-1 ring-offset-background"
-                  : "opacity-60 hover:opacity-100",
-              )}
-              style={{
-                color: LOG_LEVEL_COLORS[level],
-                ...(levelFilter === level ? { ringColor: LOG_LEVEL_COLORS[level] } : {}),
-              }}
-              onClick={() => toggleLevel(level)}
-            >
-              {level}
-              {level === "error" && errorCount > 0 && ` (${errorCount})`}
-              {level === "warn" && warnCount > 0 && ` (${warnCount})`}
-            </button>
-          ))}
-        </div>
-
-        <Input
-          className="h-6 text-xs flex-1 min-w-[120px]"
-          placeholder="Search logs..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-
-        {categories.length > 1 && (
-          <select
-            className="h-6 text-xs bg-transparent border border-border rounded px-1 text-foreground"
-            value={categoryFilter ?? ""}
-            onChange={e => setCategoryFilter(e.target.value || null)}
-          >
-            <option value="">All categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
+      <div className="flex items-center h-12 px-3 border-b border-contrast/[0.06] shrink-0">
+        {connected !== undefined && (
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full shrink-0 mr-2"
+            style={{ backgroundColor: connected ? "#26A69A" : "#6B6F77" }}
+            title={connected ? "Connected" : "Disconnected"}
+          />
         )}
-
-        <div className="flex items-center gap-1 ml-auto">
-          {onPauseChange && (
-            <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={() => onPauseChange(!paused)}>
-              {paused ? "Resume" : "Pause"}
-            </Button>
-          )}
-          {onRefresh && (
-            <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={onRefresh}>
-              Refresh
-            </Button>
-          )}
-          {onClear && (
-            <Button variant="ghost" size="sm" className="h-6 text-xs px-2" onClick={onClear}>
-              Clear
-            </Button>
-          )}
-        </div>
+        <span className="text-[14px] font-medium text-contrast flex-1">Console</span>
+        {onClear && (
+          <button
+            className="text-text-muted hover:text-contrast transition-colors cursor-pointer p-1"
+            onClick={onClear}
+            title="Clear logs"
+          >
+            <i className="fa-solid fa-trash-can text-xs" />
+          </button>
+        )}
       </div>
+
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        placeholder="Search logs..."
+        summary={hasFilters ? `${filtered.length} of ${entries.length} entries` : undefined}
+      >
+        <FilterPillGroup
+          label="Level"
+          options={levelOptions}
+          value={levelFilter}
+          onChange={setLevelFilter}
+        />
+        <FilterPillGroup
+          label="Source"
+          options={sourceOptions}
+          value={sourceFilter}
+          onChange={setSourceFilter}
+          activeColor="rgba(212,170,79,0.2)"
+          activeTextColor="#D4AA4F"
+        />
+      </FilterBar>
 
       <div
         ref={scrollRef}
@@ -161,46 +169,40 @@ export function LogPanel({
 
 function LogEntryRow({ entry }: { entry: LogEntry }) {
   const [expanded, setExpanded] = useState(false)
-  const hasDetails = entry.full_message || entry.stack_trace || entry.metadata
   const ts = formatTimestamp(entry.timestamp)
+  const level = entryLevel(entry)
+  const source = entrySource(entry)
 
   return (
     <div data-slot="log-entry">
       <div
         className={cn(
-          "flex items-start gap-2 px-3 py-1 hover:bg-muted/50 transition-colors border-b border-border/30",
-          hasDetails && "cursor-pointer",
+          "grid items-center gap-x-3 px-3 py-1 hover:bg-contrast/[0.04] transition-colors border-b border-contrast/[0.06] cursor-pointer",
           entry.is_error && "bg-destructive/5",
         )}
-        onClick={hasDetails ? () => setExpanded(prev => !prev) : undefined}
+        style={{ gridTemplateColumns: "92px 20px 80px 1fr" }}
+        onClick={() => setExpanded(prev => !prev)}
       >
-        <span className="text-text-muted shrink-0 w-[72px]">{ts}</span>
+        <span className="text-text-muted">{ts}</span>
         <span
-          className="shrink-0 w-[52px] uppercase font-semibold text-[10px] leading-4"
-          style={{ color: LOG_LEVEL_COLORS[entry.level] }}
+          className="w-2.5 h-2.5 rounded-[2px] justify-self-center"
+          style={{ backgroundColor: LOG_LEVEL_COLORS[level] }}
+          title={level}
+        />
+        <span
+          className="truncate text-text-muted"
+          style={entry.tag_color ? { color: entry.tag_color } : undefined}
+          title={source}
         >
-          {entry.level}
+          {source}
         </span>
-        {entry.tag && (
-          <Badge
-            variant="outline"
-            className="shrink-0 text-[10px] px-1 py-0 h-4 leading-4"
-            style={entry.tag_color ? { borderColor: entry.tag_color, color: entry.tag_color } : undefined}
-          >
-            {entry.tag}
-          </Badge>
-        )}
-        {entry.category && <span className="text-text-muted shrink-0">{entry.category}</span>}
-        <span className="truncate flex-1">{entry.message}</span>
-        {hasDetails && (
-          <span className="text-text-muted shrink-0 text-[10px]">{expanded ? "−" : "+"}</span>
-        )}
+        <span className="truncate">{entry.message}</span>
       </div>
       {expanded && (
-        <div className="px-3 py-2 ml-[76px] space-y-1 bg-muted/30 border-b border-border/30">
-          {entry.full_message && (
-            <pre className="text-xs whitespace-pre-wrap text-foreground/80">{entry.full_message}</pre>
-          )}
+        <div className="py-2 pr-3 space-y-1 bg-muted/30 border-b border-contrast/[0.06]" style={{ paddingLeft: "calc(192px + 3rem)" }}>
+          <pre className="text-xs whitespace-pre-wrap text-foreground/80">
+            {entry.full_message || entry.message}
+          </pre>
           {entry.stack_trace && (
             <pre className="text-xs whitespace-pre-wrap text-destructive/70">{entry.stack_trace}</pre>
           )}

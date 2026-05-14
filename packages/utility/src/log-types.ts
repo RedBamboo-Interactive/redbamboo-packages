@@ -71,9 +71,9 @@ export const LOG_LEVEL_SEVERITY: Record<LogLevel, number> = {
 }
 
 export const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
-  debug: "#727680",
-  info: "#4EA8DE",
-  warn: "#FFB74D",
-  error: "#FF5252",
-  critical: "#D32F2F",
+  debug: "#6B6F77",
+  info: "#26A69A",
+  warn: "#D4AA4F",
+  error: "#E55B5B",
+  critical: "#E55B5B",
 }
