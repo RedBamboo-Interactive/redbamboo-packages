@@ -35,20 +35,20 @@ export function LogPanel({
   const filtered = entries.filter(entry => {
     if (levelFilter && LOG_LEVEL_SEVERITY[entry.level] < LOG_LEVEL_SEVERITY[levelFilter])
       return false
-    if (categoryFilter && !entry.category.startsWith(categoryFilter))
+    if (categoryFilter && !(entry.category ?? "").startsWith(categoryFilter))
       return false
     if (search) {
       const q = search.toLowerCase()
       return (
         entry.message.toLowerCase().includes(q) ||
         entry.tag?.toLowerCase().includes(q) ||
-        entry.category.toLowerCase().includes(q)
+        (entry.category ?? "").toLowerCase().includes(q)
       )
     }
     return true
   })
 
-  const categories = Array.from(new Set(entries.map(e => e.category.split(".")[0]))).sort()
+  const categories = Array.from(new Set(entries.map(e => (e.category ?? "").split(".")[0]).filter(Boolean))).sort()
 
   useEffect(() => {
     if (!autoScrollRef.current || paused) return
@@ -190,7 +190,7 @@ function LogEntryRow({ entry }: { entry: LogEntry }) {
             {entry.tag}
           </Badge>
         )}
-        <span className="text-text-muted shrink-0">{entry.category}</span>
+        {entry.category && <span className="text-text-muted shrink-0">{entry.category}</span>}
         <span className="truncate flex-1">{entry.message}</span>
         {hasDetails && (
           <span className="text-text-muted shrink-0 text-[10px]">{expanded ? "−" : "+"}</span>

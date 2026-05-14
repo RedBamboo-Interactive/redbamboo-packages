@@ -4,8 +4,8 @@ export interface LogEntry {
   id: string
   timestamp: string
   level: LogLevel
-  category: string
-  source: string
+  category?: string
+  source?: string
   message: string
   full_message?: string | null
   tag?: string | null
