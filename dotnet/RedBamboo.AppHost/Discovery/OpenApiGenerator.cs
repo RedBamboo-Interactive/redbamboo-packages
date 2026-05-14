@@ -22,7 +22,7 @@ public static class OpenApiGenerator
         {
             AddPath(paths, ep.Path, ep.Method.ToLowerInvariant(),
                 ep.Path.Replace("/", "").Replace("{", "").Replace("}", ""),
-                ep.Description);
+                ep.Description, ep.Parameters);
         }
 
         foreach (var cap in capabilities)
@@ -32,7 +32,7 @@ public static class OpenApiGenerator
             {
                 AddPath(paths, ep.Path, ep.Method.ToLowerInvariant(),
                     $"{cap.Slug}_{ep.Path.Replace("/", "_").Trim('_')}",
-                    ep.Description);
+                    ep.Description, ep.Parameters);
             }
         }
 
@@ -50,24 +50,101 @@ public static class OpenApiGenerator
         };
     }
 
-    private static void AddPath(Dictionary<string, object> paths, string path, string method, string operationId, string description)
+    private static void AddPath(
+        Dictionary<string, object> paths, string path, string method,
+        string operationId, string description,
+        IReadOnlyList<ParameterDescriptor>? parameters = null)
     {
-        var op = new Dictionary<string, object>
+        var operation = new Dictionary<string, object>
         {
-            [method] = new
+            ["operationId"] = operationId,
+            ["summary"] = description,
+            ["responses"] = new Dictionary<string, object>
             {
-                operationId,
-                summary = description,
-                responses = new Dictionary<string, object>
-                {
-                    ["200"] = new { description = "Success" }
-                }
+                ["200"] = new { description = "Success" }
             }
         };
 
+        if (parameters is { Count: > 0 })
+        {
+            var hasBody = method is "post" or "put" or "patch";
+
+            if (hasBody)
+            {
+                var properties = new Dictionary<string, object>();
+                var required = new List<string>();
+
+                foreach (var p in parameters)
+                {
+                    var prop = BuildSchemaProperty(p);
+                    properties[p.Name] = prop;
+                    if (p.Required) required.Add(p.Name);
+                }
+
+                var schema = new Dictionary<string, object>
+                {
+                    ["type"] = "object",
+                    ["properties"] = properties,
+                };
+                if (required.Count > 0)
+                    schema["required"] = required;
+
+                operation["requestBody"] = new Dictionary<string, object>
+                {
+                    ["required"] = required.Count > 0,
+                    ["content"] = new Dictionary<string, object>
+                    {
+                        ["application/json"] = new { schema }
+                    }
+                };
+            }
+            else
+            {
+                var queryParams = new List<object>();
+                foreach (var p in parameters)
+                {
+                    queryParams.Add(new
+                    {
+                        name = p.Name,
+                        @in = "query",
+                        required = p.Required,
+                        description = p.Description ?? "",
+                        schema = BuildTypeSchema(p),
+                    });
+                }
+                operation["parameters"] = queryParams;
+            }
+        }
+
+        var op = new Dictionary<string, object> { [method] = operation };
+
         if (paths.TryGetValue(path, out var existing) && existing is Dictionary<string, object> dict)
-            dict[method] = ((Dictionary<string, object>)op[method]);
+            dict[method] = operation;
         else
             paths[path] = op;
     }
+
+    private static Dictionary<string, object> BuildSchemaProperty(ParameterDescriptor p)
+    {
+        var schema = BuildTypeSchema(p);
+        if (p.Description != null) schema["description"] = p.Description;
+        return schema;
+    }
+
+    private static Dictionary<string, object> BuildTypeSchema(ParameterDescriptor p)
+    {
+        var schema = new Dictionary<string, object> { ["type"] = MapType(p.Type) };
+        if (p.Default != null) schema["default"] = p.Default;
+        if (p.Enum is { Count: > 0 }) schema["enum"] = p.Enum;
+        return schema;
+    }
+
+    private static string MapType(string type) => type.ToLowerInvariant() switch
+    {
+        "int" or "integer" or "int32" or "int64" or "long" => "integer",
+        "float" or "double" or "decimal" or "number" => "number",
+        "bool" or "boolean" => "boolean",
+        "array" or "list" => "array",
+        _ => "string",
+    };
 }
