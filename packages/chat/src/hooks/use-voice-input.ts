@@ -3,7 +3,7 @@ import type { MessageBlock, SpeechBackend, VoiceInputState, VoiceInputHandle } f
 import { AudioRecorder } from "../lib/audio-recorder"
 import { filterConversation } from "../lib/conversation-filter"
 
-interface VoiceInputParams {
+export interface VoiceInputParams {
   speech: SpeechBackend
   messages: MessageBlock[]
   onSend: (content: string) => void
@@ -14,16 +14,24 @@ interface VoiceInputParams {
   pushToTalkKey?: string
 }
 
-export function useVoiceInput({
-  speech,
-  messages,
-  onSend,
-  onAnswerQuestion,
-  pendingQuestion,
-  disabled,
-  handsFreeEnabled,
-  pushToTalkKey = "F13",
-}: VoiceInputParams): VoiceInputHandle {
+const NOOP_HANDLE: VoiceInputHandle = {
+  state: "idle",
+  error: null,
+  transcript: null,
+  startRecording: async () => {},
+  stopRecording: async () => {},
+  cancelRecording: () => {},
+}
+
+export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle {
+  const speech = params?.speech
+  const messages = params?.messages ?? []
+  const onSend = params?.onSend ?? (() => {})
+  const onAnswerQuestion = params?.onAnswerQuestion
+  const pendingQuestion = params?.pendingQuestion
+  const disabled = params?.disabled ?? !params
+  const handsFreeEnabled = params?.handsFreeEnabled
+  const pushToTalkKey = params?.pushToTalkKey ?? "F13"
   const [state, setState] = useState<VoiceInputState>("idle")
   const [error, setError] = useState<string | null>(null)
   const [transcript, setTranscript] = useState<string | null>(null)
@@ -42,6 +50,8 @@ export function useVoiceInput({
   pendingRef.current = pendingQuestion
   const speechRef = useRef(speech)
   speechRef.current = speech
+  const activeRef = useRef(!!params)
+  activeRef.current = !!params
 
   const syncState = useCallback((s: VoiceInputState) => {
     stateRef.current = s
@@ -49,7 +59,7 @@ export function useVoiceInput({
   }, [])
 
   const startRecording = useCallback(async () => {
-    if (stateRef.current !== "idle" || disabled) return
+    if (stateRef.current !== "idle" || disabled || !activeRef.current) return
 
     if (!recorderRef.current) {
       recorderRef.current = new AudioRecorder()
@@ -80,7 +90,7 @@ export function useVoiceInput({
     abortRef.current = abort
 
     try {
-      const rawText = await speechRef.current.transcribe(audioBlob, abort.signal)
+      const rawText = await speechRef.current!.transcribe(audioBlob, abort.signal)
       if (abort.signal.aborted) return
 
       const trimmed = rawText.trim()
@@ -92,9 +102,9 @@ export function useVoiceInput({
       }
 
       let finalText = trimmed
-      if (speechRef.current.reformulate) {
+      if (speechRef.current?.reformulate) {
         const context = filterConversation(messagesRef.current)
-        finalText = await speechRef.current.reformulate(trimmed, context, abort.signal)
+        finalText = await speechRef.current!.reformulate(trimmed, context, abort.signal)
         if (abort.signal.aborted) return
       }
 
@@ -162,5 +172,6 @@ export function useVoiceInput({
     }
   }, [])
 
+  if (!params) return NOOP_HANDLE
   return { state, error, transcript, startRecording, stopRecording, cancelRecording }
 }

@@ -1,23 +1,42 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import type { ChatPanelProps, MessageBlock as MessageBlockType } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
+import { useVoiceInput } from "../hooks/use-voice-input"
 import { ChatMessage, extractPlanFileContent } from "./chat-message"
 import { Composer } from "./composer"
 import { StreamingStatusLine } from "./streaming-status-line"
+import { PendingQuestionLine } from "./pending-question-line"
+import { MorphSpinner } from "./morph-spinner"
 
-export function ChatPanel({
-  backend,
-  placeholder,
-  className,
-  header,
-  resolveImageSrc,
-  permissionMode,
-  onTogglePlanMode,
-  onExecutePlan,
-  renderStatusLine,
-  renderComposerInlineAction,
-}: ChatPanelProps) {
-  const { messages, isStreaming, sendMessage, interrupt } = useChatStream(backend)
+export function ChatPanel(props: ChatPanelProps) {
+  const internal = useChatStream(props.backend ?? null)
+
+  const messages = props.messages ?? internal.messages
+  const isStreaming = props.isStreaming ?? internal.isStreaming
+  const sendMessage = props.onSend ?? internal.sendMessage
+  const interrupt = props.onInterrupt ?? internal.interrupt
+  const pendingQuestion = props.pendingQuestion !== undefined ? props.pendingQuestion : internal.pendingQuestion
+
+  const {
+    sessionId, disabled = false, onAnswerQuestion, onResume,
+    placeholder, className, header, footer,
+    resolveImageSrc, permissionMode, onTogglePlanMode, onExecutePlan,
+    enableImageAttachments, enableFileAttachments,
+    speechBackend, handsFreeEnabled, pushToTalkKey,
+    renderStatusLine, renderComposerInlineAction,
+  } = props
+
+  const voice = useVoiceInput(speechBackend ? {
+    speech: speechBackend,
+    messages,
+    onSend: (content) => sendMessage(content),
+    onAnswerQuestion,
+    pendingQuestion: !!pendingQuestion,
+    disabled,
+    handsFreeEnabled,
+    pushToTalkKey,
+  } : null)
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const shouldAutoScroll = useRef(true)
@@ -60,31 +79,89 @@ export function ChatPanel({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [])
 
+  const defaultVoiceAction = !speechBackend ? null : (
+    { value, isStreaming: streaming, hasImages }: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean },
+  ) => {
+    if (value.trim() || hasImages || streaming) return null
+    return (
+      <button
+        onPointerDown={(e) => { e.preventDefault(); voice.startRecording() }}
+        onPointerUp={(e) => { e.preventDefault(); voice.stopRecording() }}
+        onPointerLeave={(e) => { e.preventDefault(); if (voice.state === "recording") voice.cancelRecording() }}
+        disabled={disabled || voice.state === "processing"}
+        className={`absolute right-2 bottom-1.5 w-7 h-7 flex items-center justify-center rounded-md transition-colors select-none touch-none disabled:opacity-30 disabled:cursor-not-allowed ${
+          voice.state === "recording"
+            ? "bg-red-500/30 text-red-400"
+            : voice.state === "processing"
+              ? "bg-amber-500/20 text-amber-400"
+              : voice.state === "error"
+                ? "bg-red-500/20 text-red-400"
+                : "text-text-muted/50 hover:text-text-muted hover:bg-contrast/[0.06]"
+        }`}
+        title="Hold to talk"
+      >
+        {voice.state === "recording" ? (
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+          </span>
+        ) : voice.state === "processing" ? (
+          <MorphSpinner color="#fbbf24" />
+        ) : voice.state === "error" ? (
+          <i className="fa-solid fa-triangle-exclamation text-xs" />
+        ) : (
+          <i className="fa-solid fa-microphone text-xs" />
+        )}
+      </button>
+    )
+  }
+
+  const inlineAction = renderComposerInlineAction ?? defaultVoiceAction ?? undefined
+
+  const statusLine = renderStatusLine
+    ? renderStatusLine({ isStreaming, messages, pendingQuestion: pendingQuestion ?? null })
+    : isStreaming
+      ? <StreamingStatusLine isStreaming={isStreaming} messages={messages} />
+      : pendingQuestion
+        ? <PendingQuestionLine />
+        : null
+
+  const composerEl = (
+    <Composer
+      onSend={sendMessage}
+      onInterrupt={interrupt}
+      disabled={disabled}
+      isStreaming={isStreaming}
+      placeholder={placeholder}
+      permissionMode={permissionMode}
+      onTogglePlanMode={onTogglePlanMode}
+      pendingQuestion={!!pendingQuestion}
+      onAnswerQuestion={onAnswerQuestion}
+      onResume={onResume}
+      sessionId={sessionId}
+      enableImageAttachments={enableImageAttachments}
+      enableFileAttachments={enableFileAttachments}
+      renderInlineAction={inlineAction}
+    />
+  )
+
   if (messages.length === 0 && !header) {
     return (
-      <div className={`flex-1 flex flex-col min-h-0 min-w-0 ${className || ""}`}>
+      <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 ${className || ""}`}>
         <div className="flex-1 flex items-center justify-center text-text-muted">
           <div className="text-center">
             <i className="fa-regular fa-square-terminal text-3xl mx-auto mb-3 opacity-30" />
             <p className="text-sm">Send a message to get started</p>
           </div>
         </div>
-        <Composer
-          onSend={sendMessage}
-          onInterrupt={interrupt}
-          disabled={false}
-          isStreaming={isStreaming}
-          placeholder={placeholder}
-          permissionMode={permissionMode}
-          onTogglePlanMode={onTogglePlanMode}
-          renderInlineAction={renderComposerInlineAction}
-        />
+        {composerEl}
+        {footer}
       </div>
     )
   }
 
   return (
-    <div className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
+    <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
       {header && <div className="shrink-0">{header}</div>}
 
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden py-3">
@@ -101,14 +178,13 @@ export function ChatPanel({
                 permissionMode={permissionMode}
                 onExecutePlan={onExecutePlan}
                 planFileContent={planFileContent}
+                isPendingQuestion={isLastAssistant && !!pendingQuestion}
+                onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
                 resolveImageSrc={resolveImageSrc}
               />
             )
           })}
-          {renderStatusLine
-            ? renderStatusLine({ isStreaming, messages })
-            : <StreamingStatusLine isStreaming={isStreaming} messages={messages} />
-          }
+          {statusLine}
         </div>
       </div>
 
@@ -122,16 +198,8 @@ export function ChatPanel({
         </button>
       )}
 
-      <Composer
-        onSend={sendMessage}
-        onInterrupt={interrupt}
-        disabled={false}
-        isStreaming={isStreaming}
-        placeholder={placeholder}
-        permissionMode={permissionMode}
-        onTogglePlanMode={onTogglePlanMode}
-        renderInlineAction={renderComposerInlineAction}
-      />
+      {composerEl}
+      {footer}
     </div>
   )
 }

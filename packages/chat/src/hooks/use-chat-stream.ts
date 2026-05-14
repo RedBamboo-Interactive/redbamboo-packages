@@ -1,99 +1,36 @@
 import { useState, useCallback, useEffect, useRef } from "react"
-import type { ChatBackend, ChatEvent, MessageBlock, MessagePart, ImageAttachment } from "../types"
+import type { ChatBackend, ChatEvent, MessageBlock, ImageAttachment, PendingQuestion } from "../types"
+import { processStreamEvent } from "../lib/process-stream-event"
 
-let partIdCounter = 0
+const EMPTY_MESSAGES: MessageBlock[] = []
+const noop = () => {}
+const noopAsync = async () => {}
 
-export function useChatStream(backend: ChatBackend) {
-  const [messages, setMessages] = useState<MessageBlock[]>([])
+export function useChatStream(backend: ChatBackend | null) {
+  const [messages, setMessages] = useState<MessageBlock[]>(EMPTY_MESSAGES)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null)
   const unsubRef = useRef<(() => void) | null>(null)
   const sessionIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!backend.getHistory) return
+    if (!backend?.getHistory) return
     backend.getHistory().then(history => {
       if (history?.length) setMessages(history)
     }).catch(() => {})
   }, [backend])
 
   const processEvent = useCallback((event: ChatEvent) => {
-    if (event.type === "status") {
-      setIsStreaming(false)
-      setMessages(prev => {
-        if (!prev.length) return prev
-        const lastBlock = prev[prev.length - 1]
-        if (lastBlock.role !== "assistant") return prev
-        const hasPartial = lastBlock.parts.some(p => p.isPartial)
-        if (!hasPartial) return prev
-        const updatedParts = lastBlock.parts.map(p => p.isPartial ? { ...p, isPartial: false } : p)
-        return [...prev.slice(0, -1), { ...lastBlock, parts: updatedParts }]
-      })
-      return
-    }
-
-    if (event.type === "error") {
-      setIsStreaming(false)
-    }
-
     setMessages(prev => {
-      const msgs = [...prev]
-      let lastBlock = msgs[msgs.length - 1]
-
-      if (!lastBlock || lastBlock.role !== "assistant") {
-        lastBlock = {
-          id: `assistant-${Date.now()}-${partIdCounter++}`,
-          role: "assistant",
-          parts: [],
-          timestamp: new Date().toISOString(),
-        }
-        msgs.push(lastBlock)
-      } else {
-        lastBlock = { ...lastBlock, parts: [...lastBlock.parts] }
-        msgs[msgs.length - 1] = lastBlock
-      }
-
-      const part: MessagePart = {
-        type: event.type as MessagePart["type"],
-        content: event.content || event.toolResult || "",
-        toolName: event.toolName || undefined,
-        toolInput: event.toolInput || undefined,
-      }
-
-      if (event.type === "text" && lastBlock.parts.length > 0) {
-        const lastPart = lastBlock.parts[lastBlock.parts.length - 1]
-        if (lastPart.type === "text") {
-          lastBlock.parts[lastBlock.parts.length - 1] = {
-            ...lastPart,
-            content: lastPart.content + (event.content || ""),
-          }
-          return msgs
-        }
-      }
-
-      if (event.type === "thinking" && lastBlock.parts.length > 0) {
-        const lastPart = lastBlock.parts[lastBlock.parts.length - 1]
-        if (lastPart.type === "thinking" && lastPart.isPartial) {
-          lastBlock.parts[lastBlock.parts.length - 1] = {
-            ...lastPart,
-            content: lastPart.content + (event.content || ""),
-          }
-          return msgs
-        }
-      }
-
-      if (lastBlock.parts.length > 0) {
-        const lastPart = lastBlock.parts[lastBlock.parts.length - 1]
-        if (lastPart.isPartial) {
-          lastBlock.parts[lastBlock.parts.length - 1] = { ...lastPart, isPartial: false }
-        }
-      }
-
-      lastBlock.parts.push({ ...part, isPartial: true })
-      return msgs
+      const result = processStreamEvent(prev, true, event)
+      setIsStreaming(result.isStreaming)
+      setPendingQuestion(result.pendingQuestion)
+      return result.messages
     })
   }, [])
 
   const sendMessage = useCallback(async (text: string, images?: ImageAttachment[]) => {
+    if (!backend) return
     const userBlock: MessageBlock = {
       id: `user-${Date.now()}`,
       role: "user",
@@ -102,6 +39,7 @@ export function useChatStream(backend: ChatBackend) {
     }
     setMessages(prev => [...prev, userBlock])
     setIsStreaming(true)
+    setPendingQuestion(null)
 
     try {
       const { sessionId } = await backend.sendMessage(text, images)
@@ -116,6 +54,7 @@ export function useChatStream(backend: ChatBackend) {
 
   const interrupt = useCallback(() => {
     setIsStreaming(false)
+    setPendingQuestion(null)
 
     setMessages(prev => {
       if (!prev.length) return prev
@@ -132,7 +71,7 @@ export function useChatStream(backend: ChatBackend) {
       unsubRef.current = null
     }
 
-    if (sessionIdRef.current && backend.interrupt) {
+    if (sessionIdRef.current && backend?.interrupt) {
       backend.interrupt(sessionIdRef.current).catch(() => {})
     }
   }, [backend])
@@ -142,9 +81,10 @@ export function useChatStream(backend: ChatBackend) {
       unsubRef.current()
       unsubRef.current = null
     }
-    await backend.reset?.()
-    setMessages([])
+    await backend?.reset?.()
+    setMessages(EMPTY_MESSAGES)
     setIsStreaming(false)
+    setPendingQuestion(null)
     sessionIdRef.current = null
   }, [backend])
 
@@ -154,5 +94,16 @@ export function useChatStream(backend: ChatBackend) {
     }
   }, [])
 
-  return { messages, isStreaming, sendMessage, interrupt, reset }
+  if (!backend) {
+    return {
+      messages: EMPTY_MESSAGES,
+      isStreaming: false,
+      pendingQuestion: null as PendingQuestion | null,
+      sendMessage: noopAsync as (text: string, images?: ImageAttachment[]) => Promise<void>,
+      interrupt: noop,
+      reset: noopAsync,
+    }
+  }
+
+  return { messages, isStreaming, pendingQuestion, sendMessage, interrupt, reset }
 }

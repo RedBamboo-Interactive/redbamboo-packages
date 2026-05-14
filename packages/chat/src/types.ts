@@ -94,20 +94,57 @@ export interface HandsFreeContextValue {
   cancelListening: () => void
 }
 
+// --- Stream event processing ---
+
+export interface PendingQuestion {
+  question: string
+}
+
+export interface ProcessEventResult {
+  messages: MessageBlock[]
+  isStreaming: boolean
+  pendingQuestion: PendingQuestion | null
+}
+
 // --- ChatPanel types ---
 
 export interface ChatPanelProps {
-  backend: ChatBackend
+  // Uncontrolled mode: ChatPanel manages state via useChatStream
+  backend?: ChatBackend
+
+  // Controlled mode: consumer provides state + callbacks
+  messages?: MessageBlock[]
+  isStreaming?: boolean
+  onSend?: (content: string, images?: ImageAttachment[]) => void
+  onInterrupt?: () => void
+
+  // Shared props
+  sessionId?: string | null
+  disabled?: boolean
+  pendingQuestion?: PendingQuestion | null
+  onAnswerQuestion?: (answer: string) => void
+  onResume?: () => void | Promise<void>
   placeholder?: string
   className?: string
   header?: React.ReactNode
+  footer?: React.ReactNode
   resolveImageSrc?: (src: string) => string | undefined
   permissionMode?: string
   onTogglePlanMode?: () => void
   onExecutePlan?: () => void
+  enableImageAttachments?: boolean
+  enableFileAttachments?: boolean
+
+  // Voice integration
+  speechBackend?: SpeechBackend
+  handsFreeEnabled?: boolean
+  pushToTalkKey?: string
+
+  // Render props
   renderStatusLine?: (state: {
     isStreaming: boolean
     messages: MessageBlock[]
+    pendingQuestion: PendingQuestion | null
   }) => React.ReactNode
   renderComposerInlineAction?: (state: {
     value: string
