@@ -8,9 +8,9 @@ interface MasterDetailLayoutProps {
   detail: ReactNode
   sidebarWidth?: string
   layoutKey?: string
-  sidebarDefault?: string
-  sidebarMin?: string
-  sidebarMax?: string
+  sidebarDefault?: number
+  sidebarMin?: number
+  sidebarMax?: number
   mobileLabels?: [string, string]
   mobileTab?: number
   onMobileTabChange?: (tab: number) => void
@@ -23,9 +23,9 @@ function MasterDetailLayout({
   detail,
   sidebarWidth = "w-80",
   layoutKey,
-  sidebarDefault = "18%",
-  sidebarMin = "12%",
-  sidebarMax = "35%",
+  sidebarDefault = 320,
+  sidebarMin = 240,
+  sidebarMax = 560,
   mobileLabels = ["List", "Detail"],
   mobileTab: controlledTab,
   onMobileTabChange,
@@ -87,6 +87,7 @@ function MasterDetailLayout({
         resizable ? (
           <ResizablePanelGroup
             orientation="horizontal"
+            units="pixels"
             className="flex-1 min-h-0"
             defaultLayout={savedLayout}
             onLayoutChanged={handleLayoutChanged}
@@ -105,7 +106,7 @@ function MasterDetailLayout({
               </div>
             </ResizablePanel>
             <ResizableHandle withHandle />
-            <ResizablePanel id="content" defaultSize={`${100 - parseFloat(sidebarDefault)}%`}>
+            <ResizablePanel id="content">
               <div
                 data-slot="master-detail-content"
                 className="h-full overflow-hidden flex flex-col min-h-0"
