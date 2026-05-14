@@ -53,7 +53,7 @@ const CLIP_PATHS: Record<Shape, string> = {
   circle:   buildClipPath(() => R),
 }
 
-export function MorphSpinner({ color }: { color: string }) {
+export function MorphSpinner({ color, paused }: { color: string; paused?: boolean }) {
   const [shape, setShape] = useState<Shape>("square")
   const [bouncing, setBouncing] = useState(false)
   const prevColor = useRef(color)
@@ -79,6 +79,7 @@ export function MorphSpinner({ color }: { color: string }) {
         style={{
           "--morph-color": color,
           clipPath: CLIP_PATHS[shape],
+          ...(paused ? { animationPlayState: "paused" } : undefined),
         } as React.CSSProperties}
       />
     </span>
