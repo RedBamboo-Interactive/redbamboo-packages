@@ -157,3 +157,9 @@ export type {
   FilterPillGroupProps,
   FilterPillOption,
 } from "./components/filter-bar"
+
+export {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "./components/resizable"

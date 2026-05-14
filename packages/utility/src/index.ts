@@ -73,3 +73,19 @@ export type { UseLogStreamOptions, UseLogStreamReturn } from "./use-log-stream"
 
 export { LogPanel } from "./log-panel"
 export type { LogPanelProps } from "./log-panel"
+
+export { createWebSocket } from "./create-websocket"
+export type {
+  WsEvent,
+  CreateWebSocketOptions,
+  WebSocketHandle,
+} from "./create-websocket"
+
+export { WsEventContext, useWsSubscribe, useWsSubscribeByType } from "./ws-events"
+export type { WsEventContextValue } from "./ws-events"
+
+export { WsEventProvider } from "./ws-event-provider"
+export type { WsEventProviderProps } from "./ws-event-provider"
+
+export { useLayoutPersistence } from "./use-layout-persistence"
+export type { UseLayoutPersistenceReturn } from "./use-layout-persistence"

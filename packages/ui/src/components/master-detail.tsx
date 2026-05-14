@@ -1,11 +1,16 @@
-import { type ReactNode, useState, useEffect } from "react"
+import { type ReactNode, useState, useEffect, useMemo, useCallback } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs"
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./resizable"
 import { cn } from "../utils"
 
 interface MasterDetailLayoutProps {
   sidebar: ReactNode
   detail: ReactNode
   sidebarWidth?: string
+  layoutKey?: string
+  sidebarDefault?: string
+  sidebarMin?: string
+  sidebarMax?: string
   mobileLabels?: [string, string]
   mobileTab?: number
   onMobileTabChange?: (tab: number) => void
@@ -17,6 +22,10 @@ function MasterDetailLayout({
   sidebar,
   detail,
   sidebarWidth = "w-80",
+  layoutKey,
+  sidebarDefault = "25%",
+  sidebarMin = "15%",
+  sidebarMax = "40%",
   mobileLabels = ["List", "Detail"],
   mobileTab: controlledTab,
   onMobileTabChange,
@@ -40,6 +49,28 @@ function MasterDetailLayout({
     return () => mql.removeEventListener("change", handler)
   }, [])
 
+  const savedLayout = useMemo(() => {
+    if (!layoutKey) return undefined
+    try {
+      const raw = localStorage.getItem(layoutKey)
+      return raw ? JSON.parse(raw) : undefined
+    } catch {
+      return undefined
+    }
+  }, [layoutKey])
+
+  const handleLayoutChanged = useCallback(
+    (layout: Record<string, number>) => {
+      if (!layoutKey) return
+      try {
+        localStorage.setItem(layoutKey, JSON.stringify(layout))
+      } catch { /* ignore */ }
+    },
+    [layoutKey],
+  )
+
+  const resizable = !!layoutKey
+
   return (
     <div
       data-slot="master-detail"
@@ -48,23 +79,55 @@ function MasterDetailLayout({
       {header}
 
       {isDesktop ? (
-        <div className="flex flex-1 min-h-0">
-          <div
-            data-slot="master-detail-sidebar"
-            className={cn(
-              sidebarWidth,
-              "shrink-0 bg-surface-elevated border-r border-contrast/[0.06] flex flex-col overflow-hidden",
-            )}
+        resizable ? (
+          <ResizablePanelGroup
+            orientation="horizontal"
+            className="flex-1 min-h-0"
+            defaultLayout={savedLayout}
+            onLayoutChanged={handleLayoutChanged}
           >
-            {sidebar}
+            <ResizablePanel
+              id="sidebar"
+              defaultSize={sidebarDefault}
+              minSize={sidebarMin}
+              maxSize={sidebarMax}
+            >
+              <div
+                data-slot="master-detail-sidebar"
+                className="h-full bg-surface-elevated flex flex-col overflow-hidden"
+              >
+                {sidebar}
+              </div>
+            </ResizablePanel>
+            <ResizableHandle withHandle />
+            <ResizablePanel id="content" defaultSize={`${100 - parseFloat(sidebarDefault)}%`}>
+              <div
+                data-slot="master-detail-content"
+                className="h-full overflow-hidden flex flex-col min-h-0"
+              >
+                {detail}
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        ) : (
+          <div className="flex flex-1 min-h-0">
+            <div
+              data-slot="master-detail-sidebar"
+              className={cn(
+                sidebarWidth,
+                "shrink-0 bg-surface-elevated border-r border-contrast/[0.06] flex flex-col overflow-hidden",
+              )}
+            >
+              {sidebar}
+            </div>
+            <div
+              data-slot="master-detail-content"
+              className="flex-1 overflow-hidden flex flex-col min-h-0"
+            >
+              {detail}
+            </div>
           </div>
-          <div
-            data-slot="master-detail-content"
-            className="flex-1 overflow-hidden flex flex-col min-h-0"
-          >
-            {detail}
-          </div>
-        </div>
+        )
       ) : (
         <Tabs
           value={tab}
