@@ -282,7 +282,7 @@ function PartFrieze({ parts, allParts, isLive }: { parts: MessagePart[]; allPart
             <button
               key={i}
               onClick={() => handleClick(part)}
-              className={`w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : ""}`}
+              className={`w-2.5 h-2.5 rounded-[2px] transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
               style={{ backgroundColor: getPartColor(part) }}
               title={partLabel(part)}
             />
@@ -532,7 +532,7 @@ function TaskNotificationSquare({ notification }: { notification: TaskNotificati
     <div className="py-1.5 px-0.5">
       <button
         onClick={() => setOpen(true)}
-        className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer"
+        className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
         style={{ backgroundColor: COLOR.fallback }}
         title={notification.summary}
       />

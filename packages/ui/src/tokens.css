@@ -614,6 +614,19 @@ body {
   animation: msg-in-ai 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
+@keyframes square-spawn {
+  0%   { opacity: 0; scale: 0; translate: 0 8px; }
+  35%  { opacity: 1; scale: 1.5; translate: 0 -4px; }
+  55%  { scale: 0.8; translate: 0 2px; }
+  72%  { scale: 1.15; translate: 0 -1px; }
+  86%  { scale: 0.95; translate: 0 0.5px; }
+  100% { opacity: 1; scale: 1; translate: 0 0; }
+}
+
+.square-spawn {
+  animation: square-spawn 0.45s ease-out both;
+}
+
 @keyframes square-jiggle {
   0%, 100% { transform: scale(1.25) rotate(0deg); }
   25% { transform: scale(1.25) rotate(-4deg) translate(-0.4px, -0.3px); }
@@ -622,7 +635,8 @@ body {
 }
 
 .square-jiggle {
-  animation: square-jiggle 0.6s ease-in-out infinite;
+  animation: square-spawn 0.45s ease-out both,
+             square-jiggle 0.6s ease-in-out 0.45s infinite;
 }
 
 .morph-spinner-wrap {
