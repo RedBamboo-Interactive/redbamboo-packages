@@ -196,7 +196,7 @@ function FeedbackDialog({
       <DialogContent data-slot="feedback-dialog" className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
               <i className="fa-solid fa-message text-lg text-primary" />
             </div>
             <div>
@@ -220,8 +220,8 @@ function FeedbackDialog({
                   className={cn(
                     "flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
                     category === cat.value
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      ? "border-primary bg-primary-a10 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary-a50 hover:text-foreground"
                   )}
                 >
                   <i className={cn(cat.icon, "text-[10px]")} />
@@ -236,7 +236,7 @@ function FeedbackDialog({
             <textarea
               id="feedback-description"
               data-slot="feedback-description"
-              className="w-full min-h-[120px] rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none resize-y placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+              className="w-full min-h-[120px] rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none resize-y placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring-a50 dark:bg-input-a30"
               placeholder={
                 category === "bug"
                   ? "Describe the issue you encountered..."
@@ -260,7 +260,7 @@ function FeedbackDialog({
             <CollapsibleContent>
               <div
                 data-slot="feedback-system-info"
-                className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+                className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg border border-border-a50 bg-muted-a30 px-3 py-2 text-xs text-muted-foreground"
               >
                 <span className="font-medium">App</span>
                 <span>{systemInfo.appName} v{systemInfo.appVersion}</span>

@@ -181,7 +181,7 @@ function LogEntryRow({ entry }: { entry: LogEntry }) {
       <div
         className={cn(
           "grid items-center gap-x-3 px-3 py-1 hover:bg-overlay-4 transition-colors border-b border-overlay-6 cursor-pointer",
-          entry.is_error && "bg-destructive/5",
+          entry.is_error && "bg-destructive-a5",
         )}
         style={{ gridTemplateColumns: "92px 20px 80px 1fr" }}
         onClick={() => setExpanded(prev => !prev)}
@@ -202,12 +202,12 @@ function LogEntryRow({ entry }: { entry: LogEntry }) {
         <span className="truncate">{entry.message}</span>
       </div>
       {expanded && (
-        <div className="py-2 pr-3 space-y-1 bg-muted/30 border-b border-overlay-6" style={{ paddingLeft: "calc(192px + 3rem)" }}>
-          <pre className="text-xs whitespace-pre-wrap text-foreground/80">
+        <div className="py-2 pr-3 space-y-1 bg-muted-a30 border-b border-overlay-6" style={{ paddingLeft: "calc(192px + 3rem)" }}>
+          <pre className="text-xs whitespace-pre-wrap text-foreground-a80">
             {entry.full_message || entry.message}
           </pre>
           {entry.stack_trace && (
-            <pre className="text-xs whitespace-pre-wrap text-destructive/70">{entry.stack_trace}</pre>
+            <pre className="text-xs whitespace-pre-wrap text-destructive-a70">{entry.stack_trace}</pre>
           )}
           {entry.metadata && (
             <pre className="text-xs whitespace-pre-wrap text-text-muted">

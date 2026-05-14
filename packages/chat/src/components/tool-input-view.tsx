@@ -39,7 +39,7 @@ export function ToolInputView({ toolName, toolInput }: Props) {
 }
 
 function FilePath({ path }: { path: string }) {
-  return <span className="font-mono text-xs text-amber-300/90">{path}</span>
+  return <span className="font-mono text-xs text-amber-300-a90">{path}</span>
 }
 
 function Tag({ children }: { children: React.ReactNode }) {
@@ -77,21 +77,21 @@ function EditView({ p }: { p: Record<string, unknown> }) {
       {(oldStr != null || newStr != null) && (
         <div className="rounded-md overflow-hidden border border-border-subtle text-xs font-mono">
           {oldStr != null && (
-            <div className="bg-red-500/[0.08] px-3 py-1.5 whitespace-pre-wrap break-all">
+            <div className="bg-red-500-a8 px-3 py-1.5 whitespace-pre-wrap break-all">
               {oldStr.split("\n").map((line, i) => (
                 <div key={i}>
-                  <span className="text-red-400/60 select-none mr-2">-</span>
-                  <span className="text-red-300/80">{line}</span>
+                  <span className="text-red-400-a60 select-none mr-2">-</span>
+                  <span className="text-red-300-a80">{line}</span>
                 </div>
               ))}
             </div>
           )}
           {newStr != null && (
-            <div className="bg-green-500/[0.08] px-3 py-1.5 whitespace-pre-wrap break-all">
+            <div className="bg-green-500-a8 px-3 py-1.5 whitespace-pre-wrap break-all">
               {newStr.split("\n").map((line, i) => (
                 <div key={i}>
-                  <span className="text-green-400/60 select-none mr-2">+</span>
-                  <span className="text-green-300/80">{line}</span>
+                  <span className="text-green-400-a60 select-none mr-2">+</span>
+                  <span className="text-green-300-a80">{line}</span>
                 </div>
               ))}
             </div>
@@ -128,7 +128,7 @@ function ShellView({ toolName, p }: { toolName: string; p: Record<string, unknow
       {command && (
         <div className="rounded-md bg-black/40 px-3 py-2 font-mono text-xs">
           <span className="text-text-disabled select-none mr-2">{prompt}</span>
-          <span className="text-green-300/90 whitespace-pre-wrap break-all">{command}</span>
+          <span className="text-green-300-a90 whitespace-pre-wrap break-all">{command}</span>
         </div>
       )}
       {!!(p.timeout || p.run_in_background) && (
@@ -149,7 +149,7 @@ function GrepView({ p }: { p: Record<string, unknown> }) {
       {pattern && (
         <div className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 font-mono text-xs">
           <i className="fa-solid fa-magnifying-glass text-[10px] text-text-disabled" />
-          <span className="text-amber-300/90">{pattern}</span>
+          <span className="text-amber-300-a90">{pattern}</span>
         </div>
       )}
       {path && <div><FilePath path={path} /></div>}
@@ -174,7 +174,7 @@ function GlobView({ p }: { p: Record<string, unknown> }) {
       {pattern && (
         <div className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 font-mono text-xs">
           <i className="fa-solid fa-folder-tree text-[10px] text-text-disabled" />
-          <span className="text-amber-300/90">{pattern}</span>
+          <span className="text-amber-300-a90">{pattern}</span>
         </div>
       )}
       {path && <div><FilePath path={path} /></div>}
@@ -222,7 +222,7 @@ function WebFetchView({ p }: { p: Record<string, unknown> }) {
   return url ? (
     <div className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 font-mono text-xs">
       <i className="fa-solid fa-globe text-[10px] text-text-disabled" />
-      <span className="text-blue-300/80">{url}</span>
+      <span className="text-blue-300-a80">{url}</span>
     </div>
   ) : <JsonHighlight json={JSON.stringify(p, null, 2)} />
 }

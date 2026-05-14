@@ -202,7 +202,7 @@ export function CommandPalette({
         {/* Header — matches About/Feedback pattern */}
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
               <i className="fa-solid fa-terminal text-lg text-primary" />
             </div>
             <div>
@@ -216,7 +216,7 @@ export function CommandPalette({
 
         {/* Search input */}
         <div data-slot="command-palette-search">
-          <div className="flex items-center gap-2.5 rounded-lg border border-input px-3 h-10 transition-colors focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
+          <div className="flex items-center gap-2.5 rounded-lg border border-input px-3 h-10 transition-colors focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring-a50 dark:bg-input-a30">
             <SearchIcon className="h-4 w-4 shrink-0 opacity-50" />
             <input
               ref={inputRef}
@@ -242,7 +242,7 @@ export function CommandPalette({
           id="command-palette-listbox"
           role="listbox"
           data-slot="command-palette-list"
-          className="-mx-5 max-h-72 overflow-y-auto border-t border-foreground/10 p-2"
+          className="-mx-5 max-h-72 overflow-y-auto border-t border-foreground-a10 p-2"
         >
           {flat.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">
@@ -279,7 +279,7 @@ export function CommandPalette({
                     {Icon && <Icon className="h-4 w-4 shrink-0 opacity-70" />}
                     <span className="flex-1 text-left">{cmd.label}</span>
                     {cmd.shortcut && (
-                      <kbd className="ml-auto text-xs tracking-widest text-muted-foreground/60">
+                      <kbd className="ml-auto text-xs tracking-widest text-muted-a60">
                         {cmd.shortcut}
                       </kbd>
                     )}

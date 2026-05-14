@@ -259,7 +259,7 @@ export function Composer({
       )}
       <div className="max-w-3xl mx-auto flex gap-2 items-stretch">
         <div
-          className={`flex-1 flex flex-col rounded-lg bg-overlay-6 shadow-md transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative focus-within:scale-[1.005] focus-within:shadow-xl ${dragOver ? "ring-2 ring-accent-gold/50" : ""}`}
+          className={`flex-1 flex flex-col rounded-lg bg-overlay-6 shadow-md transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative focus-within:scale-[1.005] focus-within:shadow-xl ${dragOver ? "ring-2 ring-accent-gold-a50" : ""}`}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
@@ -275,7 +275,7 @@ export function Composer({
                   />
                   <button
                     onClick={() => removeImage(i)}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500/80 hover:bg-red-500 text-white text-[10px] flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500-a80 hover:bg-red-500 text-white text-[10px] flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   >
                     <i className="fa-solid fa-xmark" />
                   </button>
@@ -302,7 +302,7 @@ export function Composer({
               <button
                 onClick={() => imageInputRef.current?.click()}
                 disabled={inputDisabled}
-                className="w-7 h-7 flex items-center justify-center rounded text-text-muted/50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="w-7 h-7 flex items-center justify-center rounded text-muted-a50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Attach image"
               >
                 <i className="fa-solid fa-image text-xs" />
@@ -312,7 +312,7 @@ export function Composer({
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={inputDisabled}
-                className="w-7 h-7 flex items-center justify-center rounded text-text-muted/50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                className="w-7 h-7 flex items-center justify-center rounded text-muted-a50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Attach file"
               >
                 <i className="fa-solid fa-paperclip text-xs" />
@@ -325,7 +325,7 @@ export function Composer({
               disabled={inputDisabled}
               className={`w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors border ${
                 isPlan
-                  ? "bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 border-violet-500/30"
+                  ? "bg-violet-500-a20 text-violet-300 hover:bg-violet-500-a30 border-violet-500-a30"
                   : "bg-overlay-6 text-text-muted hover:bg-overlay-10 border-transparent"
               } disabled:opacity-30 disabled:cursor-not-allowed`}
               title="Toggle plan mode (Shift+Tab)"
@@ -337,7 +337,7 @@ export function Composer({
           {streaming ? (
             <button
               onClick={doInterrupt}
-              className="w-full px-3 py-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition-colors flex items-center justify-center"
+              className="w-full px-3 py-2 rounded-md bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400 transition-colors flex items-center justify-center"
               title="Interrupt (Escape)"
             >
               <i className="fa-solid fa-stop text-sm" />
@@ -345,7 +345,7 @@ export function Composer({
           ) : disabled && onResume ? (
             <button
               onClick={onResume}
-              className="w-full px-3 py-2 rounded-md bg-accent-gold/20 hover:bg-accent-gold/30 text-accent-gold transition-colors flex items-center justify-center"
+              className="w-full px-3 py-2 rounded-md bg-accent-gold-a20 hover:bg-accent-gold-a30 text-accent-gold transition-colors flex items-center justify-center"
               title="Resume session (Enter)"
             >
               <i className="fa-solid fa-rotate-right text-sm" />

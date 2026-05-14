@@ -48,7 +48,7 @@ function ShareDialog({
       <DialogContent data-slot="share-dialog" className="sm:max-w-sm">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+            <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
               <i className="fa-solid fa-qrcode text-lg text-primary" />
             </div>
             <div>

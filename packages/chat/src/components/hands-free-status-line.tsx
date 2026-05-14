@@ -13,7 +13,7 @@ export function HandsFreeStatusLine({ sessionId, className }: HandsFreeStatusLin
 
   const { exchangeState, lastSummary, lastTranscript, error, queueLength } = hf
   const queueBadge = queueLength > 0 && (
-    <span className="text-[10px] text-teal-300 bg-teal-500/20 px-1.5 py-0.5 rounded-full">
+    <span className="text-[10px] text-teal-300 bg-teal-500-a20 px-1.5 py-0.5 rounded-full">
       +{queueLength} waiting
     </span>
   )
@@ -70,8 +70,8 @@ export function HandsFreeStatusLine({ sessionId, className }: HandsFreeStatusLin
             onPointerLeave={(e) => { e.preventDefault(); if (exchangeState === "listening") hf.cancelListening() }}
             className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors select-none touch-none ${
               exchangeState === "listening"
-                ? "bg-red-500/40 text-red-300"
-                : "bg-red-500/20 text-red-400 hover:bg-red-500/30 active:bg-red-500/40"
+                ? "bg-red-500-a40 text-red-300"
+                : "bg-red-500-a20 text-red-400 hover:bg-red-500-a30 active:bg-red-500-a40"
             }`}
           >
             <i className="fa-solid fa-microphone text-xs" />

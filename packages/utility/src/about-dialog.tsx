@@ -46,7 +46,7 @@ function AboutDialog({
         <DialogHeader>
           <div className="flex items-center gap-3">
             {app.icon && (
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
                 <i className={cn(app.icon, "text-lg text-primary")} />
               </div>
             )}
@@ -63,7 +63,7 @@ function AboutDialog({
         </DialogHeader>
 
         {hasUpdate && (
-          <div className="flex items-center gap-2 rounded-lg border border-accent-teal/30 bg-accent-teal/5 px-3 py-2 text-sm text-accent-teal">
+          <div className="flex items-center gap-2 rounded-lg border border-accent-teal-a30 bg-accent-teal-a5 px-3 py-2 text-sm text-accent-teal">
             <i className="fa-solid fa-circle-up text-xs" />
             <span>
               Version <strong>{fmtVersion(latestVersion)}</strong> available

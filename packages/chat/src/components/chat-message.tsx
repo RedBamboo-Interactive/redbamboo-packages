@@ -395,7 +395,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
 
   return (
     <>
-      <div className="my-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.08] p-3">
+      <div className="my-3 rounded-lg border border-violet-500-a30 bg-violet-500-a8 p-3">
         <div className="flex items-center gap-2 mb-2">
           <i className="fa-solid fa-compass-drafting text-sm text-violet-400" />
           <span className="text-sm font-medium text-violet-300">Plan ready for review</span>
@@ -407,7 +407,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
           {onExecute && !alreadyExecuting && (
             <button
               onClick={onExecute}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500/25 hover:bg-violet-500/40 text-violet-200 text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500-a25 hover:bg-violet-500-a40 text-violet-200 text-xs font-medium transition-colors"
             >
               <i className="fa-solid fa-play" />
               Execute Plan
@@ -416,7 +416,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
           {planText && (
             <button
               onClick={() => setShowPlan(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500/15 hover:bg-violet-500/30 text-violet-300 text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500-a15 hover:bg-violet-500-a30 text-violet-300 text-xs font-medium transition-colors"
             >
               <i className="fa-solid fa-eye" />
               View Plan
@@ -448,7 +448,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
             <div className="px-4 py-3 border-t border-border-subtle shrink-0">
               <button
                 onClick={() => { onExecute(); setShowPlan(false) }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-violet-500/25 hover:bg-violet-500/40 text-violet-200 text-sm font-medium transition-colors"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-violet-500-a25 hover:bg-violet-500-a40 text-violet-200 text-sm font-medium transition-colors"
               >
                 <i className="fa-solid fa-play" />
                 Execute Plan
@@ -488,7 +488,7 @@ function QuestionCard({ question, answered, onAnswer }: {
   }
 
   return (
-    <div className="my-3 rounded-lg border border-teal-500/30 bg-teal-500/[0.08] p-3">
+    <div className="my-3 rounded-lg border border-teal-500-a30 bg-teal-500-a8 p-3">
       <div className="flex items-center gap-2 mb-2">
         <i className="fa-solid fa-circle-question text-sm text-teal-400" />
         <span className="text-sm font-medium text-teal-300">Question</span>
@@ -508,12 +508,12 @@ function QuestionCard({ question, answered, onAnswer }: {
             onKeyDown={handleKeyDown}
             placeholder="Type your answer..."
             rows={1}
-            className="flex-1 resize-none bg-overlay-6 rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500/50"
+            className="flex-1 resize-none bg-overlay-6 rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500-a50"
           />
           <button
             onClick={handleSubmit}
             disabled={!value.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-teal-500/25 hover:bg-teal-500/40 text-teal-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-teal-500-a25 hover:bg-teal-500-a40 text-teal-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <i className="fa-solid fa-paper-plane" />
             Answer
@@ -542,7 +542,7 @@ function TaskNotificationSquare({ notification }: { notification: TaskNotificati
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
             <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: COLOR.fallback }} />
             <DialogTitle className="text-sm">Background Task</DialogTitle>
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${failed ? "bg-accent-red/10 text-accent-red" : "bg-overlay-6 text-text-disabled"}`}>
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${failed ? "bg-accent-red-a10 text-accent-red" : "bg-overlay-6 text-text-disabled"}`}>
               {notification.status}
             </span>
           </DialogHeader>

@@ -285,6 +285,7 @@
    avoiding Tailwind v4's color-mix-with-transparent which loses
    transparency and produces opaque grey. */
 
+@utility bg-overlay-2  { background-color: rgb(from var(--contrast) r g b / 0.02); }
 @utility bg-overlay-3  { background-color: rgb(from var(--contrast) r g b / 0.03); }
 @utility bg-overlay-4  { background-color: rgb(from var(--contrast) r g b / 0.04); }
 @utility bg-overlay-5  { background-color: rgb(from var(--contrast) r g b / 0.05); }
@@ -295,14 +296,188 @@
 @utility bg-overlay-15 { background-color: rgb(from var(--contrast) r g b / 0.15); }
 @utility bg-overlay-20 { background-color: rgb(from var(--contrast) r g b / 0.20); }
 
+@utility text-overlay-10 { color: rgb(from var(--contrast) r g b / 0.10); }
+@utility text-overlay-25 { color: rgb(from var(--contrast) r g b / 0.25); }
+@utility text-overlay-30 { color: rgb(from var(--contrast) r g b / 0.30); }
+@utility text-overlay-40 { color: rgb(from var(--contrast) r g b / 0.40); }
+@utility text-overlay-50 { color: rgb(from var(--contrast) r g b / 0.50); }
+@utility text-overlay-60 { color: rgb(from var(--contrast) r g b / 0.60); }
+@utility text-overlay-70 { color: rgb(from var(--contrast) r g b / 0.70); }
+@utility text-overlay-80 { color: rgb(from var(--contrast) r g b / 0.80); }
+
 @utility border-overlay-6  { border-color: rgb(from var(--contrast) r g b / 0.06); }
 @utility border-overlay-10 { border-color: rgb(from var(--contrast) r g b / 0.10); }
 @utility border-overlay-20 { border-color: rgb(from var(--contrast) r g b / 0.20); }
 @utility border-overlay-30 { border-color: rgb(from var(--contrast) r g b / 0.30); }
 
+@utility divide-overlay-4 {
+  & > :not(:last-child) { border-color: rgb(from var(--contrast) r g b / 0.04); }
+}
 @utility divide-overlay-6 {
   & > :not(:last-child) { border-color: rgb(from var(--contrast) r g b / 0.06); }
 }
+
+/* ── True-alpha utilities ─────────────────────────────────────────────
+   Tailwind v4 opacity modifiers (bg-color/20) use color-mix with
+   transparent, which desaturates toward black instead of producing
+   true alpha. These utilities apply real alpha via relative color
+   syntax — same technique as the overlay utilities above.
+   Use bg-accent-red-a20 instead of bg-accent-red/20, etc. */
+
+/* accent-red */
+@utility bg-accent-red-a10 { background-color: rgb(from var(--color-accent-red) r g b / 0.10); }
+@utility bg-accent-red-a20 { background-color: rgb(from var(--color-accent-red) r g b / 0.20); }
+@utility bg-accent-red-a30 { background-color: rgb(from var(--color-accent-red) r g b / 0.30); }
+@utility border-accent-red-a30 { border-color: rgb(from var(--color-accent-red) r g b / 0.30); }
+@utility border-accent-red-a40 { border-color: rgb(from var(--color-accent-red) r g b / 0.40); }
+@utility text-accent-red-a60 { color: rgb(from var(--color-accent-red) r g b / 0.60); }
+@utility text-accent-red-a80 { color: rgb(from var(--color-accent-red) r g b / 0.80); }
+
+/* accent-teal */
+@utility bg-accent-teal-a5  { background-color: rgb(from var(--color-accent-teal) r g b / 0.05); }
+@utility bg-accent-teal-a15 { background-color: rgb(from var(--color-accent-teal) r g b / 0.15); }
+@utility bg-accent-teal-a20 { background-color: rgb(from var(--color-accent-teal) r g b / 0.20); }
+@utility bg-accent-teal-a30 { background-color: rgb(from var(--color-accent-teal) r g b / 0.30); }
+@utility bg-accent-teal-a50 { background-color: rgb(from var(--color-accent-teal) r g b / 0.50); }
+@utility border-accent-teal-a30 { border-color: rgb(from var(--color-accent-teal) r g b / 0.30); }
+@utility border-accent-teal-a40 { border-color: rgb(from var(--color-accent-teal) r g b / 0.40); }
+@utility border-accent-teal-a50 { border-color: rgb(from var(--color-accent-teal) r g b / 0.50); }
+@utility ring-accent-teal-a50 { outline-color: rgb(from var(--color-accent-teal) r g b / 0.50); }
+@utility text-accent-teal-a80 { color: rgb(from var(--color-accent-teal) r g b / 0.80); }
+
+/* accent-gold */
+@utility bg-accent-gold-a20 { background-color: rgb(from var(--color-accent-gold) r g b / 0.20); }
+@utility bg-accent-gold-a30 { background-color: rgb(from var(--color-accent-gold) r g b / 0.30); }
+@utility border-accent-gold-a30 { border-color: rgb(from var(--color-accent-gold) r g b / 0.30); }
+@utility ring-accent-gold-a50 { outline-color: rgb(from var(--color-accent-gold) r g b / 0.50); }
+
+/* accent-purple */
+@utility bg-accent-purple-a20 { background-color: rgb(from var(--color-accent-purple) r g b / 0.20); }
+@utility text-accent-purple-a60 { color: rgb(from var(--color-accent-purple) r g b / 0.60); }
+
+/* primary */
+@utility bg-primary-a10 { background-color: rgb(from var(--primary) r g b / 0.10); }
+@utility bg-primary-a20 { background-color: rgb(from var(--primary) r g b / 0.20); }
+@utility bg-primary-a30 { background-color: rgb(from var(--primary) r g b / 0.30); }
+@utility bg-primary-a50 { background-color: rgb(from var(--primary) r g b / 0.50); }
+@utility bg-primary-a60 { background-color: rgb(from var(--primary) r g b / 0.60); }
+@utility bg-primary-a70 { background-color: rgb(from var(--primary) r g b / 0.70); }
+@utility bg-primary-a80 { background-color: rgb(from var(--primary) r g b / 0.80); }
+@utility border-primary-a30 { border-color: rgb(from var(--primary) r g b / 0.30); }
+@utility border-primary-a40 { border-color: rgb(from var(--primary) r g b / 0.40); }
+@utility border-primary-a50 { border-color: rgb(from var(--primary) r g b / 0.50); }
+@utility ring-primary-a30 { outline-color: rgb(from var(--primary) r g b / 0.30); }
+@utility ring-primary-a40 { outline-color: rgb(from var(--primary) r g b / 0.40); }
+@utility ring-primary-a50 { outline-color: rgb(from var(--primary) r g b / 0.50); }
+@utility text-primary-a70 { color: rgb(from var(--primary) r g b / 0.70); }
+@utility text-primary-a80 { color: rgb(from var(--primary) r g b / 0.80); }
+
+/* secondary */
+@utility bg-secondary-a80 { background-color: rgb(from var(--secondary) r g b / 0.80); }
+
+/* destructive */
+@utility bg-destructive-a5  { background-color: rgb(from var(--destructive) r g b / 0.05); }
+@utility bg-destructive-a10 { background-color: rgb(from var(--destructive) r g b / 0.10); }
+@utility bg-destructive-a15 { background-color: rgb(from var(--destructive) r g b / 0.15); }
+@utility bg-destructive-a20 { background-color: rgb(from var(--destructive) r g b / 0.20); }
+@utility bg-destructive-a30 { background-color: rgb(from var(--destructive) r g b / 0.30); }
+@utility bg-destructive-a40 { background-color: rgb(from var(--destructive) r g b / 0.40); }
+@utility border-destructive-a30 { border-color: rgb(from var(--destructive) r g b / 0.30); }
+@utility border-destructive-a40 { border-color: rgb(from var(--destructive) r g b / 0.40); }
+@utility border-destructive-a50 { border-color: rgb(from var(--destructive) r g b / 0.50); }
+@utility ring-destructive-a20 { outline-color: rgb(from var(--destructive) r g b / 0.20); }
+@utility ring-destructive-a30 { outline-color: rgb(from var(--destructive) r g b / 0.30); }
+@utility ring-destructive-a40 { outline-color: rgb(from var(--destructive) r g b / 0.40); }
+@utility text-destructive-a70 { color: rgb(from var(--destructive) r g b / 0.70); }
+@utility text-destructive-a80 { color: rgb(from var(--destructive) r g b / 0.80); }
+
+/* muted-foreground */
+@utility text-muted-a30 { color: rgb(from var(--muted-foreground) r g b / 0.30); }
+@utility text-muted-a40 { color: rgb(from var(--muted-foreground) r g b / 0.40); }
+@utility text-muted-a50 { color: rgb(from var(--muted-foreground) r g b / 0.50); }
+@utility text-muted-a60 { color: rgb(from var(--muted-foreground) r g b / 0.60); }
+@utility text-muted-a70 { color: rgb(from var(--muted-foreground) r g b / 0.70); }
+@utility text-muted-a80 { color: rgb(from var(--muted-foreground) r g b / 0.80); }
+@utility bg-muted-fg-a10 { background-color: rgb(from var(--muted-foreground) r g b / 0.10); }
+@utility bg-muted-fg-a30 { background-color: rgb(from var(--muted-foreground) r g b / 0.30); }
+@utility bg-muted-fg-a40 { background-color: rgb(from var(--muted-foreground) r g b / 0.40); }
+@utility border-muted-fg-a40 { border-color: rgb(from var(--muted-foreground) r g b / 0.40); }
+
+/* muted */
+@utility bg-muted-a20 { background-color: rgb(from var(--muted) r g b / 0.20); }
+@utility bg-muted-a30 { background-color: rgb(from var(--muted) r g b / 0.30); }
+@utility bg-muted-a40 { background-color: rgb(from var(--muted) r g b / 0.40); }
+@utility bg-muted-a50 { background-color: rgb(from var(--muted) r g b / 0.50); }
+
+/* text-disabled */
+@utility bg-text-disabled-a20 { background-color: rgb(from var(--color-text-disabled) r g b / 0.20); }
+@utility border-text-disabled-a30 { border-color: rgb(from var(--color-text-disabled) r g b / 0.30); }
+@utility text-text-disabled-a50 { color: rgb(from var(--color-text-disabled) r g b / 0.50); }
+
+/* card */
+@utility bg-card-a50 { background-color: rgb(from var(--card) r g b / 0.50); }
+@utility bg-card-a80 { background-color: rgb(from var(--card) r g b / 0.80); }
+@utility bg-card-a90 { background-color: rgb(from var(--card) r g b / 0.90); }
+@utility bg-card-a95 { background-color: rgb(from var(--card) r g b / 0.95); }
+
+/* foreground */
+@utility text-foreground-a60 { color: rgb(from var(--foreground) r g b / 0.60); }
+@utility text-foreground-a70 { color: rgb(from var(--foreground) r g b / 0.70); }
+@utility text-foreground-a80 { color: rgb(from var(--foreground) r g b / 0.80); }
+@utility text-foreground-a90 { color: rgb(from var(--foreground) r g b / 0.90); }
+@utility bg-foreground-a80 { background-color: rgb(from var(--foreground) r g b / 0.80); }
+@utility ring-foreground-a10 { outline-color: rgb(from var(--foreground) r g b / 0.10); }
+@utility border-foreground-a10 { border-color: rgb(from var(--foreground) r g b / 0.10); }
+
+/* input */
+@utility bg-input-a30 { background-color: rgb(from var(--input) r g b / 0.30); }
+@utility bg-input-a50 { background-color: rgb(from var(--input) r g b / 0.50); }
+@utility bg-input-a80 { background-color: rgb(from var(--input) r g b / 0.80); }
+
+/* border */
+@utility border-border-a40 { border-color: rgb(from var(--border) r g b / 0.40); }
+@utility border-border-a50 { border-color: rgb(from var(--border) r g b / 0.50); }
+@utility border-border-a60 { border-color: rgb(from var(--border) r g b / 0.60); }
+@utility ring-border-a40 { outline-color: rgb(from var(--border) r g b / 0.40); }
+
+/* ring */
+@utility ring-ring-a50 { outline-color: rgb(from var(--ring) r g b / 0.50); }
+
+/* built-in palette — static RGB values for true alpha */
+@utility bg-red-500-a5  { background-color: rgb(239 68 68 / 0.05); }
+@utility bg-red-500-a6  { background-color: rgb(239 68 68 / 0.06); }
+@utility bg-red-500-a8  { background-color: rgb(239 68 68 / 0.08); }
+@utility bg-red-500-a20 { background-color: rgb(239 68 68 / 0.20); }
+@utility bg-red-500-a30 { background-color: rgb(239 68 68 / 0.30); }
+@utility bg-red-500-a40 { background-color: rgb(239 68 68 / 0.40); }
+@utility bg-red-500-a80 { background-color: rgb(239 68 68 / 0.80); }
+@utility bg-amber-500-a20 { background-color: rgb(245 158 11 / 0.20); }
+@utility bg-amber-500-a30 { background-color: rgb(245 158 11 / 0.30); }
+@utility bg-green-500-a8 { background-color: rgb(34 197 94 / 0.08); }
+@utility bg-teal-500-a8  { background-color: rgb(20 184 166 / 0.08); }
+@utility bg-teal-500-a20 { background-color: rgb(20 184 166 / 0.20); }
+@utility bg-teal-500-a25 { background-color: rgb(20 184 166 / 0.25); }
+@utility bg-teal-500-a40 { background-color: rgb(20 184 166 / 0.40); }
+@utility border-teal-500-a30 { border-color: rgb(20 184 166 / 0.30); }
+@utility ring-teal-500-a50 { outline-color: rgb(20 184 166 / 0.50); }
+@utility border-amber-500-a10 { border-color: rgb(245 158 11 / 0.10); }
+@utility border-zinc-500-a10 { border-color: rgb(113 113 122 / 0.10); }
+@utility border-purple-500-a10 { border-color: rgb(168 85 247 / 0.10); }
+@utility text-red-300-a80 { color: rgb(252 165 165 / 0.80); }
+@utility text-red-400-a60 { color: rgb(248 113 113 / 0.60); }
+@utility text-amber-300-a90 { color: rgb(252 211 77 / 0.90); }
+@utility text-green-300-a80 { color: rgb(134 239 172 / 0.80); }
+@utility text-green-300-a90 { color: rgb(134 239 172 / 0.90); }
+@utility text-green-400-a60 { color: rgb(74 222 128 / 0.60); }
+@utility text-blue-300-a80 { color: rgb(147 197 253 / 0.80); }
+@utility bg-blue-400-a20 { background-color: rgb(96 165 250 / 0.20); }
+@utility bg-violet-500-a8  { background-color: rgb(139 92 246 / 0.08); }
+@utility bg-violet-500-a15 { background-color: rgb(139 92 246 / 0.15); }
+@utility bg-violet-500-a20 { background-color: rgb(139 92 246 / 0.20); }
+@utility bg-violet-500-a25 { background-color: rgb(139 92 246 / 0.25); }
+@utility bg-violet-500-a30 { background-color: rgb(139 92 246 / 0.30); }
+@utility bg-violet-500-a40 { background-color: rgb(139 92 246 / 0.40); }
+@utility border-violet-500-a30 { border-color: rgb(139 92 246 / 0.30); }
 .bg-card             { --overlay-base: var(--card); }
 .bg-popover          { --overlay-base: var(--popover); }
 

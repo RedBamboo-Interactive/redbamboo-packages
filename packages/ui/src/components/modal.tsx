@@ -102,7 +102,7 @@ export function ModalFooter({ children, align }: ModalFooterProps) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 pt-4 mt-2 border-t border-border/50",
+        "flex items-center gap-2 pt-4 mt-2 border-t border-border-a50",
         align === "end" && "justify-end",
         align === "between" && "justify-between",
       )}

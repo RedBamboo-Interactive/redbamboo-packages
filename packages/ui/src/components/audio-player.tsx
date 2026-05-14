@@ -76,7 +76,7 @@ export function AudioPlayer({ src, label }: AudioPlayerProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={toggle}
-          className="w-8 h-8 rounded-full bg-primary/20 hover:bg-primary/30 flex items-center justify-center transition-colors shrink-0"
+          className="w-8 h-8 rounded-full bg-primary-a20 hover:bg-primary-a30 flex items-center justify-center transition-colors shrink-0"
         >
           <i className={`fa-solid ${playing ? "fa-pause" : "fa-play"} text-primary text-[11px] ${playing ? "" : "ml-0.5"}`} />
         </button>
@@ -94,7 +94,7 @@ export function AudioPlayer({ src, label }: AudioPlayerProps) {
         >
           <div className="w-full h-1 rounded-full bg-overlay-10 relative">
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-primary/60 group-hover:bg-primary/80 transition-colors"
+              className="absolute inset-y-0 left-0 rounded-full bg-primary-a60 group-hover:bg-primary-a80 transition-colors"
               style={{ width: `${progress}%` }}
             />
             <div

@@ -91,12 +91,12 @@ export function ChatPanel(props: ChatPanelProps) {
         disabled={disabled || voice.state === "processing"}
         className={`absolute right-2 bottom-1.5 w-7 h-7 flex items-center justify-center rounded-md transition-colors select-none touch-none disabled:opacity-30 disabled:cursor-not-allowed ${
           voice.state === "recording"
-            ? "bg-red-500/30 text-red-400"
+            ? "bg-red-500-a30 text-red-400"
             : voice.state === "processing"
-              ? "bg-amber-500/20 text-amber-400"
+              ? "bg-amber-500-a20 text-amber-400"
               : voice.state === "error"
-                ? "bg-red-500/20 text-red-400"
-                : "text-text-muted/50 hover:text-text-muted hover:bg-overlay-6"
+                ? "bg-red-500-a20 text-red-400"
+                : "text-muted-a50 hover:text-text-muted hover:bg-overlay-6"
         }`}
         title="Hold to talk"
       >
