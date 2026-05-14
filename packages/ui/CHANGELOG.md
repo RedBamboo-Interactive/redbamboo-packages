@@ -1,5 +1,11 @@
 # @redbamboo/ui
 
+## 0.3.0
+
+### Minor Changes
+
+- 293fe40: Add `ItemList`, `ItemListRow`, `MasterDetailLayout`, `FilterBar`, and `FilterPillGroup` components for reusable master-detail list UIs with responsive layout (flush on desktop, padded+rounded on mobile)
+
 ## 0.2.0
 
 ### Minor Changes
