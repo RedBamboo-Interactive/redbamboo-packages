@@ -96,7 +96,7 @@
 .voice-input-idle:hover {
   opacity: 1;
   color: var(--color-text, #ccc);
-  background: color-mix(in oklch, var(--color-contrast, #fff) 8%, transparent);
+  background: rgb(from var(--contrast) r g b / 0.08);
 }
 
 .voice-input-recording {

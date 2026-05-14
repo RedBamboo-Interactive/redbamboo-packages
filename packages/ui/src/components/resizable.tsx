@@ -35,7 +35,7 @@ function ResizableHandle({
     <Separator
       data-slot="resizable-handle"
       className={cn(
-        "group/handle relative flex w-px items-center justify-center bg-contrast/[0.06] after:absolute after:inset-y-0 after:-left-1 after:-right-1 [&[data-resize-handle-active]]:bg-accent-teal/50",
+        "group/handle relative flex w-px items-center justify-center bg-overlay-6 after:absolute after:inset-y-0 after:-left-1 after:-right-1 [&[data-resize-handle-active]]:bg-accent-teal/50",
         className,
       )}
       {...props}

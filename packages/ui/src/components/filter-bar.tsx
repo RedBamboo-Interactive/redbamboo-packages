@@ -99,7 +99,7 @@ function FilterBar({
     >
       <div className="px-3 pb-2 flex flex-col gap-2">
         {onSearch != null && (
-          <div className="flex items-center gap-1.5 bg-contrast/[0.08] rounded px-2 py-1.5">
+          <div className="flex items-center gap-1.5 bg-overlay-8 rounded px-2 py-1.5">
             <i className="fa-solid fa-magnifying-glass text-[11px] text-text-disabled" />
             <input
               data-slot="filter-bar-search"

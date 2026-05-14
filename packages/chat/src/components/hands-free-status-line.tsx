@@ -35,7 +35,7 @@ export function HandsFreeStatusLine({ sessionId, className }: HandsFreeStatusLin
           {queueBadge}
           <button
             onClick={hf.skip}
-            className="text-xs text-text-muted hover:text-contrast px-2 py-1 rounded hover:bg-contrast/10 transition-colors"
+            className="text-xs text-text-muted hover:text-contrast px-2 py-1 rounded hover:bg-overlay-10 transition-colors"
           >
             Skip
           </button>
@@ -60,7 +60,7 @@ export function HandsFreeStatusLine({ sessionId, className }: HandsFreeStatusLin
           {queueBadge}
           <button
             onClick={hf.skip}
-            className="text-xs text-text-muted hover:text-contrast px-2 py-1 rounded hover:bg-contrast/10 transition-colors"
+            className="text-xs text-text-muted hover:text-contrast px-2 py-1 rounded hover:bg-overlay-10 transition-colors"
           >
             Skip
           </button>

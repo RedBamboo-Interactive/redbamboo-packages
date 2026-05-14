@@ -259,7 +259,7 @@ export function Composer({
       )}
       <div className="max-w-3xl mx-auto flex gap-2 items-stretch">
         <div
-          className={`flex-1 flex flex-col rounded-lg bg-contrast/[0.06] shadow-md transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative focus-within:scale-[1.005] focus-within:shadow-xl ${dragOver ? "ring-2 ring-accent-gold/50" : ""}`}
+          className={`flex-1 flex flex-col rounded-lg bg-overlay-6 shadow-md transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] relative focus-within:scale-[1.005] focus-within:shadow-xl ${dragOver ? "ring-2 ring-accent-gold/50" : ""}`}
           onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
@@ -271,7 +271,7 @@ export function Composer({
                   <img
                     src={`data:${img.mediaType};base64,${img.base64}`}
                     alt=""
-                    className="h-16 w-16 object-cover rounded-md border border-contrast/10"
+                    className="h-16 w-16 object-cover rounded-md border border-overlay-10"
                   />
                   <button
                     onClick={() => removeImage(i)}
@@ -326,7 +326,7 @@ export function Composer({
               className={`w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors border ${
                 isPlan
                   ? "bg-violet-500/20 text-violet-300 hover:bg-violet-500/30 border-violet-500/30"
-                  : "bg-contrast/[0.06] text-text-muted hover:bg-contrast/10 border-transparent"
+                  : "bg-overlay-6 text-text-muted hover:bg-overlay-10 border-transparent"
               } disabled:opacity-30 disabled:cursor-not-allowed`}
               title="Toggle plan mode (Shift+Tab)"
             >
@@ -354,7 +354,7 @@ export function Composer({
             <button
               onClick={handleSubmit}
               disabled={disabled || (!value.trim() && images.length === 0)}
-              className="w-full px-3 py-2 rounded-md bg-contrast/10 hover:bg-contrast/15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              className="w-full px-3 py-2 rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
               <i className="fa-solid fa-paper-plane text-sm" />
             </button>

@@ -121,7 +121,7 @@ function MasterDetailLayout({
               data-slot="master-detail-sidebar"
               className={cn(
                 sidebarWidth,
-                "shrink-0 bg-surface-elevated border-r border-contrast/[0.06] flex flex-col overflow-hidden",
+                "shrink-0 bg-surface-elevated border-r border-overlay-6 flex flex-col overflow-hidden",
               )}
             >
               {sidebar}

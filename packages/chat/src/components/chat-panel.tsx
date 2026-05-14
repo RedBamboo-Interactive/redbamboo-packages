@@ -96,7 +96,7 @@ export function ChatPanel(props: ChatPanelProps) {
               ? "bg-amber-500/20 text-amber-400"
               : voice.state === "error"
                 ? "bg-red-500/20 text-red-400"
-                : "text-text-muted/50 hover:text-text-muted hover:bg-contrast/[0.06]"
+                : "text-text-muted/50 hover:text-text-muted hover:bg-overlay-6"
         }`}
         title="Hold to talk"
       >
@@ -191,7 +191,7 @@ export function ChatPanel(props: ChatPanelProps) {
       {showScrollBtn && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-20 right-6 w-8 h-8 rounded-full bg-contrast/10 hover:bg-contrast/20 flex items-center justify-center transition-colors shadow-lg border border-border-subtle"
+          className="absolute bottom-20 right-6 w-8 h-8 rounded-full bg-overlay-10 hover:bg-overlay-20 flex items-center justify-center transition-colors shadow-lg border border-border-subtle"
           title="Scroll to bottom"
         >
           <i className="fa-solid fa-arrow-down text-xs" />

@@ -144,7 +144,7 @@ export function ChatMessage({
     const images = block.parts[0]?.images
     return (
       <div className="flex justify-end mb-3 msg-enter-user">
-        <div className="max-w-[80%] bg-contrast/10 rounded-xl rounded-br-sm px-4 py-2.5">
+        <div className="max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
           {images && images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
               {images.map((img: ImageAttachment, i: number) => (
@@ -152,7 +152,7 @@ export function ChatMessage({
                   key={i}
                   src={`data:${img.mediaType};base64,${img.base64}`}
                   alt=""
-                  className="max-h-48 rounded-md border border-contrast/10"
+                  className="max-h-48 rounded-md border border-overlay-10"
                 />
               ))}
             </div>
@@ -320,7 +320,7 @@ function PartModal({ part, pairedResult, open, onClose }: { part?: MessagePart; 
           />
           <DialogTitle className="text-sm">{partLabel(part)}</DialogTitle>
           {category && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-contrast/[0.06] text-text-disabled">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled">
               {category}
             </span>
           )}
@@ -508,7 +508,7 @@ function QuestionCard({ question, answered, onAnswer }: {
             onKeyDown={handleKeyDown}
             placeholder="Type your answer..."
             rows={1}
-            className="flex-1 resize-none bg-contrast/[0.06] rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500/50"
+            className="flex-1 resize-none bg-overlay-6 rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500/50"
           />
           <button
             onClick={handleSubmit}
@@ -542,7 +542,7 @@ function TaskNotificationSquare({ notification }: { notification: TaskNotificati
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
             <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: COLOR.fallback }} />
             <DialogTitle className="text-sm">Background Task</DialogTitle>
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${failed ? "bg-accent-red/10 text-accent-red" : "bg-contrast/[0.06] text-text-disabled"}`}>
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${failed ? "bg-accent-red/10 text-accent-red" : "bg-overlay-6 text-text-disabled"}`}>
               {notification.status}
             </span>
           </DialogHeader>
@@ -558,7 +558,7 @@ function TaskNotificationSquare({ notification }: { notification: TaskNotificati
             {notification.outputFile && (
               <div className="text-xs">
                 <span className="text-text-muted">Output</span>
-                <pre className="mt-1 font-mono text-text-disabled bg-contrast/[0.04] rounded px-2 py-1.5 break-all whitespace-pre-wrap">{notification.outputFile}</pre>
+                <pre className="mt-1 font-mono text-text-disabled bg-overlay-4 rounded px-2 py-1.5 break-all whitespace-pre-wrap">{notification.outputFile}</pre>
               </div>
             )}
           </div>

@@ -280,7 +280,31 @@
   --scrollbar-thumb-hover: #72767E;
 }
 
-/* ── Global styles ─────────────────────────────────────────────────── */
+/* ── Overlay utilities ─────────────────────────────────────────────── */
+/* Use relative color syntax to apply true alpha to --contrast,
+   avoiding Tailwind v4's color-mix-with-transparent which loses
+   transparency and produces opaque grey. */
+
+@utility bg-overlay-3  { background-color: rgb(from var(--contrast) r g b / 0.03); }
+@utility bg-overlay-4  { background-color: rgb(from var(--contrast) r g b / 0.04); }
+@utility bg-overlay-5  { background-color: rgb(from var(--contrast) r g b / 0.05); }
+@utility bg-overlay-6  { background-color: rgb(from var(--contrast) r g b / 0.06); }
+@utility bg-overlay-8  { background-color: rgb(from var(--contrast) r g b / 0.08); }
+@utility bg-overlay-10 { background-color: rgb(from var(--contrast) r g b / 0.10); }
+@utility bg-overlay-12 { background-color: rgb(from var(--contrast) r g b / 0.12); }
+@utility bg-overlay-15 { background-color: rgb(from var(--contrast) r g b / 0.15); }
+@utility bg-overlay-20 { background-color: rgb(from var(--contrast) r g b / 0.20); }
+
+@utility border-overlay-6  { border-color: rgb(from var(--contrast) r g b / 0.06); }
+@utility border-overlay-10 { border-color: rgb(from var(--contrast) r g b / 0.10); }
+@utility border-overlay-20 { border-color: rgb(from var(--contrast) r g b / 0.20); }
+@utility border-overlay-30 { border-color: rgb(from var(--contrast) r g b / 0.30); }
+
+@utility divide-overlay-6 {
+  & > :not(:last-child) { border-color: rgb(from var(--contrast) r g b / 0.06); }
+}
+.bg-card             { --overlay-base: var(--card); }
+.bg-popover          { --overlay-base: var(--popover); }
 
 body {
   margin: 0;

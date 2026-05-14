@@ -24,7 +24,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
         />
         <button
           onClick={onClose}
-          className="absolute top-2 right-2 w-9 h-9 rounded-full bg-contrast/10 hover:bg-contrast/20 flex items-center justify-center text-contrast transition-colors"
+          className="absolute top-2 right-2 w-9 h-9 rounded-full bg-overlay-10 hover:bg-overlay-20 flex items-center justify-center text-contrast transition-colors"
         >
           <i className="fa-solid fa-xmark" />
         </button>

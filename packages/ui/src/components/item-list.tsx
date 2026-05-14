@@ -29,8 +29,8 @@ function ItemListRow({
       data-selected={selected || undefined}
       onClick={onClick}
       className={cn(
-        "group/row flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-contrast/[0.06]",
-        selected ? "bg-contrast/[0.08]" : "hover:bg-contrast/[0.04]",
+        "group/row flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-overlay-6",
+        selected ? "bg-overlay-8" : "hover:bg-overlay-4",
         className,
       )}
     >
@@ -100,7 +100,7 @@ function ItemList<T>({
             data-slot="item-list-load-more"
             onClick={onLoadMore}
             disabled={loading}
-            className="flex items-center justify-center gap-2 px-4 py-3 text-[12px] text-accent-teal hover:text-contrast transition-colors border-b border-contrast/[0.06] hover:bg-contrast/[0.04]"
+            className="flex items-center justify-center gap-2 px-4 py-3 text-[12px] text-accent-teal hover:text-contrast transition-colors border-b border-overlay-6 hover:bg-overlay-4"
           >
             {loading ? (
               <i className="fa-solid fa-spinner fa-spin text-xs" />
