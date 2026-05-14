@@ -130,15 +130,18 @@ export function LogPanel({
         onSearch={setSearch}
         placeholder="Search logs..."
         summary={hasFilters ? `${filtered.length} of ${entries.length} entries` : undefined}
+        className="py-2"
       >
         <FilterPillGroup
           label="Level"
+          icon="fa-solid fa-layer-group"
           options={levelOptions}
           value={levelFilter}
           onChange={setLevelFilter}
         />
         <FilterPillGroup
           label="Source"
+          icon="fa-solid fa-tag"
           options={sourceOptions}
           value={sourceFilter}
           onChange={setSourceFilter}

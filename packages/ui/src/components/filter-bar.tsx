@@ -10,6 +10,7 @@ interface FilterPillOption {
 
 interface FilterPillGroupProps {
   label: string
+  icon?: string
   options: FilterPillOption[]
   value: string | null
   onChange: (value: string | null) => void
@@ -20,6 +21,7 @@ interface FilterPillGroupProps {
 
 function FilterPillGroup({
   label,
+  icon,
   options,
   value,
   onChange,
@@ -34,7 +36,10 @@ function FilterPillGroup({
       data-slot="filter-pill-group"
       className={cn("flex items-center gap-1 overflow-x-auto", className)}
     >
-      <span className="text-[10px] text-text-disabled shrink-0">{label}</span>
+      <span className="flex items-center gap-1 text-[10px] text-text-disabled shrink-0">
+        {icon && <i className={cn(icon, "text-[9px]")} />}
+        {label}
+      </span>
       {options.map((opt) => {
         const isActive = value === opt.value
         const bg = isActive
@@ -52,11 +57,13 @@ function FilterPillGroup({
             data-slot="filter-pill"
             data-active={isActive || undefined}
             onClick={() => onChange(isActive ? null : opt.value)}
-            className="rounded px-1.5 py-0.5 text-[10px] cursor-pointer transition-colors shrink-0"
+            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-[10px] cursor-pointer transition-all shrink-0 hover:brightness-125"
             style={{ backgroundColor: bg, color: fg }}
           >
-            {opt.label || opt.value}
-            {opt.count != null && ` (${opt.count})`}
+            <span>{opt.label || opt.value}</span>
+            {opt.count != null && (
+              <span className="text-[9px] opacity-50">{opt.count}</span>
+            )}
           </button>
         )
       })}
