@@ -74,14 +74,44 @@ export function createRemoteConnection(opts: {
 export function applyConnectionParams(store: RemoteConnectionStore): void {
   const params = new URLSearchParams(window.location.search)
   const token = params.get("token")
-  if (!token) return
+  if (token) {
+    const serverUrl = params.get("server") ?? undefined
+    store.set({ serverUrl, token })
 
-  const serverUrl = params.get("server") ?? undefined
-  store.set({ serverUrl, token })
+    params.delete("token")
+    params.delete("server")
+    const search = params.toString()
+    const newUrl = window.location.pathname + (search ? `?${search}` : "") + window.location.hash
+    window.history.replaceState(null, "", newUrl)
+  }
 
-  params.delete("token")
-  params.delete("server")
-  const search = params.toString()
-  const newUrl = window.location.pathname + (search ? `?${search}` : "") + window.location.hash
-  window.history.replaceState(null, "", newUrl)
+  // Clear stale serverUrl that points to a different localhost port.
+  // Requests should go through same-origin so backend proxies can
+  // inject headers like X-Caller-Info.
+  const conn = store.get()
+  if (conn && conn.serverUrl) {
+    try {
+      const stored = new URL(conn.serverUrl)
+      const isSameOrigin = stored.origin === window.location.origin
+      if (!isSameOrigin && (store.isRemoteAccess() || stored.hostname === "localhost")) {
+        store.set({ token: conn.token })
+      }
+    } catch { /* invalid URL, leave as-is */ }
+  }
+}
+
+export async function autoConnect(
+  store: RemoteConnectionStore,
+  endpoint = "/ping",
+): Promise<boolean> {
+  const conn = store.get()
+  if (conn) return true
+  try {
+    const res = await fetch(endpoint)
+    if (res.ok) {
+      store.set({ token: "" })
+      return true
+    }
+  } catch { /* server not reachable */ }
+  return false
 }

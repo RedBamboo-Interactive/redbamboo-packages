@@ -22,7 +22,7 @@ export function ConnectPrompt({
   store,
   validateEndpoint = "/ping",
   showServerUrl = false,
-  defaultServerUrl = "http://localhost:18800",
+  defaultServerUrl = "",
   onConnected,
 }: ConnectPromptProps) {
   const [serverUrl, setServerUrl] = useState(defaultServerUrl)

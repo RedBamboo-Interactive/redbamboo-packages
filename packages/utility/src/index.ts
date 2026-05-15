@@ -40,7 +40,7 @@ export { JsonHighlight } from "./json-highlight"
 export { createLocalStore, useLocalStore } from "./local-store"
 export type { LocalStore } from "./local-store"
 
-export { createRemoteConnection, applyConnectionParams } from "./remote-connection"
+export { createRemoteConnection, applyConnectionParams, autoConnect } from "./remote-connection"
 export type { ConnectionConfig, RemoteConnectionStore } from "./remote-connection"
 
 export { ConnectPrompt } from "./connect-prompt"
