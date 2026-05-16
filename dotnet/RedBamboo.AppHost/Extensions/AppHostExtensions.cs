@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using RedBamboo.AppHost.Auth;
 using RedBamboo.AppHost.Discovery;
 using RedBamboo.AppHost.Logging;
 using RedBamboo.AppHost.Proxy;
 using RedBamboo.AppHost.RemoteAccess;
 using RedBamboo.AppHost.Tunnel;
+using RedBamboo.AppHost.WebSockets;
 
 namespace RedBamboo.AppHost.Extensions;
 
@@ -17,6 +19,12 @@ public static class AppHostExtensions
         return services;
     }
 
+    public static IServiceCollection AddAppHostWebSocket(this IServiceCollection services)
+    {
+        services.TryAddSingleton<WebSocketBroadcaster>();
+        return services;
+    }
+
     public static IServiceCollection AddAppHostLogging(
         this IServiceCollection services, Action<LogServiceOptions>? configure = null)
     {
@@ -24,6 +32,7 @@ public static class AppHostExtensions
         configure?.Invoke(options);
         var logService = new LogService(options);
         services.AddSingleton(logService);
+        services.AddAppHostWebSocket();
         return services;
     }
 
@@ -42,10 +51,15 @@ public static class AppHostExtensions
         LogService? logService = null,
         Dictionary<string, string>? proxyRoutes = null)
     {
-        DiscoveryEndpoints.MapDiscoveryEndpoints(app, descriptor, tunnelService);
+        var broadcaster = app.Services.GetService<WebSocketBroadcaster>();
+
+        DiscoveryEndpoints.MapDiscoveryEndpoints(app, descriptor, tunnelService, broadcaster);
         RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
+
         if (logService is not null)
             LogEndpoints.MapLogEndpoints(app, logService);
+
+        List<ProxyRouteConfig>? wsProxyRoutes = null;
         if (proxyRoutes is { Count: > 0 })
         {
             var seenWsUpstreams = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -55,8 +69,26 @@ public static class AppHostExtensions
                 UpstreamBaseUrl = kv.Value,
                 ProxyWebSocket = seenWsUpstreams.Add(kv.Value),
             }).ToList();
-            ProxyEndpoints.MapProxyEndpoints(app, routes, logService);
+            ProxyEndpoints.MapProxyEndpoints(app, routes, appName);
+            wsProxyRoutes = routes.Where(r => r.ProxyWebSocket).ToList();
         }
+
+        if (broadcaster is not null)
+        {
+            var alreadyRegistered = broadcaster.GetEventSchemas().Any(s => s.Type == "log.entry");
+            if (logService is not null && !alreadyRegistered)
+            {
+                broadcaster.RegisterEvent(new WsEventSchema(
+                    "log.entry",
+                    "Fired for every new log entry",
+                    DataSchema: "LogEntry",
+                    Fields: ["id", "timestamp", "level", "category", "source", "message"]));
+                logService.OnLogEntry += entry => broadcaster.Broadcast("log.entry", entry.ToWireFormat());
+            }
+
+            WebSocketEndpoints.MapWebSocketEndpoints(app, broadcaster, wsProxyRoutes);
+        }
+
         return app;
     }
 }

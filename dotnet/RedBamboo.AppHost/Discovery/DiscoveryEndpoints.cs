@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using RedBamboo.AppHost.Tunnel;
+using RedBamboo.AppHost.WebSockets;
 
 namespace RedBamboo.AppHost.Discovery;
 
@@ -11,7 +12,8 @@ public static class DiscoveryEndpoints
     public static void MapDiscoveryEndpoints(
         this WebApplication app,
         IServiceDescriptor descriptor,
-        CloudflareTunnelService tunnelService)
+        CloudflareTunnelService tunnelService,
+        WebSocketBroadcaster? broadcaster = null)
     {
         _startTime = DateTime.UtcNow;
 
@@ -48,7 +50,19 @@ public static class DiscoveryEndpoints
         app.MapGet("/discover", async () =>
         {
             var capabilities = await descriptor.GetCapabilitiesAsync();
-            var appEndpoints = descriptor.GetAppEndpoints();
+            var appEndpoints = descriptor.GetAppEndpoints().ToList();
+
+            if (broadcaster is not null)
+            {
+                var eventCount = broadcaster.GetEventSchemas().Count;
+                appEndpoints.Add(new EndpointDescriptor(
+                    "WS", "/ws",
+                    $"Real-time event stream ({eventCount} event type{(eventCount == 1 ? "" : "s")}). " +
+                    "See /ws/schema for full event catalog"));
+                appEndpoints.Add(new EndpointDescriptor(
+                    "GET", "/ws/schema",
+                    "Returns all registered WebSocket event types with descriptions and field schemas"));
+            }
 
             return Results.Ok(new
             {

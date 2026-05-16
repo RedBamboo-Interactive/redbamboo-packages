@@ -35,9 +35,12 @@ if (-not $SkipFrontend) {
     Write-Host "=== Building frontend ===" -ForegroundColor Cyan
     Push-Location $FrontendDir
     try {
-        & $PackageManager run build
+        $ErrorActionPreference = "Continue"
+        Invoke-Expression "$PackageManager run build"
+        $ErrorActionPreference = "Stop"
         if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
     } finally {
+        $ErrorActionPreference = "Stop"
         Pop-Location
     }
 }

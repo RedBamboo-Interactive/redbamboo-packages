@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import type { RemoteConnectionStore } from "./remote-connection"
-import type { LogEntry, LogFilter, LogsResponse, LogStreamEvent } from "./log-types"
+import type { LogEntry, LogFilter, LogsResponse } from "./log-types"
+import { createWebSocket } from "./create-websocket"
 
 export interface UseLogStreamOptions {
   store?: RemoteConnectionStore
@@ -34,7 +35,6 @@ export function useLogStream(opts?: UseLogStreamOptions): UseLogStreamReturn {
   const [error, setError] = useState<string | null>(null)
 
   const activeRef = useRef(true)
-  const wsRef = useRef<WebSocket | null>(null)
   const seenIds = useRef(new Set<string>())
   const pausedRef = useRef(paused)
   pausedRef.current = paused
@@ -95,53 +95,39 @@ export function useLogStream(opts?: UseLogStreamOptions): UseLogStreamReturn {
     }
   }, [base, logsEndpoint])
 
-  const connectWs = useCallback(() => {
+  const wsUrl = useCallback(() => {
     const wsBase = base.replace(/^http/, "ws")
     const wsPath = opts?.wsEndpoint ?? "/ws"
-    const ws = new WebSocket(`${wsBase}${wsPath}`)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      if (activeRef.current) setConnected(true)
-    }
-
-    ws.onmessage = (event) => {
-      if (pausedRef.current || !activeRef.current) return
-      try {
-        const msg: LogStreamEvent = JSON.parse(event.data)
-        if (msg.type === "log.entry" && msg.data) {
-          addEntry(msg.data)
-        }
-      } catch {
-        // non-JSON or unrecognized message
-      }
-    }
-
-    ws.onclose = () => {
-      if (activeRef.current) {
-        setConnected(false)
-        setTimeout(() => {
-          if (activeRef.current) connectWs()
-        }, 3000)
-      }
-    }
-
-    ws.onerror = () => {
-      ws.close()
-    }
-  }, [base, opts?.wsEndpoint, addEntry])
+    return `${wsBase}${wsPath}`
+  }, [base, opts?.wsEndpoint])
 
   useEffect(() => {
     activeRef.current = true
     refresh()
-    if (autoConnect) connectWs()
+
+    if (!autoConnect) return
+
+    const handle = createWebSocket({
+      url: wsUrl,
+      onEvent: (event) => {
+        if (pausedRef.current || !activeRef.current) return
+        if (event.type === "log.entry" && event.data) {
+          addEntry(event.data as LogEntry)
+        }
+      },
+      onConnect: () => {
+        if (activeRef.current) setConnected(true)
+      },
+      onDisconnect: () => {
+        if (activeRef.current) setConnected(false)
+      },
+    })
 
     return () => {
       activeRef.current = false
-      wsRef.current?.close()
-      wsRef.current = null
+      handle.close()
     }
-  }, [refresh, connectWs, autoConnect])
+  }, [refresh, wsUrl, autoConnect, addEntry])
 
   const clear = useCallback(async () => {
     try {
