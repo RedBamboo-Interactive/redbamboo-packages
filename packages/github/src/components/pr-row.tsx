@@ -116,7 +116,15 @@ export function PrRow({
       </td>
 
       {/* Health check status */}
-      <td className="px-3 py-2 w-8">
+      <td
+        className="px-3 py-2 w-8"
+        onClick={(e) => {
+          if (!healthCheck) return
+          e.stopPropagation()
+          actions.onClickHealthCheck?.(healthCheck)
+        }}
+        style={healthCheck ? { cursor: "pointer" } : undefined}
+      >
         {healthCheck?.status === "pending" ||
         healthCheck?.status === "running" ? (
           <Loader2 className="size-4 text-muted-foreground animate-spin" />

@@ -21,6 +21,7 @@ export interface GitHubActions {
   onAdoptPr?: (pr: GitHubPr) => void
 
   onClickReview?: (review: Review) => void
+  onClickHealthCheck?: (hc: HealthCheckResult) => void
 
   onAutoTackle?: (issue: GitHubIssue) => void
   onCloseIssue?: (issue: GitHubIssue) => void
