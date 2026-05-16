@@ -139,6 +139,9 @@ export type {
   ToastVariant,
 } from "./components/toast"
 
+export { NavTabs, NavTab, navTabClass } from "./components/nav-tabs"
+export type { NavTabsProps, NavTabProps } from "./components/nav-tabs"
+
 export { AudioPlayer } from "./components/audio-player"
 export type { AudioPlayerProps } from "./components/audio-player"
 

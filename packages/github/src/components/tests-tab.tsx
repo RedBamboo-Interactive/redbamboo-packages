@@ -1,15 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
-  Play,
-  Loader2,
-  CheckCircle,
-  XCircle,
-  Minus,
-} from "lucide-react"
-import {
-  Card,
-  CardHeader,
-  CardContent,
   Button,
   Tabs,
   TabsList,
@@ -108,44 +98,42 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
   })
 
   return (
-    <Card className="flex flex-col h-full">
-      <CardHeader className="flex-none pb-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Tabs value={suiteFilter} onValueChange={setSuiteFilter}>
-            <TabsList className="h-8">
-              <TabsTrigger value="" className="text-xs px-2.5">All</TabsTrigger>
-              {suites.map(s => (
-                <TabsTrigger key={s.key} value={s.key} className="text-xs px-2.5">
-                  {s.display_name}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-overlay-6 flex-none">
+        <Tabs value={suiteFilter} onValueChange={setSuiteFilter}>
+          <TabsList className="h-7">
+            <TabsTrigger value="" className="text-xs px-2">All</TabsTrigger>
+            {suites.map(s => (
+              <TabsTrigger key={s.key} value={s.key} className="text-xs px-2">
+                {s.display_name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 ml-auto"
-            onClick={handleRunAll}
-            disabled={runningSuites.size > 0}
-          >
-            <Play className="size-3.5 mr-1" />
-            Run All
-          </Button>
-        </div>
-      </CardHeader>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs ml-auto"
+          onClick={handleRunAll}
+          disabled={runningSuites.size > 0}
+        >
+          <i className="fa-solid fa-play text-[10px] mr-1" />
+          Run All
+        </Button>
+      </div>
 
-      <CardContent className="flex-1 min-h-0 overflow-auto p-0">
+      <div className="flex-1 min-h-0 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-5 animate-spin text-text-muted" />
+            <i className="fa-solid fa-spinner fa-spin text-text-muted" />
           </div>
         ) : filteredSuites.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-sm text-text-muted">
             No test suites discovered
           </div>
         ) : (
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-overlay-6">
             {filteredSuites.map(suite => {
               const isRunning = runningSuites.has(suite.key)
               const latest = suite.latest_run
@@ -153,16 +141,15 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
 
               return (
                 <div key={suite.key} className="px-4 py-3">
-                  {/* Suite header */}
                   <div className="flex items-center gap-2 mb-2">
                     {isRunning ? (
-                      <Loader2 className="size-4 animate-spin text-text-muted" />
+                      <i className="fa-solid fa-spinner fa-spin text-sm text-text-muted" />
                     ) : latest?.passed === true ? (
-                      <CheckCircle className="size-4 text-emerald-400" />
+                      <i className="fa-solid fa-circle-check text-sm text-emerald-400" />
                     ) : latest?.passed === false ? (
-                      <XCircle className="size-4 text-red-400" />
+                      <i className="fa-solid fa-circle-xmark text-sm text-red-400" />
                     ) : (
-                      <Minus className="size-4 text-text-muted" />
+                      <i className="fa-solid fa-minus text-sm text-text-muted" />
                     )}
 
                     <span className="text-sm font-medium">{suite.display_name}</span>
@@ -189,11 +176,10 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
                       disabled={isRunning}
                       title="Run Suite"
                     >
-                      <Play className="size-3.5" />
+                      <i className="fa-solid fa-play text-[10px]" />
                     </Button>
                   </div>
 
-                  {/* Per-test sparklines */}
                   {suiteHistory.length > 0 && (
                     <div className="space-y-1 ml-6">
                       {suiteHistory.slice(0, 20).map(test => (
@@ -216,7 +202,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

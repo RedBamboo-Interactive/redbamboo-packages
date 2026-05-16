@@ -1,10 +1,4 @@
-import {
-  ExternalLink,
-  Zap,
-  X,
-  RotateCw,
-} from "lucide-react"
-import { Badge, Button } from "@redbamboo/ui"
+import { Badge } from "@redbamboo/ui"
 import type { GitHubIssue, TackleRun } from "../types"
 import { issueTypeIcon, tackleStatusIcon, timeAgo } from "./shared"
 
@@ -31,10 +25,9 @@ export function IssueRow({
 }: Props) {
   return (
     <tr
-      className="border-b border-border hover:bg-overlay-5 transition-colors cursor-pointer"
+      className="border-b border-overlay-6 hover:bg-overlay-5 transition-colors cursor-pointer"
       onClick={() => onClick?.(issue)}
     >
-      {/* Issue type icon + number */}
       <td className="px-3 py-2 w-20">
         <span className="flex items-center gap-1.5">
           {issueTypeIcon(issue.labels)}
@@ -44,7 +37,6 @@ export function IssueRow({
         </span>
       </td>
 
-      {/* Title + body preview */}
       <td className="px-3 py-2 text-sm">
         <div className="truncate max-w-[400px] font-medium">
           {issue.title}
@@ -56,7 +48,6 @@ export function IssueRow({
         )}
       </td>
 
-      {/* Labels */}
       <td className="px-3 py-2 w-32">
         <div className="flex flex-wrap gap-1">
           {issue.labels.map((l) => (
@@ -76,17 +67,14 @@ export function IssueRow({
         </div>
       </td>
 
-      {/* Author */}
       <td className="px-3 py-2 text-xs text-text-muted w-24 truncate">
         {issue.author}
       </td>
 
-      {/* Date */}
       <td className="px-3 py-2 text-xs text-text-muted w-20">
         {timeAgo(issue.created_at)}
       </td>
 
-      {/* Tackle status */}
       <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
         {tackle && (
           <button
@@ -99,43 +87,24 @@ export function IssueRow({
         )}
       </td>
 
-      {/* Actions */}
       <td className="px-3 py-2 w-32" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           {issue.state === "open" && !tackle && onAutoTackle && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-[10px]"
-              onClick={() => onAutoTackle(issue)}
-              title="Auto Tackle"
-            >
-              <Zap className="size-3.5" />
-            </Button>
+            <button onClick={() => onAutoTackle(issue)} title="Auto Tackle" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
+              <i className="fa-solid fa-bolt text-[11px] text-text-muted opacity-60" />
+            </button>
           )}
 
           {issue.state === "open" && onClose && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-text-muted"
-              onClick={() => onClose(issue)}
-              title="Close"
-            >
-              <X className="size-3.5" />
-            </Button>
+            <button onClick={() => onClose(issue)} title="Close" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
+              <i className="fa-solid fa-xmark text-[11px] text-text-muted opacity-60" />
+            </button>
           )}
 
           {issue.state === "closed" && onReopen && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5"
-              onClick={() => onReopen(issue)}
-              title="Reopen"
-            >
-              <RotateCw className="size-3.5" />
-            </Button>
+            <button onClick={() => onReopen(issue)} title="Reopen" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
+              <i className="fa-solid fa-rotate-right text-[11px] text-text-muted opacity-60" />
+            </button>
           )}
 
           {getIssueUrl && (
@@ -143,10 +112,10 @@ export function IssueRow({
               href={getIssueUrl(issue.number)}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center h-6 px-1.5 text-text-muted hover:text-contrast transition-colors"
+              className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
-              <ExternalLink className="size-3.5" />
+              <i className="fa-solid fa-arrow-up-right-from-square text-[10px] text-text-muted opacity-60" />
             </a>
           )}
         </div>

@@ -1,4 +1,3 @@
-import { FileWarning, ArrowUp } from "lucide-react"
 import type { RepoWorkingState } from "../types"
 
 interface Props {
@@ -13,13 +12,13 @@ export function WorkingStatePanel({ repos, onViewFiles }: Props) {
   if (totalUncommitted === 0 && totalUnpushed === 0) return null
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1.5 text-xs text-text-muted border-b border-border">
+    <div className="flex items-center gap-3 px-3 py-1.5 text-xs text-text-muted border-b border-overlay-6">
       {totalUncommitted > 0 && (
         <button
-          className="flex items-center gap-1 hover:text-contrast transition-colors"
+          className="flex items-center gap-1.5 hover:text-contrast transition-colors"
           onClick={() => repos.length === 1 && onViewFiles?.(repos[0]!)}
         >
-          <FileWarning className="size-3.5 text-amber-400" />
+          <i className="fa-solid fa-triangle-exclamation text-[10px] text-accent-gold" />
           <span>
             {totalUncommitted} uncommitted file
             {totalUncommitted !== 1 ? "s" : ""}
@@ -27,8 +26,8 @@ export function WorkingStatePanel({ repos, onViewFiles }: Props) {
         </button>
       )}
       {totalUnpushed > 0 && (
-        <span className="flex items-center gap-1">
-          <ArrowUp className="size-3.5 text-blue-400" />
+        <span className="flex items-center gap-1.5">
+          <i className="fa-solid fa-arrow-up text-[10px] text-accent-purple" />
           <span>
             {totalUnpushed} unpushed commit
             {totalUnpushed !== 1 ? "s" : ""}

@@ -1,13 +1,4 @@
 import {
-  Plus,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react"
-import {
-  Card,
-  CardHeader,
-  CardContent,
   Button,
   Tabs,
   TabsList,
@@ -46,96 +37,94 @@ export function IssuesTab({
   const actions = useGitHub()
 
   return (
-    <Card className="flex flex-col h-full">
-      <CardHeader className="flex-none pb-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Tabs
-            value={stateFilter}
-            onValueChange={(v) =>
-              onStateFilterChange(v as "open" | "closed" | "all")
-            }
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-overlay-6 flex-none">
+        <Tabs
+          value={stateFilter}
+          onValueChange={(v) =>
+            onStateFilterChange(v as "open" | "closed" | "all")
+          }
+        >
+          <TabsList className="h-7">
+            <TabsTrigger value="open" className="text-xs px-2">
+              Open
+            </TabsTrigger>
+            <TabsTrigger value="closed" className="text-xs px-2">
+              Closed
+            </TabsTrigger>
+            <TabsTrigger value="all" className="text-xs px-2">
+              All
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Tabs
+          value={labelFilter}
+          onValueChange={onLabelFilterChange}
+        >
+          <TabsList className="h-7">
+            <TabsTrigger value="" className="text-xs px-2">
+              All
+            </TabsTrigger>
+            <TabsTrigger value="bug" className="text-xs px-2">
+              Bug
+            </TabsTrigger>
+            <TabsTrigger
+              value="feature-request"
+              className="text-xs px-2"
+            >
+              Feature
+            </TabsTrigger>
+            <TabsTrigger
+              value="ai-reported"
+              className="text-xs px-2"
+            >
+              AI
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {onNewIssue && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs ml-auto"
+            onClick={onNewIssue}
           >
-            <TabsList className="h-8">
-              <TabsTrigger value="open" className="text-xs px-2.5">
-                Open
-              </TabsTrigger>
-              <TabsTrigger value="closed" className="text-xs px-2.5">
-                Closed
-              </TabsTrigger>
-              <TabsTrigger value="all" className="text-xs px-2.5">
-                All
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+            <i className="fa-solid fa-plus text-[10px] mr-1" />
+            New Issue
+          </Button>
+        )}
 
-          <Tabs
-            value={labelFilter}
-            onValueChange={onLabelFilterChange}
+        <div className="flex items-center gap-1 text-xs text-text-muted ml-auto">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
           >
-            <TabsList className="h-8">
-              <TabsTrigger value="" className="text-xs px-2.5">
-                All
-              </TabsTrigger>
-              <TabsTrigger value="bug" className="text-xs px-2.5">
-                Bug
-              </TabsTrigger>
-              <TabsTrigger
-                value="feature-request"
-                className="text-xs px-2.5"
-              >
-                Feature
-              </TabsTrigger>
-              <TabsTrigger
-                value="ai-reported"
-                className="text-xs px-2.5"
-              >
-                AI
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {onNewIssue && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 ml-auto"
-              onClick={onNewIssue}
-            >
-              <Plus className="size-3.5 mr-1" />
-              New Issue
-            </Button>
-          )}
-
-          <div className="flex items-center gap-1 text-xs text-text-muted ml-auto">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-            <span>
-              {page} / {totalPages || 1}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              disabled={page >= totalPages}
-              onClick={() => onPageChange(page + 1)}
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
+            <i className="fa-solid fa-chevron-left text-[10px]" />
+          </Button>
+          <span className="text-[11px] tabular-nums">
+            {page}/{totalPages || 1}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+          >
+            <i className="fa-solid fa-chevron-right text-[10px]" />
+          </Button>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="flex-1 min-h-0 overflow-auto p-0">
+      <div className="flex-1 min-h-0 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-5 animate-spin text-text-muted" />
+            <i className="fa-solid fa-spinner fa-spin text-text-muted" />
           </div>
         ) : issues.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-sm text-text-muted">
@@ -160,7 +149,7 @@ export function IssuesTab({
             </tbody>
           </table>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

@@ -1,16 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import {
-  RefreshCw,
-  Search,
-  User,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react"
-import {
-  Card,
-  CardHeader,
-  CardContent,
   Button,
   Input,
   Select,
@@ -46,7 +35,7 @@ interface Props {
   onBranchChange: (branch: string) => void
   onSearchChange: (search: string) => void
   onAuthorChange: (author: string) => void
-  onRefresh: () => void
+  onRefresh?: () => void
   onClickCommit?: (commit: GitCommit) => void
   onClickPr?: (pr: GitHubPr) => void
 }
@@ -66,7 +55,6 @@ export function CommitsTab({
   onBranchChange,
   onSearchChange,
   onAuthorChange,
-  onRefresh,
   onClickCommit,
   onClickPr,
 }: Props) {
@@ -102,92 +90,78 @@ export function CommitsTab({
   const fallbackRepo = repos[0]?.name ?? ""
 
   return (
-    <Card className="flex flex-col h-full">
-      <CardHeader className="flex-none pb-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Select value={branchFilter} onValueChange={(v: unknown) => onBranchChange(v as string)}>
-            <SelectTrigger className="w-44 h-8 text-xs">
-              <SelectValue placeholder="Branch" />
-            </SelectTrigger>
-            <SelectContent>
-              {branches.map((b) => (
-                <SelectItem key={b} value={b}>
-                  {b}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-overlay-6 flex-none">
+        <Select value={branchFilter} onValueChange={(v: unknown) => onBranchChange(v as string)}>
+          <SelectTrigger className="w-40 h-7 text-xs">
+            <SelectValue placeholder="Branch" />
+          </SelectTrigger>
+          <SelectContent>
+            {branches.map((b) => (
+              <SelectItem key={b} value={b}>
+                {b}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-          <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-text-muted" />
-            <Input
-              placeholder="Search commits..."
-              className="h-8 pl-7 text-xs w-48"
-              value={searchDraft}
-              onChange={(e) => {
-                setSearchDraft(e.target.value)
-                debouncedSearch(e.target.value)
-              }}
-            />
-          </div>
+        <div className="relative">
+          <i className="fa-solid fa-search absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-text-muted" />
+          <Input
+            placeholder="Search commits..."
+            className="h-7 pl-7 text-xs w-44"
+            value={searchDraft}
+            onChange={(e) => {
+              setSearchDraft(e.target.value)
+              debouncedSearch(e.target.value)
+            }}
+          />
+        </div>
 
-          <div className="relative">
-            <User className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-text-muted" />
-            <Input
-              placeholder="Author..."
-              className="h-8 pl-7 text-xs w-36"
-              value={authorDraft}
-              onChange={(e) => {
-                setAuthorDraft(e.target.value)
-                debouncedAuthor(e.target.value)
-              }}
-            />
-          </div>
+        <div className="relative">
+          <i className="fa-solid fa-user absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-text-muted" />
+          <Input
+            placeholder="Author..."
+            className="h-7 pl-7 text-xs w-32"
+            value={authorDraft}
+            onChange={(e) => {
+              setAuthorDraft(e.target.value)
+              debouncedAuthor(e.target.value)
+            }}
+          />
+        </div>
 
+        <div className="ml-auto flex items-center gap-1 text-xs text-text-muted">
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 px-2"
-            onClick={onRefresh}
-            disabled={loading}
+            className="h-6 w-6 p-0"
+            disabled={page <= 1}
+            onClick={() => onPageChange(page - 1)}
           >
-            <RefreshCw
-              className={`size-3.5 ${loading ? "animate-spin" : ""}`}
-            />
+            <i className="fa-solid fa-chevron-left text-[10px]" />
           </Button>
-
-          <div className="ml-auto flex items-center gap-1 text-xs text-text-muted">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-            <span>
-              {page} / {totalPages || 1}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              disabled={page >= totalPages}
-              onClick={() => onPageChange(page + 1)}
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
+          <span className="text-[11px] tabular-nums">
+            {page}/{totalPages || 1}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            disabled={page >= totalPages}
+            onClick={() => onPageChange(page + 1)}
+          >
+            <i className="fa-solid fa-chevron-right text-[10px]" />
+          </Button>
         </div>
-      </CardHeader>
+      </div>
 
       <WorkingStatePanel repos={workingState} />
 
-      <CardContent className="flex-1 min-h-0 overflow-auto p-0">
+      <div className="flex-1 min-h-0 overflow-auto">
         {loading && commits.length === 0 ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="size-5 animate-spin text-text-muted" />
+            <i className="fa-solid fa-spinner fa-spin text-text-muted" />
           </div>
         ) : (
           <table className="w-full text-left">
@@ -244,7 +218,7 @@ export function CommitsTab({
             </tbody>
           </table>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
