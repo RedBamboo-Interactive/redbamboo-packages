@@ -71,3 +71,4 @@ export { IssuesTab } from "./components/issues-tab"
 // Modals
 export { NewIssueModal } from "./modals/new-issue-modal"
 export { ReviewDetailModal } from "./modals/review-detail-modal"
+export { TackleDetailModal } from "./modals/tackle-detail-modal"
