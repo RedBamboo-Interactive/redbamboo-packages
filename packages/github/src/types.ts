@@ -333,7 +333,7 @@ export interface TestHistoryRun {
 export interface Fetcher {
   get: <T>(path: string) => Promise<T>
   post: <T>(path: string, body?: unknown) => Promise<T>
-  postStream?: (path: string, body?: unknown) => Promise<Response>
+  postStream?: (path: string, body?: unknown, signal?: AbortSignal) => Promise<Response>
 }
 
 export interface GitHubClientConfig {

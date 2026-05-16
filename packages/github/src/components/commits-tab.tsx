@@ -99,7 +99,7 @@ export function CommitsTab({
     }
   }, [])
 
-  const repoName = repos[0]?.name ?? ""
+  const fallbackRepo = repos[0]?.name ?? ""
 
   return (
     <Card className="flex flex-col h-full">
@@ -207,12 +207,12 @@ export function CommitsTab({
                     pr={pr}
                     review={
                       commitHash
-                        ? actions.getReview(repoName, commitHash)
+                        ? actions.getReview(fallbackRepo, commitHash)
                         : undefined
                     }
                     healthCheck={
                       commitHash
-                        ? actions.getHc(repoName, commitHash)
+                        ? actions.getHc(fallbackRepo, commitHash)
                         : undefined
                     }
                     tackle={tackle}
@@ -232,8 +232,8 @@ export function CommitsTab({
                 <CommitRow
                   key={c.hash}
                   commit={c}
-                  review={actions.getReview(repoName, c.hash)}
-                  healthCheck={actions.getHc(repoName, c.hash)}
+                  review={actions.getReview(c.repo_name, c.hash)}
+                  healthCheck={actions.getHc(c.repo_name, c.hash)}
                   unpushed={unpushedHashes?.has(c.hash)}
                   onReview={actions.onReviewCommit}
                   onHealthCheck={actions.onHealthCheckCommit}

@@ -59,7 +59,7 @@ export function createIssueClient(fetcher: Fetcher, config: GitHubClientConfig):
             errorCb?.("Fetcher does not support streaming (postStream required)")
             return
           }
-          const response = await fetcher.postStream(url, req)
+          const response = await fetcher.postStream(url, req, abortController?.signal)
 
           if (!response.ok || !response.body) {
             errorCb?.(`HTTP ${response.status}`)

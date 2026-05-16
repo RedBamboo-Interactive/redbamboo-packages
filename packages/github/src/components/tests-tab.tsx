@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   Play,
   Loader2,
@@ -32,6 +32,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
   const [suiteFilter, setSuiteFilter] = useState("")
   const [runningSuites, setRunningSuites] = useState<Set<string>>(new Set())
   const [history, setHistory] = useState<Record<string, { name: string; runs: TestHistoryRun[] }[]>>({})
+  const activeStreams = useRef(new Map<string, { close: () => void }>())
 
   const loadHistory = useCallback(async (suiteKey: string) => {
     if (!testClient) return
@@ -47,15 +48,24 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
     }
   }, [suites, loadHistory])
 
+  useEffect(() => {
+    const streams = activeStreams.current
+    return () => {
+      for (const stream of streams.values()) stream.close()
+      streams.clear()
+    }
+  }, [])
+
   const handleRunSuite = useCallback(async (suiteKey: string) => {
     if (!testClient) return
     setRunningSuites(prev => new Set([...prev, suiteKey]))
     try {
       const result = await testClient.runTestSuite(suiteKey)
       if (result.ok) {
-        testClient.streamTestRun(result.run_id,
+        const stream = testClient.streamTestRun(result.run_id,
           (event) => {
             if (event.type === "result") {
+              activeStreams.current.delete(suiteKey)
               setRunningSuites(prev => {
                 const next = new Set(prev)
                 next.delete(suiteKey)
@@ -66,6 +76,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
             }
           },
           () => {
+            activeStreams.current.delete(suiteKey)
             setRunningSuites(prev => {
               const next = new Set(prev)
               next.delete(suiteKey)
@@ -73,7 +84,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
             })
           },
         )
-        // stream auto-cleans up when done
+        activeStreams.current.set(suiteKey, stream)
       }
     } catch {
       setRunningSuites(prev => {
