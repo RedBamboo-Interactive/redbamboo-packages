@@ -5,7 +5,7 @@ import type { TackleClient } from "../api/tackle-client"
 
 const TERMINAL: Set<string> = new Set(["merged", "failed", "dismissed"])
 
-export function useTackles(client: TackleClient | null) {
+export function useTackles(client: TackleClient | null, resetKey?: string) {
   const clientRef = useRef(client)
   clientRef.current = client
 
@@ -16,6 +16,7 @@ export function useTackles(client: TackleClient | null) {
       return clientRef.current.getTackleStatus(id!)
     },
     isTerminal: (t) => TERMINAL.has(t.status),
+    resetKey,
   })
 
   const getTackle = useCallback(

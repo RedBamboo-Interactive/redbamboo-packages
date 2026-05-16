@@ -152,6 +152,7 @@ export function IssuesTab({
                   onAutoTackle={actions.onAutoTackle}
                   onClose={actions.onCloseIssue}
                   onReopen={actions.onReopenIssue}
+                  onClick={actions.onClickIssue}
                   onClickTackle={actions.onClickTackle}
                   getIssueUrl={actions.getIssueUrl}
                 />

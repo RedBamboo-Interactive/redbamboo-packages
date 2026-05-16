@@ -26,6 +26,7 @@ export interface GitHubActions {
   onAutoTackle?: (issue: GitHubIssue) => void
   onCloseIssue?: (issue: GitHubIssue) => void
   onReopenIssue?: (issue: GitHubIssue) => void
+  onClickIssue?: (issue: GitHubIssue) => void
   onClickTackle?: (tackle: TackleRun) => void
 
   getIssueUrl?: (number: number) => string

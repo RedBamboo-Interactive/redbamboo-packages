@@ -5,7 +5,7 @@ import type { HealthCheckClient } from "../api/health-check-client"
 
 const TERMINAL: Set<string> = new Set(["completed", "failed"])
 
-export function useHealthChecks(client: HealthCheckClient | null) {
+export function useHealthChecks(client: HealthCheckClient | null, resetKey?: string) {
   const clientRef = useRef(client)
   clientRef.current = client
 
@@ -16,6 +16,7 @@ export function useHealthChecks(client: HealthCheckClient | null) {
       return clientRef.current.getHealthCheck(id!)
     },
     isTerminal: (hc) => TERMINAL.has(hc.status),
+    resetKey,
   })
 
   const getHc = useCallback(
@@ -45,7 +46,7 @@ export function useHealthChecks(client: HealthCheckClient | null) {
           total_suites: 0,
           passed_suites: 0,
           failed_suites: 0,
-          suite_results: {},
+          suite_results: null,
           sandbox_id: null,
           duration_seconds: null,
           branch: null,

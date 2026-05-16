@@ -14,6 +14,7 @@ interface Props {
   onAutoTackle?: (issue: GitHubIssue) => void
   onClose?: (issue: GitHubIssue) => void
   onReopen?: (issue: GitHubIssue) => void
+  onClick?: (issue: GitHubIssue) => void
   onClickTackle?: (tackle: TackleRun) => void
   getIssueUrl?: (number: number) => string
 }
@@ -24,11 +25,15 @@ export function IssueRow({
   onAutoTackle,
   onClose,
   onReopen,
+  onClick,
   onClickTackle,
   getIssueUrl,
 }: Props) {
   return (
-    <tr className="border-b border-border hover:bg-overlay-5 transition-colors">
+    <tr
+      className="border-b border-border hover:bg-overlay-5 transition-colors cursor-pointer"
+      onClick={() => onClick?.(issue)}
+    >
       {/* Issue type icon + number */}
       <td className="px-3 py-2 w-20">
         <span className="flex items-center gap-1.5">
@@ -82,7 +87,7 @@ export function IssueRow({
       </td>
 
       {/* Tackle status */}
-      <td className="px-3 py-2 w-8">
+      <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
         {tackle && (
           <button
             onClick={() => onClickTackle?.(tackle)}
@@ -95,7 +100,7 @@ export function IssueRow({
       </td>
 
       {/* Actions */}
-      <td className="px-3 py-2 w-32">
+      <td className="px-3 py-2 w-32" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1">
           {issue.state === "open" && !tackle && onAutoTackle && (
             <Button

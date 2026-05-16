@@ -5,7 +5,7 @@ import type { ReviewClient } from "../api/review-client"
 
 const TERMINAL: Set<string> = new Set(["completed", "failed"])
 
-export function useReviews(client: ReviewClient | null) {
+export function useReviews(client: ReviewClient | null, resetKey?: string) {
   const clientRef = useRef(client)
   clientRef.current = client
 
@@ -16,6 +16,7 @@ export function useReviews(client: ReviewClient | null) {
       return clientRef.current.getReviewStatus(id!)
     },
     isTerminal: (r) => TERMINAL.has(r.status),
+    resetKey,
   })
 
   const makeKey = (repo: string, hash: string) => `${repo}|${hash}`
@@ -46,10 +47,10 @@ export function useReviews(client: ReviewClient | null) {
           status: "pending",
           summary: null,
           commit_intent: null,
-          findings: [],
-          test_results: {},
-          checks: {},
-          created_issue_urls: [],
+          findings: null,
+          test_results: null,
+          checks: null,
+          created_issue_urls: null,
           session_id: null,
           sandbox_id: null,
           tackle_id: tackleId ?? null,
