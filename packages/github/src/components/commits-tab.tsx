@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import {
+  Badge,
   Button,
   Input,
   Select,
@@ -16,6 +17,7 @@ import type {
 } from "../types"
 import { useGitHub } from "../contexts/github-context"
 import { CommitRow } from "./commit-row"
+import { GhostHash } from "./ghost-hash"
 import { PrRow } from "./pr-row"
 import { WorkingStatePanel } from "./working-state-panel"
 
@@ -37,6 +39,7 @@ interface Props {
   onAuthorChange: (author: string) => void
   onRefresh?: () => void
   onClickCommit?: (commit: GitCommit) => void
+  onClickUncommitted?: (repo: RepoWorkingState) => void
   onClickPr?: (pr: GitHubPr) => void
 }
 
@@ -56,6 +59,7 @@ export function CommitsTab({
   onSearchChange,
   onAuthorChange,
   onClickCommit,
+  onClickUncommitted,
   onClickPr,
 }: Props) {
   const actions = useGitHub()
@@ -166,6 +170,38 @@ export function CommitsTab({
         ) : (
           <table className="w-full text-left">
             <tbody>
+              {workingState
+                .filter((r) => r.uncommitted_count > 0)
+                .map((r) => (
+                  <tr
+                    key={`uncommitted-${r.name}`}
+                    className="border-b border-overlay-6 bg-overlay-3 hover:bg-overlay-5 transition-colors cursor-pointer"
+                    onClick={() => onClickUncommitted?.(r)}
+                  >
+                    <td className="px-3 py-2 w-28">
+                      <Badge variant="outline" className="text-[10px]">
+                        {r.name}
+                      </Badge>
+                    </td>
+                    <td className="px-3 py-2 w-20">
+                      <GhostHash />
+                    </td>
+                    <td className="px-3 py-2 text-sm truncate max-w-[400px] italic text-text-disabled">
+                      {r.uncommitted_count} uncommitted file
+                      {r.uncommitted_count !== 1 ? "s" : ""}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-text-disabled w-28 truncate">
+                      —
+                    </td>
+                    <td className="px-3 py-2 text-xs text-text-disabled w-20">
+                      now
+                    </td>
+                    <td className="px-3 py-2 w-8" />
+                    <td className="px-3 py-2 w-8" />
+                    <td className="px-3 py-2 w-24" />
+                  </tr>
+                ))}
+
               {pullRequests.map((pr) => {
                 const tackle =
                   pr.issue_number != null

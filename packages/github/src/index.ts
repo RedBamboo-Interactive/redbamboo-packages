@@ -76,6 +76,7 @@ export { TestSparkline } from "./components/test-sparkline"
 
 // Modals
 export { CommitDetailModal } from "./modals/commit-detail-modal"
+export { UncommittedDetailModal } from "./modals/uncommitted-detail-modal"
 export { NewIssueModal } from "./modals/new-issue-modal"
 export { ReviewDetailModal } from "./modals/review-detail-modal"
 export { TackleDetailModal } from "./modals/tackle-detail-modal"
