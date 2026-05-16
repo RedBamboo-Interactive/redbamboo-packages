@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { Badge, Button } from "@redbamboo/ui"
 import type { GitHubPr, Review, HealthCheckResult, TackleRun } from "../types"
+import { useGitHub } from "../contexts/github-context"
 import { verdictIcon, tackleStatusIcon, timeAgo } from "./shared"
 
 interface Props {
@@ -41,6 +42,7 @@ export function PrRow({
   onAdopt,
   onClick,
 }: Props) {
+  const actions = useGitHub()
   const canApprove =
     tackle &&
     tackle.status === "awaiting_review" &&
@@ -97,7 +99,15 @@ export function PrRow({
       </td>
 
       {/* Review status */}
-      <td className="px-3 py-2 w-8">
+      <td
+        className="px-3 py-2 w-8"
+        onClick={(e) => {
+          if (!review) return
+          e.stopPropagation()
+          actions.onClickReview?.(review)
+        }}
+        style={review ? { cursor: "pointer" } : undefined}
+      >
         {review?.status === "pending" || review?.status === "running" ? (
           <Loader2 className="size-4 text-muted-foreground animate-spin" />
         ) : review?.verdict ? (

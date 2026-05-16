@@ -1,6 +1,7 @@
 import { Bot, FlaskConical, Play } from "lucide-react"
 import { Badge, Button } from "@redbamboo/ui"
 import type { GitCommit, Review, HealthCheckResult } from "../types"
+import { useGitHub } from "../contexts/github-context"
 import { verdictIcon, timeAgo } from "./shared"
 
 interface Props {
@@ -24,6 +25,7 @@ export function CommitRow({
   onAlign,
   onClick,
 }: Props) {
+  const actions = useGitHub()
   return (
     <tr
       className="border-b border-border hover:bg-overlay-5 transition-colors cursor-pointer"
@@ -64,7 +66,15 @@ export function CommitRow({
       </td>
 
       {/* Review status */}
-      <td className="px-3 py-2 w-8">
+      <td
+        className="px-3 py-2 w-8"
+        onClick={(e) => {
+          if (!review) return
+          e.stopPropagation()
+          actions.onClickReview?.(review)
+        }}
+        style={review ? { cursor: "pointer" } : undefined}
+      >
         {review?.status === "pending" || review?.status === "running" ? (
           <Bot className="size-4 text-muted-foreground animate-pulse" />
         ) : review?.verdict ? (

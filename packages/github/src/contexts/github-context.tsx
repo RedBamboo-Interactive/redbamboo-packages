@@ -20,6 +20,8 @@ export interface GitHubActions {
   onRetackleTackle?: (tackle: TackleRun) => void
   onAdoptPr?: (pr: GitHubPr) => void
 
+  onClickReview?: (review: Review) => void
+
   onAutoTackle?: (issue: GitHubIssue) => void
   onCloseIssue?: (issue: GitHubIssue) => void
   onReopenIssue?: (issue: GitHubIssue) => void
