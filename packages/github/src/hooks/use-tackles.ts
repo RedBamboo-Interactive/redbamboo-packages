@@ -64,7 +64,7 @@ export function useTackles(client: TackleClient | null) {
           pull_request_url: null,
           pull_request_number: null,
           status: "pending",
-          mode: options.mode,
+          mode: options.mode ?? "automated",
           model: options.model ?? null,
           review_id: null,
           human_approved: false,
@@ -72,6 +72,8 @@ export function useTackles(client: TackleClient | null) {
           error_message: null,
           started_at: new Date().toISOString(),
           completed_at: null,
+          linked_notification_id: null,
+          awaiting_human_loop_details: null,
         })
       }
       return result

@@ -146,23 +146,25 @@ export type ReviewVerdict = "pass" | "pass_with_notes" | "reject" | "pending_hum
 export type ReviewStatus = "pending" | "running" | "completed" | "failed"
 
 export interface ReviewFinding {
-  severity: "error" | "warn" | "info"
+  severity: "error" | "warning" | "warn" | "info"
   category: string
-  file: string
+  file: string | null
   description: string
-  mitigated_by?: string
+  mitigated_by: string | null
 }
 
 export interface ReviewTestSuite {
   ran: boolean
   passed: boolean | null
-  output_snippet: string
+  output_snippet: string | null
 }
 
 export interface ReviewCheck {
   pass: boolean
   notes: string
 }
+
+export type ReviewTestResults = Record<string, ReviewTestSuite>
 
 export interface Review {
   id: string
@@ -174,13 +176,15 @@ export interface Review {
   status: ReviewStatus
   summary: string | null
   commit_intent: string | null
-  findings: ReviewFinding[]
-  test_results: Record<string, ReviewTestSuite>
-  checks: Record<string, ReviewCheck>
-  created_issue_urls: string[]
+  findings: ReviewFinding[] | null
+  test_results: ReviewTestResults | null
+  checks: Record<string, ReviewCheck> | null
+  created_issue_urls: string[] | null
   session_id: string | null
+  sandbox_id: string | null
   tackle_id: string | null
   error_message: string | null
+  terminated_by_restart: boolean
   started_at: string
   completed_at: string | null
 }
@@ -200,6 +204,13 @@ export type TackleStatus =
 
 export type TackleMode = "automated" | "manual"
 
+export interface AwaitingHumanLoopDetails {
+  failed_gates: string[]
+  last_error: string | null
+  summary: string | null
+  ai_native_audit_passed: boolean
+}
+
 export interface TackleRun {
   id: string
   issue_number: number | null
@@ -218,19 +229,22 @@ export interface TackleRun {
   error_message: string | null
   started_at: string
   completed_at: string | null
+  linked_notification_id: string | null
+  awaiting_human_loop_details: AwaitingHumanLoopDetails | null
 }
 
 export interface TackleStartOptions {
-  mode: TackleMode
+  mode?: TackleMode
   model?: string
 }
 
 // ── Health Checks ──────────────────────────────────────────────────
 
 export type HealthCheckVerdict = "healthy" | "degraded"
+export type HealthCheckStatus = "pending" | "running" | "completed" | "failed"
 
 export interface HealthCheckSuiteResult {
-  run_id: string
+  run_id: string | null
   suite: string
   display_name: string
   framework: string
@@ -240,7 +254,7 @@ export interface HealthCheckSuiteResult {
   failed_count: number
   skipped_count: number
   duration_seconds: number
-  failing_tests: string[]
+  failing_tests?: { name: string; error_snippet: string }[]
   error?: string
 }
 
@@ -248,13 +262,20 @@ export interface HealthCheckResult {
   id: string
   repo_name: string
   commit_hash: string
-  status: "pending" | "running" | "completed" | "failed"
+  short_hash: string
+  commit_message: string
+  status: HealthCheckStatus
   verdict: HealthCheckVerdict | null
   total_suites: number
   passed_suites: number
   failed_suites: number
-  suite_results: Record<string, HealthCheckSuiteResult>
+  suite_results: Record<string, HealthCheckSuiteResult> | null
+  sandbox_id: string | null
+  duration_seconds: number | null
+  branch: string | null
+  tackle_id: string | null
   error_message: string | null
+  terminated_by_restart: boolean
   started_at: string
   completed_at: string | null
 }
@@ -270,20 +291,29 @@ export interface TestSuiteDefinition {
   latest_run?: TestRun
 }
 
+export type TestRunStatus = "pending" | "running" | "completed" | "failed"
+
 export interface TestRun {
   id: string
   suite: string
   category: string
-  status: "pending" | "running" | "completed" | "failed"
+  status: TestRunStatus
   passed: boolean | null
-  total_tests: number
-  passed_count: number
-  failed_count: number
-  skipped_count: number
-  duration_seconds: number
-  branch: string
-  commit_sha: string
+  total_tests: number | null
+  passed_count: number | null
+  failed_count: number | null
+  skipped_count: number | null
+  output_truncated: string | null
+  failing_summary: { name: string; error_snippet: string | null }[] | null
+  test_details: { name: string; status: string; duration_ms: number | null }[] | null
   error_message: string | null
+  exit_code: number | null
+  fix_session_id: string | null
+  fix_status: string | null
+  duration_seconds: number | null
+  branch: string | null
+  commit_sha: string | null
+  sandbox_id: string | null
   started_at: string
   completed_at: string | null
 }
@@ -291,11 +321,11 @@ export interface TestRun {
 export interface TestHistoryRun {
   run_id: string
   status: string
-  duration_ms: number
+  duration_ms: number | null
   started_at: string
-  branch: string
-  commit_sha: string
-  sandbox_id?: string
+  branch: string | null
+  commit_sha: string | null
+  sandbox_id: string | null
 }
 
 // ── Fetcher ────────────────────────────────────────────────────────

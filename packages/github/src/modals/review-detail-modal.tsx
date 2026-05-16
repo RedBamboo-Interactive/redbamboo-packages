@@ -18,11 +18,12 @@ interface Props {
   onClose: () => void
 }
 
-const SEVERITY_CONFIG = {
+const SEVERITY_CONFIG: Record<string, { icon: typeof XCircle; color: string; bg: string }> = {
   error: { icon: XCircle, color: "text-red-400", bg: "bg-red-500/10" },
+  warning: { icon: AlertTriangle, color: "text-yellow-400", bg: "bg-yellow-500/10" },
   warn: { icon: AlertTriangle, color: "text-yellow-400", bg: "bg-yellow-500/10" },
   info: { icon: Info, color: "text-blue-400", bg: "bg-blue-500/10" },
-} as const
+}
 
 const CATEGORY_ICONS: Record<string, typeof Shield> = {
   security: Shield,

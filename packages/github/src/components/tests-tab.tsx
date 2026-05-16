@@ -162,8 +162,8 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
 
                     {latest && (
                       <span className="text-xs text-text-muted ml-auto">
-                        {latest.passed_count}/{latest.total_tests} passed
-                        {latest.failed_count > 0 && (
+                        {latest.passed_count ?? 0}/{latest.total_tests ?? 0} passed
+                        {(latest.failed_count ?? 0) > 0 && (
                           <span className="text-red-400 ml-1">{latest.failed_count} failed</span>
                         )}
                         <span className="ml-2">{timeAgo(latest.started_at)}</span>
