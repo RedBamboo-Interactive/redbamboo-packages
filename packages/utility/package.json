@@ -1,6 +1,6 @@
 {
   "name": "@redbamboo/utility",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "AI-native utilities — command palette, auto-discovery, and more",
   "type": "module",
   "license": "MIT",
