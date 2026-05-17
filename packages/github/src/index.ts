@@ -68,7 +68,6 @@ export { verdictIcon, tackleStatusIcon, issueTypeIcon, timeAgo } from "./compone
 export { CommitRow } from "./components/commit-row"
 export { PrRow } from "./components/pr-row"
 export { IssueRow } from "./components/issue-row"
-export { WorkingStatePanel } from "./components/working-state-panel"
 export { CommitsTab } from "./components/commits-tab"
 export { IssuesTab } from "./components/issues-tab"
 export { TestsTab } from "./components/tests-tab"

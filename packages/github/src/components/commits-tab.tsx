@@ -19,7 +19,6 @@ import { useGitHub } from "../contexts/github-context"
 import { CommitRow } from "./commit-row"
 import { GhostHash } from "./ghost-hash"
 import { PrRow } from "./pr-row"
-import { WorkingStatePanel } from "./working-state-panel"
 
 interface Props {
   repos: GitRepo[]
@@ -159,8 +158,6 @@ export function CommitsTab({
           </Button>
         </div>
       </div>
-
-      <WorkingStatePanel repos={workingState} />
 
       <div className="flex-1 min-h-0 overflow-auto">
         {loading && commits.length === 0 ? (
