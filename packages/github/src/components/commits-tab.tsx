@@ -91,6 +91,7 @@ export function CommitsTab({
   }, [])
 
   const fallbackRepo = repos[0]?.name ?? ""
+  const showRepoCol = repos.length > 1
 
   return (
     <div className="flex flex-col h-full">
@@ -175,11 +176,13 @@ export function CommitsTab({
                     className="border-b border-overlay-6 bg-overlay-3 hover:bg-overlay-5 transition-colors cursor-pointer"
                     onClick={() => onClickUncommitted?.(r)}
                   >
-                    <td className="px-3 py-2 w-28">
-                      <Badge variant="outline" className="text-[10px]">
-                        {r.name}
-                      </Badge>
-                    </td>
+                    {showRepoCol && (
+                      <td className="px-3 py-2 w-28">
+                        <Badge variant="outline" className="text-[10px]">
+                          {r.name}
+                        </Badge>
+                      </td>
+                    )}
                     <td className="px-3 py-2 w-20">
                       <GhostHash />
                     </td>
@@ -212,6 +215,7 @@ export function CommitsTab({
                   <PrRow
                     key={`pr-${pr.number}`}
                     pr={pr}
+                    showRepoCol={showRepoCol}
                     review={
                       commitHash
                         ? actions.getReview(fallbackRepo, commitHash)
@@ -239,6 +243,7 @@ export function CommitsTab({
                 <CommitRow
                   key={c.hash}
                   commit={c}
+                  showRepoCol={showRepoCol}
                   review={actions.getReview(c.repo_name, c.hash)}
                   healthCheck={actions.getHc(c.repo_name, c.hash)}
                   unpushed={unpushedHashes?.has(c.hash)}

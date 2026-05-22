@@ -8,6 +8,7 @@ interface Props {
   review?: Review
   healthCheck?: HealthCheckResult
   tackle?: TackleRun
+  showRepoCol?: boolean
   onReview?: (pr: GitHubPr) => void
   onHealthCheck?: (pr: GitHubPr) => void
   onApprove?: (tackle: TackleRun) => void
@@ -23,6 +24,7 @@ export function PrRow({
   review,
   healthCheck,
   tackle,
+  showRepoCol,
   onReview,
   onHealthCheck,
   onApprove,
@@ -50,14 +52,22 @@ export function PrRow({
       className="border-b border-overlay-6 bg-accent-yellow-a5 hover:bg-accent-yellow-a10 transition-colors cursor-pointer"
       onClick={() => onClick?.(pr)}
     >
-      <td className="px-3 py-2 w-28">
-        <span className="flex items-center gap-1.5 text-xs font-medium">
-          <i className="fa-solid fa-code-pull-request text-sm text-emerald-400" />
-          #{pr.number}
-        </span>
-      </td>
+      {showRepoCol && (
+        <td className="px-3 py-2 w-28">
+          <span className="flex items-center gap-1.5 text-xs font-medium">
+            <i className="fa-solid fa-code-pull-request text-sm text-emerald-400" />
+            #{pr.number}
+          </span>
+        </td>
+      )}
 
       <td className="px-3 py-2 w-20 text-xs font-mono text-text-muted truncate">
+        {!showRepoCol && (
+          <span className="inline-flex items-center gap-1 mr-1.5 font-medium text-contrast font-sans">
+            <i className="fa-solid fa-code-pull-request text-emerald-400" />
+            #{pr.number}
+          </span>
+        )}
         {pr.head_branch}
       </td>
 

@@ -8,6 +8,7 @@ interface Props {
   review?: Review
   healthCheck?: HealthCheckResult
   unpushed?: boolean
+  showRepoCol?: boolean
   onReview?: (commit: GitCommit) => void
   onHealthCheck?: (commit: GitCommit) => void
   onAlign?: (commit: GitCommit) => void
@@ -19,6 +20,7 @@ export function CommitRow({
   review,
   healthCheck,
   unpushed,
+  showRepoCol,
   onReview,
   onHealthCheck,
   onAlign,
@@ -30,13 +32,15 @@ export function CommitRow({
       className="border-b border-overlay-6 hover:bg-overlay-5 transition-colors cursor-pointer"
       onClick={() => onClick?.(commit)}
     >
-      <td className="px-3 py-2 w-28">
-        {commit.repo_name && (
-          <Badge variant="outline" className="text-[10px]">
-            {commit.repo_name}
-          </Badge>
-        )}
-      </td>
+      {showRepoCol && (
+        <td className="px-3 py-2 w-28">
+          {commit.repo_name && (
+            <Badge variant="outline" className="text-[10px]">
+              {commit.repo_name}
+            </Badge>
+          )}
+        </td>
+      )}
 
       <td className="px-3 py-2 w-20 font-mono text-xs text-text-muted">
         {commit.short_hash}
