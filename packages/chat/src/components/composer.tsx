@@ -292,7 +292,7 @@ export function Composer({
             disabled={inputDisabled}
             placeholder={placeholder || defaultPlaceholder}
             rows={1}
-            className="message-input-textarea w-full flex-1 resize-none bg-transparent px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none disabled:opacity-50"
+            className="message-input-textarea w-full flex-1 resize-none bg-transparent px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none disabled:opacity-50 min-h-[6.5rem]"
           />
           {renderInlineAction?.({ value, isStreaming: streaming, disabled: inputDisabled, hasImages: images.length > 0 })}
         </div>
