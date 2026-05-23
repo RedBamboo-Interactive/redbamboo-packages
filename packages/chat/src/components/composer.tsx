@@ -337,7 +337,7 @@ export function Composer({
           {streaming ? (
             <button
               onClick={doInterrupt}
-              className="w-full px-3 py-2 rounded-md bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400 transition-colors flex items-center justify-center"
+              className="w-full flex-1 px-3 py-2 rounded-md bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400 transition-colors flex items-center justify-center"
               title="Interrupt (Escape)"
             >
               <i className="fa-solid fa-stop text-sm" />
@@ -345,7 +345,7 @@ export function Composer({
           ) : disabled && onResume ? (
             <button
               onClick={onResume}
-              className="w-full px-3 py-2 rounded-md bg-accent-gold-a20 hover:bg-accent-gold-a30 text-accent-gold transition-colors flex items-center justify-center"
+              className="w-full flex-1 px-3 py-2 rounded-md bg-accent-gold-a20 hover:bg-accent-gold-a30 text-accent-gold transition-colors flex items-center justify-center"
               title="Resume session (Enter)"
             >
               <i className="fa-solid fa-rotate-right text-sm" />
@@ -354,7 +354,7 @@ export function Composer({
             <button
               onClick={handleSubmit}
               disabled={disabled || (!value.trim() && images.length === 0)}
-              className="w-full px-3 py-2 rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              className="w-full flex-1 px-3 py-2 rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
               <i className="fa-solid fa-paper-plane text-sm" />
             </button>
