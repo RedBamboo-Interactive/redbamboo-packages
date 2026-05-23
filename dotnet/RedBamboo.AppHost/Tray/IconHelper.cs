@@ -61,5 +61,6 @@ public static class StatusColors
     public static Color Red => Color.FromArgb(0xE5, 0x5B, 0x5B);
     public static Color Teal => Color.FromArgb(0x26, 0xA6, 0x9A);
     public static Color Gold => Color.FromArgb(0xE0, 0xA0, 0x2A);
+    public static Color Magenta => Color.FromArgb(0xC7, 0x4B, 0x7A);
 }
 #endif

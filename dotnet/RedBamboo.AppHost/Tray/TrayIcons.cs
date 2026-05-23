@@ -36,6 +36,13 @@ public static class TrayIcons
         g.FillPath(brush, path);
     }
 
+    public static void Star(Graphics g, int size)
+    {
+        using var path = BuildStarPath(size);
+        using var brush = new SolidBrush(Color.White);
+        g.FillPath(brush, path);
+    }
+
     private static GraphicsPath BuildFaTerminalPath(int size)
     {
         var path = new GraphicsPath(FillMode.Winding);
@@ -172,6 +179,29 @@ public static class TrayIcons
 
         using var matrix = new Matrix();
         matrix.Scale(size / 24f, size / 24f);
+        path.Transform(matrix);
+
+        return path;
+    }
+    private static GraphicsPath BuildStarPath(int size)
+    {
+        var path = new GraphicsPath(FillMode.Winding);
+
+        // 5-pointed star centered at (256, 256) in a 512x512 viewBox
+        float cx = 256f, cy = 256f, outer = 220f, inner = 90f;
+        var pts = new PointF[10];
+        for (int i = 0; i < 10; i++)
+        {
+            double angle = Math.PI / 2 + i * Math.PI / 5;
+            float r = i % 2 == 0 ? outer : inner;
+            pts[i] = new PointF(
+                cx + r * (float)Math.Cos(angle),
+                cy - r * (float)Math.Sin(angle));
+        }
+        path.AddPolygon(pts);
+
+        using var matrix = new Matrix();
+        matrix.Scale(size / 512f, size / 512f);
         path.Transform(matrix);
 
         return path;
