@@ -357,6 +357,7 @@
 
 /* primary */
 @utility bg-primary-a10 { background-color: rgb(from var(--primary) r g b / 0.10); }
+@utility bg-primary-a15 { background-color: rgb(from var(--primary) r g b / 0.15); }
 @utility bg-primary-a20 { background-color: rgb(from var(--primary) r g b / 0.20); }
 @utility bg-primary-a30 { background-color: rgb(from var(--primary) r g b / 0.30); }
 @utility bg-primary-a50 { background-color: rgb(from var(--primary) r g b / 0.50); }

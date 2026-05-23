@@ -34,7 +34,7 @@ function navTabClass(active: boolean, className?: string) {
   return cn(
     "flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors",
     active
-      ? "text-accent-teal bg-accent-teal-a15"
+      ? "text-primary bg-primary-a15"
       : "text-text-muted hover:text-contrast hover:bg-overlay-10",
     className,
   )
