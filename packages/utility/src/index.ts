@@ -4,6 +4,7 @@ export type {
   AppShellConfig,
   AppShellBrand,
   AppShellShare,
+  AppShellNova,
   AppShellProps,
 } from "./app-shell-types"
 export type { ShareDialogProps } from "./share-dialog"

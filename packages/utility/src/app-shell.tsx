@@ -20,6 +20,7 @@ import { CommandPalette, openCommandPalette } from "./command-palette"
 import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
+import { NovaButton } from "./nova-button"
 import type { AppShellProps } from "./app-shell-types"
 
 const isMac =
@@ -133,6 +134,7 @@ function AppShellInner({
       >
         <AppHeader brand={config.brand}>
           {headerContent}
+          {config.nova && <NovaButton {...config.nova} />}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
