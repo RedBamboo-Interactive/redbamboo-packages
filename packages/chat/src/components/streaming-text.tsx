@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
+import { rehypeTwemoji } from "../lib/rehype-twemoji"
 function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
   const [open, setOpen] = useState(false)
   const resolved = src && resolve ? (resolve(src) ?? src) : src
@@ -62,15 +63,18 @@ export function StreamingText({
   }, [isLive, content.length])
 
   const mdComponents = {
-    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
-      <ImageThumbnail src={src?.toString()} alt={alt?.toString()} resolve={resolveImageSrc} />
-    ),
+    img: ({ src, alt, className }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+      if (className?.toString().includes("twemoji")) {
+        return <img src={src} alt={alt} className="twemoji" draggable={false} style={{ display: "inline", height: "1.2em", width: "1.2em", verticalAlign: "-0.2em", margin: "0 0.05em", filter: "invert(1) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white)", opacity: 0.8 }} />
+      }
+      return <ImageThumbnail src={src?.toString()} alt={alt?.toString()} resolve={resolveImageSrc} />
+    },
   }
 
   return (
     <Markdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
       components={mdComponents}
       urlTransform={(u: string) => u}
     >
@@ -87,15 +91,18 @@ export function MarkdownRenderer({
   resolveImageSrc?: (src: string) => string | undefined
 }) {
   const mdComponents = {
-    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => (
-      <ImageThumbnail src={src?.toString()} alt={alt?.toString()} resolve={resolveImageSrc} />
-    ),
+    img: ({ src, alt, className }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+      if (className?.toString().includes("twemoji")) {
+        return <img src={src} alt={alt} className="twemoji" draggable={false} style={{ display: "inline", height: "1.2em", width: "1.2em", verticalAlign: "-0.2em", margin: "0 0.05em", filter: "invert(1) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white)", opacity: 0.8 }} />
+      }
+      return <ImageThumbnail src={src?.toString()} alt={alt?.toString()} resolve={resolveImageSrc} />
+    },
   }
 
   return (
     <Markdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
       components={mdComponents}
       urlTransform={(u: string) => u}
     >
