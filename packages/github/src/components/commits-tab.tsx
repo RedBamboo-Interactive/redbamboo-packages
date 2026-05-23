@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Input,
+  PanelHeader,
   Select,
   SelectTrigger,
   SelectValue,
@@ -95,7 +96,7 @@ export function CommitsTab({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-overlay-6 flex-none">
+      <PanelHeader variant="compact">
         <Select value={branchFilter} onValueChange={(v: unknown) => onBranchChange(v as string)}>
           <SelectTrigger className="w-40 h-7 text-xs">
             <SelectValue placeholder="Branch" />
@@ -158,7 +159,7 @@ export function CommitsTab({
             <i className="fa-solid fa-chevron-right text-[10px]" />
           </Button>
         </div>
-      </div>
+      </PanelHeader>
 
       <div className="flex-1 min-h-0 overflow-auto">
         {loading && commits.length === 0 ? (

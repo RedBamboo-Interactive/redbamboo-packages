@@ -166,3 +166,6 @@ export {
   ResizablePanel,
   ResizableHandle,
 } from "./components/resizable"
+
+export { PanelHeader, panelHeaderVariants } from "./components/panel-header"
+export type { PanelHeaderProps } from "./components/panel-header"

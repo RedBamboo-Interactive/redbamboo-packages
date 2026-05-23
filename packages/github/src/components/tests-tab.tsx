@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
+  Badge,
   Button,
+  PanelHeader,
   Tabs,
   TabsList,
   TabsTrigger,
-  Badge,
 } from "@redbamboo/ui"
 import type { TestSuiteDefinition, TestHistoryRun } from "../types"
 import type { TestClient } from "../api/test-client"
@@ -99,7 +100,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-overlay-6 flex-none">
+      <PanelHeader variant="compact">
         <Tabs value={suiteFilter} onValueChange={setSuiteFilter}>
           <TabsList className="h-7">
             <TabsTrigger value="" className="text-xs px-2">All</TabsTrigger>
@@ -121,7 +122,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
           <i className="fa-solid fa-play text-[10px] mr-1" />
           Run All
         </Button>
-      </div>
+      </PanelHeader>
 
       <div className="flex-1 min-h-0 overflow-auto">
         {loading ? (

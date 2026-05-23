@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { FilterBar, FilterPillGroup, cn } from "@redbamboo/ui"
+import { FilterBar, FilterPillGroup, PanelHeader, cn } from "@redbamboo/ui"
 import type { LogEntry, LogLevel } from "./log-types"
 import { LOG_LEVELS, LOG_LEVEL_COLORS, LOG_LEVEL_SEVERITY } from "./log-types"
 
@@ -105,15 +105,16 @@ export function LogPanel({
 
   return (
     <div data-slot="log-panel" className={cn("flex flex-col h-full", className)}>
-      <div className="flex items-center h-12 px-3 border-b border-overlay-6 shrink-0">
-        {connected !== undefined && (
+      <PanelHeader
+        title="Console"
+        leading={connected !== undefined ? (
           <span
-            className="inline-block w-1.5 h-1.5 rounded-full shrink-0 mr-2"
+            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
             style={{ backgroundColor: connected ? "#26A69A" : "#6B6F77" }}
             title={connected ? "Connected" : "Disconnected"}
           />
-        )}
-        <span className="text-[14px] font-medium text-contrast flex-1">Console</span>
+        ) : undefined}
+      >
         {onClear && (
           <button
             className="text-text-muted hover:text-contrast transition-colors cursor-pointer p-1"
@@ -123,7 +124,7 @@ export function LogPanel({
             <i className="fa-solid fa-trash-can text-xs" />
           </button>
         )}
-      </div>
+      </PanelHeader>
 
       <FilterBar
         search={search}

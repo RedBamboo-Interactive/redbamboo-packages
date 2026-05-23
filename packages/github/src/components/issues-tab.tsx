@@ -1,5 +1,6 @@
 import {
   Button,
+  PanelHeader,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -38,7 +39,7 @@ export function IssuesTab({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 flex-wrap px-3 py-2 border-b border-overlay-6 flex-none">
+      <PanelHeader variant="compact">
         <Tabs
           value={stateFilter}
           onValueChange={(v) =>
@@ -119,7 +120,7 @@ export function IssuesTab({
             <i className="fa-solid fa-chevron-right text-[10px]" />
           </Button>
         </div>
-      </div>
+      </PanelHeader>
 
       <div className="flex-1 min-h-0 overflow-auto">
         {loading ? (
