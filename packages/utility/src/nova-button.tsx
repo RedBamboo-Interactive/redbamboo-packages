@@ -67,7 +67,7 @@ function NovaButton({ url, apiUrl }: AppShellNova) {
     >
       <i className="fa-solid fa-star" />
       {pendingCount > 0 && (
-        <span className="nova-indicator">{pendingCount}</span>
+        <span className="nova-indicator" />
       )}
     </Button>
   )
