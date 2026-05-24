@@ -16,17 +16,22 @@ import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output-view"
 
 const readOnlyTools = new Set([
-  "Read", "Glob", "Grep", "Agent", "WebSearch", "WebFetch",
-  "ToolSearch", "CronList", "TodoRead", "Monitor",
-  "ExitPlanMode", "EnterPlanMode", "AskUserQuestion",
+  "read", "glob", "grep", "agent", "websearch", "webfetch",
+  "toolsearch", "cronlist", "todoread", "monitor",
+  "exitplanmode", "enterplanmode", "askuserquestion",
+  "list", "codesearch", "explore",
 ])
 
 const mutatingTools = new Set([
-  "Edit", "Write", "NotebookEdit", "TodoWrite",
-  "CronCreate", "CronDelete", "PushNotification",
+  "edit", "write", "notebookedit", "todowrite",
+  "croncreate", "crondelete", "pushnotification",
 ])
 
-const shellTools = new Set(["Bash", "PowerShell"])
+const shellTools = new Set(["bash", "powershell"])
+
+function matchTool(set: Set<string>, name?: string): boolean {
+  return !!name && set.has(name.toLowerCase())
+}
 
 const COLOR = {
   thinking: "var(--color-accent-purple)",
@@ -87,9 +92,9 @@ export function getPartColor(part: MessagePart): string {
   if (part.type === "error") return COLOR.error
   if (part.type === "tool_result") return COLOR.result
   if (part.type === "tool_use" && part.toolName) {
-    if (readOnlyTools.has(part.toolName)) return COLOR.readOnly
-    if (mutatingTools.has(part.toolName)) return COLOR.mutating
-    if (shellTools.has(part.toolName)) return COLOR.shell
+    if (matchTool(readOnlyTools, part.toolName)) return COLOR.readOnly
+    if (matchTool(mutatingTools, part.toolName)) return COLOR.mutating
+    if (matchTool(shellTools, part.toolName)) return COLOR.shell
   }
   return COLOR.fallback
 }
@@ -102,9 +107,9 @@ export function getSpinnerColor(messages: MessageBlock[]): string {
       const part = block.parts[j]
       if (part.type === "thinking") return COLOR.thinking
       if (part.type === "tool_use" && part.toolName) {
-        if (readOnlyTools.has(part.toolName)) return COLOR.readOnly
-        if (mutatingTools.has(part.toolName)) return COLOR.mutating
-        if (shellTools.has(part.toolName)) return COLOR.shell
+        if (matchTool(readOnlyTools, part.toolName)) return COLOR.readOnly
+        if (matchTool(mutatingTools, part.toolName)) return COLOR.mutating
+        if (matchTool(shellTools, part.toolName)) return COLOR.shell
       }
       if (part.type === "text") return COLOR.readOnly
     }
@@ -331,9 +336,9 @@ function PartFrieze({ parts, allParts, isLive }: { parts: MessagePart[]; allPart
 
 function toolCategory(part: MessagePart): string | null {
   if (part.type !== "tool_use" || !part.toolName) return null
-  if (readOnlyTools.has(part.toolName)) return "read-only"
-  if (mutatingTools.has(part.toolName)) return "mutating"
-  if (shellTools.has(part.toolName)) return "shell"
+  if (matchTool(readOnlyTools, part.toolName)) return "read-only"
+  if (matchTool(mutatingTools, part.toolName)) return "mutating"
+  if (matchTool(shellTools, part.toolName)) return "shell"
   return null
 }
 
