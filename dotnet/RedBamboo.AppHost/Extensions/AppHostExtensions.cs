@@ -42,6 +42,9 @@ public static class AppHostExtensions
         return app.UseMiddleware<BearerAuthMiddleware>(options);
     }
 
+    public static EndpointRegistry CreateEndpointRegistry(this WebApplication app)
+        => new EndpointRegistry(app);
+
     public static WebApplication MapAppHostEndpoints(
         this WebApplication app,
         IServiceDescriptor descriptor,
