@@ -62,7 +62,7 @@ function NovaButton({ url, apiUrl }: AppShellNova) {
       size="icon"
       data-slot="nova-button"
       onClick={openNova}
-      title={`Open Nova${pendingCount > 0 ? ` (${pendingCount} waiting)` : ""}`}
+      title={`Open Nova${pendingCount > 0 ? ` (${pendingCount} unread)` : ""}`}
       className="nova-button"
     >
       <i className="fa-solid fa-star" />
