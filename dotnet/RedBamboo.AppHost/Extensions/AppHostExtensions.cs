@@ -58,6 +58,9 @@ public static class AppHostExtensions
 
         DiscoveryEndpoints.MapDiscoveryEndpoints(app, descriptor, tunnelService, broadcaster);
         RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
+#if WINDOWS
+        Startup.AutoStartEndpoints.MapAutoStartEndpoints(app, appName);
+#endif
 
         if (logService is not null)
             LogEndpoints.MapLogEndpoints(app, logService);
