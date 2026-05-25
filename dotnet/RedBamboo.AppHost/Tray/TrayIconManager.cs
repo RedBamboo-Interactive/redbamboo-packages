@@ -83,6 +83,23 @@ public class TrayIconManager : IDisposable
             menu.Items.Add(autoStartItem);
         }
 
+        if (_config.RebuildScript != null)
+        {
+            menu.Items.Add(new System.Windows.Controls.Separator());
+
+            var restartItem = new System.Windows.Controls.MenuItem { Header = "Restart" };
+            restartItem.Click += (_, _) =>
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{_config.RebuildScript}\"",
+                    UseShellExecute = true,
+                });
+            };
+            menu.Items.Add(restartItem);
+        }
+
         menu.Items.Add(new System.Windows.Controls.Separator());
 
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Exit" };
