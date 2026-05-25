@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
+using RedBamboo.AppHost.Startup;
 
 namespace RedBamboo.AppHost.Tray;
 
@@ -65,6 +66,23 @@ public class TrayIconManager : IDisposable
         };
         menu.Items.Add(statusItem);
 
+        if (_config.EnableAutoStartToggle)
+        {
+            menu.Items.Add(new System.Windows.Controls.Separator());
+
+            var autoStartItem = new System.Windows.Controls.MenuItem
+            {
+                Header = "Start with Windows",
+                IsCheckable = true,
+                Tag = "autostart",
+            };
+            autoStartItem.Click += (_, _) =>
+            {
+                StartupManager.SetEnabled(_config.AppName, autoStartItem.IsChecked);
+            };
+            menu.Items.Add(autoStartItem);
+        }
+
         menu.Items.Add(new System.Windows.Controls.Separator());
 
         var exitItem = new System.Windows.Controls.MenuItem { Header = "Exit" };
@@ -99,10 +117,9 @@ public class TrayIconManager : IDisposable
         foreach (System.Windows.Controls.MenuItem item in menu.Items.OfType<System.Windows.Controls.MenuItem>())
         {
             if (item.Tag?.ToString() == "status")
-            {
                 item.Header = header;
-                break;
-            }
+            else if (item.Tag?.ToString() == "autostart")
+                item.IsChecked = StartupManager.IsEnabled(_config.AppName);
         }
     }
 
