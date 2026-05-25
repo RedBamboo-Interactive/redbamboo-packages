@@ -19,6 +19,10 @@ export interface ImageAttachment {
   base64: string
 }
 
+export interface SendOptions {
+  inputMethod?: "typed" | "voice"
+}
+
 export interface ChatEvent {
   type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "status"
   content?: string | null
@@ -115,7 +119,7 @@ export interface ChatPanelProps {
   // Controlled mode: consumer provides state + callbacks
   messages?: MessageBlock[]
   isStreaming?: boolean
-  onSend?: (content: string, images?: ImageAttachment[]) => void
+  onSend?: (content: string, images?: ImageAttachment[], options?: SendOptions) => void
   onInterrupt?: () => void
 
   // Shared props

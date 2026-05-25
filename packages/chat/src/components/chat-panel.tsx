@@ -29,7 +29,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const voice = useVoiceInput(speechBackend ? {
     speech: speechBackend,
     messages,
-    onSend: (content) => sendMessage(content),
+    onSend: (content, opts) => sendMessage(content, undefined, opts),
     onAnswerQuestion,
     pendingQuestion: !!pendingQuestion,
     disabled,

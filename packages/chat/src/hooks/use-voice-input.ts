@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback, useEffect } from "react"
-import type { MessageBlock, SpeechBackend, VoiceInputState, VoiceInputHandle } from "../types"
+import type { MessageBlock, SpeechBackend, VoiceInputState, VoiceInputHandle, SendOptions } from "../types"
 import { AudioRecorder } from "../lib/audio-recorder"
 import { filterConversation } from "../lib/conversation-filter"
 
 export interface VoiceInputParams {
   speech: SpeechBackend
   messages: MessageBlock[]
-  onSend: (content: string) => void
+  onSend: (content: string, options?: SendOptions) => void
   onAnswerQuestion?: (answer: string) => void
   pendingQuestion?: boolean
   disabled?: boolean
@@ -111,7 +111,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
       if (pendingRef.current && onAnswerRef.current) {
         onAnswerRef.current(finalText)
       } else {
-        onSendRef.current(finalText)
+        onSendRef.current(finalText, { inputMethod: "voice" })
       }
       syncState("idle")
     } catch (err) {

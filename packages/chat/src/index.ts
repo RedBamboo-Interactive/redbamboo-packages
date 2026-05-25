@@ -4,6 +4,7 @@ export type {
   MessageBlock,
   MessagePart,
   ImageAttachment,
+  SendOptions,
   ChatEvent,
   ChatBackend,
   ChatPanelProps,

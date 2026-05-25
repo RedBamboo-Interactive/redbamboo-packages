@@ -169,13 +169,14 @@ export function ChatMessage({
   resolveImageSrc,
 }: ChatMessageProps) {
   if (block.role === "user") {
-    const content = block.parts[0]?.content || ""
-    const notification = parseTaskNotification(content)
+    const rawContent = block.parts[0]?.content || ""
+    const content = rawContent.replace(/<nova-context[\s\S]*?<\/nova-context>\s*/g, "")
+    const notification = parseTaskNotification(rawContent)
     if (notification) {
       return <TaskNotificationSquare notification={notification} />
     }
 
-    const novaEvent = parseNovaEvent(content)
+    const novaEvent = parseNovaEvent(rawContent)
     if (novaEvent) {
       return <NovaEventSquare event={novaEvent} />
     }
