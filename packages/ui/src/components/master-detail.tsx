@@ -87,7 +87,6 @@ function MasterDetailLayout({
         resizable ? (
           <ResizablePanelGroup
             orientation="horizontal"
-            units="pixels"
             className="flex-1 min-h-0"
             defaultLayout={savedLayout}
             onLayoutChanged={handleLayoutChanged}

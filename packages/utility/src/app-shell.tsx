@@ -20,7 +20,7 @@ import { CommandPalette, openCommandPalette } from "./command-palette"
 import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
-import { NovaButton } from "./nova-button"
+import { AppSwitcher } from "./app-switcher"
 import type { AppShellProps } from "./app-shell-types"
 
 const isMac =
@@ -86,6 +86,7 @@ function AppShellInner({
   children,
   className,
 }: AppShellProps) {
+  const [switcherOpen, setSwitcherOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -94,6 +95,7 @@ function AppShellInner({
 
   const shareUrl = config.share?.url()
 
+  const openSwitcher = useCallback(() => setSwitcherOpen(true), [])
   const openAbout = useCallback(() => setAboutOpen(true), [])
   const openFeedback = useCallback(() => setFeedbackOpen(true), [])
   const openShare = useCallback(() => setShareOpen(true), [])
@@ -132,9 +134,8 @@ function AppShellInner({
         data-slot="app-shell"
         className={className ?? "flex h-full w-full flex-col"}
       >
-        <AppHeader brand={config.brand}>
+        <AppHeader brand={config.brand} onBrandClick={openSwitcher}>
           {headerContent}
-          {config.nova && <NovaButton {...config.nova} />}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -192,6 +193,8 @@ function AppShellInner({
 
         {children}
       </div>
+
+      <AppSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} />
 
       <ShellCommands
         onAbout={openAbout}

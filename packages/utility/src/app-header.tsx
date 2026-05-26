@@ -5,20 +5,32 @@ export interface AppHeaderBrandProps {
   icon: string
   nameParts: [string, string]
   accentClass?: string
+  onClick?: () => void
 }
 
 export interface AppHeaderProps {
   brand: AppHeaderBrandProps
   children?: React.ReactNode
   className?: string
+  onBrandClick?: () => void
 }
 
-function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary" }: AppHeaderBrandProps) {
+function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary", onClick }: AppHeaderBrandProps) {
   const allLetters = (nameParts[0] + nameParts[1]).split("")
   const mutedCount = nameParts[0].length
 
   return (
-    <div className={cn("app-header-brand flex items-center gap-2 cursor-default select-none", accentClass)}>
+    <div
+      className={cn(
+        "app-header-brand flex items-center gap-2 select-none",
+        accentClass,
+        onClick ? "cursor-pointer" : "cursor-default",
+      )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick() } } : undefined}
+    >
       <div className="app-header-brand__icon relative size-6 shrink-0 rounded flex items-center justify-center">
         <div className="app-header-brand__bg absolute inset-0 rounded" />
         <i className={cn(icon, "app-header-brand__i relative z-10 text-xs")} />
@@ -41,13 +53,13 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary" }: AppHe
   )
 }
 
-function AppHeader({ brand, children, className }: AppHeaderProps) {
+function AppHeader({ brand, children, className, onBrandClick }: AppHeaderProps) {
   return (
     <header data-slot="app-header" className={cn(
       "shrink-0 flex items-center gap-3 px-4 py-2 border-b border-border-a60",
       className,
     )}>
-      <AppHeaderBrand {...brand} />
+      <AppHeaderBrand {...brand} onClick={onBrandClick} />
       <span className="flex-1" />
       {children}
     </header>

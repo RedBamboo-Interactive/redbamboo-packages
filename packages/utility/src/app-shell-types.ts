@@ -13,11 +13,6 @@ export interface AppShellShare {
   description?: string
 }
 
-export interface AppShellNova {
-  url: string
-  apiUrl?: string
-}
-
 export interface AppShellConfig {
   name: string
   version: string
@@ -34,8 +29,6 @@ export interface AppShellConfig {
   latestVersion?: string
 
   share?: AppShellShare
-
-  nova?: AppShellNova
 
   onFeedbackSubmit?: (submission: FeedbackSubmission) => Promise<FeedbackResult>
   feedbackMetadata?: Record<string, string>

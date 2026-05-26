@@ -4,7 +4,6 @@ export type {
   AppShellConfig,
   AppShellBrand,
   AppShellShare,
-  AppShellNova,
   AppShellProps,
 } from "./app-shell-types"
 export type { ShareDialogProps } from "./share-dialog"
@@ -13,6 +12,8 @@ export { CommandProvider, useCommandStore, useCommandList } from "./command-prov
 export { useCommand } from "./use-command"
 export { CommandPalette, openCommandPalette } from "./command-palette"
 export { AppShell } from "./app-shell"
+export { AppSwitcher } from "./app-switcher"
+export type { AppSwitcherProps } from "./app-switcher"
 export { ShareDialog } from "./share-dialog"
 export { useInstallPrompt } from "./use-install-prompt"
 
