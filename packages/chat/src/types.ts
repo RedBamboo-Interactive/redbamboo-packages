@@ -3,6 +3,7 @@ export interface MessageBlock {
   role: "user" | "assistant"
   parts: MessagePart[]
   timestamp: string
+  metadata?: Record<string, unknown>
 }
 
 export interface MessagePart {
@@ -143,6 +144,9 @@ export interface ChatPanelProps {
   speechBackend?: SpeechBackend
   handsFreeEnabled?: boolean
   pushToTalkKey?: string
+
+  // Avatar
+  assistantAvatar?: string
 
   // Render props
   renderStatusLine?: (state: {

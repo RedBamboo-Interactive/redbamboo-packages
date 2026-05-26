@@ -183,8 +183,9 @@ export function ChatMessage({
 
     const images = block.parts[0]?.images
     return (
-      <div className="flex justify-end mb-3 msg-enter-user">
-        <div className="max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
+      <div className="flex justify-end mb-3 msg-enter-user group/msg">
+        <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
+          <MessageMetadata block={block} />
           {images && images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
               {images.map((img: ImageAttachment, i: number) => (
@@ -218,8 +219,9 @@ export function ChatMessage({
   }
 
   return (
-    <div className="mb-4 min-w-0">
-      <div className="max-w-full min-w-0 overflow-hidden">
+    <div className="mb-4 min-w-0 group/msg">
+      <div className="relative max-w-full min-w-0 overflow-hidden">
+        {!isLiveBlock && <MessageMetadata block={block} />}
         {groups.map((group, i) =>
           group.kind === "text" ? (
             <div key={i} className="text-sm leading-relaxed font-serif markdown-body msg-enter-ai">
@@ -593,6 +595,91 @@ function NovaEventSquare({ event }: { event: NovaEvent }) {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+const metadataLabels: Record<string, string> = {
+  model: "Model",
+  inputTokens: "Input tokens",
+  outputTokens: "Output tokens",
+  totalTokens: "Total tokens",
+  cacheRead: "Cache read",
+  cacheCreation: "Cache creation",
+  duration: "Duration",
+  stopReason: "Stop reason",
+  provider: "Provider",
+}
+
+function formatMetaValue(key: string, value: unknown): string {
+  if (value == null) return "—"
+  if (typeof value === "number") {
+    if (key === "duration") return value < 1000 ? `${value}ms` : `${(value / 1000).toFixed(1)}s`
+    if (key.toLowerCase().includes("token") || key.toLowerCase().includes("cache")) return value.toLocaleString()
+  }
+  return String(value)
+}
+
+function formatTimestamp(iso: string): string {
+  try {
+    const d = new Date(iso)
+    return d.toLocaleString(undefined, {
+      month: "short", day: "numeric", year: "numeric",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    })
+  } catch { return iso }
+}
+
+function MessageMetadata({ block }: { block: MessageBlock }) {
+  const [open, setOpen] = useState(false)
+  const meta = block.metadata
+  const entries = meta ? Object.entries(meta).filter(([, v]) => v != null) : []
+  const toolUseCount = block.parts.filter(p => p.type === "tool_use").length
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="absolute top-1 right-1 opacity-20 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-40 hover:!opacity-100 transition-opacity duration-150 p-1 cursor-pointer z-10"
+        title="Message info"
+      >
+        <i className="fa-solid fa-circle-info text-[10px] text-text-muted" />
+      </button>
+
+      <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
+        <DialogContent className="max-w-sm max-h-[70vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
+            <i className="fa-solid fa-circle-info text-sm text-text-muted" />
+            <DialogTitle className="text-sm">Message Info</DialogTitle>
+          </DialogHeader>
+
+          <div className="overflow-y-auto p-4 flex-1 min-h-0 space-y-2">
+            <MetaRow label="Timestamp" value={formatTimestamp(block.timestamp)} />
+            <MetaRow label="Message ID" value={block.id} mono />
+            {toolUseCount > 0 && <MetaRow label="Tool calls" value={String(toolUseCount)} />}
+            {entries.map(([key, value]) => (
+              <MetaRow
+                key={key}
+                label={metadataLabels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
+                value={formatMetaValue(key, value)}
+                mono={key === "model" || key === "provider"}
+              />
+            ))}
+            {entries.length === 0 && (
+              <p className="text-xs text-text-disabled italic pt-1">No additional metadata available.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function MetaRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between items-baseline gap-4 text-xs">
+      <span className="text-text-muted shrink-0">{label}</span>
+      <span className={`text-text-secondary text-right break-all ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
     </div>
   )
 }
