@@ -7,6 +7,7 @@ import type { WsEventContextValue } from "./ws-events"
 export interface WsEventProviderProps {
   url: string | (() => string)
   onReconnect?: () => void
+  onVisibilityChange?: () => void
   reconnectMs?: number
   children: React.ReactNode
 }
@@ -14,6 +15,7 @@ export interface WsEventProviderProps {
 export function WsEventProvider({
   url,
   onReconnect,
+  onVisibilityChange,
   reconnectMs,
   children,
 }: WsEventProviderProps) {
@@ -37,10 +39,11 @@ export function WsEventProvider({
         for (const handler of handlersRef.current) handler(event)
       },
       onReconnect,
+      onVisibilityChange,
       reconnectMs,
     })
     return () => handle.close()
-  }, [url, onReconnect, reconnectMs])
+  }, [url, onReconnect, onVisibilityChange, reconnectMs])
 
   const value = useMemo<WsEventContextValue>(
     () => ({ subscribe, dispatch }),

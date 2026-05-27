@@ -9,6 +9,7 @@ export interface CreateWebSocketOptions {
   onConnect?: () => void
   onDisconnect?: () => void
   onReconnect?: () => void
+  onVisibilityChange?: () => void
   reconnectMs?: number
 }
 
@@ -55,6 +56,23 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
     }
   }
 
+  function handleVisibilityChange() {
+    if (closed || document.visibilityState !== "visible") return
+    opts.onVisibilityChange?.()
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout)
+      reconnectTimeout = null
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      ws?.close()
+      connect()
+    }
+  }
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+  }
+
   connect()
 
   return {
@@ -62,6 +80,9 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
       closed = true
       if (reconnectTimeout) clearTimeout(reconnectTimeout)
       ws?.close()
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange)
+      }
     },
   }
 }
