@@ -17,6 +17,9 @@ export type {
   VoiceInputHandle,
   ExchangeState,
   HandsFreeContextValue,
+  SessionStats,
+  SessionConfigOption,
+  ContextIndicatorProps,
 } from "./types"
 
 export { ChatPanel } from "./components/chat-panel"
@@ -27,6 +30,8 @@ export { MorphSpinner } from "./components/morph-spinner"
 export { ToolInputView } from "./components/tool-input-view"
 export { ToolOutputView } from "./components/tool-output-view"
 export { ToolCallCard } from "./components/tool-call-card"
+export { ContextIndicator } from "./components/context-indicator"
+export { SessionStatsModal, getContextPercent, getMaxContext } from "./components/session-stats-modal"
 export { StreamingStatusLine } from "./components/streaming-status-line"
 export { PendingQuestionLine } from "./components/pending-question-line"
 export { HandsFreeStatusLine } from "./components/hands-free-status-line"

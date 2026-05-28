@@ -99,6 +99,34 @@ export interface HandsFreeContextValue {
   cancelListening: () => void
 }
 
+// --- Session stats / context indicator ---
+
+export interface SessionStats {
+  model?: string | null
+  status?: string
+  startedAt?: string
+  costUsd?: number | null
+  messageCount?: number
+  outputTokens?: number | null
+  cachedInputTokens?: number | null
+  contextTokens?: number | null
+  contextWindow?: number | null
+  effort?: string | null
+}
+
+export interface SessionConfigOption {
+  value: string
+  label: string
+}
+
+export interface ContextIndicatorProps {
+  stats: SessionStats | null
+  messages: MessageBlock[]
+  modelOptions?: SessionConfigOption[]
+  effortOptions?: SessionConfigOption[]
+  onConfigChange?: (config: { model?: string; effort?: string }) => Promise<void>
+}
+
 // --- Stream event processing ---
 
 export interface PendingQuestion {
