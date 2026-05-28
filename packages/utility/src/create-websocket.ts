@@ -24,8 +24,24 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   let closed = false
   let hasConnected = false
 
+  function cleanup() {
+    if (ws) {
+      ws.onopen = null
+      ws.onclose = null
+      ws.onerror = null
+      ws.onmessage = null
+      ws.close()
+      ws = null
+    }
+    if (reconnectTimeout) {
+      clearTimeout(reconnectTimeout)
+      reconnectTimeout = null
+    }
+  }
+
   function connect() {
     if (closed) return
+    cleanup()
     const url = typeof opts.url === "function" ? opts.url() : opts.url
     ws = new WebSocket(url)
 
@@ -59,12 +75,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   function handleVisibilityChange() {
     if (closed || document.visibilityState !== "visible") return
     opts.onVisibilityChange?.()
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout)
-      reconnectTimeout = null
-    }
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      ws?.close()
       connect()
     }
   }
@@ -78,8 +89,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   return {
     close() {
       closed = true
-      if (reconnectTimeout) clearTimeout(reconnectTimeout)
-      ws?.close()
+      cleanup()
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibilityChange)
       }
