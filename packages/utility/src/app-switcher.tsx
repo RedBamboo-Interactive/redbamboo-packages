@@ -7,13 +7,15 @@ interface AppEntry {
   icon: string
   nameParts: [string, string]
   color: string
+  description: string
 }
 
 const APP_REGISTRY: AppEntry[] = [
-  { port: 18800, icon: "fa-solid fa-microchip", nameParts: ["Red", "Compute"], color: "#26A69A" },
-  { port: 18801, icon: "fa-solid fa-terminal", nameParts: ["Code", "Red"], color: "#E55B5B" },
-  { port: 18802, icon: "fa-solid fa-fire", nameParts: ["Red", "Matter"], color: "#D4A03C" },
-  { port: 18803, icon: "fa-solid fa-star", nameParts: ["No", "va"], color: "#C74B7A" },
+  { port: 18800, icon: "fa-solid fa-microchip", nameParts: ["Red", "Compute"], color: "#26A69A", description: "AI compute service" },
+  { port: 18801, icon: "fa-solid fa-terminal", nameParts: ["Code", "Red"], color: "#E55B5B", description: "Development tools" },
+  { port: 18802, icon: "fa-solid fa-fire", nameParts: ["Red", "Matter"], color: "#D4A03C", description: "Game engine CMS" },
+  { port: 18803, icon: "fa-solid fa-star", nameParts: ["No", "va"], color: "#C74B7A", description: "AI assistant" },
+  { port: 18804, icon: "fa-solid fa-leaf", nameParts: ["Red", "Leaf"], color: "#66BB6A", description: "Content & knowledge" },
 ]
 
 function useAppDiscovery(open: boolean) {
@@ -71,8 +73,8 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="w-fit sm:max-w-none p-4">
-        <div className="app-switcher-grid">
+      <DialogContent showCloseButton={false} className="w-72 sm:max-w-none p-2">
+        <div className="app-switcher-list">
           {APP_REGISTRY.map((app, i) => {
             const isOffline = statuses[app.port] === false
             const allLetters = (app.nameParts[0] + app.nameParts[1]).split("")
@@ -94,9 +96,10 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
                   onOpenChange(false)
                 }}
                 className={cn(
-                  "app-switcher-tile",
-                  entered && "app-switcher-tile--entered",
-                  isOffline && "app-switcher-tile--offline",
+                  "app-switcher-row",
+                  entered && "app-switcher-row--entered",
+                  isOffline && "app-switcher-row--offline",
+                  isActive && "app-switcher-row--active",
                 )}
                 style={
                   {
@@ -105,24 +108,27 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
                   } as React.CSSProperties
                 }
               >
-                <div className="app-switcher-tile__icon">
-                  <div className="app-switcher-tile__icon-bg" />
-                  <i className={cn(app.icon, "app-switcher-tile__icon-i")} />
+                <div className="app-switcher-row__icon">
+                  <div className="app-switcher-row__icon-bg" />
+                  <i className={cn(app.icon, "app-switcher-row__icon-i")} />
                 </div>
-                <span className="text-sm font-semibold">
-                  {allLetters.map((char, j) => (
-                    <span
-                      key={j}
-                      className={cn(
-                        "app-switcher-tile__letter inline-block",
-                        j < mutedCount ? "text-muted-foreground" : "text-current",
-                      )}
-                      style={{ "--letter-i": j } as React.CSSProperties}
-                    >
-                      {char}
-                    </span>
-                  ))}
-                </span>
+                <div className="app-switcher-row__text">
+                  <span className="app-switcher-row__name">
+                    {allLetters.map((char, j) => (
+                      <span
+                        key={j}
+                        className={cn(
+                          "app-switcher-row__letter inline-block",
+                          j < mutedCount ? "text-muted-foreground" : "text-current",
+                        )}
+                        style={{ "--letter-i": j } as React.CSSProperties}
+                      >
+                        {char}
+                      </span>
+                    ))}
+                  </span>
+                  <span className="app-switcher-row__desc text-muted-foreground">{app.description}</span>
+                </div>
               </a>
             )
           })}

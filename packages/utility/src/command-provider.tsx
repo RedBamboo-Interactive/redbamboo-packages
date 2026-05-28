@@ -94,6 +94,64 @@ function scanDOM(store: CommandStore) {
   }
 }
 
+// ── Global shortcut listener ─────────────────────────────────────────
+
+const isMac =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
+
+interface ParsedShortcut {
+  key: string
+  ctrl: boolean
+  meta: boolean
+  alt: boolean
+  shift: boolean
+}
+
+function parseShortcut(shortcut: string): ParsedShortcut | null {
+  const s = shortcut.trim()
+  if (!s) return null
+
+  let ctrl = false
+  let meta = false
+  let alt = false
+  let shift = false
+  let key: string
+
+  if (s.includes("⌘")) {
+    meta = true
+    key = s.replace("⌘", "")
+  } else if (s.includes("+")) {
+    const parts = s.split("+")
+    key = parts[parts.length - 1]
+    for (let i = 0; i < parts.length - 1; i++) {
+      const mod = parts[i].trim().toLowerCase()
+      if (mod === "ctrl") ctrl = true
+      else if (mod === "meta" || mod === "cmd") meta = true
+      else if (mod === "alt") alt = true
+      else if (mod === "shift") shift = true
+    }
+  } else {
+    key = s
+  }
+
+  if (!key) return null
+  return { key, ctrl, meta, alt, shift }
+}
+
+function matchesEvent(e: KeyboardEvent, p: ParsedShortcut): boolean {
+  if (e.key !== p.key && e.key.toLowerCase() !== p.key.toLowerCase()) return false
+
+  const expectCtrl = p.ctrl || (!isMac && p.meta)
+  const expectMeta = isMac && p.meta
+
+  if (e.ctrlKey !== expectCtrl) return false
+  if (e.metaKey !== expectMeta) return false
+  if (e.altKey !== p.alt) return false
+  if (e.shiftKey !== p.shift) return false
+
+  return true
+}
+
 // ── Provider ──────────────────────────────────────────────────────────
 
 export interface CommandProviderProps {
@@ -130,6 +188,33 @@ export function CommandProvider({ children, discover = true }: CommandProviderPr
       clearTimeout(timeout)
     }
   }, [store, discover])
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const target = e.target as HTMLElement
+      const isInput = target.tagName === "INPUT"
+        || target.tagName === "TEXTAREA"
+        || target.isContentEditable
+      const isFnKey = /^F\d{1,2}$/.test(e.key)
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey
+
+      if (isInput && !isFnKey && !hasModifier) return
+
+      for (const cmd of store.getSnapshot()) {
+        if (!cmd.shortcut) continue
+        const parsed = parseShortcut(cmd.shortcut)
+        if (!parsed) continue
+        if (matchesEvent(e, parsed)) {
+          e.preventDefault()
+          cmd.action()
+          return
+        }
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [store])
 
   return (
     <CommandStoreContext.Provider value={store}>

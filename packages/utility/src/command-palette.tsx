@@ -122,22 +122,14 @@ export function CommandPalette({
 
   const selectedCommand = flat[selectedIndex] ?? null
 
-  // Ctrl+K / Cmd+K  +  imperative event trigger
+  // Imperative event trigger (keyboard shortcut handled by CommandProvider)
   useEffect(() => {
     if (isControlled) return
-    function onKey(e: globalThis.KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault()
-        setOpen(true)
-      }
-    }
     function onCustom() {
       setOpen(true)
     }
-    document.addEventListener("keydown", onKey)
     document.addEventListener("command-palette:open", onCustom)
     return () => {
-      document.removeEventListener("keydown", onKey)
       document.removeEventListener("command-palette:open", onCustom)
     }
   }, [isControlled, setOpen])
