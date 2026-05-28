@@ -42,6 +42,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--app-color);
 }
 
 .app-switcher-row__icon-bg {
@@ -99,6 +100,7 @@
 }
 
 .app-switcher-row:hover .app-switcher-row__icon-i {
+  color: var(--app-color);
   animation: switcher-icon-bounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 

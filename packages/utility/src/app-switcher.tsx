@@ -104,7 +104,7 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
                 style={
                   {
                     "--tile-i": i,
-                    color: app.color,
+                    "--app-color": app.color,
                   } as React.CSSProperties
                 }
               >
@@ -117,17 +117,17 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
                     {allLetters.map((char, j) => (
                       <span
                         key={j}
-                        className={cn(
-                          "app-switcher-row__letter inline-block",
-                          j < mutedCount ? "text-muted-foreground" : "text-current",
-                        )}
-                        style={{ "--letter-i": j } as React.CSSProperties}
+                        className="app-switcher-row__letter inline-block"
+                        style={{
+                          "--letter-i": j,
+                          color: j < mutedCount ? undefined : app.color,
+                        } as React.CSSProperties}
                       >
                         {char}
                       </span>
                     ))}
                   </span>
-                  <span className="app-switcher-row__desc text-muted-foreground">{app.description}</span>
+                  <span className="app-switcher-row__desc">{app.description}</span>
                 </div>
               </a>
             )
