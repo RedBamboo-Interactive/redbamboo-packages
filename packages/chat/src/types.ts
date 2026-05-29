@@ -102,6 +102,10 @@ export interface HandsFreeContextValue {
 // --- Session stats / context indicator ---
 
 export interface SessionStats {
+  name?: string | null
+  jobHash?: string | null
+  sessionId?: string | null
+  discussionId?: string | null
   model?: string | null
   status?: string
   startedAt?: string

@@ -89,11 +89,33 @@ function countToolCalls(messages: MessageBlock[]): number {
   return count
 }
 
-function StatRow({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function CopyBadge({ label, value, short }: { label: string; value: string; short?: string }) {
+  const [copied, setCopied] = useState(false)
+  const display = short ?? value
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
   return (
-    <div className="flex items-baseline justify-between py-1.5">
-      <span className="text-xs text-text-muted">{label}</span>
-      <span className="text-sm font-medium">
+    <div className="flex items-center justify-between py-1.5 gap-3">
+      <span className="text-xs text-text-muted shrink-0">{label}</span>
+      <button
+        onClick={handleCopy}
+        className="font-mono text-[11px] px-2 py-0.5 rounded bg-overlay-6 hover:bg-overlay-10 text-text-muted hover:text-contrast transition-colors cursor-pointer"
+        title={copied ? "Copied!" : `Copy ${value}`}
+      >
+        {copied ? "Copied!" : `#${display}`}
+      </button>
+    </div>
+  )
+}
+
+function StatRow({ label, value, sub, mono }: { label: string; value: string; sub?: string; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between py-1.5 gap-3">
+      <span className="text-xs text-text-muted shrink-0">{label}</span>
+      <span className={`text-sm font-medium text-right min-w-0 truncate ${mono ? "font-mono text-xs" : ""}`}>
         {value}
         {sub && <span className="text-xs text-text-muted ml-1">{sub}</span>}
       </span>
@@ -153,6 +175,15 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
         </DialogHeader>
 
         <div className="divide-y divide-overlay-6">
+          {(s.name || s.jobHash || s.sessionId || s.discussionId) && (
+            <div className="pb-2">
+              {s.name && <StatRow label="Name" value={s.name} />}
+              {s.jobHash && <CopyBadge label="Job hash" value={s.jobHash} short={s.jobHash.slice(0, 8)} />}
+              {s.sessionId && <CopyBadge label="Session ID" value={s.sessionId} short={s.sessionId.slice(0, 8)} />}
+              {s.discussionId && <CopyBadge label="Discussion ID" value={s.discussionId} short={s.discussionId.slice(0, 8)} />}
+            </div>
+          )}
+
           {hasConfig && (
             <div className="pb-2">
               {modelOptions && (
