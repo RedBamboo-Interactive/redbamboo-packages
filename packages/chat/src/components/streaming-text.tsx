@@ -1,29 +1,64 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useSyncExternalStore } from "react"
+import { createPortal } from "react-dom"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import { rehypeTwemoji } from "../lib/rehype-twemoji"
+
+// Module-level lightbox state — survives component remounts from markdown re-renders
+let lightboxState: { src: string; alt: string } | null = null
+const listeners = new Set<() => void>()
+function setLightbox(s: typeof lightboxState) { lightboxState = s; listeners.forEach(fn => fn()) }
+function subscribeLightbox(cb: () => void) { listeners.add(cb); return () => { listeners.delete(cb) } }
+function getLightbox() { return lightboxState }
+
+let lightboxMounted = 0
+function ImageLightbox() {
+  const state = useSyncExternalStore(subscribeLightbox, getLightbox)
+  const isFirst = useRef(false)
+
+  useEffect(() => {
+    if (lightboxMounted === 0) isFirst.current = true
+    lightboxMounted++
+    return () => { lightboxMounted--; isFirst.current = false }
+  }, [])
+
+  useEffect(() => {
+    if (!state) return
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setLightbox(null) }
+    document.addEventListener("keydown", handler)
+    return () => document.removeEventListener("keydown", handler)
+  }, [state])
+
+  if (!state || !isFirst.current) return null
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+      onClick={(e) => { if (e.target === e.currentTarget) setLightbox(null) }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={state.alt || "Image preview"}
+    >
+      <div className="max-w-4xl max-h-[90vh] overflow-auto animate-in fade-in zoom-in-98 duration-200" onClick={e => e.stopPropagation()}>
+        <img src={state.src} alt={state.alt} className="max-w-full max-h-[85vh] rounded-xl object-contain" />
+        {state.alt && <p className="text-sm text-text-muted text-center px-4 py-2">{state.alt}</p>}
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
-  const [open, setOpen] = useState(false)
   const resolved = src && resolve ? (resolve(src) ?? src) : src
 
   return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1"
-      >
-        <img src={resolved} alt={alt || ""} loading="lazy" className="w-20 h-20 object-cover" />
-      </button>
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setOpen(false)}>
-          <div className="max-w-lg max-h-[80vh] overflow-auto" onClick={e => e.stopPropagation()}>
-            <img src={resolved} alt={alt || ""} className="max-w-full max-h-[80vh] rounded-xl object-contain" />
-            {alt && <p className="text-sm text-text-muted text-center px-4 py-2">{alt}</p>}
-          </div>
-        </div>
-      )}
-    </>
+    <button
+      onClick={() => setLightbox({ src: resolved || "", alt: alt || "" })}
+      className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1"
+    >
+      <img src={resolved} alt={alt || ""} loading="lazy" className="w-20 h-20 object-cover" />
+    </button>
   )
 }
 
@@ -72,14 +107,17 @@ export function StreamingText({
   }
 
   return (
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
-      components={mdComponents}
-      urlTransform={(u: string) => u}
-    >
-      {content.slice(0, revealed)}
-    </Markdown>
+    <>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
+        components={mdComponents}
+        urlTransform={(u: string) => u}
+      >
+        {content.slice(0, revealed)}
+      </Markdown>
+      <ImageLightbox />
+    </>
   )
 }
 
@@ -100,13 +138,16 @@ export function MarkdownRenderer({
   }
 
   return (
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
-      components={mdComponents}
-      urlTransform={(u: string) => u}
-    >
-      {content}
-    </Markdown>
+    <>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
+        components={mdComponents}
+        urlTransform={(u: string) => u}
+      >
+        {content}
+      </Markdown>
+      <ImageLightbox />
+    </>
   )
 }
