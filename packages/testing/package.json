@@ -1,0 +1,35 @@
+{
+  "name": "@redbamboo/testing",
+  "version": "0.1.0",
+  "description": "Shared Playwright utilities for the Red Suite (Nova, CodeRed, RedMatter, RedLeaf)",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "echo ok",
+    "test": "echo ok",
+    "clean": "rimraf dist",
+    "smoke": "tsx src/smoke-test.ts",
+    "explore:redleaf": "node scripts/explore-redleaf.cjs"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "tsx": "^4.19.4",
+    "typescript": "~5.9.3"
+  }
+}
