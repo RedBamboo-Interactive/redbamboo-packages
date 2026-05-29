@@ -18,6 +18,7 @@ const NOOP_HANDLE: VoiceInputHandle = {
   state: "idle",
   error: null,
   transcript: null,
+  interimTranscript: null,
   startRecording: async () => {},
   stopRecording: async () => {},
   cancelRecording: () => {},
@@ -35,6 +36,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
   const [state, setState] = useState<VoiceInputState>("idle")
   const [error, setError] = useState<string | null>(null)
   const [transcript, setTranscript] = useState<string | null>(null)
+  const [interimTranscript, setInterimTranscript] = useState<string | null>(null)
 
   const recorderRef = useRef<AudioRecorder | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -78,6 +80,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
 
     setError(null)
     setTranscript(null)
+    setInterimTranscript(null)
     syncState("recording")
   }, [disabled, syncState])
 
@@ -101,12 +104,16 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
         return
       }
 
+      setInterimTranscript(trimmed)
+
       let finalText = trimmed
       if (speechRef.current?.reformulate) {
         const context = filterConversation(messagesRef.current)
         finalText = await speechRef.current!.reformulate(trimmed, context, abort.signal)
         if (abort.signal.aborted) return
       }
+
+      setInterimTranscript(null)
 
       if (pendingRef.current && onAnswerRef.current) {
         onAnswerRef.current(finalText)
@@ -119,6 +126,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
       console.error("[voice] transcription failed:", err)
       const msg = err instanceof Error ? err.message : "Voice processing failed"
       setError(msg)
+      setInterimTranscript(null)
       syncState("error")
       setTimeout(() => {
         if (stateRef.current === "error") syncState("idle")
@@ -134,6 +142,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
       abortRef.current?.abort()
     }
     setError(null)
+    setInterimTranscript(null)
     syncState("idle")
   }, [syncState])
 
@@ -174,5 +183,5 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
   }, [])
 
   if (!params) return NOOP_HANDLE
-  return { state, error, transcript, startRecording, stopRecording, cancelRecording }
+  return { state, error, transcript, interimTranscript, startRecording, stopRecording, cancelRecording }
 }

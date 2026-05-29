@@ -83,13 +83,23 @@ export function ChatPanel(props: ChatPanelProps) {
     { value, isStreaming: streaming, hasImages }: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean },
   ) => {
     if (value.trim() || hasImages || streaming) return null
+    const isActive = voice.state !== "idle"
+    const voiceLabel = voice.state === "recording"
+      ? "Recording"
+      : voice.state === "processing"
+        ? voice.interimTranscript ? "Refining" : "Transcribing"
+        : voice.state === "error"
+          ? "Error"
+          : null
     return (
       <button
         onPointerDown={(e) => { e.preventDefault(); voice.startRecording() }}
         onPointerUp={(e) => { e.preventDefault(); voice.stopRecording() }}
         onPointerLeave={(e) => { e.preventDefault(); if (voice.state === "recording") voice.cancelRecording() }}
         disabled={disabled || voice.state === "processing"}
-        className={`absolute right-2 bottom-1.5 w-7 h-7 flex items-center justify-center rounded-md transition-colors select-none touch-none disabled:opacity-30 disabled:cursor-not-allowed ${
+        className={`absolute right-2 bottom-1.5 flex items-center justify-center rounded-md transition-all select-none touch-none disabled:opacity-30 disabled:cursor-not-allowed ${
+          isActive ? "gap-1.5 px-2.5 h-7" : "w-7 h-7"
+        } ${
           voice.state === "recording"
             ? "bg-red-500-a30 text-red-400"
             : voice.state === "processing"
@@ -112,6 +122,7 @@ export function ChatPanel(props: ChatPanelProps) {
         ) : (
           <i className="fa-solid fa-microphone text-xs" />
         )}
+        {voiceLabel && <span className="text-xs font-medium">{voiceLabel}</span>}
       </button>
     )
   }
@@ -132,7 +143,7 @@ export function ChatPanel(props: ChatPanelProps) {
       onInterrupt={interrupt}
       disabled={disabled}
       isStreaming={isStreaming}
-      placeholder={placeholder}
+      placeholder={voice.interimTranscript ?? placeholder}
       permissionMode={permissionMode}
       onTogglePlanMode={onTogglePlanMode}
       pendingQuestion={!!pendingQuestion}

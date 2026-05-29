@@ -66,6 +66,7 @@ export interface VoiceInputHandle {
   state: VoiceInputState
   error: string | null
   transcript: string | null
+  interimTranscript: string | null
   startRecording: () => Promise<void>
   stopRecording: () => Promise<void>
   cancelRecording: () => void
