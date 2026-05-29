@@ -44,23 +44,30 @@ public sealed class TelemetryMiddleware
         finally
         {
             sw.Stop();
-            var durationMs = sw.Elapsed.TotalMilliseconds;
 
-            var endpoint = context.GetEndpoint();
-            var routePattern = (endpoint as RouteEndpoint)?.RoutePattern?.RawText;
-
-            _telemetry.Record(new TelemetryEntry
+            if (!IsStreamingResponse(context))
             {
-                Timestamp = DateTimeOffset.UtcNow,
-                Method = context.Request.Method,
-                Path = context.Request.Path.Value ?? "/",
-                RoutePattern = routePattern,
-                StatusCode = context.Response.StatusCode,
-                DurationMs = durationMs,
-                ResponseSize = context.Response.ContentLength,
-                CorrelationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault(),
-                Error = error ?? (context.Response.StatusCode >= 400 ? $"HTTP {context.Response.StatusCode}" : null),
-            });
+                var durationMs = sw.Elapsed.TotalMilliseconds;
+
+                var endpoint = context.GetEndpoint();
+                var routePattern = (endpoint as RouteEndpoint)?.RoutePattern?.RawText;
+
+                var kind = context.Items.TryGetValue("Telemetry.Kind", out var k) ? k as string : null;
+
+                _telemetry.Record(new TelemetryEntry
+                {
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Method = context.Request.Method,
+                    Path = context.Request.Path.Value ?? "/",
+                    RoutePattern = routePattern,
+                    StatusCode = context.Response.StatusCode,
+                    DurationMs = durationMs,
+                    ResponseSize = context.Response.ContentLength,
+                    CorrelationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault(),
+                    Error = error ?? (context.Response.StatusCode >= 400 ? $"HTTP {context.Response.StatusCode}" : null),
+                    Kind = kind,
+                });
+            }
         }
     }
 
@@ -82,6 +89,13 @@ public sealed class TelemetryMiddleware
             return true;
 
         return false;
+    }
+
+    private static bool IsStreamingResponse(HttpContext context)
+    {
+        var contentType = context.Response.ContentType;
+        return contentType != null &&
+               contentType.StartsWith("text/event-stream", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasFileExtension(string path)

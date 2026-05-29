@@ -86,7 +86,13 @@ public static class AppHostExtensions
 
         var telemetry = app.Services.GetService<TelemetryService>();
         if (telemetry is not null)
+        {
+            if (descriptor is RegistryServiceDescriptor rsd)
+                foreach (var ep in rsd.Registry.GetEndpoints())
+                    telemetry.DescribeRoute(ep.Method, ep.Path, ep.Description);
+
             TelemetryEndpoints.MapTelemetryEndpoints(app, telemetry);
+        }
 
         List<ProxyRouteConfig>? wsProxyRoutes = null;
         if (proxyRoutes is { Count: > 0 })

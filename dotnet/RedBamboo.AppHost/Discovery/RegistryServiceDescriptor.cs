@@ -6,6 +6,8 @@ public abstract class RegistryServiceDescriptor : IServiceDescriptor
 
     protected RegistryServiceDescriptor(EndpointRegistry registry) => _registry = registry;
 
+    public EndpointRegistry Registry => _registry;
+
     public abstract string ServiceName { get; }
     public abstract string Version { get; }
     public abstract string Description { get; }

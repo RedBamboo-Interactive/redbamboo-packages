@@ -12,6 +12,7 @@ public record TelemetryEntry
     public long? ResponseSize { get; init; }
     public string? CorrelationId { get; init; }
     public string? Error { get; init; }
+    public string? Kind { get; init; }
 
     public object ToWireFormat() => new
     {
@@ -25,6 +26,7 @@ public record TelemetryEntry
         response_size = ResponseSize,
         correlation_id = CorrelationId,
         error = Error,
+        kind = Kind,
     };
 }
 
@@ -56,4 +58,6 @@ public record RouteStats
     public double P99Ms { get; init; }
     public long? AvgResponseSize { get; init; }
     public string? LastSeen { get; init; }
+    public string? Kind { get; init; }
+    public string? Description { get; init; }
 }

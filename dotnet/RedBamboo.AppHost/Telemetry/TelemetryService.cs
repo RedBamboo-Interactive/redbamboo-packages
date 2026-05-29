@@ -11,8 +11,13 @@ public class TelemetryService : IAsyncDisposable
     private readonly Task _consumerTask;
     private readonly CancellationTokenSource _cts = new();
 
+    private readonly Dictionary<string, string> _descriptions = new(StringComparer.OrdinalIgnoreCase);
+
     public event Action<TelemetryEntry>? OnEntry;
     public TelemetryOptions Options => _options;
+
+    public void DescribeRoute(string method, string routePattern, string description)
+        => _descriptions[$"{method} {routePattern}"] = description;
 
     public TelemetryService(TelemetryOptions options)
     {
@@ -85,7 +90,7 @@ public class TelemetryService : IAsyncDisposable
         var where = clauses.Count > 0 ? "WHERE " + string.Join(" AND ", clauses) : "";
         cmd.CommandText = $"""
             SELECT id, timestamp, method, path, route_pattern, status_code,
-                   duration_ms, response_size, correlation_id, error
+                   duration_ms, response_size, correlation_id, error, kind
             FROM requests {where}
             ORDER BY timestamp DESC
             LIMIT @limit OFFSET @offset
@@ -127,14 +132,15 @@ public class TelemetryService : IAsyncDisposable
                 MAX(duration_ms),
                 SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END),
                 AVG(response_size),
-                MAX(timestamp)
+                MAX(timestamp),
+                MAX(kind)
             FROM requests {where}
             GROUP BY method, COALESCE(route_pattern, path)
             ORDER BY cnt DESC
             """;
 
         var groups = new List<(string method, string route, int count, double avg,
-            double min, double max, int errors, double? avgSize, string lastSeen)>();
+            double min, double max, int errors, double? avgSize, string lastSeen, string? kind)>();
 
         using (var reader = cmd.ExecuteReader())
         {
@@ -149,7 +155,8 @@ public class TelemetryService : IAsyncDisposable
                     reader.GetDouble(5),
                     reader.GetInt32(6),
                     reader.IsDBNull(7) ? null : reader.GetDouble(7),
-                    reader.GetString(8)));
+                    reader.GetString(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9)));
             }
         }
 
@@ -158,6 +165,8 @@ public class TelemetryService : IAsyncDisposable
         foreach (var g in groups)
         {
             var durations = GetSortedDurations(conn, g.method, g.route, since);
+
+            _descriptions.TryGetValue($"{g.method} {g.route}", out var desc);
 
             result.Add(new RouteStats
             {
@@ -174,6 +183,8 @@ public class TelemetryService : IAsyncDisposable
                 P99Ms = Math.Round(Percentile(durations, 0.99), 2),
                 AvgResponseSize = g.avgSize is { } sz ? (long)Math.Round(sz) : null,
                 LastSeen = g.lastSeen,
+                Kind = g.kind,
+                Description = desc,
             });
         }
 
@@ -261,13 +272,32 @@ public class TelemetryService : IAsyncDisposable
                 duration_ms REAL NOT NULL,
                 response_size INTEGER,
                 correlation_id TEXT,
-                error TEXT
+                error TEXT,
+                kind TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp);
             CREATE INDEX IF NOT EXISTS idx_requests_route ON requests(route_pattern);
             CREATE INDEX IF NOT EXISTS idx_requests_duration ON requests(duration_ms);
             """;
         cmd.ExecuteNonQuery();
+
+        MigrateSchema(conn);
+    }
+
+    private static void MigrateSchema(SqliteConnection conn)
+    {
+        using var pragma = conn.CreateCommand();
+        pragma.CommandText = "PRAGMA table_info(requests)";
+        var columns = new HashSet<string>();
+        using (var reader = pragma.ExecuteReader())
+            while (reader.Read()) columns.Add(reader.GetString(1));
+
+        if (!columns.Contains("kind"))
+        {
+            using var alter = conn.CreateCommand();
+            alter.CommandText = "ALTER TABLE requests ADD COLUMN kind TEXT";
+            alter.ExecuteNonQuery();
+        }
     }
 
     private async Task ConsumeAsync(CancellationToken ct)
@@ -305,10 +335,10 @@ public class TelemetryService : IAsyncDisposable
             cmd.CommandText = """
                 INSERT INTO requests
                     (timestamp, method, path, route_pattern, status_code,
-                     duration_ms, response_size, correlation_id, error)
+                     duration_ms, response_size, correlation_id, error, kind)
                 VALUES
                     (@ts, @method, @path, @route, @status,
-                     @duration, @size, @corr, @err)
+                     @duration, @size, @corr, @err, @kind)
                 """;
             cmd.Parameters.AddWithValue("@ts", e.Timestamp.ToString("O"));
             cmd.Parameters.AddWithValue("@method", e.Method);
@@ -319,6 +349,7 @@ public class TelemetryService : IAsyncDisposable
             cmd.Parameters.AddWithValue("@size", (object?)e.ResponseSize ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@corr", (object?)e.CorrelationId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@err", (object?)e.Error ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@kind", (object?)e.Kind ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
 
@@ -344,6 +375,7 @@ public class TelemetryService : IAsyncDisposable
                 ResponseSize = reader.IsDBNull(7) ? null : reader.GetInt64(7),
                 CorrelationId = reader.IsDBNull(8) ? null : reader.GetString(8),
                 Error = reader.IsDBNull(9) ? null : reader.GetString(9),
+                Kind = reader.IsDBNull(10) ? null : reader.GetString(10),
             });
         }
 
