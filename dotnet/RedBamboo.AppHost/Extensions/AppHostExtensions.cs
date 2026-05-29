@@ -6,6 +6,7 @@ using RedBamboo.AppHost.Discovery;
 using RedBamboo.AppHost.Logging;
 using RedBamboo.AppHost.Proxy;
 using RedBamboo.AppHost.RemoteAccess;
+using RedBamboo.AppHost.Telemetry;
 using RedBamboo.AppHost.Tunnel;
 using RedBamboo.AppHost.WebSockets;
 
@@ -34,6 +35,24 @@ public static class AppHostExtensions
         services.AddSingleton(logService);
         services.AddAppHostWebSocket();
         return services;
+    }
+
+    public static IServiceCollection AddAppHostTelemetry(
+        this IServiceCollection services, Action<TelemetryOptions> configure)
+    {
+        var options = new TelemetryOptions { AppName = "Unknown" };
+        configure(options);
+        var service = new TelemetryService(options);
+        services.AddSingleton(service);
+        services.AddAppHostWebSocket();
+        return services;
+    }
+
+    public static IApplicationBuilder UseAppHostTelemetry(this IApplicationBuilder app)
+    {
+        if (app.ApplicationServices.GetService<TelemetryService>() is null)
+            return app;
+        return app.UseMiddleware<TelemetryMiddleware>();
     }
 
     public static IApplicationBuilder UseAppHostAuth(
@@ -65,6 +84,10 @@ public static class AppHostExtensions
         if (logService is not null)
             LogEndpoints.MapLogEndpoints(app, logService);
 
+        var telemetry = app.Services.GetService<TelemetryService>();
+        if (telemetry is not null)
+            TelemetryEndpoints.MapTelemetryEndpoints(app, telemetry);
+
         List<ProxyRouteConfig>? wsProxyRoutes = null;
         if (proxyRoutes is { Count: > 0 })
         {
@@ -90,6 +113,22 @@ public static class AppHostExtensions
                     DataSchema: "LogEntry",
                     Fields: ["id", "timestamp", "level", "category", "source", "message"]));
                 logService.OnLogEntry += entry => broadcaster.Broadcast("log.entry", entry.ToWireFormat());
+            }
+
+            if (telemetry is not null)
+            {
+                var telemetryRegistered = broadcaster.GetEventSchemas()
+                    .Any(s => s.Type == "telemetry.request");
+                if (!telemetryRegistered)
+                {
+                    broadcaster.RegisterEvent(new WsEventSchema(
+                        "telemetry.request",
+                        "Fired for every tracked API request",
+                        DataSchema: "TelemetryEntry",
+                        Fields: ["method", "path", "route_pattern", "status_code", "duration_ms"]));
+                    telemetry.OnEntry += entry =>
+                        broadcaster.Broadcast("telemetry.request", entry.ToWireFormat());
+                }
             }
 
             WebSocketEndpoints.MapWebSocketEndpoints(app, broadcaster, wsProxyRoutes);
