@@ -116,6 +116,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
       syncState("idle")
     } catch (err) {
       if (abort.signal.aborted) return
+      console.error("[voice] transcription failed:", err)
       const msg = err instanceof Error ? err.message : "Voice processing failed"
       setError(msg)
       syncState("error")
