@@ -43,6 +43,13 @@ public static class TrayIcons
         g.FillPath(brush, path);
     }
 
+    public static void Leaf(Graphics g, int size)
+    {
+        using var path = BuildLeafPath(size);
+        using var brush = new SolidBrush(Color.White);
+        g.FillPath(brush, path);
+    }
+
     private static GraphicsPath BuildFaTerminalPath(int size)
     {
         var path = new GraphicsPath(FillMode.Winding);
@@ -183,6 +190,40 @@ public static class TrayIcons
 
         return path;
     }
+    private static GraphicsPath BuildLeafPath(int size)
+    {
+        var path = new GraphicsPath(FillMode.Winding);
+
+        path.AddBezier(471.3f, 6.7f, 477.7f, 0.6f, 487f, -1.6f, 495.6f, 1.2f);
+        path.AddBezier(495.6f, 1.2f, 505.4f, 4.5f, 512f, 13.7f, 512f, 24f);
+        path.AddLine(512f, 24f, 512f, 210.9f);
+        path.AddBezier(512f, 210.9f, 512f, 342.1f, 403.9f, 448f, 273.2f, 448f);
+        path.AddBezier(273.2f, 448f, 196.2f, 448f, 129.8f, 398.5f, 105.7f, 329.3f);
+        path.AddBezier(105.7f, 329.3f, 70.3f, 360.1f, 48f, 405.4f, 48f, 456f);
+        path.AddBezier(48f, 456f, 48f, 469.3f, 37.3f, 480f, 24f, 480f);
+        path.AddBezier(24f, 480f, 10.7f, 480f, 0f, 469.3f, 0f, 456f);
+        path.AddBezier(0f, 456f, 0f, 381.1f, 38.2f, 315.1f, 96.1f, 276.3f);
+        path.AddBezier(96.1f, 276.3f, 131.4f, 252.7f, 173.5f, 240f, 216f, 240f);
+        path.AddLine(216f, 240f, 296f, 240f);
+        path.AddBezier(296f, 240f, 309.3f, 240f, 320f, 229.3f, 320f, 216f);
+        path.AddBezier(320f, 216f, 320f, 202.7f, 309.3f, 192f, 296f, 192f);
+        path.AddLine(296f, 192f, 216f, 192f);
+        path.AddBezier(216f, 192f, 176.3f, 192f, 138.7f, 200.8f, 105f, 216.5f);
+        path.AddBezier(105f, 216.5f, 128.3f, 146.5f, 194.2f, 96f, 272f, 96f);
+        path.AddBezier(272f, 96f, 338.4f, 96f, 387.8f, 73.9f, 420.7f, 52f);
+        path.AddBezier(420.7f, 52f, 439.9f, 39.2f, 456.2f, 23.9f, 471.4f, 6.7f);
+        path.CloseFigure();
+
+        using var matrix = new Matrix();
+        matrix.Translate(-256f, -256f, MatrixOrder.Append);
+        matrix.Scale(0.75f, 0.75f, MatrixOrder.Append);
+        matrix.Translate(256f, 256f, MatrixOrder.Append);
+        matrix.Scale(size / 512f, size / 512f, MatrixOrder.Append);
+        path.Transform(matrix);
+
+        return path;
+    }
+
     private static GraphicsPath BuildStarPath(int size)
     {
         var path = new GraphicsPath(FillMode.Winding);
