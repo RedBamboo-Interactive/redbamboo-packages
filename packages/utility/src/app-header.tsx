@@ -11,6 +11,7 @@ export interface AppHeaderBrandProps {
 export interface AppHeaderProps {
   brand: AppHeaderBrandProps
   children?: React.ReactNode
+  breadcrumb?: React.ReactNode
   className?: string
   onBrandClick?: () => void
 }
@@ -53,13 +54,19 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary", onClick
   )
 }
 
-function AppHeader({ brand, children, className, onBrandClick }: AppHeaderProps) {
+function AppHeader({ brand, children, breadcrumb, className, onBrandClick }: AppHeaderProps) {
   return (
     <header data-slot="app-header" className={cn(
       "shrink-0 flex items-center gap-3 px-4 py-2 border-b border-border-a60",
       className,
     )}>
       <AppHeaderBrand {...brand} onClick={onBrandClick} />
+      {breadcrumb && (
+        <>
+          <span className="h-4 w-px bg-border-a60" />
+          {breadcrumb}
+        </>
+      )}
       <span className="flex-1" />
       {children}
     </header>

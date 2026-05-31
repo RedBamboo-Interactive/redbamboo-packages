@@ -82,6 +82,7 @@ function ShellCommands({
 function AppShellInner({
   config,
   headerContent,
+  breadcrumb,
   menuItems,
   children,
   className,
@@ -134,7 +135,7 @@ function AppShellInner({
         data-slot="app-shell"
         className={className ?? "flex h-full w-full flex-col"}
       >
-        <AppHeader brand={config.brand} onBrandClick={openSwitcher}>
+        <AppHeader brand={config.brand} breadcrumb={breadcrumb} onBrandClick={openSwitcher}>
           {headerContent}
           <DropdownMenu>
             <DropdownMenuTrigger

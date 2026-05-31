@@ -37,6 +37,7 @@ export interface AppShellConfig {
 export interface AppShellProps {
   config: AppShellConfig
   headerContent?: ReactNode
+  breadcrumb?: ReactNode
   menuItems?: ReactNode
   children: ReactNode
   className?: string

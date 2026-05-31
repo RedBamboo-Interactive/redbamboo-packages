@@ -91,3 +91,11 @@ export type { WsEventProviderProps } from "./ws-event-provider"
 
 export { useLayoutPersistence } from "./use-layout-persistence"
 export type { UseLayoutPersistenceReturn } from "./use-layout-persistence"
+
+export { buildBreadcrumbs, useBreadcrumbLabelsContext } from "./use-breadcrumbs"
+export type { RouteHandle, RouteMatch } from "./use-breadcrumbs"
+
+export { BreadcrumbLabelProvider, useBreadcrumbLabel, useBreadcrumbLabels } from "./breadcrumb-labels"
+
+export { useNavigateUp } from "./use-navigate-up"
+export type { NavigateUpOptions } from "./use-navigate-up"
