@@ -5,7 +5,7 @@ interface LabelEntry {
   icon?: string
 }
 
-interface BreadcrumbLabelContextValue {
+export interface BreadcrumbLabelContextValue {
   labels: Map<string, LabelEntry>
   setLabel: (path: string, label: string, icon?: string) => void
   removeLabel: (path: string) => void
