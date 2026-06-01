@@ -23,7 +23,7 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary", onClick
   return (
     <div
       className={cn(
-        "app-header-brand flex items-center gap-2 select-none",
+        "app-header-brand flex items-center gap-2 select-none shrink-0",
         accentClass,
         onClick ? "cursor-pointer" : "cursor-default",
       )}
@@ -62,10 +62,10 @@ function AppHeader({ brand, children, breadcrumb, className, onBrandClick }: App
     )}>
       <AppHeaderBrand {...brand} onClick={onBrandClick} />
       {breadcrumb && (
-        <>
-          <span className="h-4 w-px bg-border-a60" />
+        <div className="hidden sm:flex items-center gap-3 min-w-0 overflow-hidden">
+          <span className="h-4 w-px bg-border-a60 shrink-0" />
           {breadcrumb}
-        </>
+        </div>
       )}
       <span className="flex-1" />
       {children}

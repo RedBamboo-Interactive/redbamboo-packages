@@ -14,10 +14,10 @@ export interface BreadcrumbProps {
 
 export function Breadcrumb({ items, onNavigate, className }: BreadcrumbProps) {
   return (
-    <nav aria-label="Breadcrumb" data-slot="breadcrumb">
-      <ol className={cn("flex items-center gap-1.5 text-xs", className)}>
+    <nav aria-label="Breadcrumb" data-slot="breadcrumb" className="min-w-0">
+      <ol className={cn("flex items-center gap-1.5 text-xs min-w-0", className)}>
         {items.map((item, i) => (
-          <li key={i} className="flex items-center gap-1.5">
+          <li key={i} className={cn("flex items-center gap-1.5", i === items.length - 1 ? "min-w-0" : "shrink-0")}>
             {i > 0 && (
               <i className="fa-solid fa-chevron-right text-[8px] text-text-muted opacity-50" />
             )}
@@ -25,15 +25,15 @@ export function Breadcrumb({ items, onNavigate, className }: BreadcrumbProps) {
               <button
                 type="button"
                 onClick={() => onNavigate(item.href!)}
-                className="text-text-muted hover:text-contrast transition-colors cursor-pointer flex items-center gap-1"
+                className="text-text-muted hover:text-contrast transition-colors cursor-pointer flex items-center gap-1 min-w-0"
               >
-                {item.icon && <i className={cn(item.icon, "text-[10px]")} />}
-                {item.label}
+                {item.icon && <i className={cn(item.icon, "text-[10px] shrink-0")} />}
+                <span className="truncate">{item.label}</span>
               </button>
             ) : (
-              <span className="text-text-muted flex items-center gap-1">
-                {item.icon && <i className={cn(item.icon, "text-[10px]")} />}
-                {item.label}
+              <span className="text-text-muted flex items-center gap-1 min-w-0">
+                {item.icon && <i className={cn(item.icon, "text-[10px] shrink-0")} />}
+                <span className="truncate">{item.label}</span>
               </span>
             )}
           </li>
