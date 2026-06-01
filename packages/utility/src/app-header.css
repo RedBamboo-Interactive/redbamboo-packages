@@ -1,3 +1,11 @@
+/* ── AppHeader breadcrumbs — hide on mobile touch devices ─────────── */
+
+@media (max-width: 639px) and (pointer: coarse) {
+  .app-header-crumbs {
+    display: none;
+  }
+}
+
 /* ── AppHeader brand ────────────────────────────────────────────────── */
 
 .app-header-brand__bg {

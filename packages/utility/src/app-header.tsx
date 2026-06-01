@@ -62,7 +62,7 @@ function AppHeader({ brand, children, breadcrumb, className, onBrandClick }: App
     )}>
       <AppHeaderBrand {...brand} onClick={onBrandClick} />
       {breadcrumb && (
-        <div className="hidden sm:flex [@media(pointer:fine)]:flex items-center gap-3 min-w-0 overflow-hidden">
+        <div className="app-header-crumbs flex items-center gap-3 min-w-0 overflow-hidden">
           <span className="h-4 w-px bg-border-a60 shrink-0" />
           {breadcrumb}
         </div>
