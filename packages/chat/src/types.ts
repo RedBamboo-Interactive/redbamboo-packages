@@ -172,6 +172,7 @@ export interface ChatPanelProps {
   onExecutePlan?: () => void
   enableImageAttachments?: boolean
   enableFileAttachments?: boolean
+  draftStorageKey?: string
 
   // Voice integration
   speechBackend?: SpeechBackend

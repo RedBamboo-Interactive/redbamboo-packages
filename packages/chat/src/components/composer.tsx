@@ -16,6 +16,7 @@ interface ComposerProps {
   renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean }) => React.ReactNode
   enableImageAttachments?: boolean
   enableFileAttachments?: boolean
+  draftStorageKey?: string
 }
 
 function readImageFile(file: File): Promise<ImageAttachment | null> {
@@ -34,6 +35,23 @@ function readImageFile(file: File): Promise<ImageAttachment | null> {
   })
 }
 
+const DRAFT_SAVE_DELAY = 300
+
+function loadDraftFromStorage(key: string, id: string): string | null {
+  try { return localStorage.getItem(`${key}:${id}`) } catch { return null }
+}
+
+function saveDraftToStorage(key: string, id: string, text: string): void {
+  try {
+    if (text) localStorage.setItem(`${key}:${id}`, text)
+    else localStorage.removeItem(`${key}:${id}`)
+  } catch {}
+}
+
+function removeDraftFromStorage(key: string, id: string): void {
+  try { localStorage.removeItem(`${key}:${id}`) } catch {}
+}
+
 export function Composer({
   onSend,
   onInterrupt,
@@ -49,6 +67,7 @@ export function Composer({
   renderInlineAction,
   enableImageAttachments = true,
   enableFileAttachments = true,
+  draftStorageKey,
 }: ComposerProps) {
   const [value, setValue] = useState("")
   const [images, setImages] = useState<ImageAttachment[]>([])
@@ -60,22 +79,35 @@ export function Composer({
   const valueRef = useRef(value)
   const imagesRef = useRef(images)
   const [draftRestoreKey, setDraftRestoreKey] = useState(0)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   valueRef.current = value
   imagesRef.current = images
 
   useEffect(() => {
-    if (prevSessionRef.current !== undefined && prevSessionRef.current !== sessionId) {
+    const isInitial = prevSessionRef.current === undefined
+    const isSwitch = !isInitial && prevSessionRef.current !== sessionId
+
+    if (isSwitch) {
       const prevId = prevSessionRef.current
       if (prevId) {
         draftsRef.current[prevId] = { value: valueRef.current, images: imagesRef.current }
+        if (draftStorageKey) saveDraftToStorage(draftStorageKey, prevId, valueRef.current)
       }
       const draft = sessionId ? draftsRef.current[sessionId] : undefined
-      setValue(draft?.value ?? "")
+      const storedText = draftStorageKey && sessionId ? loadDraftFromStorage(draftStorageKey, sessionId) : null
+      setValue(draft?.value ?? storedText ?? "")
       setImages(draft?.images ?? [])
       setDraftRestoreKey(k => k + 1)
+    } else if (isInitial && draftStorageKey && sessionId) {
+      const saved = loadDraftFromStorage(draftStorageKey, sessionId)
+      if (saved) {
+        setValue(saved)
+        setDraftRestoreKey(k => k + 1)
+      }
     }
+
     prevSessionRef.current = sessionId
-  }, [sessionId])
+  }, [sessionId, draftStorageKey])
 
   useLayoutEffect(() => {
     if (draftRestoreKey > 0 && textareaRef.current) {
@@ -91,6 +123,25 @@ export function Composer({
   useEffect(() => {
     if (!isStreaming) setInterrupted(false)
   }, [isStreaming])
+
+  useEffect(() => {
+    if (!draftStorageKey || !sessionId) return
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      saveDraftToStorage(draftStorageKey, sessionId, value)
+    }, DRAFT_SAVE_DELAY)
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
+  }, [value, draftStorageKey, sessionId])
+
+  useEffect(() => {
+    if (!draftStorageKey) return
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      const id = prevSessionRef.current
+      const text = valueRef.current
+      if (id && text) saveDraftToStorage(draftStorageKey, id, text)
+    }
+  }, [draftStorageKey])
 
   const streaming = isStreaming && !interrupted
 
@@ -117,7 +168,10 @@ export function Composer({
         onSend(trimmed, images.length > 0 ? images : undefined)
         setValue("")
         setImages([])
-        if (sessionId) delete draftsRef.current[sessionId]
+        if (sessionId) {
+          delete draftsRef.current[sessionId]
+          if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
+        }
         if (textareaRef.current) textareaRef.current.style.height = "auto"
       } else {
         doInterrupt()
@@ -130,7 +184,10 @@ export function Composer({
       onAnswerQuestion(trimmed)
       setValue("")
       setImages([])
-      if (sessionId) delete draftsRef.current[sessionId]
+      if (sessionId) {
+        delete draftsRef.current[sessionId]
+        if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
+      }
       if (textareaRef.current) textareaRef.current.style.height = "auto"
       return
     }
@@ -138,11 +195,14 @@ export function Composer({
     onSend(trimmed, images.length > 0 ? images : undefined)
     setValue("")
     setImages([])
-    if (sessionId) delete draftsRef.current[sessionId]
+    if (sessionId) {
+      delete draftsRef.current[sessionId]
+      if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
+    }
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
     }
-  }, [value, images, disabled, streaming, onSend, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId])
+  }, [value, images, disabled, streaming, onSend, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape" && streaming) {

@@ -21,7 +21,7 @@ export function ChatPanel(props: ChatPanelProps) {
     sessionId, disabled = false, onAnswerQuestion, onResume,
     placeholder, className, header, footer,
     resolveImageSrc, permissionMode, onTogglePlanMode, onExecutePlan,
-    enableImageAttachments, enableFileAttachments,
+    enableImageAttachments, enableFileAttachments, draftStorageKey,
     speechBackend, handsFreeEnabled, pushToTalkKey,
     renderStatusLine, renderComposerInlineAction,
   } = props
@@ -152,6 +152,7 @@ export function ChatPanel(props: ChatPanelProps) {
       sessionId={sessionId}
       enableImageAttachments={enableImageAttachments}
       enableFileAttachments={enableFileAttachments}
+      draftStorageKey={draftStorageKey}
       renderInlineAction={inlineAction}
     />
   )
