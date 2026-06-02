@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useSyncExternalStore } from "react"
+import { memo, useState, useRef, useEffect, useMemo, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -6,14 +6,17 @@ import rehypeHighlight from "rehype-highlight"
 import { rehypeTwemoji } from "../lib/rehype-twemoji"
 
 // Module-level lightbox state — survives component remounts from markdown re-renders
-let lightboxState: { src: string; alt: string } | null = null
+const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
+function isVideoSrc(src?: string): boolean { return !!src && VIDEO_EXTENSIONS.test(src) }
+
+let lightboxState: { src: string; alt: string; type: "image" | "video" } | null = null
 const listeners = new Set<() => void>()
 function setLightbox(s: typeof lightboxState) { lightboxState = s; listeners.forEach(fn => fn()) }
 function subscribeLightbox(cb: () => void) { listeners.add(cb); return () => { listeners.delete(cb) } }
 function getLightbox() { return lightboxState }
 
 let lightboxMounted = 0
-function ImageLightbox() {
+function MediaLightbox() {
   const state = useSyncExternalStore(subscribeLightbox, getLightbox)
   const isFirst = useRef(false)
 
@@ -38,10 +41,14 @@ function ImageLightbox() {
       onClick={(e) => { if (e.target === e.currentTarget) setLightbox(null) }}
       role="dialog"
       aria-modal="true"
-      aria-label={state.alt || "Image preview"}
+      aria-label={state.alt || (state.type === "video" ? "Video player" : "Image preview")}
     >
       <div className="max-w-4xl max-h-[90vh] overflow-auto animate-in fade-in zoom-in-98 duration-200" onClick={e => e.stopPropagation()}>
-        <img src={state.src} alt={state.alt} className="max-w-full max-h-[85vh] rounded-xl object-contain" />
+        {state.type === "video" ? (
+          <video src={state.src} controls autoPlay className="max-w-full max-h-[85vh] rounded-xl" />
+        ) : (
+          <img src={state.src} alt={state.alt} className="max-w-full max-h-[85vh] rounded-xl object-contain" />
+        )}
         {state.alt && <p className="text-sm text-text-muted text-center px-4 py-2">{state.alt}</p>}
       </div>
     </div>,
@@ -49,18 +56,40 @@ function ImageLightbox() {
   )
 }
 
+function resolveSrc(src?: string, resolve?: (s: string) => string | undefined) {
+  return src && resolve ? (resolve(src) ?? src) : src
+}
+
 function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
-  const resolved = src && resolve ? (resolve(src) ?? src) : src
+  const resolved = resolveSrc(src, resolve)
 
   return (
     <button
-      onClick={() => setLightbox({ src: resolved || "", alt: alt || "" })}
+      onClick={() => setLightbox({ src: resolved || "", alt: alt || "", type: "image" })}
       className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1"
     >
       <img src={resolved} alt={alt || ""} loading="lazy" className="w-20 h-20 object-cover" />
     </button>
   )
 }
+
+const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
+  const resolved = resolveSrc(src, resolve)
+
+  return (
+    <button
+      onClick={() => setLightbox({ src: resolved || "", alt: alt || "", type: "video" })}
+      className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1 relative"
+    >
+      <video src={resolved} muted autoPlay loop playsInline className="w-20 h-20 object-cover" />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="white" className="drop-shadow-md">
+          <path d="M4 2.5v11l9-5.5z" />
+        </svg>
+      </div>
+    </button>
+  )
+}, (prev, next) => prev.src === next.src && prev.alt === next.alt)
 
 const CHARS_PER_FRAME = 3
 
@@ -97,14 +126,18 @@ export function StreamingText({
     return () => cancelAnimationFrame(rafRef.current)
   }, [isLive, content.length])
 
-  const mdComponents = {
+  const resolveRef = useRef(resolveImageSrc)
+  resolveRef.current = resolveImageSrc
+  const mdComponents = useMemo(() => ({
     img: ({ src, alt, className }: React.ImgHTMLAttributes<HTMLImageElement>) => {
       if (className?.toString().includes("twemoji")) {
         return <img src={src} alt={alt} className="twemoji" draggable={false} style={{ display: "inline", height: "1.2em", width: "1.2em", verticalAlign: "-0.2em", margin: "0 0.05em", filter: "invert(1) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white)", opacity: 0.8 }} />
       }
-      return <ImageThumbnail src={src?.toString()} alt={alt?.toString()} resolve={resolveImageSrc} />
+      const s = src?.toString()
+      if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
+      return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
     },
-  }
+  }), [])
 
   return (
     <>
@@ -116,7 +149,7 @@ export function StreamingText({
       >
         {content.slice(0, revealed)}
       </Markdown>
-      <ImageLightbox />
+      <MediaLightbox />
     </>
   )
 }
@@ -128,14 +161,18 @@ export function MarkdownRenderer({
   content: string
   resolveImageSrc?: (src: string) => string | undefined
 }) {
-  const mdComponents = {
+  const resolveRef = useRef(resolveImageSrc)
+  resolveRef.current = resolveImageSrc
+  const mdComponents = useMemo(() => ({
     img: ({ src, alt, className }: React.ImgHTMLAttributes<HTMLImageElement>) => {
       if (className?.toString().includes("twemoji")) {
         return <img src={src} alt={alt} className="twemoji" draggable={false} style={{ display: "inline", height: "1.2em", width: "1.2em", verticalAlign: "-0.2em", margin: "0 0.05em", filter: "invert(1) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white)", opacity: 0.8 }} />
       }
-      return <ImageThumbnail src={src?.toString()} alt={alt?.toString()} resolve={resolveImageSrc} />
+      const s = src?.toString()
+      if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
+      return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
     },
-  }
+  }), [])
 
   return (
     <>
@@ -147,7 +184,7 @@ export function MarkdownRenderer({
       >
         {content}
       </Markdown>
-      <ImageLightbox />
+      <MediaLightbox />
     </>
   )
 }
