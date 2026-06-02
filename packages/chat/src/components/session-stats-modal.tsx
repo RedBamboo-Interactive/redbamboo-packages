@@ -113,7 +113,7 @@ function CopyBadge({ label, value, short }: { label: string; value: string; shor
 
 function StatRow({ label, value, sub, mono }: { label: string; value: string; sub?: string; mono?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between py-1.5 gap-3">
+    <div className="flex items-baseline justify-between py-1.5 gap-3 min-w-0">
       <span className="text-xs text-text-muted shrink-0">{label}</span>
       <span className={`text-sm font-medium text-right min-w-0 truncate ${mono ? "font-mono text-xs" : ""}`}>
         {value}
@@ -174,7 +174,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
           <DialogTitle>Session Info</DialogTitle>
         </DialogHeader>
 
-        <div className="divide-y divide-overlay-6">
+        <div className="divide-y divide-overlay-6 min-w-0">
           {(s.name || s.jobHash || s.sessionId || s.discussionId) && (
             <div className="pb-2">
               {s.name && <StatRow label="Name" value={s.name} />}
