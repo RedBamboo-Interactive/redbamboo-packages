@@ -172,3 +172,18 @@ export type { PanelHeaderProps } from "./components/panel-header"
 
 export { Breadcrumb } from "./components/breadcrumb"
 export type { BreadcrumbItem, BreadcrumbProps } from "./components/breadcrumb"
+
+export {
+  ChartCard,
+  ChartTooltip,
+  RbBarChart,
+  RbAreaChart,
+  RbDonutChart,
+  CHART_PALETTE,
+} from "./components/charts"
+
+export type {
+  BarChartSeries,
+  AreaChartSeries,
+  DonutSegment,
+} from "./components/charts"
