@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -31,6 +32,9 @@ public static class ProxyEndpoints
                 using var req = new HttpRequestMessage(new HttpMethod(ctx.Request.Method), $"{targetPath}{query}");
                 if (callerInfo != null)
                     req.Headers.TryAddWithoutValidation("X-Caller-Info", callerInfo);
+                var userId = ctx.User?.FindFirstValue("sub");
+                if (userId != null)
+                    req.Headers.TryAddWithoutValidation("X-User-Id", userId);
                 if (ctx.Request.ContentLength > 0 || ctx.Request.ContentType != null)
                 {
                     req.Content = new StreamContent(ctx.Request.Body);
