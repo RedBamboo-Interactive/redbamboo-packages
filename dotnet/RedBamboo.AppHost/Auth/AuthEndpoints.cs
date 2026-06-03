@@ -1,11 +1,21 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using RedBamboo.AppHost.Discovery;
 
 namespace RedBamboo.AppHost.Auth;
 
 public static class AuthEndpoints
 {
+    private static string SanitizeReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrEmpty(returnUrl)) return "/";
+        if (!returnUrl.StartsWith('/')) return "/";
+        if (returnUrl.StartsWith("//")) return "/";
+        if (returnUrl.Contains("://")) return "/";
+        return returnUrl;
+    }
+
     public static void Map(EndpointRegistry registry)
     {
         registry.MapGet("/login", "Login page",
@@ -15,14 +25,19 @@ public static class AuthEndpoints
             });
 
         registry.MapGet("/auth/login", "Initiate OAuth login flow",
-            (HttpContext context, IAuthProvider provider, AuthOptions options) =>
+            (HttpContext context, IServiceProvider sp, AuthOptions options) =>
             {
-                var returnUrl = context.Request.Query["returnUrl"].FirstOrDefault() ?? "/";
+                var provider = sp.GetService<IAuthProvider>();
+                if (provider is null)
+                    return Results.Content("<html><body><h1>OAuth not configured</h1><p>No authentication provider is available. Running in local-only mode.</p></body></html>", "text/html");
+
+                var returnUrl = SanitizeReturnUrl(context.Request.Query["returnUrl"].FirstOrDefault());
                 var state = Guid.NewGuid().ToString("N");
 
                 var cookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
+                    Secure = true,
                     SameSite = SameSiteMode.Lax,
                     MaxAge = TimeSpan.FromMinutes(10)
                 };
@@ -39,9 +54,12 @@ public static class AuthEndpoints
             .WithParam("returnUrl", "string", description: "URL to redirect to after login");
 
         registry.MapGet("/auth/callback", "OAuth callback handler",
-            async (HttpContext context, IAuthProvider provider, IUserStore userStore,
+            async (HttpContext context, IServiceProvider sp, IUserStore userStore,
                 JwtService jwtService, IRefreshTokenStore refreshTokenStore, AuthOptions options) =>
             {
+                var provider = sp.GetService<IAuthProvider>();
+                if (provider is null)
+                    return Results.BadRequest(new { error = "not_configured", message = "No authentication provider is available." });
                 var code = context.Request.Query["code"].FirstOrDefault();
                 var state = context.Request.Query["state"].FirstOrDefault();
                 var expectedState = context.Request.Cookies["redsuite_auth_state"];
@@ -86,7 +104,7 @@ public static class AuthEndpoints
                 context.Response.Cookies.Delete("redsuite_auth_state");
                 context.Response.Cookies.Delete("redsuite_auth_return");
 
-                var returnUrl = context.Request.Cookies["redsuite_auth_return"] ?? "/";
+                var returnUrl = SanitizeReturnUrl(context.Request.Cookies["redsuite_auth_return"]);
                 return Results.Redirect(returnUrl);
             });
 

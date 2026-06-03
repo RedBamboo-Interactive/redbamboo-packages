@@ -49,7 +49,7 @@ public sealed class PermissionService : IPermissionService
                 if (grant.Scope is not null)
                     continue;
 
-                if (GrantMatchesTypeAndAction(grant, entityType, action))
+                if (GrantMatchesTypeAndAction(grant, entityType, action, grants))
                     return true;
             }
         }
@@ -83,7 +83,7 @@ public sealed class PermissionService : IPermissionService
                 if (grant.Scope is not "own")
                     continue;
 
-                if (GrantMatchesTypeAndAction(grant, entityType, action))
+                if (GrantMatchesTypeAndAction(grant, entityType, action, grants))
                     return true;
             }
         }
@@ -91,9 +91,12 @@ public sealed class PermissionService : IPermissionService
         return false;
     }
 
-    private static bool GrantMatchesTypeAndAction(PermissionGrant grant, string entityType, string action)
+    private static bool GrantMatchesTypeAndAction(PermissionGrant grant, string entityType, string action, PermissionGrant[] allGrants)
     {
         if (grant.Type != "*" && !grant.Type.Equals(entityType, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (grant.Type == "*" && HasDenyGrant(allGrants, entityType))
             return false;
 
         if (grant.Actions.Contains(action, StringComparer.OrdinalIgnoreCase))
@@ -103,6 +106,17 @@ public sealed class PermissionService : IPermissionService
             && AdminImpliedActions.Contains(action))
             return true;
 
+        return false;
+    }
+
+    private static bool HasDenyGrant(PermissionGrant[] grants, string entityType)
+    {
+        foreach (var grant in grants)
+        {
+            if (grant.Type.Equals(entityType, StringComparison.OrdinalIgnoreCase)
+                && grant.Actions.Length == 0)
+                return true;
+        }
         return false;
     }
 

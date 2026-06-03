@@ -102,6 +102,8 @@ public sealed class AuthMiddleware
     {
         var path = context.Request.Path.Value ?? "";
         if (path is "/" or "") return true;
+        if (path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)) return false;
+        if (path.StartsWith("/auth/", StringComparison.OrdinalIgnoreCase)) return false;
         var ext = Path.GetExtension(path);
         return !string.IsNullOrEmpty(ext);
     }
