@@ -128,17 +128,18 @@ public sealed class PermissionService : IPermissionService
 
     private static string[]? GetRoles(ClaimsPrincipal user)
     {
-        var rolesClaim = user.FindFirstValue("roles");
-        if (rolesClaim is null)
+        var claims = user.FindAll("roles").ToList();
+        if (claims.Count == 0)
             return null;
 
-        try
+        // JwtSecurityTokenHandler splits JSON array claims into individual Claim objects,
+        // but directly-constructed ClaimsIdentity (LocalDefault) keeps the JSON array as one claim
+        if (claims.Count == 1 && claims[0].Value.StartsWith('['))
         {
-            return JsonSerializer.Deserialize<string[]>(rolesClaim);
+            try { return JsonSerializer.Deserialize<string[]>(claims[0].Value); }
+            catch { return [claims[0].Value]; }
         }
-        catch
-        {
-            return null;
-        }
+
+        return claims.Select(c => c.Value).ToArray();
     }
 }

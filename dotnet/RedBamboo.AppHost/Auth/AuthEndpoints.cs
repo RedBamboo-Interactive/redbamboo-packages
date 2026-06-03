@@ -77,7 +77,7 @@ public static class AuthEndpoints
                 var identity = await provider.ExchangeCodeAsync(code, redirectUri);
                 var user = await userStore.CreateOrUpdateFromExternalAsync(identity);
 
-                var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles);
+                var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles, user.AvatarUrl);
                 var refreshToken = jwtService.GenerateRefreshToken();
 
                 var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
@@ -116,22 +116,29 @@ public static class AuthEndpoints
             {
                 var refreshToken = context.Request.Cookies[options.RefreshCookieName];
                 if (string.IsNullOrEmpty(refreshToken))
-                    return ClearAuthCookiesAndReturn(context, options, Results.Json(new { error = "no_token" }, statusCode: 401));
+                {
+                    context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+                    return Results.Json(new { error = "no_token" }, statusCode: 401);
+                }
 
                 var userId = await refreshTokenStore.ValidateAndGetUserIdAsync(refreshToken);
                 if (userId is null)
-                    return ClearAuthCookiesAndReturn(context, options, Results.Json(new { error = "invalid_token" }, statusCode: 401));
+                {
+                    context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+                }
 
                 var user = await userStore.FindByIdAsync(userId);
                 if (user is null)
                 {
                     await refreshTokenStore.RevokeAsync(refreshToken);
-                    return ClearAuthCookiesAndReturn(context, options, Results.Json(new { error = "user_not_found" }, statusCode: 401));
+                    context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+                    return Results.Json(new { error = "user_not_found" }, statusCode: 401);
                 }
 
                 await refreshTokenStore.RevokeAsync(refreshToken);
 
-                var newAccessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles);
+                var newAccessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles, user.AvatarUrl);
                 var newRefreshToken = jwtService.GenerateRefreshToken();
 
                 var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
@@ -191,12 +198,13 @@ public static class AuthEndpoints
                 else
                     roles = [];
 
-                string? avatarUrl = null;
+                string? avatarUrl = context.User.FindFirst("picture")?.Value;
                 var userStore = sp.GetService<IUserStore>();
                 if (userStore is not null)
                 {
                     var user = await userStore.FindByIdAsync(sub);
-                    avatarUrl = user?.AvatarUrl;
+                    if (user?.AvatarUrl is not null)
+                        avatarUrl = user.AvatarUrl;
                 }
 
                 return Results.Ok(new { id = sub, email, name, roles, avatarUrl });

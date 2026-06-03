@@ -32,11 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         return await fetchUser()
       }
-      setUser(null)
-      return false
+      return await fetchUser()
     } catch {
-      setUser(null)
-      return false
+      return await fetchUser()
     }
   }, [fetchUser])
 

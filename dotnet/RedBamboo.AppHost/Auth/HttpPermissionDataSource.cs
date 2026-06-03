@@ -6,7 +6,7 @@ namespace RedBamboo.AppHost.Auth;
 
 public class PermissionDataSourceOptions
 {
-    public string RedLeafBaseUrl { get; init; } = "http://localhost:18804";
+    public string RedLeafBaseUrl { get; set; } = "http://localhost:18804";
 }
 
 public sealed class HttpPermissionDataSource : IPermissionDataSource

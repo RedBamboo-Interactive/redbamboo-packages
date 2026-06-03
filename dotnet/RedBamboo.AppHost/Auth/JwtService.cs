@@ -18,7 +18,7 @@ public sealed class JwtService
         _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.SigningKey));
     }
 
-    public string GenerateAccessToken(string userId, string email, string? name, string[] roles)
+    public string GenerateAccessToken(string userId, string email, string? name, string[] roles, string? avatarUrl = null)
     {
         var claims = new List<Claim>
         {
@@ -29,6 +29,9 @@ public sealed class JwtService
 
         if (name is not null)
             claims.Add(new(JwtRegisteredClaimNames.Name, name));
+
+        if (avatarUrl is not null)
+            claims.Add(new("picture", avatarUrl));
 
         var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(

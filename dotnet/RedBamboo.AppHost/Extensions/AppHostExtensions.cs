@@ -79,8 +79,10 @@ public static class AppHostExtensions
             services.AddSingleton<IAuthProvider>(sp => sp.GetRequiredService<GoogleAuthProvider>());
         }
 
-        services.AddSingleton<IUserStore, InMemoryUserStore>();
-        services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
+        services.AddSingleton<AuthenticatedHttpClientFactory>();
+
+        services.AddSingleton<IUserStore, RedLeafUserStore>();
+        services.AddSingleton<IRefreshTokenStore, RedLeafRefreshTokenStore>();
 
         services.AddSingleton(new PermissionDataSourceOptions());
         services.AddHttpClient<HttpPermissionDataSource>();
@@ -103,6 +105,11 @@ public static class AppHostExtensions
     {
         services.AddSingleton<IPermissionDataSource, T>();
         return services;
+    }
+
+    public static IApplicationBuilder UseUserDetection(this IApplicationBuilder app)
+    {
+        return app.UseMiddleware<UserDetectionMiddleware>();
     }
 
     public static IApplicationBuilder UseAppHostJwtAuth(this IApplicationBuilder app)
