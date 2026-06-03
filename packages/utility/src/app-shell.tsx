@@ -151,7 +151,7 @@ function AppShellInner({
           {!isLoading && user && (
             <div className="size-7 rounded-full bg-primary-a20 flex items-center justify-center text-xs font-medium text-primary shrink-0 select-none overflow-hidden">
               {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="size-full object-cover" />
+                <img src={user.avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 (user.name?.[0] || user.email[0]).toUpperCase()
               )}
@@ -211,9 +211,18 @@ function AppShellInner({
               {user && (
                 <>
                   <DropdownMenuSeparator />
-                  <div className="px-3 py-2">
-                    <div className="text-sm font-medium truncate">{user.name || "User"}</div>
-                    <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    <div className="size-8 rounded-full bg-primary-a20 flex items-center justify-center text-xs font-medium text-primary shrink-0 overflow-hidden">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        (user.name?.[0] || user.email[0]).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{user.name || "User"}</div>
+                      <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                    </div>
                   </div>
                   <DropdownMenuItem onClick={() => logout()}>
                     <i className="fa-solid fa-right-from-bracket size-4 text-center" />

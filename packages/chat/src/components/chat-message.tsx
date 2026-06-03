@@ -170,7 +170,9 @@ export function ChatMessage({
 }: ChatMessageProps) {
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
-    const content = rawContent.replace(/<nova-context[\s\S]*?<\/nova-context>\s*/g, "")
+    const content = rawContent
+      .replace(/<nova-context[\s\S]*?<\/nova-context>\s*/g, "")
+      .replace(/<nova-prior-messages[\s\S]*?<\/nova-prior-messages>\s*/g, "")
     const notification = parseTaskNotification(rawContent)
     if (notification) {
       return <TaskNotificationSquare notification={notification} />

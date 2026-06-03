@@ -18,6 +18,12 @@
     "version": "changeset version",
     "publish": "pnpm build && changeset publish"
   },
+  "pnpm": {
+    "overrides": {
+      "@types/react": "^19.2.14",
+      "@types/react-dom": "^19.2.3"
+    }
+  },
   "devDependencies": {
     "@changesets/cli": "^2.29.4",
     "@types/react": "^19.2.14",
