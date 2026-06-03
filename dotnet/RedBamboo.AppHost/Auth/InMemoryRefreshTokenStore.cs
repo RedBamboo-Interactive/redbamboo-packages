@@ -5,12 +5,15 @@ namespace RedBamboo.AppHost.Auth;
 public sealed class InMemoryRefreshTokenStore : IRefreshTokenStore
 {
     private readonly ConcurrentDictionary<string, TokenEntry> _tokens = new();
+    private int _operationCount;
 
     private record TokenEntry(string UserId, DateTimeOffset ExpiresAt);
 
     public Task StoreAsync(string token, string userId, DateTimeOffset expiresAt)
     {
         _tokens[token] = new TokenEntry(userId, expiresAt);
+        if (Interlocked.Increment(ref _operationCount) % 100 == 0)
+            CleanupExpired();
         return Task.CompletedTask;
     }
 
@@ -42,5 +45,15 @@ public sealed class InMemoryRefreshTokenStore : IRefreshTokenStore
         }
 
         return Task.CompletedTask;
+    }
+
+    private void CleanupExpired()
+    {
+        var now = DateTimeOffset.UtcNow;
+        foreach (var kvp in _tokens)
+        {
+            if (kvp.Value.ExpiresAt <= now)
+                _tokens.TryRemove(kvp.Key, out _);
+        }
     }
 }

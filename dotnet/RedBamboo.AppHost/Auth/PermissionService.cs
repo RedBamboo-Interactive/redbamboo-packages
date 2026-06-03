@@ -9,7 +9,7 @@ public sealed class PermissionService : IPermissionService
     private static readonly HashSet<string> AdminImpliedActions = ["read", "write", "delete"];
 
     private readonly IPermissionDataSource _dataSource;
-    private readonly ConcurrentDictionary<string, PermissionGrant[]> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private ConcurrentDictionary<string, PermissionGrant[]> _cache = new(StringComparer.OrdinalIgnoreCase);
 
     public bool IsLoaded { get; private set; }
 
@@ -21,9 +21,10 @@ public sealed class PermissionService : IPermissionService
     public async Task RefreshAsync()
     {
         var roles = await _dataSource.LoadRolesAsync();
-        _cache.Clear();
+        var newCache = new ConcurrentDictionary<string, PermissionGrant[]>(StringComparer.OrdinalIgnoreCase);
         foreach (var role in roles)
-            _cache[role.RoleSlug] = role.Grants;
+            newCache[role.RoleSlug] = role.Grants;
+        _cache = newCache;
         IsLoaded = true;
     }
 

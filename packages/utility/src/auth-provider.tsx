@@ -55,7 +55,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 
   useEffect(() => {
+    let cancelled = false
     fetchUser().then((ok) => {
+      if (cancelled) return
       setIsLoading(false)
       if (ok) {
         intervalRef.current = setInterval(() => {
@@ -64,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
     return () => {
+      cancelled = true
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [fetchUser, refresh])

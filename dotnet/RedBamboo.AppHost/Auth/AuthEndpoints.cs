@@ -170,7 +170,7 @@ public static class AuthEndpoints
             });
 
         registry.MapGet("/auth/me", "Get current user info",
-            (HttpContext context) =>
+            (HttpContext context, IServiceProvider sp) =>
             {
                 var sub = context.User.FindFirstValue("sub");
                 if (sub is null)
@@ -183,7 +183,15 @@ public static class AuthEndpoints
                     ? System.Text.Json.JsonSerializer.Deserialize<string[]>(rolesJson) ?? []
                     : Array.Empty<string>();
 
-                return Results.Ok(new { id = sub, email, name, roles });
+                string? avatarUrl = null;
+                var userStore = sp.GetService<IUserStore>();
+                if (userStore is not null)
+                {
+                    var user = userStore.FindByIdAsync(sub).GetAwaiter().GetResult();
+                    avatarUrl = user?.AvatarUrl;
+                }
+
+                return Results.Ok(new { id = sub, email, name, roles, avatarUrl });
             });
     }
 

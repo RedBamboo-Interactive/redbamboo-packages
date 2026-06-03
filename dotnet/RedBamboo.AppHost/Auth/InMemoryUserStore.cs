@@ -43,7 +43,8 @@ public sealed class InMemoryUserStore : IUserStore
         }
 
         var id = Guid.NewGuid().ToString();
-        var user = new AuthUser(id, identity.Email, identity.Name, identity.AvatarUrl, ["admin"]);
+        var isFirstUser = _usersById.IsEmpty;
+        var user = new AuthUser(id, identity.Email, identity.Name, identity.AvatarUrl, isFirstUser ? ["admin"] : ["viewer"]);
         _usersById[id] = user;
         _providerIndex[key] = id;
         return Task.FromResult(user);

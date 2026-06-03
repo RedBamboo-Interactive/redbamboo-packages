@@ -95,30 +95,7 @@ public static class AppHostExtensions
     {
         var options = new AuthOptions();
         configure(options);
-        services.AddSingleton(options);
-
-        if (options.Jwt != null)
-        {
-            services.AddSingleton(options.Jwt);
-            services.AddSingleton<JwtService>();
-        }
-
-        if (options.Google != null)
-        {
-            services.AddSingleton(options.Google);
-            services.AddHttpClient<GoogleAuthProvider>();
-            services.AddSingleton<IAuthProvider>(sp => sp.GetRequiredService<GoogleAuthProvider>());
-        }
-
-        services.AddSingleton<IUserStore, InMemoryUserStore>();
-        services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
-
-        services.AddSingleton(new PermissionDataSourceOptions());
-        services.AddHttpClient<HttpPermissionDataSource>();
-        services.AddSingleton<IPermissionDataSource>(sp => sp.GetRequiredService<HttpPermissionDataSource>());
-        services.AddSingleton<IPermissionService, PermissionService>();
-
-        return services;
+        return services.AddAppHostAuth(options);
     }
 
     public static IServiceCollection AddPermissionDataSource<T>(
