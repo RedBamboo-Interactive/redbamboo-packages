@@ -61,6 +61,85 @@ public static class AppHostExtensions
         return app.UseMiddleware<BearerAuthMiddleware>(options);
     }
 
+    public static IServiceCollection AddAppHostAuth(
+        this IServiceCollection services, AuthOptions options)
+    {
+        services.AddSingleton(options);
+
+        if (options.Jwt != null)
+        {
+            services.AddSingleton(options.Jwt);
+            services.AddSingleton<JwtService>();
+        }
+
+        if (options.Google != null)
+        {
+            services.AddSingleton(options.Google);
+            services.AddHttpClient<GoogleAuthProvider>();
+            services.AddSingleton<IAuthProvider>(sp => sp.GetRequiredService<GoogleAuthProvider>());
+        }
+
+        services.AddSingleton<IUserStore, InMemoryUserStore>();
+        services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
+
+        services.AddSingleton(new PermissionDataSourceOptions());
+        services.AddHttpClient<HttpPermissionDataSource>();
+        services.AddSingleton<IPermissionDataSource>(sp => sp.GetRequiredService<HttpPermissionDataSource>());
+        services.AddSingleton<IPermissionService, PermissionService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddAppHostAuth(
+        this IServiceCollection services, Action<AuthOptions> configure)
+    {
+        var options = new AuthOptions();
+        configure(options);
+        services.AddSingleton(options);
+
+        if (options.Jwt != null)
+        {
+            services.AddSingleton(options.Jwt);
+            services.AddSingleton<JwtService>();
+        }
+
+        if (options.Google != null)
+        {
+            services.AddSingleton(options.Google);
+            services.AddHttpClient<GoogleAuthProvider>();
+            services.AddSingleton<IAuthProvider>(sp => sp.GetRequiredService<GoogleAuthProvider>());
+        }
+
+        services.AddSingleton<IUserStore, InMemoryUserStore>();
+        services.AddSingleton<IRefreshTokenStore, InMemoryRefreshTokenStore>();
+
+        services.AddSingleton(new PermissionDataSourceOptions());
+        services.AddHttpClient<HttpPermissionDataSource>();
+        services.AddSingleton<IPermissionDataSource>(sp => sp.GetRequiredService<HttpPermissionDataSource>());
+        services.AddSingleton<IPermissionService, PermissionService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddPermissionDataSource<T>(
+        this IServiceCollection services) where T : class, IPermissionDataSource
+    {
+        services.AddSingleton<IPermissionDataSource, T>();
+        return services;
+    }
+
+    public static IApplicationBuilder UseAppHostJwtAuth(this IApplicationBuilder app)
+    {
+        var options = app.ApplicationServices.GetService<AuthOptions>();
+        if (options is null) return app;
+        return app.UseMiddleware<AuthMiddleware>();
+    }
+
+    public static void MapAuthEndpoints(this EndpointRegistry registry)
+    {
+        AuthEndpoints.Map(registry);
+    }
+
     public static EndpointRegistry CreateEndpointRegistry(this WebApplication app)
         => new EndpointRegistry(app);
 

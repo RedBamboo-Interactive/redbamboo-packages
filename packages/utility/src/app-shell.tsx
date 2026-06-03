@@ -11,6 +11,7 @@ import {
   ToastProvider,
   useToast,
 } from "@redbamboo/ui"
+import { AuthProvider, useAuth } from "./auth-provider"
 import { AppHeader } from "./app-header"
 import { AboutDialog } from "./about-dialog"
 import { FeedbackDialog } from "./feedback-dialog"
@@ -41,6 +42,15 @@ function ShellCommands({
   canInstall: boolean
   install: () => void
 }) {
+  const { user, logout } = useAuth()
+
+  useCommand("app-shell:sign-out", {
+    label: "Sign Out",
+    group: "App",
+    action: () => logout(),
+    enabled: !!user,
+  })
+
   useCommand("app-shell:about", {
     label: "About",
     group: "App",
@@ -87,6 +97,7 @@ function AppShellInner({
   children,
   className,
 }: AppShellProps) {
+  const { user, isLoading, logout } = useAuth()
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -137,6 +148,15 @@ function AppShellInner({
       >
         <AppHeader brand={config.brand} breadcrumb={breadcrumb} onBrandClick={openSwitcher}>
           {headerContent}
+          {!isLoading && user && (
+            <div className="size-7 rounded-full bg-primary-a20 flex items-center justify-center text-xs font-medium text-primary shrink-0 select-none overflow-hidden">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="size-full object-cover" />
+              ) : (
+                (user.name?.[0] || user.email[0]).toUpperCase()
+              )}
+            </div>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -188,6 +208,19 @@ function AppShellInner({
                   About {config.name}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
+              {user && (
+                <>
+                  <DropdownMenuSeparator />
+                  <div className="px-3 py-2">
+                    <div className="text-sm font-medium truncate">{user.name || "User"}</div>
+                    <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                  </div>
+                  <DropdownMenuItem onClick={() => logout()}>
+                    <i className="fa-solid fa-right-from-bracket size-4 text-center" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </AppHeader>
@@ -246,11 +279,13 @@ function AppShellInner({
 
 function AppShell(props: AppShellProps) {
   return (
-    <CommandProvider>
-      <ToastProvider>
-        <AppShellInner {...props} />
-      </ToastProvider>
-    </CommandProvider>
+    <AuthProvider>
+      <CommandProvider>
+        <ToastProvider>
+          <AppShellInner {...props} />
+        </ToastProvider>
+      </CommandProvider>
+    </AuthProvider>
   )
 }
 

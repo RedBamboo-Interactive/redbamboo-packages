@@ -1,0 +1,178 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
+using RedBamboo.AppHost.Discovery;
+
+namespace RedBamboo.AppHost.Auth;
+
+public static class AuthEndpoints
+{
+    public static void Map(EndpointRegistry registry)
+    {
+        registry.MapGet("/login", "Login page",
+            (HttpContext context) =>
+            {
+                return Results.Content(LoginPage.Render(), "text/html");
+            });
+
+        registry.MapGet("/auth/login", "Initiate OAuth login flow",
+            (HttpContext context, IAuthProvider provider, AuthOptions options) =>
+            {
+                var returnUrl = context.Request.Query["returnUrl"].FirstOrDefault() ?? "/";
+                var state = Guid.NewGuid().ToString("N");
+
+                var cookieOptions = new CookieOptions
+                {
+                    HttpOnly = true,
+                    SameSite = SameSiteMode.Lax,
+                    MaxAge = TimeSpan.FromMinutes(10)
+                };
+                context.Response.Cookies.Append("redsuite_auth_state", state, cookieOptions);
+                context.Response.Cookies.Append("redsuite_auth_return", returnUrl, cookieOptions);
+
+                var scheme = context.Request.Scheme;
+                var host = context.Request.Host;
+                var redirectUri = $"{scheme}://{host}/auth/callback";
+                var authorizeUrl = provider.GetAuthorizeUrl(redirectUri, state);
+
+                return Results.Redirect(authorizeUrl);
+            })
+            .WithParam("returnUrl", "string", description: "URL to redirect to after login");
+
+        registry.MapGet("/auth/callback", "OAuth callback handler",
+            async (HttpContext context, IAuthProvider provider, IUserStore userStore,
+                JwtService jwtService, IRefreshTokenStore refreshTokenStore, AuthOptions options) =>
+            {
+                var code = context.Request.Query["code"].FirstOrDefault();
+                var state = context.Request.Query["state"].FirstOrDefault();
+                var expectedState = context.Request.Cookies["redsuite_auth_state"];
+
+                if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state) ||
+                    !string.Equals(state, expectedState, StringComparison.Ordinal))
+                {
+                    return Results.BadRequest(new { error = "invalid_state", message = "State mismatch or missing code." });
+                }
+
+                var scheme = context.Request.Scheme;
+                var host = context.Request.Host;
+                var redirectUri = $"{scheme}://{host}/auth/callback";
+
+                var identity = await provider.ExchangeCodeAsync(code, redirectUri);
+                var user = await userStore.CreateOrUpdateFromExternalAsync(identity);
+
+                var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles);
+                var refreshToken = jwtService.GenerateRefreshToken();
+
+                var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
+                await refreshTokenStore.StoreAsync(refreshToken, user.Id, refreshExpiry);
+
+                context.Response.Cookies.Append(options.CookieName, accessToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Lax,
+                    Path = "/",
+                    MaxAge = options.Jwt.AccessTokenLifetime
+                });
+
+                context.Response.Cookies.Append(options.RefreshCookieName, refreshToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Path = "/auth/refresh",
+                    MaxAge = options.Jwt.RefreshTokenLifetime
+                });
+
+                context.Response.Cookies.Delete("redsuite_auth_state");
+                context.Response.Cookies.Delete("redsuite_auth_return");
+
+                var returnUrl = context.Request.Cookies["redsuite_auth_return"] ?? "/";
+                return Results.Redirect(returnUrl);
+            });
+
+        registry.MapPost("/auth/refresh", "Refresh access token",
+            async (HttpContext context, IRefreshTokenStore refreshTokenStore,
+                IUserStore userStore, JwtService jwtService, AuthOptions options) =>
+            {
+                var refreshToken = context.Request.Cookies[options.RefreshCookieName];
+                if (string.IsNullOrEmpty(refreshToken))
+                    return ClearAuthCookiesAndReturn(context, options, Results.Json(new { error = "no_token" }, statusCode: 401));
+
+                var userId = await refreshTokenStore.ValidateAndGetUserIdAsync(refreshToken);
+                if (userId is null)
+                    return ClearAuthCookiesAndReturn(context, options, Results.Json(new { error = "invalid_token" }, statusCode: 401));
+
+                var user = await userStore.FindByIdAsync(userId);
+                if (user is null)
+                {
+                    await refreshTokenStore.RevokeAsync(refreshToken);
+                    return ClearAuthCookiesAndReturn(context, options, Results.Json(new { error = "user_not_found" }, statusCode: 401));
+                }
+
+                await refreshTokenStore.RevokeAsync(refreshToken);
+
+                var newAccessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles);
+                var newRefreshToken = jwtService.GenerateRefreshToken();
+
+                var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
+                await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry);
+
+                context.Response.Cookies.Append(options.CookieName, newAccessToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Lax,
+                    Path = "/",
+                    MaxAge = options.Jwt.AccessTokenLifetime
+                });
+
+                context.Response.Cookies.Append(options.RefreshCookieName, newRefreshToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Secure = true,
+                    SameSite = SameSiteMode.Strict,
+                    Path = "/auth/refresh",
+                    MaxAge = options.Jwt.RefreshTokenLifetime
+                });
+
+                return Results.Ok(new { expiresIn = options.Jwt.AccessTokenLifetime.TotalSeconds });
+            });
+
+        registry.MapPost("/auth/logout", "Log out and clear tokens",
+            async (HttpContext context, IRefreshTokenStore refreshTokenStore, AuthOptions options) =>
+            {
+                var refreshToken = context.Request.Cookies[options.RefreshCookieName];
+                if (!string.IsNullOrEmpty(refreshToken))
+                    await refreshTokenStore.RevokeAsync(refreshToken);
+
+                context.Response.Cookies.Delete(options.CookieName, new CookieOptions { Path = "/" });
+                context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+
+                return Results.Ok(new { ok = true });
+            });
+
+        registry.MapGet("/auth/me", "Get current user info",
+            (HttpContext context) =>
+            {
+                var sub = context.User.FindFirstValue("sub");
+                if (sub is null)
+                    return Results.Json(new { error = "not_authenticated" }, statusCode: 401);
+
+                var email = context.User.FindFirstValue("email") ?? "";
+                var name = context.User.FindFirstValue("name");
+                var rolesJson = context.User.FindFirstValue("roles");
+                var roles = rolesJson is not null
+                    ? System.Text.Json.JsonSerializer.Deserialize<string[]>(rolesJson) ?? []
+                    : Array.Empty<string>();
+
+                return Results.Ok(new { id = sub, email, name, roles });
+            });
+    }
+
+    private static IResult ClearAuthCookiesAndReturn(HttpContext context, AuthOptions options, IResult result)
+    {
+        context.Response.Cookies.Delete(options.CookieName, new CookieOptions { Path = "/" });
+        context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+        return result;
+    }
+}

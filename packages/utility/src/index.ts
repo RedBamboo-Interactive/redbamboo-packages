@@ -51,6 +51,9 @@ export type { ConnectPromptProps } from "./connect-prompt"
 export { RemoteAccessProvider, useRemoteAccess } from "./remote-access-provider"
 export type { RemoteAccessStatus, RemoteAccessContextValue } from "./remote-access-provider"
 
+export { AuthProvider, useAuth } from "./auth-provider"
+export type { AuthUser, AuthContextValue } from "./auth-types"
+
 export { useServiceDiscovery } from "./use-service-discovery"
 export type { ServiceManifest, CapabilityInfo, EndpointInfo } from "./use-service-discovery"
 
