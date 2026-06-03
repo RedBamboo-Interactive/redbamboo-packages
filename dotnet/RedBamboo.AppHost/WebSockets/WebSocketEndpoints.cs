@@ -33,6 +33,15 @@ public static class WebSocketEndpoints
                     upstreamSockets.Add(upstream);
                     try
                     {
+                        var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+                        if (authHeader != null)
+                            upstream.Options.SetRequestHeader("Authorization", authHeader);
+                        else
+                        {
+                            var cookie = ctx.Request.Cookies["redsuite_token"];
+                            if (cookie != null)
+                                upstream.Options.SetRequestHeader("Authorization", $"Bearer {cookie}");
+                        }
                         var wsUri = new Uri(
                             route.UpstreamBaseUrl
                                 .Replace("http://", "ws://")
