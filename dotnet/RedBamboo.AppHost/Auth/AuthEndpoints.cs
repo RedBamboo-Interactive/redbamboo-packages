@@ -170,7 +170,7 @@ public static class AuthEndpoints
             });
 
         registry.MapGet("/auth/me", "Get current user info",
-            (HttpContext context, IServiceProvider sp) =>
+            async (HttpContext context, IServiceProvider sp) =>
             {
                 var sub = context.User.FindFirstValue("sub");
                 if (sub is null)
@@ -187,7 +187,7 @@ public static class AuthEndpoints
                 var userStore = sp.GetService<IUserStore>();
                 if (userStore is not null)
                 {
-                    var user = userStore.FindByIdAsync(sub).GetAwaiter().GetResult();
+                    var user = await userStore.FindByIdAsync(sub);
                     avatarUrl = user?.AvatarUrl;
                 }
 
