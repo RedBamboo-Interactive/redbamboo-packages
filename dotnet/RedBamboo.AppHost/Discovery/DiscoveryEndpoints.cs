@@ -67,9 +67,12 @@ public static class DiscoveryEndpoints
             return Results.Ok(new
             {
                 service = descriptor.ServiceName,
+                name = descriptor.ServiceName,
                 version = descriptor.Version,
                 description = descriptor.Description,
                 api_base = descriptor.ApiBase,
+                iconClass = descriptor.IconClass,
+                iconColor = descriptor.IconColor,
                 capabilities,
                 app_endpoints = appEndpoints,
                 management = new

@@ -52,6 +52,7 @@ public sealed class JwtService
     public ClaimsPrincipal? ValidateToken(string token)
     {
         var handler = new JwtSecurityTokenHandler();
+        handler.InboundClaimTypeMap.Clear();
         var parameters = new TokenValidationParameters
         {
             ValidateIssuer = true,

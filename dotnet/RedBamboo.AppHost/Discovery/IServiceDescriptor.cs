@@ -6,6 +6,8 @@ public interface IServiceDescriptor
     string Version { get; }
     string Description { get; }
     string ApiBase { get; }
+    string? IconClass => null;
+    string? IconColor => null;
 
     Task<IReadOnlyList<CapabilityDescriptor>> GetCapabilitiesAsync();
     IReadOnlyList<EndpointDescriptor> GetAppEndpoints();

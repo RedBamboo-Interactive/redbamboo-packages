@@ -12,6 +12,8 @@ public abstract class RegistryServiceDescriptor : IServiceDescriptor
     public abstract string Version { get; }
     public abstract string Description { get; }
     public abstract string ApiBase { get; }
+    public virtual string? IconClass => null;
+    public virtual string? IconColor => null;
 
     public abstract Task<IReadOnlyList<CapabilityDescriptor>> GetCapabilitiesAsync();
 

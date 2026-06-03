@@ -7,7 +7,7 @@ public class AuthOptions
     public GoogleAuthOptions? Google { get; init; }
     public string CookieName { get; init; } = "redsuite_token";
     public string RefreshCookieName { get; init; } = "redsuite_refresh";
-    public List<string> BypassPaths { get; init; } = ["/ping", "/api/remote/status", "/auth/login", "/auth/callback", "/login"];
+    public List<string> BypassPaths { get; init; } = ["/ping", "/api/remote/status", "/auth/login", "/auth/callback", "/login", "/discover"];
 }
 
 public enum AuthMode

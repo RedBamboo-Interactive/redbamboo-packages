@@ -205,7 +205,7 @@ interface RbDonutChartProps {
 function getSegmentColor(segment: DonutSegment, index: number, fallbackColors?: string[]): string {
   if (segment.color) return segment.color
   const palette = fallbackColors || CHART_PALETTE
-  return palette[index % palette.length]
+  return palette[index % palette.length]!
 }
 
 export function RbDonutChart({ data, height = 220, centerLabel, colors, emptyMessage = "No data", showLegend, formatTooltip }: RbDonutChartProps) {

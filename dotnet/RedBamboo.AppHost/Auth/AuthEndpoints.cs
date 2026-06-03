@@ -83,11 +83,13 @@ public static class AuthEndpoints
                 var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
                 await refreshTokenStore.StoreAsync(refreshToken, user.Id, refreshExpiry);
 
+                var isSecure = context.Request.IsHttps;
+
                 context.Response.Cookies.Append(options.CookieName, accessToken, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Lax,
+                    Secure = isSecure,
+                    SameSite = isSecure ? SameSiteMode.Lax : SameSiteMode.Lax,
                     Path = "/",
                     MaxAge = options.Jwt.AccessTokenLifetime
                 });
@@ -95,8 +97,8 @@ public static class AuthEndpoints
                 context.Response.Cookies.Append(options.RefreshCookieName, refreshToken, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
+                    Secure = isSecure,
+                    SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
                     Path = "/auth/refresh",
                     MaxAge = options.Jwt.RefreshTokenLifetime
                 });
@@ -135,11 +137,13 @@ public static class AuthEndpoints
                 var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
                 await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry);
 
+                var isSecure = context.Request.IsHttps;
+
                 context.Response.Cookies.Append(options.CookieName, newAccessToken, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Lax,
+                    Secure = isSecure,
+                    SameSite = isSecure ? SameSiteMode.Lax : SameSiteMode.Lax,
                     Path = "/",
                     MaxAge = options.Jwt.AccessTokenLifetime
                 });
@@ -147,8 +151,8 @@ public static class AuthEndpoints
                 context.Response.Cookies.Append(options.RefreshCookieName, newRefreshToken, new CookieOptions
                 {
                     HttpOnly = true,
-                    Secure = true,
-                    SameSite = SameSiteMode.Strict,
+                    Secure = isSecure,
+                    SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
                     Path = "/auth/refresh",
                     MaxAge = options.Jwt.RefreshTokenLifetime
                 });
@@ -178,10 +182,14 @@ public static class AuthEndpoints
 
                 var email = context.User.FindFirstValue("email") ?? "";
                 var name = context.User.FindFirstValue("name");
-                var rolesJson = context.User.FindFirstValue("roles");
-                var roles = rolesJson is not null
-                    ? System.Text.Json.JsonSerializer.Deserialize<string[]>(rolesJson) ?? []
-                    : Array.Empty<string>();
+                var roleClaims = context.User.FindAll("roles").Select(c => c.Value).ToList();
+                string[] roles;
+                if (roleClaims.Count == 1 && roleClaims[0].StartsWith('['))
+                    roles = System.Text.Json.JsonSerializer.Deserialize<string[]>(roleClaims[0]) ?? [];
+                else if (roleClaims.Count > 0)
+                    roles = roleClaims.ToArray();
+                else
+                    roles = [];
 
                 string? avatarUrl = null;
                 var userStore = sp.GetService<IUserStore>();
