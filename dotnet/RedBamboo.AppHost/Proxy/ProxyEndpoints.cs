@@ -35,6 +35,15 @@ public static class ProxyEndpoints
                 var userId = ctx.User?.FindFirstValue("sub");
                 if (userId != null)
                     req.Headers.TryAddWithoutValidation("X-User-Id", userId);
+                var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+                if (authHeader != null)
+                    req.Headers.TryAddWithoutValidation("Authorization", authHeader);
+                else
+                {
+                    var cookie = ctx.Request.Cookies["redsuite_token"];
+                    if (cookie != null)
+                        req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cookie}");
+                }
                 if (ctx.Request.ContentLength > 0 || ctx.Request.ContentType != null)
                 {
                     req.Content = new StreamContent(ctx.Request.Body);
