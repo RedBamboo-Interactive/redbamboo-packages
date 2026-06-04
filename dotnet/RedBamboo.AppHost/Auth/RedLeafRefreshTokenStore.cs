@@ -37,7 +37,7 @@ public sealed class RedLeafRefreshTokenStore : IRefreshTokenStore
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<string?> ValidateAndGetUserIdAsync(string token)
+    public async Task<RefreshTokenValidation?> ValidateAsync(string token)
     {
         var hash = HashToken(token);
         var entity = await FindByHashAsync(hash);
@@ -54,10 +54,17 @@ public sealed class RedLeafRefreshTokenStore : IRefreshTokenStore
             return null;
         }
 
-        return d.TryGetProperty("user_id", out var uid) ? uid.GetString() : null;
+        var userId = d.TryGetProperty("user_id", out var uid) ? uid.GetString() : null;
+        return userId is not null ? new RefreshTokenValidation(userId, entity.Id.ToString()) : null;
     }
 
-    public async Task RevokeAsync(string token)
+    public async Task RevokeByIdAsync(string entityId)
+    {
+        if (Guid.TryParse(entityId, out var id))
+            await DeleteEntityAsync(id);
+    }
+
+    public async Task RevokeByTokenAsync(string token)
     {
         var hash = HashToken(token);
         var entity = await FindByHashAsync(hash);
