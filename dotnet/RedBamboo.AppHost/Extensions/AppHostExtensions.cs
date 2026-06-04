@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RedBamboo.AppHost.Auth;
@@ -46,6 +47,17 @@ public static class AppHostExtensions
         services.AddSingleton(service);
         services.AddAppHostWebSocket();
         return services;
+    }
+
+    public static IApplicationBuilder UseAppHostForwardedHeaders(this IApplicationBuilder app)
+    {
+        var options = new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+        };
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+        return app.UseForwardedHeaders(options);
     }
 
     public static IApplicationBuilder UseAppHostTelemetry(this IApplicationBuilder app)
