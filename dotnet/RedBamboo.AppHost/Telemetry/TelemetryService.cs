@@ -177,6 +177,7 @@ public class TelemetryService : IAsyncDisposable
                 AvgMs = Math.Round(g.avg, 2),
                 MinMs = Math.Round(g.min, 2),
                 MaxMs = Math.Round(g.max, 2),
+                P10Ms = Math.Round(Percentile(durations, 0.10), 2),
                 P50Ms = Math.Round(Percentile(durations, 0.50), 2),
                 P70Ms = Math.Round(Percentile(durations, 0.70), 2),
                 P90Ms = Math.Round(Percentile(durations, 0.90), 2),

@@ -52,6 +52,7 @@ public record RouteStats
     public double AvgMs { get; init; }
     public double MinMs { get; init; }
     public double MaxMs { get; init; }
+    public double P10Ms { get; init; }
     public double P50Ms { get; init; }
     public double P70Ms { get; init; }
     public double P90Ms { get; init; }
