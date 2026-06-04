@@ -58,6 +58,12 @@ public sealed class BearerAuthMiddleware
 
         if (provided == null || !string.Equals(provided, accessToken, StringComparison.Ordinal))
         {
+            if (_options.FallThroughOnFailure)
+            {
+                await _next(context);
+                return;
+            }
+
             context.Response.StatusCode = 401;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(new

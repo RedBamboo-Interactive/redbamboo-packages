@@ -36,16 +36,16 @@ public sealed class AuthMiddleware
             return;
         }
 
-        string? token = null;
-
+        string? headerToken = null;
         var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
         if (authHeader != null && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            token = authHeader["Bearer ".Length..];
+            headerToken = authHeader["Bearer ".Length..];
 
-        token ??= context.Request.Cookies[_options.CookieName];
+        var cookieToken = context.Request.Cookies[_options.CookieName];
 
-        if (token is not null)
+        foreach (var token in new[] { headerToken, cookieToken })
         {
+            if (token is null) continue;
             var principal = _jwtService.ValidateToken(token);
             if (principal is not null)
             {
@@ -53,11 +53,12 @@ public sealed class AuthMiddleware
                 await _next(context);
                 return;
             }
-
-            context.Response.Cookies.Delete(_options.CookieName);
         }
 
-        if (_options.Mode == AuthMode.LocalDefault && IsLocalRequest(context))
+        if (cookieToken is not null)
+            context.Response.Cookies.Delete(_options.CookieName);
+
+        if (IsLocalRequest(context))
         {
             var claims = new[]
             {

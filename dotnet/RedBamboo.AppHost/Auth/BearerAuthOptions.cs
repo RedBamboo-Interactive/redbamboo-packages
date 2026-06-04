@@ -6,4 +6,5 @@ public class BearerAuthOptions
     public string CookieName { get; init; } = "apphost_token";
     public List<string> BypassPaths { get; init; } = ["/ping", "/api/remote/status"];
     public bool AllowQueryParamToken { get; init; } = true;
+    public bool FallThroughOnFailure { get; init; } = false;
 }

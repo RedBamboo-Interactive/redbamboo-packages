@@ -148,15 +148,6 @@ function AppShellInner({
       >
         <AppHeader brand={config.brand} breadcrumb={breadcrumb} onBrandClick={openSwitcher}>
           {headerContent}
-          {!isLoading && user && (
-            <div className="size-7 rounded-full bg-primary-a20 flex items-center justify-center text-xs font-medium text-primary shrink-0 select-none overflow-hidden">
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                (user.name?.[0] || user.email[0]).toUpperCase()
-              )}
-            </div>
-          )}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={

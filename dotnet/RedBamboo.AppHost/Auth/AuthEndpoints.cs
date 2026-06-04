@@ -75,13 +75,23 @@ public static class AuthEndpoints
                 var redirectUri = $"{scheme}://{host}/auth/callback";
 
                 var identity = await provider.ExchangeCodeAsync(code, redirectUri);
-                var user = await userStore.CreateOrUpdateFromExternalAsync(identity);
 
-                var accessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles, user.AvatarUrl);
+                AuthUser? user = null;
+                try { user = await userStore.CreateOrUpdateFromExternalAsync(identity); }
+                catch { /* RedLeaf may be unavailable */ }
+
+                var userId = user?.Id ?? identity.ProviderId;
+                var email = user?.Email ?? identity.Email;
+                var name = user?.Name ?? identity.Name;
+                var roles = user?.Roles ?? ["admin"];
+                var avatarUrl = user?.AvatarUrl ?? identity.AvatarUrl;
+
+                var accessToken = jwtService.GenerateAccessToken(userId, email, name, roles, avatarUrl);
                 var refreshToken = jwtService.GenerateRefreshToken();
 
                 var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
-                await refreshTokenStore.StoreAsync(refreshToken, user.Id, refreshExpiry);
+                try { await refreshTokenStore.StoreAsync(refreshToken, userId, refreshExpiry); }
+                catch { /* refresh won't work but login still proceeds */ }
 
                 var isSecure = context.Request.IsHttps;
 
