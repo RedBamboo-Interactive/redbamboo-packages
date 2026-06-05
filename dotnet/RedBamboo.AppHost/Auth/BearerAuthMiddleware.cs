@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 
 namespace RedBamboo.AppHost.Auth;
@@ -73,6 +74,15 @@ public sealed class BearerAuthMiddleware
             });
             return;
         }
+
+        var claims = new[]
+        {
+            new Claim("sub", "service"),
+            new Claim("email", "service@bearer"),
+            new Claim("name", "Service Account"),
+            new Claim("roles", "[\"admin\"]", System.IdentityModel.Tokens.Jwt.JsonClaimValueTypes.JsonArray)
+        };
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "BearerToken"));
 
         await _next(context);
     }

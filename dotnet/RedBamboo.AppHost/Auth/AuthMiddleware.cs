@@ -36,6 +36,12 @@ public sealed class AuthMiddleware
             return;
         }
 
+        if (context.User.Identity?.IsAuthenticated == true)
+        {
+            await _next(context);
+            return;
+        }
+
         string? headerToken = null;
         var authHeader = context.Request.Headers.Authorization.FirstOrDefault();
         if (authHeader != null && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
