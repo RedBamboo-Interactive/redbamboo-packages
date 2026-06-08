@@ -114,14 +114,20 @@ function AskNovaCommands({ appName }: { appName: string }) {
     }
     setModalContext(ctx)
 
-    toPng(document.body, { pixelRatio: Math.min(1, 1280 / window.innerWidth) })
-      .then(dataUrl => {
-        const base64 = dataUrl.split(",")[1]
-        if (base64) {
-          setModalContext(prev => prev ? { ...prev, screenshot: { mediaType: "image/png", base64 } } : prev)
-        }
+    requestAnimationFrame(() => {
+      toPng(document.body, {
+        pixelRatio: Math.min(1, 1280 / window.innerWidth),
+        height: window.innerHeight,
+        canvasHeight: window.innerHeight,
       })
-      .catch(() => {})
+        .then(dataUrl => {
+          const base64 = dataUrl.split(",")[1]
+          if (base64) {
+            setModalContext(prev => prev ? { ...prev, screenshot: { mediaType: "image/png", base64 } } : prev)
+          }
+        })
+        .catch(() => {})
+    })
   }, [appName])
 
   useCommand("ask-nova", {
@@ -194,23 +200,25 @@ function AskNovaModal({ context, onClose }: { context: AskNovaContext | null; on
           </div>
         </DialogHeader>
 
-        <div className="p-3 space-y-2">
-          {context?.screenshot && (
-            <img
-              src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
-              alt=""
-              className="max-h-24 rounded-md border border-overlay-10 object-cover object-top"
+        <div className="p-3">
+          <div className="flex items-start gap-2">
+            {context?.screenshot && (
+              <img
+                src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
+                alt=""
+                className="h-16 w-16 rounded-md border border-overlay-10 object-cover object-top shrink-0"
+              />
+            )}
+            <textarea
+              ref={textareaRef}
+              value={question}
+              onChange={e => setQuestion(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="What would you like to know?"
+              rows={3}
+              className="flex-1 min-w-0 resize-none bg-overlay-6 rounded-lg px-3 py-2.5 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-pink-500-a50"
             />
-          )}
-          <textarea
-            ref={textareaRef}
-            value={question}
-            onChange={e => setQuestion(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="What would you like to know?"
-            rows={3}
-            className="w-full resize-none bg-overlay-6 rounded-lg px-3 py-2.5 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-pink-500-a50"
-          />
+          </div>
         </div>
 
         <div className="px-4 py-3 border-t border-border-subtle flex items-center justify-between">
