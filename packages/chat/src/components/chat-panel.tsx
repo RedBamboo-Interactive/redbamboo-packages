@@ -166,8 +166,8 @@ export function ChatPanel(props: ChatPanelProps) {
             <p className="text-sm">Send a message to get started</p>
           </div>
         </div>
-        {composerEl}
         {footer}
+        {composerEl}
       </div>
     )
   }
@@ -210,8 +210,8 @@ export function ChatPanel(props: ChatPanelProps) {
         </button>
       )}
 
-      {composerEl}
       {footer}
+      {composerEl}
     </div>
   )
 }
