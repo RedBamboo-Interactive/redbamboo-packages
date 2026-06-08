@@ -57,12 +57,14 @@ export function ContextSquare({ context }: ContextSquareProps) {
   const app = resolveApp(context.app)
   const displayUrl = context.route || tryPathname(context.url) || context.url
 
+  const NOVA_MAGENTA = "rgb(236 72 153)"
+
   return (
-    <div className="py-1.5 px-0.5">
+    <div className="py-1.5 px-0.5 flex justify-end">
       <button
         onClick={() => setOpen(true)}
         className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
-        style={{ backgroundColor: app.color }}
+        style={{ backgroundColor: NOVA_MAGENTA }}
         title={`Context from ${app.label}`}
       />
 
