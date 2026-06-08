@@ -22,6 +22,7 @@ import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
+import { useAskNova } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
 
 const isMac =
@@ -89,6 +90,32 @@ function ShellCommands({
   return null
 }
 
+const NOVA_PORT = "18803"
+
+function AskNovaCommands({ appName }: { appName: string }) {
+  const nova = useAskNova({ app: appName })
+
+  const isNova = typeof window !== "undefined" && window.location.port === NOVA_PORT
+  useCommand("ask-nova", {
+    label: "Ask Nova about this page",
+    group: "AI",
+    shortcut: "Ctrl+Shift+N",
+    keywords: ["nova", "ai", "ask", "question", "help", "context"],
+    action: () => { nova.ask() },
+    enabled: !isNova,
+  })
+
+  useCommand("ask-nova-selection", {
+    label: "Ask Nova about selection",
+    group: "AI",
+    keywords: ["nova", "ai", "selection", "highlight", "text"],
+    action: () => { nova.askWithSelection() },
+    enabled: !isNova,
+  })
+
+  return null
+}
+
 function AppShellInner({
   config,
   headerContent,
@@ -97,7 +124,7 @@ function AppShellInner({
   children,
   className,
 }: AppShellProps) {
-  const { user, isLoading, logout } = useAuth()
+  const { user, logout } = useAuth()
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
@@ -238,6 +265,7 @@ function AppShellInner({
         canInstall={canInstall}
         install={install}
       />
+      <AskNovaCommands appName={config.name} />
       <CommandPalette />
 
       <AboutDialog
