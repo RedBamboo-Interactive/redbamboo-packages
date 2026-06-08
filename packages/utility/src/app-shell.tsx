@@ -168,12 +168,13 @@ function AskNovaModal({ context, capturingScreenshot, onClose }: { context: AskN
   const [sending, setSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  const isOpen = !!context
   useEffect(() => {
-    if (context) {
+    if (isOpen) {
       setQuestion("")
       requestAnimationFrame(() => textareaRef.current?.focus())
     }
-  }, [context])
+  }, [isOpen])
 
   const handleSubmit = useCallback(async () => {
     if (!context || !question.trim() || sending) return
