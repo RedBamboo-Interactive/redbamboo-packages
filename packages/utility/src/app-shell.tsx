@@ -114,7 +114,7 @@ function AskNovaCommands({ appName }: { appName: string }) {
     }
     setModalContext(ctx)
 
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       toPng(document.body, {
         pixelRatio: Math.min(1, 1280 / window.innerWidth),
         height: window.innerHeight,
@@ -127,7 +127,7 @@ function AskNovaCommands({ appName }: { appName: string }) {
           }
         })
         .catch(() => {})
-    })
+    }, 50)
   }, [appName])
 
   useCommand("ask-nova", {
