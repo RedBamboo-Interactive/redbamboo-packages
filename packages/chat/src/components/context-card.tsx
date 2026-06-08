@@ -195,7 +195,7 @@ export function PendingContextBanner({ context, onDismiss }: PendingContextBanne
 // ── Parsing: extract ContextCardData from a user message ─────────────
 
 export function parseContextFromMessage(content: string): ContextCardData | null {
-  const match = content.match(/<nova-context[\s\S]*?>([\s\S]*?)<\/nova-context>/)
+  const match = content.match(/<nova-context\s+source="[^"]*"[^>]*>([\s\S]*?)<\/nova-context>/)
   if (!match) return null
 
   const inner = match[1]
