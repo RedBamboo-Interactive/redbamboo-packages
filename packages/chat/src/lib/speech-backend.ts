@@ -106,3 +106,49 @@ export function createSpeechBackend({
     },
   }
 }
+
+// ---------------------------------------------------------------------------
+// Built-in proxy transport — calls the host app's reverse-proxy endpoints
+// ---------------------------------------------------------------------------
+
+export function createProxySpeechTransport(): SpeechTransport {
+  return {
+    async transcribe(audio: Blob, signal?: AbortSignal) {
+      const ext = audio.type.includes("mp4") ? "mp4" : "webm"
+      const form = new FormData()
+      form.append("audio", audio, `recording.${ext}`)
+      const res = await fetch("/stt/transcribe", {
+        method: "POST",
+        body: form,
+        signal,
+        credentials: "include",
+      })
+      if (!res.ok) throw new Error("Transcription failed")
+      return res.json()
+    },
+
+    async speak(text: string, voice?: string, instructions?: string, signal?: AbortSignal) {
+      const res = await fetch("/tts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: voice ?? "Serena", instructions }),
+        signal,
+        credentials: "include",
+      })
+      if (!res.ok) throw new Error("Speech generation failed")
+      return res.arrayBuffer()
+    },
+
+    async prompt(req: PromptRequest, signal?: AbortSignal) {
+      const res = await fetch("/ai-session/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...req, mode: "oneshot", rationale: "Voice prompt" }),
+        signal,
+        credentials: "include",
+      })
+      if (!res.ok) throw new Error("Prompt failed")
+      return res.json()
+    },
+  }
+}
