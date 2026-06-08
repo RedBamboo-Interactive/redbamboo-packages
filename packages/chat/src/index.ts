@@ -24,7 +24,7 @@ export type {
 
 export { ChatPanel } from "./components/chat-panel"
 export { ChatMessage, getPartColor, getSpinnerColor, extractPlanFileContent } from "./components/chat-message"
-export { ContextSquare, PendingContextBanner, parseContextFromMessage } from "./components/context-card"
+export { ContextSquare, PendingContextBanner, parseContextFromMessage, extractRawContextXml } from "./components/context-card"
 export type { ContextCardData, ContextSquareProps, PendingContextBannerProps } from "./components/context-card"
 export { Composer } from "./components/composer"
 export { StreamingText, MarkdownRenderer } from "./components/streaming-text"

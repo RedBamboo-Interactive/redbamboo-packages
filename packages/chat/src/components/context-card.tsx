@@ -43,6 +43,7 @@ export interface ContextCardData {
 
 export interface ContextSquareProps {
   context: ContextCardData
+  rawXml?: string
 }
 
 export interface PendingContextBannerProps {
@@ -52,10 +53,9 @@ export interface PendingContextBannerProps {
 
 // ── ContextSquare (small indicator in message, opens modal) ──────────
 
-export function ContextSquare({ context }: ContextSquareProps) {
+export function ContextSquare({ context, rawXml }: ContextSquareProps) {
   const [open, setOpen] = useState(false)
   const app = resolveApp(context.app)
-  const displayUrl = context.route || tryPathname(context.url) || context.url
 
   const NOVA_MAGENTA = "rgb(236 72 153)"
 
@@ -71,68 +71,21 @@ export function ContextSquare({ context }: ContextSquareProps) {
       <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
         <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-            <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: app.color }} />
+            <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: NOVA_MAGENTA }} />
             <i className={`${app.icon} text-sm`} style={{ color: app.color }} />
-            <DialogTitle className="text-sm">{app.label}</DialogTitle>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled">
-              context
-            </span>
+            <DialogTitle className="text-sm">Context from {app.label}</DialogTitle>
           </DialogHeader>
 
-          <div className="overflow-y-auto p-4 flex-1 min-h-0 space-y-3">
-            <ContextRow label="URL" value={displayUrl} mono />
-            {context.title && <ContextRow label="Page" value={context.title} />}
-
-            {context.extra?.breadcrumbs != null && (
-              <ContextRow label="Location" value={String(context.extra.breadcrumbs)} />
+          <div className="overflow-y-auto p-4 flex-1 min-h-0">
+            {rawXml ? (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
+                {rawXml}
+              </pre>
+            ) : (
+              <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
+                {formatContextBlock(context)}
+              </pre>
             )}
-            {context.extra?.activeTab != null && (
-              <ContextRow label="Active tab" value={String(context.extra.activeTab)} />
-            )}
-            {context.extra?.selectedItem != null && (
-              <ContextRow label="Selected item" value={String(context.extra.selectedItem)} />
-            )}
-            {context.extra?.heading != null && (
-              <ContextRow label="Heading" value={String(context.extra.heading)} />
-            )}
-
-            {context.description && <ContextRow label="Description" value={context.description} />}
-
-            {context.selection && (
-              <div>
-                <span className="text-[10px] uppercase text-text-disabled font-semibold">Selected text</span>
-                <p className="text-xs text-text-secondary font-serif whitespace-pre-wrap mt-1 bg-overlay-4 rounded px-2 py-1.5">
-                  {context.selection}
-                </p>
-              </div>
-            )}
-
-            {context.screenshot && (
-              <div>
-                <span className="text-[10px] uppercase text-text-disabled font-semibold">Screenshot</span>
-                <img
-                  src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
-                  alt={`Screenshot from ${app.label}`}
-                  className="mt-1 w-full rounded-md border border-overlay-10"
-                />
-              </div>
-            )}
-
-            {/* Remaining extra fields not shown above */}
-            {context.extra && (() => {
-              const shown = new Set(["breadcrumbs", "activeTab", "selectedItem", "heading"])
-              const remaining = Object.entries(context.extra).filter(([k]) => !shown.has(k))
-              if (remaining.length === 0) return null
-              return (
-                <div className="flex flex-wrap gap-1">
-                  {remaining.map(([key, value]) => (
-                    <span key={key} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled">
-                      {key}: {typeof value === "string" ? value : JSON.stringify(value)}
-                    </span>
-                  ))}
-                </div>
-              )
-            })()}
           </div>
         </DialogContent>
       </Dialog>
@@ -232,13 +185,25 @@ export function parseContextFromMessage(content: string): ContextCardData | null
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-function ContextRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="flex justify-between items-baseline gap-4 text-xs">
-      <span className="text-text-muted shrink-0">{label}</span>
-      <span className={`text-text-secondary text-right break-all ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
-    </div>
-  )
+function formatContextBlock(context: ContextCardData): string {
+  const lines: string[] = []
+  lines.push(`app: ${context.app}`)
+  lines.push(`url: ${context.url}`)
+  if (context.route) lines.push(`route: ${context.route}`)
+  if (context.title) lines.push(`page: ${context.title}`)
+  if (context.description) lines.push(`description: ${context.description}`)
+  if (context.selection) lines.push(`selection: ${context.selection}`)
+  if (context.extra) {
+    for (const [key, value] of Object.entries(context.extra)) {
+      lines.push(`${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
+    }
+  }
+  return lines.join("\n")
+}
+
+export function extractRawContextXml(content: string): string | undefined {
+  const match = content.match(/<nova-context\s+source="[^"]*"[^>]*>[\s\S]*?<\/nova-context>/)
+  return match?.[0]
 }
 
 function tryPathname(url: string): string | undefined {

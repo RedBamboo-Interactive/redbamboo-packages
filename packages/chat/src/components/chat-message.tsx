@@ -11,7 +11,7 @@ import {
 import type { MessageBlock, MessagePart, ImageAttachment } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
 import { Emojify } from "./emojify"
-import { ContextSquare, parseContextFromMessage } from "./context-card"
+import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
 import { rehypeTwemoji } from "../lib/rehype-twemoji"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output-view"
@@ -185,17 +185,18 @@ export function ChatMessage({
     }
 
     const contextData = parseContextFromMessage(rawContent)
+    const contextXml = contextData ? extractRawContextXml(rawContent) : undefined
     const contextScreenshot = block.parts[0]?.images?.[0]
     const nonContextImages = block.parts[0]?.images?.slice(contextData ? 1 : 0)
 
     if (contextData && !content && (!nonContextImages || nonContextImages.length === 0)) {
-      return <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} />
+      return <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
     }
 
     return (
       <div className="mb-3 msg-enter-user group/msg">
         {contextData && (
-          <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} />
+          <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
         <div className="flex justify-end">
           <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
