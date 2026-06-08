@@ -26,7 +26,6 @@ import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
-import { toPng } from "html-to-image"
 import { askNova, scrapeDOMContext } from "./ask-nova"
 import type { AskNovaContext } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
@@ -102,32 +101,37 @@ function AskNovaCommands({ appName }: { appName: string }) {
   const [modalContext, setModalContext] = useState<AskNovaContext | null>(null)
   const isNova = typeof window !== "undefined" && window.location.port === NOVA_PORT
 
-  const openModal = useCallback(() => {
+  const openModal = useCallback(async () => {
+    let screenshot: AskNovaContext["screenshot"]
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        preferCurrentTab: true,
+      } as DisplayMediaStreamOptions)
+      const track = stream.getVideoTracks()[0]
+      const canvas = document.createElement("canvas")
+      const video = document.createElement("video")
+      video.srcObject = stream
+      await video.play()
+      const scale = Math.min(1, 1280 / video.videoWidth)
+      canvas.width = Math.round(video.videoWidth * scale)
+      canvas.height = Math.round(video.videoHeight * scale)
+      canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height)
+      track.stop()
+      const base64 = canvas.toDataURL("image/png").split(",")[1]
+      if (base64) screenshot = { mediaType: "image/png", base64 }
+    } catch { /* user denied or API unavailable */ }
+
     const domContext = scrapeDOMContext()
-    const ctx: AskNovaContext = {
+    setModalContext({
       app: appName,
       url: window.location.href,
       title: document.title,
       route: window.location.pathname + window.location.search,
       selection: window.getSelection()?.toString()?.trim() || undefined,
       extra: Object.keys(domContext).length > 0 ? domContext : undefined,
-    }
-    setModalContext(ctx)
-
-    setTimeout(() => {
-      toPng(document.body, {
-        pixelRatio: Math.min(1, 1280 / window.innerWidth),
-        height: window.innerHeight,
-        canvasHeight: window.innerHeight,
-      })
-        .then(dataUrl => {
-          const base64 = dataUrl.split(",")[1]
-          if (base64) {
-            setModalContext(prev => prev ? { ...prev, screenshot: { mediaType: "image/png", base64 } } : prev)
-          }
-        })
-        .catch(() => {})
-    }, 50)
+      screenshot,
+    })
   }, [appName])
 
   useCommand("ask-nova", {
