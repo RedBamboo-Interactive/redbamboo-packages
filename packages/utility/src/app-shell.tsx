@@ -26,7 +26,7 @@ import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
-import html2canvas from "html2canvas"
+import { toPng } from "html-to-image"
 import { askNova, scrapeDOMContext } from "./ask-nova"
 import type { AskNovaContext, AskNovaImageAttachment } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
@@ -105,12 +105,9 @@ function AskNovaCommands({ appName }: { appName: string }) {
   const gatherContext = useCallback(async (): Promise<AskNovaContext> => {
     let screenshot: AskNovaImageAttachment | undefined
     try {
-      const canvas = await html2canvas(document.body, {
-        scale: Math.min(1, 1280 / window.innerWidth),
-        logging: false,
-        useCORS: true,
-      })
-      const base64 = canvas.toDataURL("image/png").split(",")[1]
+      const pixelRatio = Math.min(1, 1280 / window.innerWidth)
+      const dataUrl = await toPng(document.body, { pixelRatio })
+      const base64 = dataUrl.split(",")[1]
       if (base64) screenshot = { mediaType: "image/png", base64 }
     } catch { /* screenshot is optional */ }
 
