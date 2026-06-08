@@ -28,7 +28,7 @@ import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
 import { toPng } from "html-to-image"
 import { askNova, scrapeDOMContext } from "./ask-nova"
-import type { AskNovaContext, AskNovaImageAttachment } from "./ask-nova"
+import type { AskNovaContext } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
 
 const isMac =
@@ -102,25 +102,26 @@ function AskNovaCommands({ appName }: { appName: string }) {
   const [modalContext, setModalContext] = useState<AskNovaContext | null>(null)
   const isNova = typeof window !== "undefined" && window.location.port === NOVA_PORT
 
-  const gatherContext = useCallback(async (): Promise<AskNovaContext> => {
-    let screenshot: AskNovaImageAttachment | undefined
-    try {
-      const pixelRatio = Math.min(1, 1280 / window.innerWidth)
-      const dataUrl = await toPng(document.body, { pixelRatio })
-      const base64 = dataUrl.split(",")[1]
-      if (base64) screenshot = { mediaType: "image/png", base64 }
-    } catch { /* screenshot is optional */ }
-
+  const openModal = useCallback(() => {
     const domContext = scrapeDOMContext()
-    return {
+    const ctx: AskNovaContext = {
       app: appName,
       url: window.location.href,
       title: document.title,
       route: window.location.pathname + window.location.search,
       selection: window.getSelection()?.toString()?.trim() || undefined,
       extra: Object.keys(domContext).length > 0 ? domContext : undefined,
-      screenshot,
     }
+    setModalContext(ctx)
+
+    toPng(document.body, { pixelRatio: Math.min(1, 1280 / window.innerWidth) })
+      .then(dataUrl => {
+        const base64 = dataUrl.split(",")[1]
+        if (base64) {
+          setModalContext(prev => prev ? { ...prev, screenshot: { mediaType: "image/png", base64 } } : prev)
+        }
+      })
+      .catch(() => {})
   }, [appName])
 
   useCommand("ask-nova", {
@@ -128,7 +129,7 @@ function AskNovaCommands({ appName }: { appName: string }) {
     group: "AI",
     shortcut: "Ctrl+Shift+N",
     keywords: ["nova", "ai", "ask", "question", "help", "context"],
-    action: async () => setModalContext(await gatherContext()),
+    action: openModal,
     enabled: !isNova,
   })
 
@@ -136,7 +137,7 @@ function AskNovaCommands({ appName }: { appName: string }) {
     label: "Ask Nova about selection",
     group: "AI",
     keywords: ["nova", "ai", "selection", "highlight", "text"],
-    action: async () => setModalContext(await gatherContext()),
+    action: openModal,
     enabled: !isNova,
   })
 
@@ -198,7 +199,7 @@ function AskNovaModal({ context, onClose }: { context: AskNovaContext | null; on
             <img
               src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
               alt=""
-              className="w-full max-h-36 object-cover object-top rounded-md border border-overlay-10"
+              className="max-h-24 rounded-md border border-overlay-10 object-cover object-top"
             />
           )}
           <textarea
