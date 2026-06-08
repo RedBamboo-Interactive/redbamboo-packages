@@ -114,29 +114,27 @@ function AskNovaCommands({ appName }: { appName: string }) {
     })
     setCapturingScreenshot(true)
 
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        import("html-to-image")
-          .then(({ toPng }) =>
-            toPng(document.body, {
-              pixelRatio: Math.min(1, 1280 / window.innerWidth),
-              height: window.innerHeight,
-              canvasHeight: window.innerHeight,
-              filter: (node) => !(node instanceof HTMLElement && node.hasAttribute("data-radix-portal")),
-            })
-          )
-          .then(dataUrl => {
-            const base64 = dataUrl.split(",")[1]
-            if (base64) {
-              setModalContext(prev =>
-                prev ? { ...prev, screenshot: { mediaType: "image/png", base64 } } : prev
-              )
-            }
+    setTimeout(() => {
+      import("html-to-image")
+        .then(({ toPng }) =>
+          toPng(document.body, {
+            pixelRatio: Math.min(1, 1280 / window.innerWidth),
+            height: window.innerHeight,
+            canvasHeight: window.innerHeight,
+            filter: (node) => !(node instanceof HTMLElement && (node.hasAttribute("data-radix-portal") || node.hasAttribute("data-base-ui-portal"))),
           })
-          .catch(() => {})
-          .finally(() => setCapturingScreenshot(false))
-      }, 0)
-    })
+        )
+        .then(dataUrl => {
+          const base64 = dataUrl.split(",")[1]
+          if (base64) {
+            setModalContext(prev =>
+              prev ? { ...prev, screenshot: { mediaType: "image/png", base64 } } : prev
+            )
+          }
+        })
+        .catch(() => {})
+        .finally(() => setCapturingScreenshot(false))
+    }, 500)
   }, [appName])
 
   useCommand("ask-nova", {
@@ -210,39 +208,39 @@ function AskNovaModal({ context, capturingScreenshot, onClose }: { context: AskN
           </div>
         </DialogHeader>
 
-        <div className="p-3">
-          <div className="flex items-start gap-2">
-            {context?.screenshot ? (
-              <img
-                src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
-                alt=""
-                className="h-16 w-16 rounded-md border border-overlay-10 object-cover object-top shrink-0"
-              />
-            ) : capturingScreenshot ? (
-              <div className="h-16 w-16 rounded-md border border-overlay-10 shrink-0 bg-overlay-6 animate-pulse" />
-            ) : null}
+        <div className="p-3" style={{ display: "flex", gap: "0.5rem", alignItems: "stretch" }}>
+          {context?.screenshot ? (
+            <img
+              src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
+              alt=""
+              className="rounded-lg object-cover object-top"
+              style={{ width: "5rem", alignSelf: "stretch" }}
+            />
+          ) : capturingScreenshot ? (
+            <div className="rounded-lg bg-overlay-10 animate-pulse" style={{ width: "5rem", alignSelf: "stretch" }} />
+          ) : null}
+          <div className="flex-1 flex flex-col rounded-lg bg-overlay-6 shadow-md">
             <textarea
               ref={textareaRef}
               value={question}
               onChange={e => setQuestion(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="What would you like to know?"
-              rows={3}
-              className="flex-1 min-w-0 resize-none bg-overlay-6 rounded-lg px-3 py-2.5 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-pink-500-a50"
+              rows={2}
+              className="w-full flex-1 resize-none bg-transparent px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none"
+              style={{ minHeight: "4.5rem" }}
             />
           </div>
-        </div>
-
-        <div className="px-4 py-3 border-t border-border-subtle flex items-center justify-between">
-          <span className="text-[10px] text-text-disabled">Enter to send · Shift+Enter for newline</span>
-          <button
-            onClick={handleSubmit}
-            disabled={!question.trim() || sending}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-pink-500-a25 hover:bg-pink-500-a40 text-pink-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <i className={`fa-solid ${sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} />
-            Ask Nova
-          </button>
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", flexShrink: 0 }}>
+            <button
+              onClick={handleSubmit}
+              disabled={!question.trim() || sending}
+              className="rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              style={{ width: "2.75rem", flex: "1 1 0" }}
+            >
+              <i className={`fa-solid ${sending ? "fa-spinner fa-spin" : "fa-paper-plane"} text-sm`} />
+            </button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
