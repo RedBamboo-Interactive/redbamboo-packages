@@ -76,16 +76,17 @@ export function ContextSquare({ context, rawXml }: ContextSquareProps) {
             <DialogTitle className="text-sm">Context from {app.label}</DialogTitle>
           </DialogHeader>
 
-          <div className="overflow-y-auto p-4 flex-1 min-h-0">
-            {rawXml ? (
-              <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
-                {rawXml}
-              </pre>
-            ) : (
-              <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
-                {formatContextBlock(context)}
-              </pre>
+          <div className="overflow-y-auto p-4 flex-1 min-h-0 space-y-3">
+            {context.screenshot && (
+              <img
+                src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
+                alt={`Screenshot from ${app.label}`}
+                className="w-full rounded-md border border-overlay-10"
+              />
             )}
+            <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
+              {rawXml || formatContextBlock(context)}
+            </pre>
           </div>
         </DialogContent>
       </Dialog>

@@ -26,8 +26,9 @@ import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
+import html2canvas from "html2canvas"
 import { askNova, scrapeDOMContext } from "./ask-nova"
-import type { AskNovaContext } from "./ask-nova"
+import type { AskNovaContext, AskNovaImageAttachment } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
 
 const isMac =
@@ -101,7 +102,18 @@ function AskNovaCommands({ appName }: { appName: string }) {
   const [modalContext, setModalContext] = useState<AskNovaContext | null>(null)
   const isNova = typeof window !== "undefined" && window.location.port === NOVA_PORT
 
-  const gatherContext = useCallback((): AskNovaContext => {
+  const gatherContext = useCallback(async (): Promise<AskNovaContext> => {
+    let screenshot: AskNovaImageAttachment | undefined
+    try {
+      const canvas = await html2canvas(document.body, {
+        scale: Math.min(1, 1280 / window.innerWidth),
+        logging: false,
+        useCORS: true,
+      })
+      const base64 = canvas.toDataURL("image/png").split(",")[1]
+      if (base64) screenshot = { mediaType: "image/png", base64 }
+    } catch { /* screenshot is optional */ }
+
     const domContext = scrapeDOMContext()
     return {
       app: appName,
@@ -110,6 +122,7 @@ function AskNovaCommands({ appName }: { appName: string }) {
       route: window.location.pathname + window.location.search,
       selection: window.getSelection()?.toString()?.trim() || undefined,
       extra: Object.keys(domContext).length > 0 ? domContext : undefined,
+      screenshot,
     }
   }, [appName])
 
@@ -118,7 +131,7 @@ function AskNovaCommands({ appName }: { appName: string }) {
     group: "AI",
     shortcut: "Ctrl+Shift+N",
     keywords: ["nova", "ai", "ask", "question", "help", "context"],
-    action: () => setModalContext(gatherContext()),
+    action: async () => setModalContext(await gatherContext()),
     enabled: !isNova,
   })
 
@@ -126,7 +139,7 @@ function AskNovaCommands({ appName }: { appName: string }) {
     label: "Ask Nova about selection",
     group: "AI",
     keywords: ["nova", "ai", "selection", "highlight", "text"],
-    action: () => setModalContext(gatherContext()),
+    action: async () => setModalContext(await gatherContext()),
     enabled: !isNova,
   })
 
@@ -183,7 +196,14 @@ function AskNovaModal({ context, onClose }: { context: AskNovaContext | null; on
           </div>
         </DialogHeader>
 
-        <div className="p-3">
+        <div className="p-3 space-y-2">
+          {context?.screenshot && (
+            <img
+              src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
+              alt=""
+              className="w-full max-h-36 object-cover object-top rounded-md border border-overlay-10"
+            />
+          )}
           <textarea
             ref={textareaRef}
             value={question}
