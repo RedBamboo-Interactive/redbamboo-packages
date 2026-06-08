@@ -106,6 +106,7 @@ export type { NavigateUpOptions } from "./use-navigate-up"
 export {
   askNova,
   formatContextMessage,
+  scrapeDOMContext,
   useAskNova,
   useAskNovaCommand,
   useAskNovaReceiver,

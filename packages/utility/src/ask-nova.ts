@@ -16,6 +16,7 @@ export interface AskNovaContext {
   screenshot?: AskNovaImageAttachment
   route?: string
   extra?: Record<string, unknown>
+  question?: string
 }
 
 export interface AskNovaOptions {
@@ -47,7 +48,7 @@ interface ReadyMessage {
 
 // ── DOM context scraper ──────────────────────────────────────────────
 
-function scrapeDOMContext(): Record<string, unknown> {
+export function scrapeDOMContext(): Record<string, unknown> {
   const ctx: Record<string, unknown> = {}
 
   const crumbs = document.querySelectorAll<HTMLElement>('[data-slot="breadcrumb"] .truncate')

@@ -1,6 +1,10 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
@@ -22,7 +26,8 @@ import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
-import { useAskNova } from "./ask-nova"
+import { askNova, scrapeDOMContext } from "./ask-nova"
+import type { AskNovaContext } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
 
 const isMac =
@@ -93,15 +98,27 @@ function ShellCommands({
 const NOVA_PORT = "18803"
 
 function AskNovaCommands({ appName }: { appName: string }) {
-  const nova = useAskNova({ app: appName })
-
+  const [modalContext, setModalContext] = useState<AskNovaContext | null>(null)
   const isNova = typeof window !== "undefined" && window.location.port === NOVA_PORT
+
+  const gatherContext = useCallback((): AskNovaContext => {
+    const domContext = scrapeDOMContext()
+    return {
+      app: appName,
+      url: window.location.href,
+      title: document.title,
+      route: window.location.pathname + window.location.search,
+      selection: window.getSelection()?.toString()?.trim() || undefined,
+      extra: Object.keys(domContext).length > 0 ? domContext : undefined,
+    }
+  }, [appName])
+
   useCommand("ask-nova", {
     label: "Ask Nova about this page",
     group: "AI",
     shortcut: "Ctrl+Shift+N",
     keywords: ["nova", "ai", "ask", "question", "help", "context"],
-    action: () => { nova.ask() },
+    action: () => setModalContext(gatherContext()),
     enabled: !isNova,
   })
 
@@ -109,11 +126,89 @@ function AskNovaCommands({ appName }: { appName: string }) {
     label: "Ask Nova about selection",
     group: "AI",
     keywords: ["nova", "ai", "selection", "highlight", "text"],
-    action: () => { nova.askWithSelection() },
+    action: () => setModalContext(gatherContext()),
     enabled: !isNova,
   })
 
-  return null
+  return (
+    <AskNovaModal
+      context={modalContext}
+      onClose={() => setModalContext(null)}
+    />
+  )
+}
+
+function AskNovaModal({ context, onClose }: { context: AskNovaContext | null; onClose: () => void }) {
+  const [question, setQuestion] = useState("")
+  const [sending, setSending] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    if (context) {
+      setQuestion("")
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    }
+  }, [context])
+
+  const handleSubmit = useCallback(async () => {
+    if (!context || !question.trim() || sending) return
+    setSending(true)
+    await askNova({ ...context, question: question.trim() })
+    setSending(false)
+    onClose()
+  }, [context, question, sending, onClose])
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit()
+    }
+  }, [handleSubmit])
+
+  const breadcrumbs = context?.extra?.breadcrumbs as string | undefined
+  const displayUrl = context?.route || context?.url || ""
+
+  return (
+    <Dialog open={!!context} onOpenChange={v => { if (!v) onClose() }}>
+      <DialogContent showCloseButton={false} className="sm:max-w-lg p-0 gap-0">
+        <DialogHeader className="px-4 py-3 border-b border-border-subtle">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-lg bg-pink-500-a10">
+              <i className="fa-solid fa-star text-sm text-pink-400" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-sm">Ask Nova</DialogTitle>
+              <p className="text-[10px] text-text-muted font-mono truncate">{breadcrumbs || displayUrl}</p>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="p-3">
+          <textarea
+            ref={textareaRef}
+            value={question}
+            onChange={e => setQuestion(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="What would you like to know?"
+            rows={3}
+            className="w-full resize-none bg-overlay-6 rounded-lg px-3 py-2.5 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-pink-500-a50"
+          />
+        </div>
+
+        <div className="px-4 py-3 border-t border-border-subtle flex items-center justify-between">
+          <span className="text-[10px] text-text-disabled">Enter to send · Shift+Enter for newline</span>
+          <button
+            onClick={handleSubmit}
+            disabled={!question.trim() || sending}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-pink-500-a25 hover:bg-pink-500-a40 text-pink-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <i className={`fa-solid ${sending ? "fa-spinner fa-spin" : "fa-paper-plane"}`} />
+            Ask Nova
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function AppShellInner({
