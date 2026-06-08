@@ -102,3 +102,22 @@ export { BreadcrumbLabelProvider, useBreadcrumbLabel, useBreadcrumbLabels } from
 
 export { useNavigateUp } from "./use-navigate-up"
 export type { NavigateUpOptions } from "./use-navigate-up"
+
+export {
+  askNova,
+  formatContextMessage,
+  useAskNova,
+  useAskNovaCommand,
+  useAskNovaReceiver,
+  usePendingNovaContext,
+} from "./ask-nova"
+export type {
+  AskNovaImageAttachment,
+  AskNovaContext,
+  AskNovaOptions,
+  PendingNovaContext,
+  UseAskNovaOptions,
+  UseAskNovaReturn,
+  UseAskNovaCommandOptions,
+  UseAskNovaReceiverOptions,
+} from "./ask-nova"
