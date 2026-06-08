@@ -99,21 +99,10 @@ const NOVA_PORT = "18803"
 
 function AskNovaCommands({ appName }: { appName: string }) {
   const [modalContext, setModalContext] = useState<AskNovaContext | null>(null)
+  const [capturingScreenshot, setCapturingScreenshot] = useState(false)
   const isNova = typeof window !== "undefined" && window.location.port === NOVA_PORT
 
-  const openModal = useCallback(async () => {
-    let screenshot: AskNovaContext["screenshot"]
-    try {
-      const { toPng } = await import("html-to-image")
-      const dataUrl = await toPng(document.body, {
-        pixelRatio: Math.min(1, 1280 / window.innerWidth),
-        height: window.innerHeight,
-        canvasHeight: window.innerHeight,
-      })
-      const base64 = dataUrl.split(",")[1]
-      if (base64) screenshot = { mediaType: "image/png", base64 }
-    } catch { /* screenshot is optional */ }
-
+  const openModal = useCallback(() => {
     const domContext = scrapeDOMContext()
     setModalContext({
       app: appName,
@@ -122,7 +111,31 @@ function AskNovaCommands({ appName }: { appName: string }) {
       route: window.location.pathname + window.location.search,
       selection: window.getSelection()?.toString()?.trim() || undefined,
       extra: Object.keys(domContext).length > 0 ? domContext : undefined,
-      screenshot,
+    })
+    setCapturingScreenshot(true)
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        import("html-to-image")
+          .then(({ toPng }) =>
+            toPng(document.body, {
+              pixelRatio: Math.min(1, 1280 / window.innerWidth),
+              height: window.innerHeight,
+              canvasHeight: window.innerHeight,
+              filter: (node) => !(node instanceof HTMLElement && node.hasAttribute("data-radix-portal")),
+            })
+          )
+          .then(dataUrl => {
+            const base64 = dataUrl.split(",")[1]
+            if (base64) {
+              setModalContext(prev =>
+                prev ? { ...prev, screenshot: { mediaType: "image/png", base64 } } : prev
+              )
+            }
+          })
+          .catch(() => {})
+          .finally(() => setCapturingScreenshot(false))
+      }, 0)
     })
   }, [appName])
 
@@ -146,12 +159,13 @@ function AskNovaCommands({ appName }: { appName: string }) {
   return (
     <AskNovaModal
       context={modalContext}
-      onClose={() => setModalContext(null)}
+      capturingScreenshot={capturingScreenshot}
+      onClose={() => { setModalContext(null); setCapturingScreenshot(false) }}
     />
   )
 }
 
-function AskNovaModal({ context, onClose }: { context: AskNovaContext | null; onClose: () => void }) {
+function AskNovaModal({ context, capturingScreenshot, onClose }: { context: AskNovaContext | null; capturingScreenshot?: boolean; onClose: () => void }) {
   const [question, setQuestion] = useState("")
   const [sending, setSending] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -198,13 +212,15 @@ function AskNovaModal({ context, onClose }: { context: AskNovaContext | null; on
 
         <div className="p-3">
           <div className="flex items-start gap-2">
-            {context?.screenshot && (
+            {context?.screenshot ? (
               <img
                 src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
                 alt=""
                 className="h-16 w-16 rounded-md border border-overlay-10 object-cover object-top shrink-0"
               />
-            )}
+            ) : capturingScreenshot ? (
+              <div className="h-16 w-16 rounded-md border border-overlay-10 shrink-0 bg-overlay-6 animate-pulse" />
+            ) : null}
             <textarea
               ref={textareaRef}
               value={question}
