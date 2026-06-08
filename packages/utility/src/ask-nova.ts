@@ -45,6 +45,34 @@ interface ReadyMessage {
   type: typeof PROTOCOL_READY
 }
 
+// ── DOM context scraper ──────────────────────────────────────────────
+
+function scrapeDOMContext(): Record<string, unknown> {
+  const ctx: Record<string, unknown> = {}
+
+  const crumbs = document.querySelectorAll<HTMLElement>('[data-slot="breadcrumb"] .truncate')
+  if (crumbs.length > 0) {
+    ctx.breadcrumbs = Array.from(crumbs).map(el => el.textContent?.trim()).filter(Boolean).join(" > ")
+  }
+
+  const activeTab = document.querySelector<HTMLElement>('[data-slot="tabs-trigger"][data-active]')
+  if (activeTab) {
+    ctx.activeTab = activeTab.textContent?.trim() || undefined
+  }
+
+  const selectedItem = document.querySelector<HTMLElement>('[data-slot="item-list-row"][data-selected]')
+  if (selectedItem) {
+    ctx.selectedItem = selectedItem.textContent?.trim()?.replace(/\s+/g, " ") || undefined
+  }
+
+  const heading = document.querySelector<HTMLElement>("h1, h2")
+  if (heading) {
+    ctx.heading = heading.textContent?.trim() || undefined
+  }
+
+  return ctx
+}
+
 // ── Format context for AI ────────────────────────────────────────────
 
 function escapeXml(s: string): string {
@@ -245,12 +273,14 @@ export function useAskNova({
   const ask = useCallback(async (overrides?: Partial<AskNovaContext>) => {
     if (!enabled) return false
 
+    const domContext = scrapeDOMContext()
     const context: AskNovaContext = {
       app,
       url: window.location.href,
       title: document.title,
       route: window.location.pathname + window.location.search,
       selection: window.getSelection()?.toString()?.trim() || undefined,
+      extra: Object.keys(domContext).length > 0 ? domContext : undefined,
       ...overrides,
     }
 

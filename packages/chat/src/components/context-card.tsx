@@ -41,7 +41,7 @@ export interface ContextCardData {
   extra?: Record<string, unknown>
 }
 
-export interface ContextCardProps {
+export interface ContextSquareProps {
   context: ContextCardData
 }
 
@@ -50,102 +50,91 @@ export interface PendingContextBannerProps {
   onDismiss: () => void
 }
 
-// ── ContextCard (renders in message history) ─────────────────────────
+// ── ContextSquare (small indicator in message, opens modal) ──────────
 
-export function ContextCard({ context }: ContextCardProps) {
-  const [screenshotOpen, setScreenshotOpen] = useState(false)
+export function ContextSquare({ context }: ContextSquareProps) {
+  const [open, setOpen] = useState(false)
   const app = resolveApp(context.app)
   const displayUrl = context.route || tryPathname(context.url) || context.url
 
   return (
-    <>
-      <div
-        data-slot="context-card"
-        className="my-3 rounded-lg border p-3"
-        style={{
-          borderColor: `color-mix(in oklch, ${app.color}, transparent 70%)`,
-          backgroundColor: `color-mix(in oklch, ${app.color}, transparent 92%)`,
-        }}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <div
-            className="w-5 h-5 rounded flex items-center justify-center"
-            style={{ backgroundColor: `color-mix(in oklch, ${app.color}, transparent 75%)` }}
-          >
-            <i className={`${app.icon} text-[10px]`} style={{ color: app.color }} />
+    <div className="py-1.5 px-0.5">
+      <button
+        onClick={() => setOpen(true)}
+        className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
+        style={{ backgroundColor: app.color }}
+        title={`Context from ${app.label}`}
+      />
+
+      <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
+        <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
+            <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: app.color }} />
+            <i className={`${app.icon} text-sm`} style={{ color: app.color }} />
+            <DialogTitle className="text-sm">{app.label}</DialogTitle>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled">
+              context
+            </span>
+          </DialogHeader>
+
+          <div className="overflow-y-auto p-4 flex-1 min-h-0 space-y-3">
+            <ContextRow label="URL" value={displayUrl} mono />
+            {context.title && <ContextRow label="Page" value={context.title} />}
+
+            {context.extra?.breadcrumbs != null && (
+              <ContextRow label="Location" value={String(context.extra.breadcrumbs)} />
+            )}
+            {context.extra?.activeTab != null && (
+              <ContextRow label="Active tab" value={String(context.extra.activeTab)} />
+            )}
+            {context.extra?.selectedItem != null && (
+              <ContextRow label="Selected item" value={String(context.extra.selectedItem)} />
+            )}
+            {context.extra?.heading != null && (
+              <ContextRow label="Heading" value={String(context.extra.heading)} />
+            )}
+
+            {context.description && <ContextRow label="Description" value={context.description} />}
+
+            {context.selection && (
+              <div>
+                <span className="text-[10px] uppercase text-text-disabled font-semibold">Selected text</span>
+                <p className="text-xs text-text-secondary font-serif whitespace-pre-wrap mt-1 bg-overlay-4 rounded px-2 py-1.5">
+                  {context.selection}
+                </p>
+              </div>
+            )}
+
+            {context.screenshot && (
+              <div>
+                <span className="text-[10px] uppercase text-text-disabled font-semibold">Screenshot</span>
+                <img
+                  src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
+                  alt={`Screenshot from ${app.label}`}
+                  className="mt-1 w-full rounded-md border border-overlay-10"
+                />
+              </div>
+            )}
+
+            {/* Remaining extra fields not shown above */}
+            {context.extra && (() => {
+              const shown = new Set(["breadcrumbs", "activeTab", "selectedItem", "heading"])
+              const remaining = Object.entries(context.extra).filter(([k]) => !shown.has(k))
+              if (remaining.length === 0) return null
+              return (
+                <div className="flex flex-wrap gap-1">
+                  {remaining.map(([key, value]) => (
+                    <span key={key} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled">
+                      {key}: {typeof value === "string" ? value : JSON.stringify(value)}
+                    </span>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
-          <span className="text-sm font-medium" style={{ color: app.color }}>
-            {app.label}
-          </span>
-          <span className="text-xs text-text-muted font-mono truncate max-w-[60%]">
-            {displayUrl}
-          </span>
-        </div>
-
-        {context.screenshot && (
-          <button
-            onClick={() => setScreenshotOpen(true)}
-            className="block w-full mb-2 cursor-pointer group"
-          >
-            <img
-              src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
-              alt={`Screenshot from ${app.label}`}
-              className="w-full max-h-48 object-cover object-top rounded-md border border-overlay-10 group-hover:brightness-110 transition-all"
-            />
-          </button>
-        )}
-
-        {context.title && (
-          <p className="text-sm font-medium text-text-primary mb-1">{context.title}</p>
-        )}
-
-        {context.description && (
-          <p className="text-xs text-text-muted mb-1">{context.description}</p>
-        )}
-
-        {context.selection && (
-          <div className="mt-2 rounded-md bg-overlay-6 px-3 py-2 border-l-2" style={{ borderLeftColor: app.color }}>
-            <p className="text-[10px] uppercase text-text-disabled font-semibold mb-1">Selected text</p>
-            <p className="text-xs text-text-secondary font-serif whitespace-pre-wrap line-clamp-4">{context.selection}</p>
-          </div>
-        )}
-
-        {context.extra && Object.keys(context.extra).length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {Object.entries(context.extra).map(([key, value]) => (
-              <span
-                key={key}
-                className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled"
-              >
-                {key}: {typeof value === "string" ? value : JSON.stringify(value)}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {context.screenshot && (
-        <Dialog open={screenshotOpen} onOpenChange={v => { if (!v) setScreenshotOpen(false) }}>
-          <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col p-0 gap-0">
-            <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-              <div
-                className="w-3 h-3 rounded-[2px]"
-                style={{ backgroundColor: app.color }}
-              />
-              <i className={`${app.icon} text-sm`} style={{ color: app.color }} />
-              <DialogTitle className="text-sm">{app.label} — {displayUrl}</DialogTitle>
-            </DialogHeader>
-            <div className="overflow-auto p-2 flex-1 min-h-0">
-              <img
-                src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
-                alt={`Screenshot from ${app.label}`}
-                className="w-full rounded"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-    </>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }
 
@@ -154,6 +143,7 @@ export function ContextCard({ context }: ContextCardProps) {
 export function PendingContextBanner({ context, onDismiss }: PendingContextBannerProps) {
   const app = resolveApp(context.app)
   const displayUrl = context.route || tryPathname(context.url) || context.url
+  const breadcrumbs = context.extra?.breadcrumbs as string | undefined
 
   return (
     <div
@@ -178,7 +168,10 @@ export function PendingContextBanner({ context, onDismiss }: PendingContextBanne
           <span className="text-xs font-medium" style={{ color: app.color }}>{app.label}</span>
           <span className="text-[10px] text-text-muted font-mono truncate">{displayUrl}</span>
         </div>
-        {context.title && (
+        {breadcrumbs && (
+          <p className="text-[10px] text-text-muted truncate mt-0.5">{breadcrumbs}</p>
+        )}
+        {!breadcrumbs && context.title && (
           <p className="text-xs text-text-secondary truncate mt-0.5">{context.title}</p>
         )}
         {context.selection && (
@@ -214,6 +207,16 @@ export function parseContextFromMessage(content: string): ContextCardData | null
   const url = get("url")
   if (!app || !url) return null
 
+  const extra: Record<string, unknown> = {}
+  const knownTags = new Set(["app", "url", "page-title", "route", "description", "selected-text", "has-screenshot"])
+  const tagPattern = /<([a-zA-Z][a-zA-Z0-9_-]*)>([\s\S]*?)<\/\1>/g
+  let tagMatch: RegExpExecArray | null
+  while ((tagMatch = tagPattern.exec(inner)) !== null) {
+    if (!knownTags.has(tagMatch[1])) {
+      extra[tagMatch[1]] = tagMatch[2].trim()
+    }
+  }
+
   return {
     app,
     url,
@@ -221,10 +224,20 @@ export function parseContextFromMessage(content: string): ContextCardData | null
     route: get("route"),
     description: get("description"),
     selection: get("selected-text"),
+    extra: Object.keys(extra).length > 0 ? extra : undefined,
   }
 }
 
-// ── Utility ──────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────
+
+function ContextRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between items-baseline gap-4 text-xs">
+      <span className="text-text-muted shrink-0">{label}</span>
+      <span className={`text-text-secondary text-right break-all ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
+    </div>
+  )
+}
 
 function tryPathname(url: string): string | undefined {
   try {

@@ -11,7 +11,7 @@ import {
 import type { MessageBlock, MessagePart, ImageAttachment } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
 import { Emojify } from "./emojify"
-import { ContextCard, parseContextFromMessage } from "./context-card"
+import { ContextSquare, parseContextFromMessage } from "./context-card"
 import { rehypeTwemoji } from "../lib/rehype-twemoji"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output-view"
@@ -188,33 +188,35 @@ export function ChatMessage({
     const contextScreenshot = block.parts[0]?.images?.[0]
     const nonContextImages = block.parts[0]?.images?.slice(contextData ? 1 : 0)
 
+    if (contextData && !content && (!nonContextImages || nonContextImages.length === 0)) {
+      return <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} />
+    }
+
     return (
       <div className="mb-3 msg-enter-user group/msg">
         {contextData && (
-          <ContextCard context={{ ...contextData, screenshot: contextScreenshot }} />
+          <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} />
         )}
-        {(content || (nonContextImages && nonContextImages.length > 0)) && (
-          <div className="flex justify-end">
-            <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
-              <MessageMetadata block={block} />
-              {nonContextImages && nonContextImages.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {nonContextImages.map((img: ImageAttachment, i: number) => (
-                    <img
-                      key={i}
-                      src={`data:${img.mediaType};base64,${img.base64}`}
-                      alt=""
-                      className="max-h-48 rounded-md border border-overlay-10"
-                    />
-                  ))}
-                </div>
-              )}
-              {content && (
-                <p className="text-sm whitespace-pre-wrap break-words font-serif"><Emojify text={content} /></p>
-              )}
-            </div>
+        <div className="flex justify-end">
+          <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
+            <MessageMetadata block={block} />
+            {nonContextImages && nonContextImages.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {nonContextImages.map((img: ImageAttachment, i: number) => (
+                  <img
+                    key={i}
+                    src={`data:${img.mediaType};base64,${img.base64}`}
+                    alt=""
+                    className="max-h-48 rounded-md border border-overlay-10"
+                  />
+                ))}
+              </div>
+            )}
+            {content && (
+              <p className="text-sm whitespace-pre-wrap break-words font-serif"><Emojify text={content} /></p>
+            )}
           </div>
-        )}
+        </div>
       </div>
     )
   }
