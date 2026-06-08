@@ -104,23 +104,15 @@ function AskNovaCommands({ appName }: { appName: string }) {
   const openModal = useCallback(async () => {
     let screenshot: AskNovaContext["screenshot"]
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        preferCurrentTab: true,
-      } as DisplayMediaStreamOptions)
-      const track = stream.getVideoTracks()[0]
-      const canvas = document.createElement("canvas")
-      const video = document.createElement("video")
-      video.srcObject = stream
-      await video.play()
-      const scale = Math.min(1, 1280 / video.videoWidth)
-      canvas.width = Math.round(video.videoWidth * scale)
-      canvas.height = Math.round(video.videoHeight * scale)
-      canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height)
-      track.stop()
-      const base64 = canvas.toDataURL("image/png").split(",")[1]
+      const { toPng } = await import("html-to-image")
+      const dataUrl = await toPng(document.body, {
+        pixelRatio: Math.min(1, 1280 / window.innerWidth),
+        height: window.innerHeight,
+        canvasHeight: window.innerHeight,
+      })
+      const base64 = dataUrl.split(",")[1]
       if (base64) screenshot = { mediaType: "image/png", base64 }
-    } catch { /* user denied or API unavailable */ }
+    } catch { /* screenshot is optional */ }
 
     const domContext = scrapeDOMContext()
     setModalContext({
