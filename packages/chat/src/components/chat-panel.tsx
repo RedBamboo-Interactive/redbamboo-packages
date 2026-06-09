@@ -20,7 +20,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const {
     sessionId, disabled = false, onAnswerQuestion, onResume,
     placeholder, className, header, footer,
-    resolveImageSrc, permissionMode, onTogglePlanMode, onExecutePlan,
+    resolveImageSrc, resolveFileLink, permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, draftStorageKey,
     speechBackend, handsFreeEnabled, pushToTalkKey,
     renderStatusLine, renderComposerInlineAction,
@@ -193,6 +193,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 isPendingQuestion={isLastAssistant && !!pendingQuestion}
                 onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
                 resolveImageSrc={resolveImageSrc}
+                resolveFileLink={resolveFileLink}
               />
             )
           })}

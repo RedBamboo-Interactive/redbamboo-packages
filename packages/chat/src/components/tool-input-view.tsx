@@ -3,9 +3,11 @@ import { JsonHighlight } from "@redbamboo/utility"
 interface Props {
   toolName: string
   toolInput: string
+  /** When provided, file paths render as links that trigger this action. */
+  onOpenFile?: () => void
 }
 
-export function ToolInputView({ toolName, toolInput }: Props) {
+export function ToolInputView({ toolName, toolInput, onOpenFile }: Props) {
   let parsed: Record<string, unknown> = {}
   try {
     parsed = JSON.parse(toolInput)
@@ -15,11 +17,11 @@ export function ToolInputView({ toolName, toolInput }: Props) {
 
   switch (toolName) {
     case "Read":
-      return <ReadView p={parsed} />
+      return <ReadView p={parsed} onOpen={onOpenFile} />
     case "Edit":
-      return <EditView p={parsed} />
+      return <EditView p={parsed} onOpen={onOpenFile} />
     case "Write":
-      return <WriteView p={parsed} />
+      return <WriteView p={parsed} onOpen={onOpenFile} />
     case "Bash":
     case "PowerShell":
       return <ShellView toolName={toolName} p={parsed} />
@@ -38,8 +40,20 @@ export function ToolInputView({ toolName, toolInput }: Props) {
   }
 }
 
-function FilePath({ path }: { path: string }) {
-  return <span className="font-mono text-xs text-amber-300-a90">{path}</span>
+function FilePath({ path, onOpen }: { path: string; onOpen?: () => void }) {
+  if (!onOpen) {
+    return <span className="font-mono text-xs text-amber-300-a90">{path}</span>
+  }
+  return (
+    <button
+      onClick={onOpen}
+      className="group inline-flex items-center gap-1.5 font-mono text-xs text-amber-300-a90 hover:underline underline-offset-2 text-left break-all"
+      title="Open in editor"
+    >
+      {path}
+      <i className="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
+    </button>
+  )
 }
 
 function Tag({ children }: { children: React.ReactNode }) {
@@ -50,13 +64,13 @@ function Tag({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ReadView({ p }: { p: Record<string, unknown> }) {
+function ReadView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => void }) {
   const path = p.file_path as string | undefined
   const offset = p.offset as number | undefined
   const limit = p.limit as number | undefined
   return (
     <div className="space-y-1.5">
-      {path && <FilePath path={path} />}
+      {path && <FilePath path={path} onOpen={onOpen} />}
       {(offset != null || limit != null) && (
         <div className="flex gap-2">
           {offset != null && <Tag>offset {offset}</Tag>}
@@ -67,13 +81,13 @@ function ReadView({ p }: { p: Record<string, unknown> }) {
   )
 }
 
-function EditView({ p }: { p: Record<string, unknown> }) {
+function EditView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => void }) {
   const path = p.file_path as string | undefined
   const oldStr = p.old_string as string | undefined
   const newStr = p.new_string as string | undefined
   return (
     <div className="space-y-2">
-      {path && <FilePath path={path} />}
+      {path && <FilePath path={path} onOpen={onOpen} />}
       {(oldStr != null || newStr != null) && (
         <div className="rounded-md overflow-hidden border border-border-subtle text-xs font-mono">
           {oldStr != null && (
@@ -103,12 +117,12 @@ function EditView({ p }: { p: Record<string, unknown> }) {
   )
 }
 
-function WriteView({ p }: { p: Record<string, unknown> }) {
+function WriteView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => void }) {
   const path = p.file_path as string | undefined
   const content = p.content as string | undefined
   return (
     <div className="space-y-2">
-      {path && <FilePath path={path} />}
+      {path && <FilePath path={path} onOpen={onOpen} />}
       {content && (
         <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-muted max-h-48 overflow-y-auto rounded-md bg-overlay-3 px-3 py-2">
           {content.length > 2000 ? content.slice(0, 2000) + "\n..." : content}

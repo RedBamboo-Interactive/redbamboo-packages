@@ -167,6 +167,12 @@ export interface ChatPanelProps {
   header?: React.ReactNode
   footer?: React.ReactNode
   resolveImageSrc?: (src: string) => string | undefined
+  /**
+   * Resolve a file path from a tool call (Read/Write/Edit…) to an action that
+   * opens it (e.g. in an editor tab). Return undefined when the file can't be
+   * opened — the jump button is hidden in that case.
+   */
+  resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   permissionMode?: string
   onTogglePlanMode?: () => void
   onExecutePlan?: () => void

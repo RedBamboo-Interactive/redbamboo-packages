@@ -156,6 +156,7 @@ interface ChatMessageProps {
   isPendingQuestion?: boolean
   onAnswerQuestion?: (answer: string) => void
   resolveImageSrc?: (src: string) => string | undefined
+  resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
 }
 
 export function ChatMessage({
@@ -168,6 +169,7 @@ export function ChatMessage({
   isPendingQuestion,
   onAnswerQuestion,
   resolveImageSrc,
+  resolveFileLink,
 }: ChatMessageProps) {
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
@@ -249,7 +251,7 @@ export function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} />
+              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} />
             </div>
           )
         )}
@@ -320,7 +322,12 @@ function findPairedResult(allParts: MessagePart[], toolUsePart: MessagePart): Me
   return undefined
 }
 
-function PartFrieze({ parts, allParts, isLive }: { parts: MessagePart[]; allParts: MessagePart[]; isLive?: boolean }) {
+function PartFrieze({ parts, allParts, isLive, resolveFileLink }: {
+  parts: MessagePart[]
+  allParts: MessagePart[]
+  isLive?: boolean
+  resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
+}) {
   const [selected, setSelected] = useState<{ part: MessagePart; result?: MessagePart } | null>(null)
 
   const handleClick = (part: MessagePart) => {
@@ -348,7 +355,7 @@ function PartFrieze({ parts, allParts, isLive }: { parts: MessagePart[]; allPart
         })}
       </div>
 
-      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} />
+      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} />
     </>
   )
 }
@@ -361,12 +368,39 @@ function toolCategory(part: MessagePart): string | null {
   return null
 }
 
-function PartModal({ part, pairedResult, open, onClose }: { part?: MessagePart; pairedResult?: MessagePart; open: boolean; onClose: () => void }) {
+const fileTools = new Set(["read", "write", "edit", "multiedit", "notebookedit"])
+
+/** File path (and line, when the tool input implies one) targeted by a file tool call. */
+function extractToolFile(part: MessagePart): { path: string; line?: number } | null {
+  if (part.type !== "tool_use" || !part.toolName || !part.toolInput) return null
+  if (!fileTools.has(part.toolName.toLowerCase())) return null
+  try {
+    const input = JSON.parse(part.toolInput) as Record<string, unknown>
+    const path = input.file_path ?? input.notebook_path ?? input.path
+    if (typeof path !== "string" || !path) return null
+    // Read's offset is the 1-based line the read started from.
+    const line = typeof input.offset === "number" && input.offset > 0 ? input.offset : undefined
+    return { path, line }
+  } catch {
+    return null
+  }
+}
+
+function PartModal({ part, pairedResult, open, onClose, resolveFileLink }: {
+  part?: MessagePart
+  pairedResult?: MessagePart
+  open: boolean
+  onClose: () => void
+  resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
+}) {
   if (!part) return null
   const category = toolCategory(part)
   const isToolUse = part.type === "tool_use"
   const resultContent = pairedResult?.content || (isToolUse ? undefined : part.content)
   const isError = part.type === "error" || (pairedResult?.type === "tool_result" && pairedResult.content?.toLowerCase().startsWith("error"))
+
+  const toolFile = resolveFileLink ? extractToolFile(part) : null
+  const openFile = toolFile ? resolveFileLink?.(toolFile.path, { line: toolFile.line }) : undefined
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
@@ -382,12 +416,26 @@ function PartModal({ part, pairedResult, open, onClose }: { part?: MessagePart; 
               {category}
             </span>
           )}
+          {openFile && (
+            <button
+              onClick={() => { onClose(); openFile() }}
+              className="ml-auto mr-7 inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-overlay-6 text-text-muted hover:bg-overlay-10 hover:text-contrast transition-colors"
+              title={`Open ${toolFile!.path} in the editor`}
+            >
+              <i className="fa-regular fa-code text-[11px]" />
+              Open
+            </button>
+          )}
         </DialogHeader>
 
         <div className="overflow-y-auto p-4 flex-1 min-h-0">
           {isToolUse && part.toolInput && (
             <div className="mb-3">
-              <ToolInputView toolName={part.toolName || "Unknown"} toolInput={part.toolInput} />
+              <ToolInputView
+                toolName={part.toolName || "Unknown"}
+                toolInput={part.toolInput}
+                onOpenFile={openFile ? () => { onClose(); openFile() } : undefined}
+              />
             </div>
           )}
 
