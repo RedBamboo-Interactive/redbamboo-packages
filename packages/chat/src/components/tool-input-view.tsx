@@ -26,9 +26,9 @@ export function ToolInputView({ toolName, toolInput, onOpenFile }: Props) {
     case "PowerShell":
       return <ShellView toolName={toolName} p={parsed} />
     case "Grep":
-      return <GrepView p={parsed} />
+      return <GrepView p={parsed} onOpen={onOpenFile} />
     case "Glob":
-      return <GlobView p={parsed} />
+      return <GlobView p={parsed} onOpen={onOpenFile} />
     case "Agent":
       return <AgentView p={parsed} />
     case "WebSearch":
@@ -155,7 +155,7 @@ function ShellView({ toolName, p }: { toolName: string; p: Record<string, unknow
   )
 }
 
-function GrepView({ p }: { p: Record<string, unknown> }) {
+function GrepView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => void }) {
   const pattern = p.pattern as string | undefined
   const path = p.path as string | undefined
   return (
@@ -166,7 +166,7 @@ function GrepView({ p }: { p: Record<string, unknown> }) {
           <span className="text-amber-300-a90">{pattern}</span>
         </div>
       )}
-      {path && <div><FilePath path={path} /></div>}
+      {path && <div><FilePath path={path} onOpen={onOpen} /></div>}
       {!!(p.glob || p.type || p.output_mode || p["-i"] || p.multiline) && (
         <div className="flex gap-2 flex-wrap">
           {!!p.glob && <Tag>glob: {String(p.glob)}</Tag>}
@@ -180,7 +180,7 @@ function GrepView({ p }: { p: Record<string, unknown> }) {
   )
 }
 
-function GlobView({ p }: { p: Record<string, unknown> }) {
+function GlobView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => void }) {
   const pattern = p.pattern as string | undefined
   const path = p.path as string | undefined
   return (
@@ -191,7 +191,7 @@ function GlobView({ p }: { p: Record<string, unknown> }) {
           <span className="text-amber-300-a90">{pattern}</span>
         </div>
       )}
-      {path && <div><FilePath path={path} /></div>}
+      {path && <div><FilePath path={path} onOpen={onOpen} /></div>}
     </div>
   )
 }

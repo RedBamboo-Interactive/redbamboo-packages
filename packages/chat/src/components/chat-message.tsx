@@ -368,7 +368,8 @@ function toolCategory(part: MessagePart): string | null {
   return null
 }
 
-const fileTools = new Set(["read", "write", "edit", "multiedit", "notebookedit"])
+// Grep/Glob `path` may be a directory — hosts are expected to handle both.
+const fileTools = new Set(["read", "write", "edit", "multiedit", "notebookedit", "grep", "glob"])
 
 /** File path (and line, when the tool input implies one) targeted by a file tool call. */
 function extractToolFile(part: MessagePart): { path: string; line?: number } | null {
