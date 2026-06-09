@@ -6,6 +6,7 @@ param(
     [Parameter(Mandatory)][string]$BuildTarget,
     [string]$PackageManager = "npm",
     [string[]]$ExtraKill = @(),
+    [string[]]$LinkedPackages = @(),
     [switch]$SkipFrontend,
     [switch]$SkipBackend,
     [switch]$NoLaunch
@@ -28,6 +29,24 @@ while ((Get-Date) -lt $deadline) {
     $listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if (-not $listener) { break }
     Start-Sleep -Milliseconds 500
+}
+
+# ── Build linked packages ──
+if (-not $SkipFrontend -and $LinkedPackages.Count -gt 0) {
+    $packagesRoot = "$PSScriptRoot\..\packages"
+    foreach ($pkg in $LinkedPackages) {
+        Write-Host "=== Building @redbamboo/$pkg ===" -ForegroundColor Cyan
+        Push-Location "$packagesRoot\$pkg"
+        try {
+            $ErrorActionPreference = "Continue"
+            Invoke-Expression "$PackageManager run build"
+            $ErrorActionPreference = "Stop"
+            if ($LASTEXITCODE -ne 0) { throw "Package @redbamboo/$pkg build failed" }
+        } finally {
+            $ErrorActionPreference = "Stop"
+            Pop-Location
+        }
+    }
 }
 
 # ── Build frontend ──
