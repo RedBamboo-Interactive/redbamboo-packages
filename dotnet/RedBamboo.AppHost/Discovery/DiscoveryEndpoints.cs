@@ -13,7 +13,10 @@ public static class DiscoveryEndpoints
         this WebApplication app,
         IServiceDescriptor descriptor,
         CloudflareTunnelService tunnelService,
-        WebSocketBroadcaster? broadcaster = null)
+        WebSocketBroadcaster? broadcaster = null,
+        bool hasLogs = false,
+        bool hasTelemetry = false,
+        IReadOnlyDictionary<string, string>? proxyRoutes = null)
     {
         _startTime = DateTime.UtcNow;
 
@@ -64,6 +67,57 @@ public static class DiscoveryEndpoints
                     "Returns all registered WebSocket event types with descriptions and field schemas"));
             }
 
+            var management = new Dictionary<string, object?>
+            {
+                ["ping"] = "/ping",
+                ["health"] = "/health",
+                ["discovery"] = "/discover",
+                ["openapi"] = "/openapi.json",
+                ["remote"] = new
+                {
+                    status = "/api/remote/status",
+                    enable = "/api/remote/enable",
+                    disable = "/api/remote/disable",
+                    share = "/api/remote/share",
+                    token = "/api/remote/token",
+                },
+            };
+
+            if (hasLogs)
+                management["logs"] = new
+                {
+                    list = "/api/logs",
+                    summary = "/api/logs/summary",
+                    clear = "/api/logs/clear",
+                };
+
+            if (hasTelemetry)
+                management["telemetry"] = new
+                {
+                    list = "/api/telemetry",
+                    stats = "/api/telemetry/stats",
+                    process = "/api/telemetry/process",
+                    cleanup = "/api/telemetry/cleanup",
+                };
+
+            if (OperatingSystem.IsWindows())
+                management["autostart"] = "/api/autostart";
+
+            // Pass-through routes to sibling services. Agents should follow the upstream's
+            // /discover for the full surface behind each prefix.
+            object? proxies = null;
+            if (proxyRoutes is { Count: > 0 })
+            {
+                proxies = proxyRoutes.Select(kv => new
+                {
+                    prefix = kv.Key,
+                    upstream = kv.Value,
+                    discover = kv.Value.TrimEnd('/') + "/discover",
+                    description = $"All methods under {kv.Key}/** are proxied to {kv.Value}. " +
+                                  "See the upstream /discover for the endpoints behind this prefix.",
+                }).ToList();
+            }
+
             return Results.Ok(new
             {
                 service = descriptor.ServiceName,
@@ -75,20 +129,8 @@ public static class DiscoveryEndpoints
                 iconColor = descriptor.IconColor,
                 capabilities,
                 app_endpoints = appEndpoints,
-                management = new
-                {
-                    ping = "/ping",
-                    health = "/health",
-                    discovery = "/discover",
-                    openapi = "/openapi.json",
-                    remote = new
-                    {
-                        status = "/api/remote/status",
-                        enable = "/api/remote/enable",
-                        disable = "/api/remote/disable",
-                        share = "/api/remote/share",
-                    },
-                },
+                proxies,
+                management,
             });
         });
 

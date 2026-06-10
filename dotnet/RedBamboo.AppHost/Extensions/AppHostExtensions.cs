@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using RedBamboo.AppHost.Auth;
 using RedBamboo.AppHost.Discovery;
 using RedBamboo.AppHost.Logging;
@@ -149,8 +150,12 @@ public static class AppHostExtensions
         Dictionary<string, string>? proxyRoutes = null)
     {
         var broadcaster = app.Services.GetService<WebSocketBroadcaster>();
+        var telemetry = app.Services.GetService<TelemetryService>();
 
-        DiscoveryEndpoints.MapDiscoveryEndpoints(app, descriptor, tunnelService, broadcaster);
+        DiscoveryEndpoints.MapDiscoveryEndpoints(app, descriptor, tunnelService, broadcaster,
+            hasLogs: logService is not null,
+            hasTelemetry: telemetry is not null,
+            proxyRoutes: proxyRoutes);
         RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
 #if WINDOWS
         Startup.AutoStartEndpoints.MapAutoStartEndpoints(app, appName);
@@ -159,7 +164,6 @@ public static class AppHostExtensions
         if (logService is not null)
             LogEndpoints.MapLogEndpoints(app, logService);
 
-        var telemetry = app.Services.GetService<TelemetryService>();
         if (telemetry is not null)
         {
             if (descriptor is RegistryServiceDescriptor rsd)
@@ -215,6 +219,63 @@ public static class AppHostExtensions
             WebSocketEndpoints.MapWebSocketEndpoints(app, broadcaster, wsProxyRoutes);
         }
 
+        WarnOnUnregisteredRoutes(app, descriptor, proxyRoutes);
+
         return app;
+    }
+
+    /// <summary>
+    /// Best-effort startup diagnostic: any route mapped on the app but absent from the
+    /// EndpointRegistry (and not a known AppHost infra route) is invisible to /discover.
+    /// Logs one warning per undiscoverable route so gaps can't accumulate silently.
+    /// </summary>
+    private static void WarnOnUnregisteredRoutes(
+        WebApplication app, IServiceDescriptor descriptor, Dictionary<string, string>? proxyRoutes)
+    {
+        app.Lifetime.ApplicationStarted.Register(() =>
+        {
+            try
+            {
+                var registered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var ep in descriptor.GetAppEndpoints())
+                    registered.Add($"{ep.Method} {ep.Path.TrimEnd('/')}");
+
+                var infraPrefixes = new List<string>
+                {
+                    "/ping", "/health", "/discover", "/openapi.json",
+                    "/api/remote", "/api/autostart", "/api/logs", "/api/telemetry",
+                    "/ws", "/login", "/auth",
+                };
+                if (proxyRoutes is not null)
+                    infraPrefixes.AddRange(proxyRoutes.Keys);
+
+                var sources = ((Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)app).DataSources;
+                foreach (var endpoint in sources.SelectMany(ds => ds.Endpoints))
+                {
+                    if (endpoint is not Microsoft.AspNetCore.Routing.RouteEndpoint route) continue;
+                    var pattern = route.RoutePattern.RawText;
+                    if (string.IsNullOrEmpty(pattern)) continue;
+                    if (!pattern.StartsWith('/')) pattern = "/" + pattern;
+                    if (pattern == "/" || pattern.Contains("{**") || pattern.Contains("{*path")) continue;
+                    if (infraPrefixes.Any(p => pattern.StartsWith(p, StringComparison.OrdinalIgnoreCase))) continue;
+
+                    var methods = endpoint.Metadata
+                        .GetMetadata<Microsoft.AspNetCore.Routing.HttpMethodMetadata>()?.HttpMethods
+                        ?? ["GET"];
+                    foreach (var method in methods)
+                    {
+                        if (!registered.Contains($"{method} {pattern.TrimEnd('/')}"))
+                            app.Logger.LogWarning(
+                                "Route {Method} {Pattern} is not in the EndpointRegistry — it is invisible to /discover. " +
+                                "Register it via the registry map methods or registry.Describe().",
+                                method, pattern);
+                    }
+                }
+            }
+            catch
+            {
+                // Diagnostics only — never let this interfere with startup.
+            }
+        });
     }
 }
