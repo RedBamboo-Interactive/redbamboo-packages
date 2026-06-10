@@ -40,6 +40,7 @@ function ShellCommands({
   onShare,
   onSwitchApp,
   shareEnabled,
+  feedbackEnabled,
   canInstall,
   install,
 }: {
