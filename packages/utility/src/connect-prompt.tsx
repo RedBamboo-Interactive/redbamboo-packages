@@ -20,7 +20,9 @@ export interface ConnectPromptProps {
 export function ConnectPrompt({
   brand,
   store,
-  validateEndpoint = "/ping",
+  // /health requires auth on remote connections; /ping is in the bearer bypass
+  // list, so validating against it would accept any token.
+  validateEndpoint = "/health",
   showServerUrl = false,
   defaultServerUrl = "",
   onConnected,
