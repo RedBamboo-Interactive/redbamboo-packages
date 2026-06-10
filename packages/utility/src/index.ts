@@ -55,7 +55,13 @@ export { AuthProvider, useAuth } from "./auth-provider"
 export type { AuthUser, AuthContextValue } from "./auth-types"
 
 export { useServiceDiscovery } from "./use-service-discovery"
-export type { ServiceManifest, CapabilityInfo, EndpointInfo } from "./use-service-discovery"
+export type { ServiceManifest, CapabilityInfo, EndpointInfo, ParameterInfo, ProxyInfo } from "./use-service-discovery"
+
+export { SUITE_APPS, SUITE_PORTS, NOVA_PORT, getSuiteApp, currentSuiteApp } from "./suite-registry"
+export type { SuiteApp } from "./suite-registry"
+
+export { apiFetch, ApiFetchError } from "./api-fetch"
+export type { ApiFetchOptions, ApiErrorBody } from "./api-fetch"
 
 export { TunnelSettingsPanel } from "./tunnel-settings-panel"
 export type { TunnelSettingsPanelProps, TunnelStatus } from "./tunnel-settings-panel"

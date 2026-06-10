@@ -5,9 +5,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@redbamboo/ui"
+import { SUITE_APPS } from "@redbamboo/utility"
 import type { ImageAttachment } from "../types"
 
-// ── App metadata (mirrors utility/app-switcher registry) ─────────────
+// ── App metadata (from the shared suite registry) ────────────────────
 
 interface AppMeta {
   icon: string
@@ -15,17 +16,12 @@ interface AppMeta {
   label: string
 }
 
-const APP_META: Record<string, AppMeta> = {
-  redcompute: { icon: "fa-solid fa-microchip", color: "#26A69A", label: "RedCompute" },
-  codered:    { icon: "fa-solid fa-terminal",  color: "#E55B5B", label: "CodeRed" },
-  redmatter:  { icon: "fa-solid fa-fire",      color: "#D4A03C", label: "RedMatter" },
-  nova:       { icon: "fa-solid fa-star",       color: "#C74B7A", label: "Nova" },
-  redleaf:    { icon: "fa-solid fa-leaf",        color: "#66BB6A", label: "RedLeaf" },
-}
-
 function resolveApp(name: string): AppMeta {
   const key = name.toLowerCase().replace(/\s+/g, "")
-  return APP_META[key] ?? { icon: "fa-solid fa-circle", color: "var(--color-text-muted)", label: name }
+  const app = SUITE_APPS.find((a) => a.name.toLowerCase() === key)
+  return app
+    ? { icon: app.icon, color: app.color, label: app.name }
+    : { icon: "fa-solid fa-circle", color: "var(--color-text-muted)", label: name }
 }
 
 // ── Types ────────────────────────────────────────────────────────────

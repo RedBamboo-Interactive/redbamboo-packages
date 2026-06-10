@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react"
+import { NOVA_PORT, SUITE_PORTS } from "./suite-registry"
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -31,7 +32,6 @@ export interface UseAskNovaReceiverOptions {
 
 // ── Protocol ─────────────────────────────────────────────────────────
 
-const NOVA_PORT = 18803
 const PROTOCOL_TYPE = "redbamboo:ask-nova"
 const PROTOCOL_READY = "redbamboo:ask-nova:ready"
 
@@ -163,7 +163,7 @@ export function useAskNovaReceiver({ onContext, enabled = true }: UseAskNovaRece
     const hostname = window.location.hostname || "localhost"
     const protocol = window.location.protocol
     const allowedOrigins = new Set(
-      [18800, 18801, 18802, 18803, 18804].map(p => `${protocol}//${hostname}:${p}`),
+      SUITE_PORTS.map(p => `${protocol}//${hostname}:${p}`),
     )
 
     function dedupeAndDeliver(context: AskNovaContext) {
@@ -313,6 +313,12 @@ export interface UseAskNovaCommandOptions extends UseAskNovaOptions {
   }
 }
 
+/**
+ * @deprecated AppShell already registers the `ask-nova` and `ask-nova-selection`
+ * commands for every app. Using this hook alongside AppShell silently overwrites
+ * those registrations (the command store now warns). Use `useAskNova` for the
+ * imperative API, or AppShell for the commands.
+ */
 export function useAskNovaCommand({
   store,
   shortcut = "Ctrl+Shift+N",

@@ -1,25 +1,18 @@
 import { useState, useEffect, useMemo } from "react"
 import { cn, Dialog, DialogContent } from "@redbamboo/ui"
+import { SUITE_APPS } from "./suite-registry"
 import "./app-switcher.css"
 
-interface AppEntry {
-  port: number
-  icon: string
-  nameParts: [string, string]
-  color: string
-  description: string
+interface DiscoveredApp {
+  ok: boolean
+  /** Live manifest values override the static registry when the app is reachable. */
+  description?: string
+  icon?: string
+  color?: string
 }
 
-const APP_REGISTRY: AppEntry[] = [
-  { port: 18800, icon: "fa-solid fa-microchip", nameParts: ["Red", "Compute"], color: "#26A69A", description: "AI compute service" },
-  { port: 18801, icon: "fa-solid fa-terminal", nameParts: ["Code", "Red"], color: "#E55B5B", description: "Development tools" },
-  { port: 18802, icon: "fa-solid fa-fire", nameParts: ["Red", "Matter"], color: "#D4A03C", description: "Game engine CMS" },
-  { port: 18803, icon: "fa-solid fa-star", nameParts: ["No", "va"], color: "#C74B7A", description: "AI assistant" },
-  { port: 18804, icon: "fa-solid fa-leaf", nameParts: ["Red", "Leaf"], color: "#66BB6A", description: "Content & knowledge" },
-]
-
 function useAppDiscovery(open: boolean) {
-  const [statuses, setStatuses] = useState<Record<number, boolean>>({})
+  const [statuses, setStatuses] = useState<Record<number, DiscoveredApp>>({})
 
   useEffect(() => {
     if (!open) return
@@ -29,15 +22,31 @@ function useAppDiscovery(open: boolean) {
     const hostname = window.location.hostname || "localhost"
     const protocol = window.location.protocol
 
-    for (const app of APP_REGISTRY) {
+    for (const app of SUITE_APPS) {
       const controller = new AbortController()
       controllers.push(controller)
 
       fetch(`${protocol}//${hostname}:${app.port}/discover`, {
         signal: controller.signal,
       })
-        .then((r) => setStatuses((prev) => ({ ...prev, [app.port]: r.ok })))
-        .catch(() => setStatuses((prev) => ({ ...prev, [app.port]: false })))
+        .then(async (r) => {
+          let info: DiscoveredApp = { ok: r.ok }
+          if (r.ok) {
+            try {
+              const manifest = await r.json()
+              info = {
+                ok: true,
+                description: typeof manifest.description === "string" ? manifest.description : undefined,
+                icon: typeof manifest.iconClass === "string" ? manifest.iconClass : undefined,
+                color: typeof manifest.iconColor === "string" ? manifest.iconColor : undefined,
+              }
+            } catch {
+              // tolerate non-JSON; reachability is still useful
+            }
+          }
+          setStatuses((prev) => ({ ...prev, [app.port]: info }))
+        })
+        .catch(() => setStatuses((prev) => ({ ...prev, [app.port]: { ok: false } })))
     }
 
     return () => controllers.forEach((c) => c.abort())
@@ -75,8 +84,12 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent showCloseButton={false} className="w-72 sm:max-w-none p-2">
         <div className="app-switcher-list">
-          {APP_REGISTRY.map((app, i) => {
-            const isOffline = statuses[app.port] === false
+          {SUITE_APPS.map((app, i) => {
+            const discovered = statuses[app.port]
+            const isOffline = discovered?.ok === false
+            const icon = discovered?.icon ?? app.icon
+            const color = discovered?.color ?? app.color
+            const description = discovered?.description ?? app.description
             const allLetters = (app.nameParts[0] + app.nameParts[1]).split("")
             const mutedCount = app.nameParts[0].length
             const isActive = String(app.port) === currentPort
@@ -104,13 +117,13 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
                 style={
                   {
                     "--tile-i": i,
-                    "--app-color": app.color,
+                    "--app-color": color,
                   } as React.CSSProperties
                 }
               >
                 <div className="app-switcher-row__icon">
                   <div className="app-switcher-row__icon-bg" />
-                  <i className={cn(app.icon, "app-switcher-row__icon-i")} />
+                  <i className={cn(icon, "app-switcher-row__icon-i")} />
                 </div>
                 <div className="app-switcher-row__text">
                   <span className="app-switcher-row__name">
@@ -120,14 +133,14 @@ function AppSwitcher({ open, onOpenChange }: AppSwitcherProps) {
                         className="app-switcher-row__letter inline-block"
                         style={{
                           "--letter-i": j,
-                          color: j < mutedCount ? undefined : app.color,
+                          color: j < mutedCount ? undefined : color,
                         } as React.CSSProperties}
                       >
                         {char}
                       </span>
                     ))}
                   </span>
-                  <span className="app-switcher-row__desc">{app.description}</span>
+                  <span className="app-switcher-row__desc">{description}</span>
                 </div>
               </a>
             )

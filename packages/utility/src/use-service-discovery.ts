@@ -1,10 +1,28 @@
 import { useState, useEffect, useCallback } from "react"
 import type { RemoteConnectionStore } from "./remote-connection"
 
+export interface ParameterInfo {
+  name: string
+  type: string
+  required?: boolean
+  description?: string
+  default?: unknown
+  enum?: string[]
+  /** "query" | "body" | "path" | "header" — absent means inferred from the HTTP verb. */
+  location?: string
+}
+
 export interface EndpointInfo {
   method: string
   path: string
   description: string
+  parameters?: ParameterInfo[] | null
+  /** JSON-schema-shaped request body, when the flat parameter model can't express it. */
+  requestBody?: unknown
+  /** JSON-schema-shaped success response body. */
+  response?: unknown
+  /** Auth requirement annotation: "none" | "local" | "bearer" | "jwt". */
+  auth?: string | null
 }
 
 export interface CapabilityInfo {
@@ -15,13 +33,25 @@ export interface CapabilityInfo {
   endpoints?: EndpointInfo[]
 }
 
+export interface ProxyInfo {
+  prefix: string
+  upstream: string
+  /** The upstream's /discover URL — follow it for the surface behind this prefix. */
+  discover: string
+  description?: string
+}
+
 export interface ServiceManifest {
   service: string
+  name?: string
   version: string
   description: string
   api_base: string
+  iconClass?: string | null
+  iconColor?: string | null
   capabilities: CapabilityInfo[]
   app_endpoints: EndpointInfo[]
+  proxies?: ProxyInfo[] | null
   management: {
     ping: string
     health: string
@@ -32,7 +62,20 @@ export interface ServiceManifest {
       enable: string
       disable: string
       share: string
+      token?: string
     }
+    logs?: {
+      list: string
+      summary: string
+      clear: string
+    }
+    telemetry?: {
+      list: string
+      stats: string
+      process: string
+      cleanup: string
+    }
+    autostart?: string
   }
 }
 
