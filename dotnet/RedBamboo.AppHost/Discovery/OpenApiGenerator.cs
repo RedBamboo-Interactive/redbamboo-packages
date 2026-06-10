@@ -12,17 +12,25 @@ public static class OpenApiGenerator
         AddPath(paths, "/ping", "get", "Ping", "Liveness probe");
         AddPath(paths, "/health", "get", "Health", "Structured health check with tunnel and capability status");
         AddPath(paths, "/discover", "get", "Discover", "Machine-readable service manifest for AI agent discovery");
+        AddPath(paths, "/openapi.json", "get", "OpenApi", "This OpenAPI 3.1 document");
         AddPath(paths, "/api/remote/status", "get", "RemoteStatus", "Tunnel and remote access status");
         AddPath(paths, "/api/remote/enable", "post", "RemoteEnable", "Start tunnel and auto-generate access token");
         AddPath(paths, "/api/remote/disable", "post", "RemoteDisable", "Stop tunnel");
         AddPath(paths, "/api/remote/share", "get", "RemoteShare", "Get shareable URL with embedded token");
         AddPath(paths, "/api/remote/token", "put", "RemoteRegenerateToken", "Regenerate access token");
 
+        if (OperatingSystem.IsWindows())
+        {
+            AddPath(paths, "/api/autostart", "get", "AutoStartGet", "Whether the app starts with Windows");
+            AddPath(paths, "/api/autostart", "put", "AutoStartSet", "Enable or disable starting with Windows",
+                [new ParameterDescriptor("enabled", "boolean", Required: true, Location: ParamLocation.Body)]);
+        }
+
         foreach (var ep in appEndpoints)
         {
             AddPath(paths, ep.Path, ep.Method.ToLowerInvariant(),
                 ep.Path.Replace("/", "").Replace("{", "").Replace("}", ""),
-                ep.Description, ep.Parameters);
+                ep.Description, ep.Parameters, ep.RequestBody, ep.Response);
         }
 
         foreach (var cap in capabilities)
@@ -32,7 +40,7 @@ public static class OpenApiGenerator
             {
                 AddPath(paths, ep.Path, ep.Method.ToLowerInvariant(),
                     $"{cap.Slug}_{ep.Path.Replace("/", "_").Trim('_')}",
-                    ep.Description, ep.Parameters);
+                    ep.Description, ep.Parameters, ep.RequestBody, ep.Response);
             }
         }
 
@@ -53,31 +61,79 @@ public static class OpenApiGenerator
     private static void AddPath(
         Dictionary<string, object> paths, string path, string method,
         string operationId, string description,
-        IReadOnlyList<ParameterDescriptor>? parameters = null)
+        IReadOnlyList<ParameterDescriptor>? parameters = null,
+        object? requestBodySchema = null,
+        object? responseSchema = null)
     {
+        // WS pseudo-entries from /discover have no OpenAPI representation
+        if (method is not ("get" or "post" or "put" or "patch" or "delete" or "head" or "options")) return;
+
         var operation = new Dictionary<string, object>
         {
             ["operationId"] = operationId,
             ["summary"] = description,
             ["responses"] = new Dictionary<string, object>
             {
-                ["200"] = new { description = "Success" }
+                ["200"] = responseSchema is null
+                    ? new { description = "Success" }
+                    : new Dictionary<string, object>
+                    {
+                        ["description"] = "Success",
+                        ["content"] = new Dictionary<string, object>
+                        {
+                            ["application/json"] = new { schema = responseSchema }
+                        }
+                    }
             }
         };
 
-        if (parameters is { Count: > 0 })
+        if (parameters is { Count: > 0 } || requestBodySchema is not null)
         {
-            var hasBody = method is "post" or "put" or "patch";
+            var bodyByDefault = method is "post" or "put" or "patch";
 
-            if (hasBody)
+            var bodyParams = new List<ParameterDescriptor>();
+            var nonBodyParams = new List<object>();
+
+            foreach (var p in parameters ?? [])
+            {
+                var location = p.Location ?? (bodyByDefault ? ParamLocation.Body : ParamLocation.Query);
+                if (location == ParamLocation.Body)
+                {
+                    bodyParams.Add(p);
+                }
+                else
+                {
+                    nonBodyParams.Add(new
+                    {
+                        name = p.Name,
+                        @in = location,
+                        required = p.Required || location == ParamLocation.Path,
+                        description = p.Description ?? "",
+                        schema = BuildTypeSchema(p),
+                    });
+                }
+            }
+
+            if (requestBodySchema is not null)
+            {
+                // Explicit schema wins over flat body params
+                operation["requestBody"] = new Dictionary<string, object>
+                {
+                    ["required"] = true,
+                    ["content"] = new Dictionary<string, object>
+                    {
+                        ["application/json"] = new { schema = requestBodySchema }
+                    }
+                };
+            }
+            else if (bodyParams.Count > 0)
             {
                 var properties = new Dictionary<string, object>();
                 var required = new List<string>();
 
-                foreach (var p in parameters)
+                foreach (var p in bodyParams)
                 {
-                    var prop = BuildSchemaProperty(p);
-                    properties[p.Name] = prop;
+                    properties[p.Name] = BuildSchemaProperty(p);
                     if (p.Required) required.Add(p.Name);
                 }
 
@@ -98,22 +154,9 @@ public static class OpenApiGenerator
                     }
                 };
             }
-            else
-            {
-                var queryParams = new List<object>();
-                foreach (var p in parameters)
-                {
-                    queryParams.Add(new
-                    {
-                        name = p.Name,
-                        @in = "query",
-                        required = p.Required,
-                        description = p.Description ?? "",
-                        schema = BuildTypeSchema(p),
-                    });
-                }
-                operation["parameters"] = queryParams;
-            }
+
+            if (nonBodyParams.Count > 0)
+                operation["parameters"] = nonBodyParams;
         }
 
         var op = new Dictionary<string, object> { [method] = operation };
@@ -145,6 +188,7 @@ public static class OpenApiGenerator
         "float" or "double" or "decimal" or "number" => "number",
         "bool" or "boolean" => "boolean",
         "array" or "list" => "array",
+        "object" or "json" => "object",
         _ => "string",
     };
 }
