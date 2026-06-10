@@ -34,8 +34,6 @@ export interface UseAskNovaReceiverOptions {
 const NOVA_PORT = 18803
 const PROTOCOL_TYPE = "redbamboo:ask-nova"
 const PROTOCOL_READY = "redbamboo:ask-nova:ready"
-const READY_POLL_INTERVAL = 300
-const READY_POLL_MAX = 30
 
 interface AskNovaMessage {
   type: typeof PROTOCOL_TYPE
@@ -105,6 +103,30 @@ export function formatContextMessage(context: AskNovaContext, userQuestion?: str
   return lines.join("\n")
 }
 
+// ── URL hash codec ──────────────────────────────────────────────────
+
+const HASH_PREFIX = "ask-nova="
+
+function encodeContextHash(context: AskNovaContext): string {
+  const json = JSON.stringify(context)
+  const encoded = encodeURIComponent(json)
+  if (encoded.length > 1_500_000) {
+    const { screenshot: _, ...lite } = context
+    return encodeURIComponent(JSON.stringify(lite))
+  }
+  return encoded
+}
+
+export function parseContextHash(hash: string): AskNovaContext | null {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash
+  if (!raw.startsWith(HASH_PREFIX)) return null
+  try {
+    return JSON.parse(decodeURIComponent(raw.slice(HASH_PREFIX.length)))
+  } catch {
+    return null
+  }
+}
+
 // ── Core: open Nova and transfer context ─────────────────────────────
 
 export async function askNova(
@@ -123,48 +145,9 @@ export async function askNova(
   const protocol = window.location.protocol
   const novaOrigin = `${protocol}//${hostname}:${novaPort}`
 
-  const novaWindow = window.open(novaOrigin, "nova-ai")
-  if (!novaWindow) return false
-
-  const payload: AskNovaMessage = { type: PROTOCOL_TYPE, context: fullContext }
-
-  return new Promise<boolean>((resolve) => {
-    let done = false
-
-    function send() {
-      if (done) return
-      done = true
-      cleanup()
-      novaWindow!.postMessage(payload, novaOrigin)
-      resolve(true)
-    }
-
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== novaOrigin) return
-      if ((event.data as ReadyMessage | undefined)?.type !== PROTOCOL_READY) return
-      send()
-    }
-
-    function cleanup() {
-      window.removeEventListener("message", onMessage)
-      clearInterval(poll)
-    }
-
-    window.addEventListener("message", onMessage)
-
-    // Poll for already-open tabs: try posting immediately and on an
-    // interval. The receiver ignores duplicates via a processed-id set.
-    let attempts = 0
-    const poll = setInterval(() => {
-      if (done || ++attempts > READY_POLL_MAX) {
-        if (!done) send()
-        return
-      }
-      try {
-        novaWindow!.postMessage(payload, novaOrigin)
-      } catch { /* cross-origin during navigation — ignore */ }
-    }, READY_POLL_INTERVAL)
-  })
+  const hash = encodeContextHash(fullContext)
+  window.open(`${novaOrigin}/#${HASH_PREFIX}${hash}`, "_blank", "noopener,noreferrer")
+  return true
 }
 
 // ── Hook: receiver side (used by Nova) ───────────────────────────────
@@ -183,6 +166,26 @@ export function useAskNovaReceiver({ onContext, enabled = true }: UseAskNovaRece
       [18800, 18801, 18802, 18803, 18804].map(p => `${protocol}//${hostname}:${p}`),
     )
 
+    function dedupeAndDeliver(context: AskNovaContext) {
+      const key = `${context.app}:${context.url}:${context.title ?? ""}`
+      if (processedRef.current.has(key)) return
+      processedRef.current.add(key)
+      setTimeout(() => processedRef.current.delete(key), 5000)
+      callbackRef.current(context)
+    }
+
+    // Read context from URL hash (primary path — works with PWA link capturing)
+    function checkHash() {
+      const ctx = parseContextHash(window.location.hash)
+      if (!ctx) return
+      history.replaceState(null, "", window.location.pathname + window.location.search)
+      dedupeAndDeliver(ctx)
+    }
+
+    checkHash()
+    window.addEventListener("hashchange", checkHash)
+
+    // postMessage listener (fallback for cross-origin window.open callers)
     function sendReady() {
       if (!window.opener) return
       try {
@@ -199,17 +202,14 @@ export function useAskNovaReceiver({ onContext, enabled = true }: UseAskNovaRece
       if (!allowedOrigins.has(event.origin)) return
       const data = event.data as AskNovaMessage | undefined
       if (data?.type !== PROTOCOL_TYPE) return
-
-      const dedupeKey = `${data.context.app}:${data.context.url}:${data.context.title ?? ""}`
-      if (processedRef.current.has(dedupeKey)) return
-      processedRef.current.add(dedupeKey)
-      setTimeout(() => processedRef.current.delete(dedupeKey), 5000)
-
-      callbackRef.current(data.context)
+      dedupeAndDeliver(data.context)
     }
 
     window.addEventListener("message", onMessage)
-    return () => window.removeEventListener("message", onMessage)
+    return () => {
+      window.removeEventListener("hashchange", checkHash)
+      window.removeEventListener("message", onMessage)
+    }
   }, [enabled])
 }
 

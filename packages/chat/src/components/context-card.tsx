@@ -81,7 +81,7 @@ export function ContextSquare({ context, rawXml }: ContextSquareProps) {
               <img
                 src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
                 alt={`Screenshot from ${app.label}`}
-                className="w-full rounded-md border border-overlay-10"
+                className="max-h-48 rounded-md border border-overlay-10 object-cover object-top"
               />
             )}
             <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
@@ -184,6 +184,11 @@ export function parseContextFromMessage(content: string): ContextCardData | null
   }
 }
 
+export function extractRawContextXml(content: string): string | undefined {
+  const match = content.match(/<nova-context\s+source="[^"]*"[^>]*>[\s\S]*?<\/nova-context>/)
+  return match?.[0]
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function formatContextBlock(context: ContextCardData): string {
@@ -200,11 +205,6 @@ function formatContextBlock(context: ContextCardData): string {
     }
   }
   return lines.join("\n")
-}
-
-export function extractRawContextXml(content: string): string | undefined {
-  const match = content.match(/<nova-context\s+source="[^"]*"[^>]*>[\s\S]*?<\/nova-context>/)
-  return match?.[0]
 }
 
 function tryPathname(url: string): string | undefined {
