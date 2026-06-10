@@ -29,6 +29,7 @@ import { AppSwitcher } from "./app-switcher"
 import { askNova, scrapeDOMContext } from "./ask-nova"
 import type { AskNovaContext } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
+import { SUITE_APPS, NOVA_PORT, currentSuiteApp } from "./suite-registry"
 
 const isMac =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
@@ -37,6 +38,7 @@ function ShellCommands({
   onAbout,
   onFeedback,
   onShare,
+  onSwitchApp,
   shareEnabled,
   canInstall,
   install,
@@ -44,6 +46,7 @@ function ShellCommands({
   onAbout: () => void
   onFeedback: () => void
   onShare: () => void
+  onSwitchApp: () => void
   shareEnabled: boolean
   canInstall: boolean
   install: () => void
@@ -52,6 +55,7 @@ function ShellCommands({
 
   useCommand("app-shell:sign-out", {
     label: "Sign Out",
+    description: "Log out of the current account",
     group: "App",
     action: () => logout(),
     enabled: !!user,
@@ -59,18 +63,21 @@ function ShellCommands({
 
   useCommand("app-shell:about", {
     label: "About",
+    description: "Show app version and details",
     group: "App",
     action: onAbout,
   })
 
   useCommand("app-shell:feedback", {
     label: "Send Feedback",
+    description: "Report a problem or suggest an improvement",
     group: "App",
     action: onFeedback,
   })
 
   useCommand("app-shell:command-palette", {
     label: "Command Palette",
+    description: "Open this command palette",
     group: "App",
     shortcut: isMac ? "⌘K" : "Ctrl+K",
     action: openCommandPalette,
@@ -78,6 +85,7 @@ function ShellCommands({
 
   useCommand("app-shell:share", {
     label: "Share",
+    description: "Show a shareable link and QR code for remote access",
     group: "App",
     keywords: ["qr", "link"],
     action: onShare,
@@ -86,21 +94,54 @@ function ShellCommands({
 
   useCommand("app-shell:install", {
     label: "Install App",
+    description: "Install as a desktop app (PWA)",
     group: "App",
     keywords: ["pwa", "download"],
     action: install,
     enabled: canInstall,
   })
 
+  useCommand("app-shell:switch-app", {
+    label: "Switch App…",
+    description: "Open the Red Suite app switcher",
+    group: "Apps",
+    keywords: ["apps", "suite", "switcher"],
+    action: onSwitchApp,
+  })
+
   return null
 }
 
-const NOVA_PORT = "18803"
+function SuiteAppCommand({ app, enabled }: { app: (typeof SUITE_APPS)[number]; enabled: boolean }) {
+  useCommand(`app-shell:open-${app.name.toLowerCase()}`, {
+    label: `Open ${app.name}`,
+    description: `${app.description} (port ${app.port})`,
+    group: "Apps",
+    keywords: ["switch", "app", app.name.toLowerCase()],
+    action: () => {
+      const hostname = window.location.hostname || "localhost"
+      window.open(`${window.location.protocol}//${hostname}:${app.port}`, "_blank", "noopener,noreferrer")
+    },
+    enabled,
+  })
+  return null
+}
+
+function SuiteAppCommands() {
+  const current = currentSuiteApp()
+  return (
+    <>
+      {SUITE_APPS.map((app) => (
+        <SuiteAppCommand key={app.port} app={app} enabled={app.port !== current?.port} />
+      ))}
+    </>
+  )
+}
 
 function AskNovaCommands({ appName }: { appName: string }) {
   const [modalContext, setModalContext] = useState<AskNovaContext | null>(null)
   const [capturingScreenshot, setCapturingScreenshot] = useState(false)
-  const isNova = typeof window !== "undefined" && window.location.port === NOVA_PORT
+  const isNova = typeof window !== "undefined" && window.location.port === String(NOVA_PORT)
 
   const openModal = useCallback(() => {
     const domContext = scrapeDOMContext()
@@ -393,10 +434,12 @@ function AppShellInner({
         onAbout={openAbout}
         onFeedback={openFeedback}
         onShare={openShare}
+        onSwitchApp={openSwitcher}
         shareEnabled={!!shareUrl}
         canInstall={canInstall}
         install={install}
       />
+      <SuiteAppCommands />
       <AskNovaCommands appName={config.name} />
       <CommandPalette />
 

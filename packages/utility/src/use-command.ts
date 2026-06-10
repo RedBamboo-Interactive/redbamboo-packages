@@ -18,6 +18,7 @@ export function useCommand(id: string, options: CommandOptions) {
     store.register({
       id,
       label: options.label,
+      description: options.description,
       group: options.group,
       icon: options.icon,
       shortcut: options.shortcut,
@@ -25,5 +26,5 @@ export function useCommand(id: string, options: CommandOptions) {
       action: () => ref.current.action(),
     })
     return () => store.unregister(id)
-  }, [store, id, enabled, options.label, options.group, options.icon, options.shortcut])
+  }, [store, id, enabled, options.label, options.description, options.group, options.icon, options.shortcut])
 }

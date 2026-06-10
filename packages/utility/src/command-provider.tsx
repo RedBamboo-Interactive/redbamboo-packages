@@ -15,6 +15,32 @@ interface CommandStore {
   getSnapshot(): Command[]
 }
 
+const warnedCollisions = new Set<string>()
+
+function warnOnce(key: string, message: string) {
+  if (warnedCollisions.has(key)) return
+  warnedCollisions.add(key)
+  console.warn(`[command-palette] ${message}`)
+}
+
+/**
+ * Machine-discoverable mirror of the command list. AI agents (Nova, browser drivers)
+ * can enumerate available UI actions via `window.__redbamboo_commands` and invoke one
+ * via `window.__redbamboo_runCommand(id)`.
+ */
+function syncWindowMirror(snapshot: Command[]) {
+  if (typeof window === "undefined") return
+  const w = window as unknown as Record<string, unknown>
+  w.__redbamboo_commands = snapshot.map((c) => ({
+    id: c.id,
+    label: c.label,
+    description: c.description,
+    group: c.group,
+    shortcut: c.shortcut,
+    keywords: c.keywords,
+  }))
+}
+
 function createCommandStore(): CommandStore {
   let commands = new Map<string, Command>()
   let snapshot: Command[] = []
@@ -22,11 +48,39 @@ function createCommandStore(): CommandStore {
 
   function notify() {
     snapshot = Array.from(commands.values())
+    syncWindowMirror(snapshot)
     for (const fn of listeners) fn()
+  }
+
+  function checkCollisions(command: Command) {
+    // DOM-discovered commands legitimately re-register on every scan
+    if (command.id.startsWith(DOM_PREFIX)) return
+
+    if (commands.has(command.id)) {
+      warnOnce(`id:${command.id}`,
+        `Command id "${command.id}" registered twice — the previous registration is silently replaced. ` +
+        "Check for duplicate useCommand calls (e.g. AppShell + useAskNovaCommand both registering ask-nova).")
+    }
+
+    if (command.shortcut) {
+      const parsed = parseShortcut(command.shortcut)
+      if (parsed) {
+        for (const other of commands.values()) {
+          if (other.id === command.id || !other.shortcut) continue
+          const otherParsed = parseShortcut(other.shortcut)
+          if (otherParsed && sameShortcut(parsed, otherParsed)) {
+            warnOnce(`shortcut:${command.id}:${other.id}`,
+              `Shortcut conflict: "${command.shortcut}" is bound by both "${other.id}" and "${command.id}". ` +
+              "The first registered command wins; the second will never fire from the keyboard.")
+          }
+        }
+      }
+    }
   }
 
   return {
     register(command) {
+      checkCollisions(command)
       commands = new Map(commands)
       commands.set(command.id, command)
       notify()
@@ -80,6 +134,7 @@ function scanDOM(store: CommandStore) {
     store.register({
       id,
       label,
+      description: el.getAttribute("data-command-description") ?? undefined,
       group: el.getAttribute("data-command-group") ?? undefined,
       shortcut: el.getAttribute("data-command-shortcut") ?? undefined,
       keywords: keywords ? keywords.split(",").map((k) => k.trim()) : undefined,
@@ -136,6 +191,11 @@ function parseShortcut(shortcut: string): ParsedShortcut | null {
 
   if (!key) return null
   return { key, ctrl, meta, alt, shift }
+}
+
+function sameShortcut(a: ParsedShortcut, b: ParsedShortcut): boolean {
+  return a.key.toLowerCase() === b.key.toLowerCase()
+    && a.ctrl === b.ctrl && a.meta === b.meta && a.alt === b.alt && a.shift === b.shift
 }
 
 function matchesEvent(e: KeyboardEvent, p: ParsedShortcut): boolean {
@@ -214,6 +274,20 @@ export function CommandProvider({ children, discover = true }: CommandProviderPr
 
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
+  }, [store])
+
+  // Machine-facing invoke hook, paired with the window.__redbamboo_commands list
+  useEffect(() => {
+    const w = window as unknown as Record<string, unknown>
+    w.__redbamboo_runCommand = (id: string): boolean => {
+      const cmd = store.getSnapshot().find((c) => c.id === id)
+      if (!cmd) return false
+      cmd.action()
+      return true
+    }
+    return () => {
+      delete w.__redbamboo_runCommand
+    }
   }, [store])
 
   return (

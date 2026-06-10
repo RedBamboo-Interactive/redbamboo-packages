@@ -3,6 +3,8 @@ import type { ComponentType } from "react"
 export interface Command {
   id: string
   label: string
+  /** What the command does — used for fuzzy search and machine discovery (AI agents). */
+  description?: string
   group?: string
   icon?: ComponentType<{ className?: string }>
   shortcut?: string
