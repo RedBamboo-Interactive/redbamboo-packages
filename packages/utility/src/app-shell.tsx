@@ -48,6 +48,7 @@ function ShellCommands({
   onShare: () => void
   onSwitchApp: () => void
   shareEnabled: boolean
+  feedbackEnabled: boolean
   canInstall: boolean
   install: () => void
 }) {
@@ -73,6 +74,7 @@ function ShellCommands({
     description: "Report a problem or suggest an improvement",
     group: "App",
     action: onFeedback,
+    enabled: feedbackEnabled,
   })
 
   useCommand("app-shell:command-palette", {
@@ -436,6 +438,7 @@ function AppShellInner({
         onShare={openShare}
         onSwitchApp={openSwitcher}
         shareEnabled={!!shareUrl}
+        feedbackEnabled={!!config.onFeedbackSubmit}
         canInstall={canInstall}
         install={install}
       />
