@@ -50,8 +50,10 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
     private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15)];
     private static readonly TimeSpan WarnInterval = TimeSpan.FromMinutes(5);
 
+    private const int MaxUpsertAttempts = 10;
+
     private sealed record Pending(string Stream, string DataJson, Guid? EntityId, string? EntitySlug, string? UserId, DateTimeOffset CreatedAt);
-    private sealed record PendingUpsert(string Slug, string TypeSlug, string Name, string DataJson);
+    private sealed record PendingUpsert(string Slug, string TypeSlug, string Name, string DataJson, int Attempts = 0);
 
     private readonly HttpClient _http;
     private readonly string _appName;
@@ -195,7 +197,15 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
                     continue;
                 }
 
-                _pendingUpserts.TryAdd(slug, upsert);
+                // A deterministically failing payload (e.g. one the server
+                // 500s on) must not stall the queue forever — cap attempts.
+                if (upsert.Attempts + 1 >= MaxUpsertAttempts)
+                {
+                    Warn($"Dropping upsert of '{slug}' after {MaxUpsertAttempts} failed attempts (last status {(int)response.StatusCode})");
+                    continue;
+                }
+
+                _pendingUpserts.TryAdd(slug, upsert with { Attempts = upsert.Attempts + 1 });
                 return; // server unhappy — stop this pass, retry next tick
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
