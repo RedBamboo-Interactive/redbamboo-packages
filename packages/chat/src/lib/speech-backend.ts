@@ -143,7 +143,7 @@ export function createProxySpeechTransport(): SpeechTransport {
       const res = await fetch("/ai-session/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...req, mode: "oneshot", rationale: "Voice prompt" }),
+        body: JSON.stringify({ ...req, mode: "oneshot", rationale: "Voice prompt", qualityTier: "fast" }),
         signal,
         credentials: "include",
       })
