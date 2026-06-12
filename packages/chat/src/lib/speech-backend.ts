@@ -71,7 +71,7 @@ export function createSpeechBackend({
   transport,
   reformulatePrompt = DEFAULT_REFORMULATE_PROMPT,
   summarizePrompt = DEFAULT_SUMMARIZE_PROMPT,
-  model = "haiku",
+  model,
   reformulateMaxTokens = 500,
   summarizeMaxTokens = 300,
 }: CreateSpeechBackendOptions): SpeechBackend {
@@ -140,10 +140,13 @@ export function createProxySpeechTransport(): SpeechTransport {
     },
 
     async prompt(req: PromptRequest, signal?: AbortSignal) {
+      // Strip any model from the request — an explicit model always wins over
+      // qualityTier on the server, which would make the tier dead weight here.
+      const { model: _model, ...rest } = req
       const res = await fetch("/ai-session/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...req, mode: "oneshot", rationale: "Voice prompt", qualityTier: "fast" }),
+        body: JSON.stringify({ ...rest, mode: "oneshot", rationale: "Voice prompt", qualityTier: "fast" }),
         signal,
         credentials: "include",
       })
