@@ -104,11 +104,13 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
     /// <summary>
     /// Queue a record for shipping. Non-blocking; the enqueue timestamp is
     /// preserved as the record's created_at so buffering doesn't skew times.
+    /// Pass <paramref name="createdAt"/> explicitly when backfilling
+    /// historical rows.
     /// </summary>
-    public void Enqueue(string stream, object data, Guid? entityId = null, string? userId = null)
+    public void Enqueue(string stream, object data, Guid? entityId = null, string? userId = null, DateTimeOffset? createdAt = null)
     {
         var json = JsonSerializer.Serialize(data);
-        _channel.Writer.TryWrite(new Pending(stream, json, entityId, null, userId, DateTimeOffset.UtcNow));
+        _channel.Writer.TryWrite(new Pending(stream, json, entityId, null, userId, createdAt ?? DateTimeOffset.UtcNow));
     }
 
     /// <summary>
