@@ -197,7 +197,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
               )}
               {effortOptions && (
                 <ConfigSelect
-                  label="Effort"
+                  label="Quality"
                   value={s.effort || "high"}
                   options={effortOptions}
                   onChange={v => handleConfigChange({ effort: v })}

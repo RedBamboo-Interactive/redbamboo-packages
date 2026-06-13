@@ -7,3 +7,7 @@ Thumbs.db
 videos/
 test-results/
 screenshots/
+screenshots-*/
+
+# Ad-hoc test scripts
+packages/testing/test-*.mjs
