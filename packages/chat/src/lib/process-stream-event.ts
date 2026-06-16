@@ -1,4 +1,4 @@
-import type { ChatEvent, MessageBlock, MessagePart, PendingQuestion, ProcessEventResult } from "../types"
+import type { ChatEvent, MessageBlock, MessagePart, PendingQuestion, ProcessEventResult, StructuredQuestion } from "../types"
 
 let partIdCounter = 0
 
@@ -8,6 +8,21 @@ function finalizePartials(block: MessageBlock): MessageBlock {
   return { ...block, parts: block.parts.map(p => p.isPartial ? { ...p, isPartial: false } : p) }
 }
 
+export function parseStructuredQuestions(raw: Record<string, unknown>): StructuredQuestion[] | undefined {
+  if (!("questions" in raw) || !Array.isArray(raw.questions) || raw.questions.length === 0) return undefined
+  return (raw.questions as Record<string, unknown>[]).map((q) => ({
+    question: typeof q.question === "string" ? q.question : "",
+    header: typeof q.header === "string" ? q.header : undefined,
+    multiSelect: !!q.multiSelect,
+    options: Array.isArray(q.options)
+      ? (q.options as Record<string, unknown>[]).map((o) => ({
+          label: typeof o === "string" ? o : (typeof o.label === "string" ? o.label : ""),
+          description: typeof o === "string" ? undefined : (typeof o.description === "string" ? o.description : undefined),
+        }))
+      : [],
+  }))
+}
+
 function detectPendingQuestion(block: MessageBlock): PendingQuestion | null {
   for (let i = block.parts.length - 1; i >= 0; i--) {
     const part = block.parts[i]
@@ -15,11 +30,19 @@ function detectPendingQuestion(block: MessageBlock): PendingQuestion | null {
       const hasResult = block.parts.slice(i + 1).some(p => p.type === "tool_result")
       if (hasResult) return null
       let question = "Claude is asking a question..."
+      let questions: StructuredQuestion[] | undefined
       try {
         const raw = typeof part.toolInput === "string" ? JSON.parse(part.toolInput) : part.toolInput
-        if (raw && typeof raw === "object" && "question" in raw) question = (raw as { question: string }).question
+        if (raw && typeof raw === "object") {
+          questions = parseStructuredQuestions(raw as Record<string, unknown>)
+          if (questions) {
+            question = questions[0].question || question
+          } else if ("question" in raw && typeof (raw as Record<string, unknown>).question === "string") {
+            question = (raw as { question: string }).question
+          }
+        }
       } catch { /* use fallback */ }
-      return { question }
+      return { question, questions }
     }
   }
   return null

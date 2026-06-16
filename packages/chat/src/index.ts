@@ -8,6 +8,8 @@ export type {
   ChatEvent,
   ChatBackend,
   ChatPanelProps,
+  QuestionOption,
+  StructuredQuestion,
   PendingQuestion,
   ProcessEventResult,
   SpeechBackend,
@@ -49,6 +51,6 @@ export { AudioPlayer } from "./lib/audio-player"
 export { filterConversation } from "./lib/conversation-filter"
 export { createSpeechBackend, createProxySpeechTransport, DEFAULT_REFORMULATE_PROMPT, DEFAULT_SUMMARIZE_PROMPT } from "./lib/speech-backend"
 export type { SpeechTransport, PromptRequest, CreateSpeechBackendOptions } from "./lib/speech-backend"
-export { processStreamEvent } from "./lib/process-stream-event"
+export { processStreamEvent, parseStructuredQuestions } from "./lib/process-stream-event"
 export { rebuildBlocks } from "./lib/rebuild-blocks"
 export type { PersistedMessage } from "./lib/rebuild-blocks"

@@ -117,11 +117,14 @@ export interface SessionStats {
   contextTokens?: number | null
   contextWindow?: number | null
   effort?: string | null
+  qualityTier?: string | null
 }
 
 export interface SessionConfigOption {
   value: string
   label: string
+  color?: string
+  icon?: string
 }
 
 export interface ContextIndicatorProps {
@@ -129,13 +132,27 @@ export interface ContextIndicatorProps {
   messages: MessageBlock[]
   modelOptions?: SessionConfigOption[]
   effortOptions?: SessionConfigOption[]
-  onConfigChange?: (config: { model?: string; effort?: string }) => Promise<void>
+  qualityTierOptions?: SessionConfigOption[]
+  onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
 }
 
 // --- Stream event processing ---
 
+export interface QuestionOption {
+  label: string
+  description?: string
+}
+
+export interface StructuredQuestion {
+  question: string
+  header?: string
+  multiSelect: boolean
+  options: QuestionOption[]
+}
+
 export interface PendingQuestion {
   question: string
+  questions?: StructuredQuestion[]
 }
 
 export interface ProcessEventResult {

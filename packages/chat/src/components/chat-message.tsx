@@ -8,13 +8,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@redbamboo/ui"
-import type { MessageBlock, MessagePart, ImageAttachment } from "../types"
+import type { MessageBlock, MessagePart, ImageAttachment, StructuredQuestion } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
 import { Emojify } from "./emojify"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
 import { rehypeTwemoji } from "../lib/rehype-twemoji"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output-view"
+import { parseStructuredQuestions } from "../lib/process-stream-event"
 
 const readOnlyTools = new Set([
   "read", "glob", "grep", "agent", "websearch", "webfetch",
@@ -230,9 +231,17 @@ export function ChatMessage({
 
   const askQuestionPart = block.parts.find(p => p.type === "tool_use" && p.toolName === "AskUserQuestion")
   let questionText: string | null = null
-  if (askQuestionPart?.toolInput) {
+  let structuredQuestions: StructuredQuestion[] | null = null
+  if (askQuestionPart?.toolInput && !askQuestionPart.isPartial) {
     try {
-      questionText = JSON.parse(askQuestionPart.toolInput).question || null
+      const parsed = JSON.parse(askQuestionPart.toolInput)
+      const sq = parseStructuredQuestions(parsed)
+      if (sq) {
+        questionText = sq[0].question || "Claude is asking a question..."
+        structuredQuestions = sq
+      } else if (parsed.question) {
+        questionText = parsed.question
+      }
     } catch { questionText = askQuestionPart.toolInput }
   }
 
@@ -266,6 +275,7 @@ export function ChatMessage({
         {questionText && (
           <QuestionCard
             question={questionText}
+            questions={structuredQuestions}
             answered={!isPendingQuestion}
             onAnswer={onAnswerQuestion}
           />
@@ -568,65 +578,251 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
   )
 }
 
-function QuestionCard({ question, answered, onAnswer }: {
+function QuestionCard({ question, questions, answered, onAnswer }: {
   question: string
+  questions?: StructuredQuestion[] | null
   answered: boolean
   onAnswer?: (answer: string) => void
 }) {
-  const [value, setValue] = useState("")
+  const [selections, setSelections] = useState<Map<number, Set<number>>>(new Map())
+  const [otherTexts, setOtherTexts] = useState<Map<number, string>>(new Map())
+  const [otherActive, setOtherActive] = useState<Map<number, boolean>>(new Map())
+  const [freeText, setFreeText] = useState("")
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    if (!answered && inputRef.current) inputRef.current.focus()
-  }, [answered])
+    if (!answered && !questions?.length && inputRef.current) inputRef.current.focus()
+  }, [answered, questions])
 
-  const handleSubmit = () => {
-    const trimmed = value.trim()
-    if (!trimmed || !onAnswer) return
-    onAnswer(trimmed)
-    setValue("")
+  const toggleOption = (qIdx: number, optIdx: number) => {
+    if (answered) return
+    const q = questions![qIdx]
+    setSelections(prev => {
+      const next = new Map(prev)
+      const current = new Set(prev.get(qIdx) || [])
+      if (q.multiSelect) {
+        if (current.has(optIdx)) current.delete(optIdx)
+        else current.add(optIdx)
+      } else {
+        current.clear()
+        current.add(optIdx)
+        setOtherActive(p => { const m = new Map(p); m.set(qIdx, false); return m })
+        setOtherTexts(p => { const m = new Map(p); m.delete(qIdx); return m })
+      }
+      next.set(qIdx, current)
+      return next
+    })
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const toggleOther = (qIdx: number) => {
+    if (answered) return
+    const q = questions![qIdx]
+    setOtherActive(prev => {
+      const next = new Map(prev)
+      const isActive = !prev.get(qIdx)
+      next.set(qIdx, isActive)
+      if (!q.multiSelect && isActive) {
+        setSelections(p => { const m = new Map(p); m.set(qIdx, new Set()); return m })
+      }
+      return next
+    })
+  }
+
+  const canSubmit = (): boolean => {
+    if (!questions?.length) return freeText.trim().length > 0
+    return questions.every((_, i) => {
+      const selected = selections.get(i) || new Set()
+      const isOther = otherActive.get(i)
+      const otherText = otherTexts.get(i)?.trim()
+      return selected.size > 0 || (isOther && !!otherText)
+    })
+  }
+
+  const buildAnswer = (): string => {
+    if (!questions?.length) return freeText.trim()
+    const parts: string[] = []
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i]
+      const selected = selections.get(i) || new Set()
+      const otherText = otherActive.get(i) ? otherTexts.get(i)?.trim() : undefined
+      const labels = Array.from(selected).map(idx => q.options[idx]?.label).filter(Boolean)
+      if (otherText) labels.push(otherText)
+      const value = labels.join(", ")
+      if (questions.length > 1) {
+        parts.push(`${q.header || q.question}: ${value}`)
+      } else {
+        parts.push(value)
+      }
+    }
+    return parts.join("\n")
+  }
+
+  const handleSubmit = () => {
+    const answer = questions?.length ? buildAnswer() : freeText.trim()
+    if (!answer || !onAnswer) return
+    onAnswer(answer)
+  }
+
+  const handleFreeTextKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
   }
 
+  if (!questions?.length) {
+    return (
+      <div className="my-3 rounded-lg border border-teal-500-a30 bg-teal-500-a8 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <i className="fa-solid fa-circle-question text-sm text-teal-400" />
+          <span className="text-sm font-medium text-teal-300">Question</span>
+        </div>
+        <p className="text-sm text-text-primary mb-3 font-serif">{question}</p>
+        {answered ? (
+          <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
+            <i className="fa-solid fa-check text-xs text-green-400" />
+            Answered
+          </span>
+        ) : onAnswer ? (
+          <div className="flex gap-2 items-end">
+            <textarea
+              ref={inputRef}
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              onKeyDown={handleFreeTextKeyDown}
+              placeholder="Type your answer..."
+              rows={1}
+              className="flex-1 resize-none bg-overlay-6 rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500-a50"
+            />
+            <button
+              onClick={handleSubmit}
+              disabled={!freeText.trim()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-teal-500-a25 hover:bg-teal-500-a40 text-teal-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <i className="fa-solid fa-paper-plane" />
+              Answer
+            </button>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className="my-3 rounded-lg border border-teal-500-a30 bg-teal-500-a8 p-3">
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-3">
         <i className="fa-solid fa-circle-question text-sm text-teal-400" />
         <span className="text-sm font-medium text-teal-300">Question</span>
       </div>
-      <p className="text-sm text-text-primary mb-3 font-serif">{question}</p>
-      {answered ? (
-        <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-          <i className="fa-solid fa-check text-xs text-green-400" />
-          Answered
-        </span>
-      ) : onAnswer ? (
-        <div className="flex gap-2 items-end">
-          <textarea
-            ref={inputRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type your answer..."
-            rows={1}
-            className="flex-1 resize-none bg-overlay-6 rounded-md px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500-a50"
-          />
+
+      <div className="space-y-4">
+        {questions.map((q, qIdx) => (
+          <div key={qIdx}>
+            {q.header && questions.length > 1 && (
+              <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-teal-500-a15 text-teal-300 mb-1.5">
+                {q.header}
+              </span>
+            )}
+
+            <p className="text-sm text-text-primary mb-2 font-serif">{q.question}</p>
+
+            {q.multiSelect && (
+              <p className="text-[11px] text-text-muted mb-2 italic">Select all that apply</p>
+            )}
+
+            <div className="space-y-1">
+              {q.options.map((opt, optIdx) => {
+                const isSelected = !!(selections.get(qIdx) || new Set()).has(optIdx)
+                return (
+                  <button
+                    key={optIdx}
+                    onClick={() => toggleOption(qIdx, optIdx)}
+                    disabled={answered}
+                    className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-md text-left transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-teal-500-a20 border border-teal-500-a40"
+                        : "bg-overlay-4 border border-transparent hover:bg-overlay-8"
+                    } disabled:opacity-60 disabled:cursor-not-allowed`}
+                  >
+                    <span className={`mt-0.5 shrink-0 w-4 h-4 ${q.multiSelect ? "rounded-sm" : "rounded-full"} border flex items-center justify-center ${
+                      isSelected ? "border-teal-400 bg-teal-500-a30" : "border-text-muted"
+                    }`}>
+                      {isSelected && (
+                        q.multiSelect
+                          ? <i className="fa-solid fa-check text-[9px] text-teal-300" />
+                          : <span className="w-2 h-2 rounded-full bg-teal-400" />
+                      )}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-text-primary">{opt.label}</span>
+                      {opt.description && (
+                        <span className="block text-xs text-text-muted mt-0.5">{opt.description}</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+
+              <button
+                onClick={() => toggleOther(qIdx)}
+                disabled={answered}
+                className={`w-full flex items-start gap-2.5 px-3 py-2 rounded-md text-left transition-colors cursor-pointer ${
+                  otherActive.get(qIdx)
+                    ? "bg-teal-500-a20 border border-teal-500-a40"
+                    : "bg-overlay-4 border border-transparent hover:bg-overlay-8"
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                <span className={`mt-0.5 shrink-0 w-4 h-4 ${q.multiSelect ? "rounded-sm" : "rounded-full"} border flex items-center justify-center ${
+                  otherActive.get(qIdx) ? "border-teal-400 bg-teal-500-a30" : "border-text-muted"
+                }`}>
+                  {otherActive.get(qIdx) && (
+                    q.multiSelect
+                      ? <i className="fa-solid fa-check text-[9px] text-teal-300" />
+                      : <span className="w-2 h-2 rounded-full bg-teal-400" />
+                  )}
+                </span>
+                <span className="text-sm text-text-muted italic">Other...</span>
+              </button>
+
+              {otherActive.get(qIdx) && !answered && (
+                <div className="ml-[26px] mt-1">
+                  <input
+                    type="text"
+                    value={otherTexts.get(qIdx) || ""}
+                    onChange={(e) => setOtherTexts(prev => { const m = new Map(prev); m.set(qIdx, e.target.value); return m })}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSubmit() } }}
+                    placeholder="Type your answer..."
+                    autoFocus
+                    className="w-full bg-overlay-6 rounded-md px-3 py-1.5 text-sm font-serif placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-teal-500-a50"
+                  />
+                </div>
+              )}
+            </div>
+
+            {qIdx < questions.length - 1 && (
+              <div className="border-t border-teal-500-a15 mt-3" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3">
+        {answered ? (
+          <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
+            <i className="fa-solid fa-check text-xs text-green-400" />
+            Answered
+          </span>
+        ) : onAnswer ? (
           <button
             onClick={handleSubmit}
-            disabled={!value.trim()}
+            disabled={!canSubmit()}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-teal-500-a25 hover:bg-teal-500-a40 text-teal-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <i className="fa-solid fa-paper-plane" />
-            Answer
+            Submit
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   )
 }
