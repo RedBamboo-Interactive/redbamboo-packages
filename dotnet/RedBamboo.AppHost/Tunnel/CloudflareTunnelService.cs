@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Management;
+using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
@@ -28,18 +30,23 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
             if (_process != null || (Status == TunnelStatus.Running && IsExternal))
                 return Task.FromResult(false);
 
-            if (config.DetectExternalTunnel && DetectExistingTunnel())
-            {
-                _logger?.LogInformation("Detected existing cloudflared process — using external tunnel");
-                IsExternal = true;
-                SetStatus(TunnelStatus.Running, null);
-                return Task.FromResult(true);
-            }
-
             if (string.IsNullOrWhiteSpace(config.TunnelToken))
             {
                 SetStatus(TunnelStatus.Error, "No tunnel token configured");
                 return Task.FromResult(false);
+            }
+
+            if (OperatingSystem.IsWindows())
+            {
+                if (config.DetectExternalTunnel && DetectTunnelWithToken(config.TunnelToken))
+                {
+                    _logger?.LogInformation("Detected existing cloudflared process for this tunnel, using external");
+                    IsExternal = true;
+                    SetStatus(TunnelStatus.Running, null);
+                    return Task.FromResult(true);
+                }
+
+                KillOrphanedProcesses(config.TunnelToken);
             }
 
             var exe = ResolveCloudflaredPath(config.CloudflaredPath);
@@ -160,10 +167,55 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
         StatusChanged?.Invoke(status, error);
     }
 
-    private static bool DetectExistingTunnel()
+    [SupportedOSPlatform("windows")]
+    private bool DetectTunnelWithToken(string token)
     {
-        try { return Process.GetProcessesByName("cloudflared").Length > 0; }
-        catch { return false; }
+        try
+        {
+            var tokenFragment = token.Length > 20 ? token[..20] : token;
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'cloudflared.exe'");
+            foreach (var obj in searcher.Get())
+            {
+                var cmd = obj["CommandLine"]?.ToString() ?? "";
+                if (cmd.Contains(tokenFragment, StringComparison.Ordinal))
+                    return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Failed to detect existing tunnel process");
+        }
+        return false;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private void KillOrphanedProcesses(string token)
+    {
+        try
+        {
+            var tokenFragment = token.Length > 20 ? token[..20] : token;
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'cloudflared.exe'");
+            foreach (var obj in searcher.Get())
+            {
+                var cmd = obj["CommandLine"]?.ToString() ?? "";
+                if (!cmd.Contains(tokenFragment, StringComparison.Ordinal)) continue;
+
+                var pid = Convert.ToInt32(obj["ProcessId"]);
+                try
+                {
+                    using var proc = Process.GetProcessById(pid);
+                    proc.Kill(entireProcessTree: true);
+                    _logger?.LogInformation("Killed orphaned cloudflared process (PID {Pid})", pid);
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogDebug(ex, "Failed to clean up orphaned tunnel processes");
+        }
     }
 
     private static string? ResolveCloudflaredPath(string? configuredPath)
