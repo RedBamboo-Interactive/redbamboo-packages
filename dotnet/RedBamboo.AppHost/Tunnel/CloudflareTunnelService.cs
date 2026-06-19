@@ -172,13 +172,12 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
     {
         try
         {
-            var tokenFragment = token.Length > 20 ? token[..20] : token;
             using var searcher = new ManagementObjectSearcher(
                 "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'cloudflared.exe'");
             foreach (var obj in searcher.Get())
             {
                 var cmd = obj["CommandLine"]?.ToString() ?? "";
-                if (cmd.Contains(tokenFragment, StringComparison.Ordinal))
+                if (cmd.Contains(token, StringComparison.Ordinal))
                     return true;
             }
         }
@@ -194,13 +193,12 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
     {
         try
         {
-            var tokenFragment = token.Length > 20 ? token[..20] : token;
             using var searcher = new ManagementObjectSearcher(
                 "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'cloudflared.exe'");
             foreach (var obj in searcher.Get())
             {
                 var cmd = obj["CommandLine"]?.ToString() ?? "";
-                if (!cmd.Contains(tokenFragment, StringComparison.Ordinal)) continue;
+                if (!cmd.Contains(token, StringComparison.Ordinal)) continue;
 
                 var pid = Convert.ToInt32(obj["ProcessId"]);
                 try
