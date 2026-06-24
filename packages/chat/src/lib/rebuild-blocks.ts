@@ -10,6 +10,7 @@ export interface PersistedMessage {
   toolResult?: string | null
   messageId?: string | null
   timestamp: string
+  attachmentsJson?: string | null
 }
 
 export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
@@ -64,6 +65,14 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
     }
 
     currentBlock.parts.push(part)
+
+    if (rec.attachmentsJson) {
+      try {
+        const attachments = JSON.parse(rec.attachmentsJson)
+        if (attachments.audioUrl)
+          currentBlock.parts.push({ type: "audio", content: attachments.audioUrl })
+      } catch { /* ignore parse errors */ }
+    }
   }
 
   return blocks

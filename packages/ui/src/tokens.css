@@ -640,6 +640,16 @@ body {
              square-jiggle 0.6s ease-in-out 0.45s infinite;
 }
 
+@keyframes audio-wave {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+.audio-wave {
+  animation: audio-wave 0.75s ease-in-out infinite;
+  transform-origin: center;
+}
+
 .morph-spinner-wrap {
   display: inline-flex;
   align-items: center;

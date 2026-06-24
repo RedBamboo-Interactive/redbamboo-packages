@@ -7,7 +7,7 @@ export interface MessageBlock {
 }
 
 export interface MessagePart {
-  type: "text" | "thinking" | "tool_use" | "tool_result" | "error"
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio"
   content: string
   toolName?: string
   toolInput?: string

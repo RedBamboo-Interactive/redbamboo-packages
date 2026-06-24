@@ -194,6 +194,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
                 resolveImageSrc={resolveImageSrc}
                 resolveFileLink={resolveFileLink}
+                assistantAvatar={props.assistantAvatar}
               />
             )
           })}

@@ -16,6 +16,7 @@ import { rehypeTwemoji } from "../lib/rehype-twemoji"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output-view"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
+import { AudioPlayerWidget } from "./audio-player-widget"
 
 const readOnlyTools = new Set([
   "read", "glob", "grep", "agent", "websearch", "webfetch",
@@ -158,6 +159,7 @@ interface ChatMessageProps {
   onAnswerQuestion?: (answer: string) => void
   resolveImageSrc?: (src: string) => string | undefined
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
+  assistantAvatar?: string
 }
 
 export function ChatMessage({
@@ -171,12 +173,13 @@ export function ChatMessage({
   onAnswerQuestion,
   resolveImageSrc,
   resolveFileLink,
+  assistantAvatar,
 }: ChatMessageProps) {
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
     const content = rawContent
       .replace(/<nova-context[\s\S]*?<\/nova-context>\s*/g, "")
-      .replace(/<nova-prior-messages[\s\S]*?<\/nova-prior-messages>\s*/g, "")
+      .replace(/<nova-prior-messages?[\s\S]*?<\/nova-prior-messages?>\s*/g, "")
     const notification = parseTaskNotification(rawContent)
     if (notification) {
       return <TaskNotificationSquare notification={notification} />
@@ -258,6 +261,10 @@ export function ChatMessage({
                 <MarkdownRenderer content={group.parts[0].content} resolveImageSrc={resolveImageSrc} />
               )}
             </div>
+          ) : group.kind === "audio" ? (
+            <div key={i} className="msg-enter-ai my-2">
+              <AudioPlayerWidget src={group.parts[0].content} avatarSrc={assistantAvatar} />
+            </div>
           ) : (
             <div key={i} className="msg-enter-ai">
               <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} />
@@ -287,6 +294,7 @@ export function ChatMessage({
 
 type PartGroup =
   | { kind: "text"; parts: [MessagePart] }
+  | { kind: "audio"; parts: [MessagePart] }
   | { kind: "frieze"; parts: MessagePart[]; isLive?: boolean }
 
 function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
@@ -301,9 +309,9 @@ function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
   }
 
   for (const part of parts) {
-    if (part.type === "text") {
+    if (part.type === "text" || part.type === "audio") {
       flushFrieze()
-      groups.push({ kind: "text", parts: [part] })
+      groups.push({ kind: part.type === "audio" ? "audio" : "text", parts: [part] })
     } else {
       frieze.push(part)
     }
