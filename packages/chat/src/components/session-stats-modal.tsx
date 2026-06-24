@@ -15,7 +15,8 @@ interface Props {
   messages: MessageBlock[]
   modelOptions?: SessionConfigOption[]
   effortOptions?: SessionConfigOption[]
-  onConfigChange?: (config: { model?: string; effort?: string }) => Promise<void>
+  qualityTierOptions?: SessionConfigOption[]
+  onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
 }
 
 const DEFAULT_MAX_CONTEXT = 200_000
@@ -130,6 +131,36 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   onChange: (value: string) => void
   disabled?: boolean
 }) {
+  const hasIcons = options.some(o => o.icon || o.color)
+
+  if (hasIcons) {
+    return (
+      <div className="flex items-center justify-between py-1.5">
+        <span className="text-xs text-text-muted">{label}</span>
+        <div className="flex items-center gap-1">
+          {options.map(o => {
+            const active = value === o.value
+            return (
+              <button
+                key={o.value}
+                onClick={() => !disabled && onChange(o.value)}
+                disabled={disabled}
+                title={o.label}
+                className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md transition-colors disabled:opacity-50 ${
+                  active ? "" : "bg-overlay-6 text-text-muted hover:bg-overlay-10 hover:text-contrast"
+                }`}
+                style={active && o.color ? { backgroundColor: `${o.color}20`, color: o.color } : undefined}
+              >
+                {o.icon && <i className={o.icon} />}
+                {o.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center justify-between py-1.5">
       <span className="text-xs text-text-muted">{label}</span>
@@ -147,7 +178,7 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   )
 }
 
-export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOptions, effortOptions, onConfigChange }: Props) {
+export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOptions, effortOptions, qualityTierOptions, onConfigChange }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
   const pct = getContextPercent(s)
@@ -155,9 +186,9 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
   const userMessages = messages.filter(m => m.role === "user").length
   const [updating, setUpdating] = useState(false)
 
-  const hasConfig = onConfigChange && (modelOptions || effortOptions)
+  const hasConfig = onConfigChange && (modelOptions || effortOptions || qualityTierOptions)
 
-  const handleConfigChange = async (config: { model?: string; effort?: string }) => {
+  const handleConfigChange = async (config: { model?: string; effort?: string; qualityTier?: string }) => {
     if (!onConfigChange) return
     setUpdating(true)
     try {
@@ -195,7 +226,16 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
                   disabled={updating}
                 />
               )}
-              {effortOptions && (
+              {qualityTierOptions && (
+                <ConfigSelect
+                  label="Quality"
+                  value={s.qualityTier || "standard"}
+                  options={qualityTierOptions}
+                  onChange={v => handleConfigChange({ qualityTier: v })}
+                  disabled={updating}
+                />
+              )}
+              {effortOptions && !qualityTierOptions && (
                 <ConfigSelect
                   label="Quality"
                   value={s.effort || "high"}
