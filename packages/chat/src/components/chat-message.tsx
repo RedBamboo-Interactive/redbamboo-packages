@@ -920,6 +920,8 @@ function MessageMetadata({ block }: { block: MessageBlock }) {
   const meta = block.metadata
   const entries = meta ? Object.entries(meta).filter(([, v]) => v != null) : []
   const toolUseCount = block.parts.filter(p => p.type === "tool_use").length
+  const imageCount = block.parts.reduce((n, p) => n + (p.images?.length ?? 0), 0)
+  const hasAudio = block.parts.some(p => p.type === "audio")
 
   return (
     <>
@@ -941,16 +943,24 @@ function MessageMetadata({ block }: { block: MessageBlock }) {
           <div className="overflow-y-auto p-4 flex-1 min-h-0 space-y-2">
             <MetaRow label="Timestamp" value={formatTimestamp(block.timestamp)} />
             <MetaRow label="Message ID" value={block.id} mono />
+            <MetaRow label="Role" value={block.role} />
+            {block.senderAgentId && <MetaRow label="Sender agent" value={block.senderAgentId} mono />}
             {toolUseCount > 0 && <MetaRow label="Tool calls" value={String(toolUseCount)} />}
-            {entries.map(([key, value]) => (
-              <MetaRow
-                key={key}
-                label={metadataLabels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
-                value={formatMetaValue(key, value)}
-                mono={key === "model" || key === "provider"}
-              />
-            ))}
-            {entries.length === 0 && (
+            {imageCount > 0 && <MetaRow label="Images" value={String(imageCount)} />}
+            {hasAudio && <MetaRow label="Audio" value="Yes" />}
+            {entries.length > 0 && (
+              <div className="border-t border-border-subtle my-1 pt-1">
+                {entries.map(([key, value]) => (
+                  <MetaRow
+                    key={key}
+                    label={metadataLabels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
+                    value={formatMetaValue(key, value)}
+                    mono={key === "model" || key === "provider"}
+                  />
+                ))}
+              </div>
+            )}
+            {entries.length === 0 && !block.senderAgentId && toolUseCount === 0 && imageCount === 0 && !hasAudio && (
               <p className="text-xs text-text-disabled italic pt-1">No additional metadata available.</p>
             )}
           </div>

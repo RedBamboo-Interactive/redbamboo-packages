@@ -20,10 +20,19 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
   for (const rec of records) {
     if (rec.role === "user") {
       currentBlock = null
+      const part: MessagePart = { type: "text", content: rec.content || "" }
+      if (rec.attachmentsJson) {
+        try {
+          const attachments = JSON.parse(rec.attachmentsJson)
+          if (Array.isArray(attachments.images) && attachments.images.length > 0) {
+            part.images = attachments.images
+          }
+        } catch { /* ignore parse errors */ }
+      }
       blocks.push({
         id: `db-${rec.id}`,
         role: "user",
-        parts: [{ type: "text", content: rec.content || "" }],
+        parts: [part],
         timestamp: rec.timestamp,
       })
       continue
@@ -71,6 +80,9 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
         const attachments = JSON.parse(rec.attachmentsJson)
         if (attachments.audioUrl)
           currentBlock.parts.push({ type: "audio", content: attachments.audioUrl })
+        if (Array.isArray(attachments.images) && attachments.images.length > 0) {
+          part.images = attachments.images
+        }
       } catch { /* ignore parse errors */ }
     }
   }
