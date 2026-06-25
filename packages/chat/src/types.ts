@@ -4,6 +4,7 @@ export interface MessageBlock {
   parts: MessagePart[]
   timestamp: string
   metadata?: Record<string, unknown>
+  senderAgentId?: string
 }
 
 export interface MessagePart {
@@ -204,6 +205,7 @@ export interface ChatPanelProps {
 
   // Avatar
   assistantAvatar?: string
+  resolveAgentInfo?: (agentId: string) => { name: string; avatarUrl: string } | undefined
 
   // Render props
   renderStatusLine?: (state: {

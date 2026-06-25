@@ -181,6 +181,9 @@ export function ChatPanel(props: ChatPanelProps) {
           {messages.map((block: MessageBlockType, index: number) => {
             const isLastAssistant = block.role === "assistant" &&
               !messages.slice(index + 1).some((b: MessageBlockType) => b.role === "assistant")
+            const senderAgent = block.senderAgentId && props.resolveAgentInfo
+              ? props.resolveAgentInfo(block.senderAgentId)
+              : undefined
             return (
               <ChatMessage
                 key={block.id}
@@ -195,6 +198,8 @@ export function ChatPanel(props: ChatPanelProps) {
                 resolveImageSrc={resolveImageSrc}
                 resolveFileLink={resolveFileLink}
                 assistantAvatar={props.assistantAvatar}
+                senderName={senderAgent?.name}
+                senderAvatarUrl={senderAgent?.avatarUrl}
               />
             )
           })}

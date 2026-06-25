@@ -160,6 +160,8 @@ interface ChatMessageProps {
   resolveImageSrc?: (src: string) => string | undefined
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   assistantAvatar?: string
+  senderName?: string
+  senderAvatarUrl?: string
 }
 
 export function ChatMessage({
@@ -174,6 +176,8 @@ export function ChatMessage({
   resolveImageSrc,
   resolveFileLink,
   assistantAvatar,
+  senderName,
+  senderAvatarUrl,
 }: ChatMessageProps) {
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
@@ -207,6 +211,12 @@ export function ChatMessage({
         <div className="flex justify-end">
           <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
             <MessageMetadata block={block} />
+            {senderName && (
+              <div className="flex items-center gap-1.5 mb-1.5">
+                {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
+                <span className="text-xs text-text-muted font-medium">{senderName}</span>
+              </div>
+            )}
             {nonContextImages && nonContextImages.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
                 {nonContextImages.map((img: ImageAttachment, i: number) => (
@@ -252,6 +262,12 @@ export function ChatMessage({
     <div className="mb-4 min-w-0 group/msg">
       <div className="relative max-w-full min-w-0 overflow-hidden">
         {!isLiveBlock && <MessageMetadata block={block} />}
+        {senderName && (
+          <div className="flex items-center gap-1.5 mb-1.5">
+            {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
+            <span className="text-xs text-text-muted font-medium">{senderName}</span>
+          </div>
+        )}
         {groups.map((group, i) =>
           group.kind === "text" ? (
             <div key={i} className="text-sm leading-relaxed font-serif markdown-body msg-enter-ai">
