@@ -29,7 +29,7 @@ function ItemListRow({
       data-selected={selected || undefined}
       onClick={onClick}
       className={cn(
-        "group/row flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-overlay-6",
+        "group/row w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-overlay-6",
         selected ? "bg-overlay-8" : "hover:bg-overlay-4",
         className,
       )}
