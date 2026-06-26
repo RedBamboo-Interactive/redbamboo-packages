@@ -884,6 +884,35 @@ function NovaEventSquare({ event }: { event: NovaEvent }) {
   )
 }
 
+interface NovaContextMeta {
+  attrs: Record<string, string>
+  body: string
+}
+
+function parseNovaContextMeta(content: string): NovaContextMeta | null {
+  const match = content.match(/<nova-context\s+([^>]*)>([\s\S]*?)<\/nova-context>/)
+  if (!match) return null
+  if (/source="/.test(match[1])) return null
+
+  const attrs: Record<string, string> = {}
+  const attrPattern = /(\w+)="([^"]*)"/g
+  let m: RegExpExecArray | null
+  while ((m = attrPattern.exec(match[1])) !== null) {
+    attrs[m[1]] = m[2]
+  }
+
+  return { attrs, body: match[2].trim() }
+}
+
+const novaContextLabels: Record<string, string> = {
+  timestamp: "Context time",
+  day: "Day",
+  device: "Device",
+  input: "Input method",
+  discussion: "Discussion",
+  agent: "Agent",
+}
+
 const metadataLabels: Record<string, string> = {
   model: "Model",
   inputTokens: "Input tokens",
@@ -915,13 +944,21 @@ function formatTimestamp(iso: string): string {
   } catch { return iso }
 }
 
+const novaContextKeys = new Set(["timestamp", "day", "device", "input", "discussion", "agent", "outfit", "activeDiscussionCount", "archivedDiscussionCount", "otherAgentDiscussionCount"])
+
 function MessageMetadata({ block }: { block: MessageBlock }) {
   const [open, setOpen] = useState(false)
+  const [showRaw, setShowRaw] = useState(false)
   const meta = block.metadata
-  const entries = meta ? Object.entries(meta).filter(([, v]) => v != null) : []
+  const novaMetaEntries = meta ? Object.entries(meta).filter(([k, v]) => novaContextKeys.has(k) && v != null) : []
+  const otherEntries = meta ? Object.entries(meta).filter(([k, v]) => !novaContextKeys.has(k) && v != null) : []
   const toolUseCount = block.parts.filter(p => p.type === "tool_use").length
   const imageCount = block.parts.reduce((n, p) => n + (p.images?.length ?? 0), 0)
   const hasAudio = block.parts.some(p => p.type === "audio")
+
+  const rawContent = block.parts[0]?.content || ""
+  const novaCtxFromXml = novaMetaEntries.length === 0 ? parseNovaContextMeta(rawContent) : null
+  const hasNovaCtx = novaMetaEntries.length > 0 || novaCtxFromXml != null
 
   return (
     <>
@@ -948,9 +985,9 @@ function MessageMetadata({ block }: { block: MessageBlock }) {
             {toolUseCount > 0 && <MetaRow label="Tool calls" value={String(toolUseCount)} />}
             {imageCount > 0 && <MetaRow label="Images" value={String(imageCount)} />}
             {hasAudio && <MetaRow label="Audio" value="Yes" />}
-            {entries.length > 0 && (
+            {otherEntries.length > 0 && (
               <div className="border-t border-border-subtle my-1 pt-1">
-                {entries.map(([key, value]) => (
+                {otherEntries.map(([key, value]) => (
                   <MetaRow
                     key={key}
                     label={metadataLabels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
@@ -960,7 +997,45 @@ function MessageMetadata({ block }: { block: MessageBlock }) {
                 ))}
               </div>
             )}
-            {entries.length === 0 && !block.senderAgentId && toolUseCount === 0 && imageCount === 0 && !hasAudio && (
+            {novaMetaEntries.length > 0 && (
+              <div className="border-t border-border-subtle my-1 pt-1">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">Nova Context</p>
+                {novaMetaEntries.map(([key, value]) => (
+                  <MetaRow
+                    key={key}
+                    label={novaContextLabels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
+                    value={key === "timestamp" ? formatTimestamp(String(value)) : String(value)}
+                    mono={key === "discussion"}
+                  />
+                ))}
+              </div>
+            )}
+            {novaCtxFromXml && (
+              <div className="border-t border-border-subtle my-1 pt-1">
+                <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">Nova Context</p>
+                {Object.entries(novaCtxFromXml.attrs).map(([key, value]) => (
+                  <MetaRow
+                    key={key}
+                    label={novaContextLabels[key] || key}
+                    value={key === "timestamp" ? formatTimestamp(value) : value}
+                    mono={key === "discussion"}
+                  />
+                ))}
+                <button
+                  onClick={() => setShowRaw(!showRaw)}
+                  className="text-[10px] text-accent hover:text-accent-hover mt-2 cursor-pointer flex items-center gap-1"
+                >
+                  <i className={`fa-solid fa-chevron-${showRaw ? "down" : "right"} text-[8px]`} />
+                  {showRaw ? "Hide" : "Show"} raw context
+                </button>
+                {showRaw && (
+                  <pre className="text-[10px] font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-2.5 py-2 mt-1.5 leading-relaxed max-h-48 overflow-y-auto">
+                    {novaCtxFromXml.body}
+                  </pre>
+                )}
+              </div>
+            )}
+            {otherEntries.length === 0 && !block.senderAgentId && toolUseCount === 0 && imageCount === 0 && !hasAudio && !hasNovaCtx && (
               <p className="text-xs text-text-disabled italic pt-1">No additional metadata available.</p>
             )}
           </div>

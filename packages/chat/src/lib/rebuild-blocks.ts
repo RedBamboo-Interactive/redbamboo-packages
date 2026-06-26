@@ -29,12 +29,23 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
           }
         } catch { /* ignore parse errors */ }
       }
-      blocks.push({
+      const userBlock: MessageBlock = {
         id: `db-${rec.id}`,
         role: "user",
         parts: [part],
         timestamp: rec.timestamp,
-      })
+      }
+      if (rec.content) {
+        const ctxMatch = rec.content.match(/<nova-context\s+([^>]*)>/)
+        if (ctxMatch) {
+          const attrs: Record<string, unknown> = {}
+          const re = /(\w+)="([^"]*)"/g
+          let m: RegExpExecArray | null
+          while ((m = re.exec(ctxMatch[1])) !== null) attrs[m[1]] = m[2]
+          if (Object.keys(attrs).length > 0) userBlock.metadata = attrs
+        }
+      }
+      blocks.push(userBlock)
       continue
     }
 
