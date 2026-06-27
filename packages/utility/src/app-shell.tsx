@@ -20,6 +20,7 @@ import { AppHeader } from "./app-header"
 import { AboutDialog } from "./about-dialog"
 import { FeedbackDialog } from "./feedback-dialog"
 import type { FeedbackSubmission } from "./feedback-dialog"
+import { submitFeedbackViaSession } from "./submit-feedback"
 import { CommandProvider } from "./command-provider"
 import { CommandPalette, openCommandPalette } from "./command-palette"
 import { useCommand } from "./use-command"
@@ -71,7 +72,7 @@ function ShellCommands({
   })
 
   useCommand("app-shell:feedback", {
-    label: "Send Feedback",
+    label: "Report Feedback",
     description: "Report a problem or suggest an improvement",
     group: "App",
     action: onFeedback,
@@ -315,20 +316,35 @@ function AppShellInner({
   const openFeedback = useCallback(() => setFeedbackOpen(true), [])
   const openShare = useCallback(() => setShareOpen(true), [])
 
+  const feedbackHandler = config.onFeedbackSubmit ?? submitFeedbackViaSession
+
+  const captureScreenshot = useCallback(async (): Promise<string | undefined> => {
+    try {
+      const { toPng } = await import("html-to-image")
+      const dataUrl = await toPng(document.body, {
+        pixelRatio: Math.min(1, 1280 / window.innerWidth),
+        height: window.innerHeight,
+        canvasHeight: window.innerHeight,
+        filter: (node) => !(node instanceof HTMLElement && (node.hasAttribute("data-radix-portal") || node.hasAttribute("data-base-ui-portal"))),
+      })
+      return dataUrl.split(",")[1]
+    } catch {
+      return undefined
+    }
+  }, [])
+
   const handleFeedbackSubmit = useCallback(
     (submission: FeedbackSubmission) => {
-      if (!config.onFeedbackSubmit) return
-
       const id = toast({ title: "Sending feedback...", variant: "loading" })
 
-      config.onFeedbackSubmit(submission)
+      feedbackHandler(submission)
         .then((result) => {
           update(id, {
             title: "Feedback sent",
             description: result.title,
             variant: "success",
             action: result.issueUrl
-              ? { label: "View on GitHub", onClick: () => window.open(result.issueUrl, "_blank") }
+              ? { label: "View", onClick: () => window.open(result.issueUrl, "_blank") }
               : undefined,
           })
         })
@@ -340,7 +356,7 @@ function AppShellInner({
           })
         })
     },
-    [config.onFeedbackSubmit, toast, update],
+    [feedbackHandler, toast, update],
   )
 
   return (
@@ -383,12 +399,10 @@ function AppShellInner({
                     Install
                   </DropdownMenuItem>
                 )}
-                {config.onFeedbackSubmit && (
-                  <DropdownMenuItem onClick={openFeedback}>
-                    <i className="fa-solid fa-message size-4 text-center" />
-                    Send Feedback
-                  </DropdownMenuItem>
-                )}
+                <DropdownMenuItem onClick={openFeedback}>
+                  <i className="fa-solid fa-bug size-4 text-center" />
+                  Report Feedback
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={openCommandPalette}>
                   <i className="fa-solid fa-terminal size-4 text-center" />
                   Command Palette
@@ -439,7 +453,7 @@ function AppShellInner({
         onShare={openShare}
         onSwitchApp={openSwitcher}
         shareEnabled={!!shareUrl}
-        feedbackEnabled={!!config.onFeedbackSubmit}
+        feedbackEnabled={true}
         canInstall={canInstall}
         install={install}
       />
@@ -461,15 +475,14 @@ function AppShellInner({
         onOpenChange={setAboutOpen}
       />
 
-      {config.onFeedbackSubmit && (
-        <FeedbackDialog
-          app={{ name: config.name, version: config.version }}
-          customMetadata={config.feedbackMetadata}
-          onSubmit={handleFeedbackSubmit}
-          open={feedbackOpen}
-          onOpenChange={setFeedbackOpen}
-        />
-      )}
+      <FeedbackDialog
+        app={{ name: config.name, version: config.version }}
+        customMetadata={config.feedbackMetadata}
+        captureScreenshot={captureScreenshot}
+        onSubmit={handleFeedbackSubmit}
+        open={feedbackOpen}
+        onOpenChange={setFeedbackOpen}
+      />
 
       {shareUrl && (
         <ShareDialog

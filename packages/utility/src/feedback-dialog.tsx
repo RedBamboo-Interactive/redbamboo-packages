@@ -1,6 +1,5 @@
 import * as React from "react"
 import {
-  cn,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -8,11 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
   Button,
-  Label,
-  Separator,
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
 } from "@redbamboo/ui"
 
 // -- Types ------------------------------------------------------------------
@@ -30,10 +24,19 @@ export interface SystemInfo {
   colorScheme: "light" | "dark" | "unknown"
 }
 
+export interface FeedbackContext {
+  url: string
+  route: string
+  title: string
+  screenshot?: string
+  domContext?: Record<string, unknown>
+}
+
 export interface FeedbackSubmission {
-  category: FeedbackCategory
+  category?: FeedbackCategory
   description: string
   systemInfo: SystemInfo
+  context?: FeedbackContext
   customMetadata?: Record<string, string>
 }
 
@@ -45,15 +48,10 @@ export interface FeedbackResult {
 export interface FeedbackDialogProps {
   app: { name: string; version: string }
   customMetadata?: Record<string, string>
+  captureScreenshot?: () => Promise<string | undefined>
   onSubmit: (submission: FeedbackSubmission) => void
   open: boolean
   onOpenChange: (open: boolean) => void
-}
-
-export interface FeedbackButtonProps {
-  onClick: () => void
-  className?: string
-  variant?: "menu-item" | "button"
 }
 
 // -- Utilities --------------------------------------------------------------
@@ -116,64 +114,36 @@ export function collectSystemInfo(app: { name: string; version: string }): Syste
 
 // -- Components -------------------------------------------------------------
 
-const categories: { value: FeedbackCategory; label: string; icon: string }[] = [
-  { value: "bug", label: "Bug", icon: "fa-solid fa-bug" },
-  { value: "feature", label: "Feature", icon: "fa-solid fa-lightbulb" },
-  { value: "suggestion", label: "Suggestion", icon: "fa-solid fa-comment" },
-]
-
-function FeedbackButton({ onClick, className, variant = "button" }: FeedbackButtonProps) {
-  if (variant === "menu-item") {
-    return (
-      <button
-        type="button"
-        data-slot="feedback-button"
-        onClick={onClick}
-        className={cn(
-          "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-          className
-        )}
-      >
-        <i className="fa-solid fa-message size-4 text-center" />
-        Send Feedback
-      </button>
-    )
-  }
-
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      data-slot="feedback-button"
-      onClick={onClick}
-      className={className}
-    >
-      <i className="fa-solid fa-message" />
-      Send Feedback
-    </Button>
-  )
-}
-
 function FeedbackDialog({
   app,
   customMetadata,
+  captureScreenshot,
   onSubmit,
   open,
   onOpenChange,
 }: FeedbackDialogProps) {
-  const [category, setCategory] = React.useState<FeedbackCategory>("bug")
   const [description, setDescription] = React.useState("")
-  const [infoOpen, setInfoOpen] = React.useState(false)
+  const [screenshot, setScreenshot] = React.useState<string | undefined>()
+  const [contextData, setContextData] = React.useState<FeedbackContext | undefined>()
 
   const systemInfo = React.useMemo(() => collectSystemInfo(app), [app, open])
 
   React.useEffect(() => {
     if (open) {
-      setCategory("bug")
       setDescription("")
-      setInfoOpen(false)
+      setContextData({
+        url: location.href,
+        route: location.pathname + location.search,
+        title: document.title,
+      })
+      if (captureScreenshot) {
+        captureScreenshot().then(s => setScreenshot(s)).catch(() => {})
+      }
+    } else {
+      setScreenshot(undefined)
+      setContextData(undefined)
     }
-  }, [open])
+  }, [open, captureScreenshot])
 
   const canSubmit = description.trim().length > 0
 
@@ -182,9 +152,9 @@ function FeedbackDialog({
     if (!canSubmit) return
 
     onSubmit({
-      category,
       description: description.trim(),
       systemInfo,
+      context: contextData ? { ...contextData, screenshot } : undefined,
       customMetadata,
     })
 
@@ -200,87 +170,25 @@ function FeedbackDialog({
               <i className="fa-solid fa-message text-lg text-primary" />
             </div>
             <div>
-              <DialogTitle>Send Feedback</DialogTitle>
+              <DialogTitle>Report Feedback</DialogTitle>
               <DialogDescription>
-                Help us improve {app.name}
+                Report a bug, request a feature, or share a suggestion
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} data-slot="feedback-form" className="space-y-4">
-          <div className="space-y-2">
-            <Label>Category</Label>
-            <div data-slot="feedback-category" className="flex gap-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat.value}
-                  type="button"
-                  onClick={() => setCategory(cat.value)}
-                  className={cn(
-                    "flex flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
-                    category === cat.value
-                      ? "border-primary bg-primary-a10 text-primary"
-                      : "border-border text-muted-foreground hover:border-primary-a50 hover:text-foreground"
-                  )}
-                >
-                  <i className={cn(cat.icon, "text-[10px]")} />
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="feedback-description">What's on your mind?</Label>
-            <textarea
-              id="feedback-description"
-              data-slot="feedback-description"
-              className="w-full min-h-[120px] rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none resize-y placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring-a50 dark:bg-input-a30"
-              placeholder={
-                category === "bug"
-                  ? "Describe the issue you encountered..."
-                  : category === "feature"
-                    ? "Describe the feature you'd like to see..."
-                    : "Share your suggestion..."
-              }
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              required
-            />
-          </div>
-
-          <Separator />
-
-          <Collapsible open={infoOpen} onOpenChange={setInfoOpen}>
-            <CollapsibleTrigger className="flex w-full cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground">
-              <i className={cn("fa-solid fa-chevron-right text-[10px] transition-transform", infoOpen && "rotate-90")} />
-              System info included with submission
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div
-                data-slot="feedback-system-info"
-                className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 rounded-lg border border-border-a50 bg-muted-a30 px-3 py-2 text-xs text-muted-foreground"
-              >
-                <span className="font-medium">App</span>
-                <span>{systemInfo.appName} v{systemInfo.appVersion}</span>
-                <span className="font-medium">Browser</span>
-                <span>{systemInfo.browser}</span>
-                <span className="font-medium">OS</span>
-                <span>{systemInfo.os}</span>
-                <span className="font-medium">Screen</span>
-                <span>{systemInfo.screenResolution}</span>
-                <span className="font-medium">Theme</span>
-                <span>{systemInfo.colorScheme}</span>
-                {customMetadata && Object.entries(customMetadata).map(([key, value]) => (
-                  <React.Fragment key={key}>
-                    <span className="font-medium">{key}</span>
-                    <span>{value}</span>
-                  </React.Fragment>
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          <textarea
+            id="feedback-description"
+            data-slot="feedback-description"
+            autoFocus
+            className="w-full min-h-[160px] rounded-lg border border-input bg-transparent px-3 py-2.5 text-sm leading-relaxed transition-colors outline-none resize-y placeholder:text-muted-foreground focus-visible:border-foreground-a20 dark:bg-input-a30"
+            placeholder="What's on your mind?"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+          />
 
           <DialogFooter>
             <Button
@@ -305,4 +213,4 @@ function FeedbackDialog({
   )
 }
 
-export { FeedbackDialog, FeedbackButton }
+export { FeedbackDialog }

@@ -22,17 +22,18 @@ export type { AboutApp, AboutDialogProps } from "./about-dialog"
 
 export {
   FeedbackDialog,
-  FeedbackButton,
   collectSystemInfo,
 } from "./feedback-dialog"
 export type {
   FeedbackCategory,
+  FeedbackContext,
   FeedbackSubmission,
   FeedbackResult,
   SystemInfo,
   FeedbackDialogProps,
-  FeedbackButtonProps,
 } from "./feedback-dialog"
+
+export { submitFeedbackViaSession } from "./submit-feedback"
 
 export { AppHeader, AppHeaderBrand } from "./app-header"
 export type { AppHeaderProps, AppHeaderBrandProps } from "./app-header"
