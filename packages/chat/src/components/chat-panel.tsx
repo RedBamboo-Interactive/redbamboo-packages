@@ -43,6 +43,13 @@ export function ChatPanel(props: ChatPanelProps) {
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const planFileContent = useMemo(() => extractPlanFileContent(messages), [messages])
 
+  const lastAssistantIndex = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "assistant") return i
+    }
+    return -1
+  }, [messages])
+
   const scrollToEnd = useCallback(() => {
     if (!shouldAutoScroll.current || !scrollRef.current) return
     requestAnimationFrame(() => {
@@ -179,8 +186,7 @@ export function ChatPanel(props: ChatPanelProps) {
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden py-3">
         <div ref={contentRef} className="max-w-3xl mx-auto px-4 min-w-0">
           {messages.map((block: MessageBlockType, index: number) => {
-            const isLastAssistant = block.role === "assistant" &&
-              !messages.slice(index + 1).some((b: MessageBlockType) => b.role === "assistant")
+            const isLastAssistant = index === lastAssistantIndex
             const senderAgent = block.senderAgentId && props.resolveAgentInfo
               ? props.resolveAgentInfo(block.senderAgentId)
               : undefined

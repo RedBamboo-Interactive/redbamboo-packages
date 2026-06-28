@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { memo, useState, useRef, useEffect } from "react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
@@ -164,7 +164,7 @@ interface ChatMessageProps {
   senderAvatarUrl?: string
 }
 
-export function ChatMessage({
+export const ChatMessage = memo(function ChatMessage({
   block,
   isStreaming,
   isLastAssistantBlock,
@@ -306,7 +306,7 @@ export function ChatMessage({
       </div>
     </div>
   )
-}
+})
 
 type PartGroup =
   | { kind: "text"; parts: [MessagePart] }

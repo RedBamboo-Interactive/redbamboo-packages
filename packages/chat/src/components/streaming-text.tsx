@@ -75,13 +75,59 @@ function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: string; res
 
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
   const resolved = resolveSrc(src, resolve)
+  const [poster, setPoster] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!resolved) return
+    const video = document.createElement("video")
+    video.muted = true
+    video.preload = "auto"
+    let disposed = false
+
+    const capture = () => {
+      if (disposed) return
+      try {
+        const canvas = document.createElement("canvas")
+        canvas.width = 160
+        canvas.height = 160
+        const ctx = canvas.getContext("2d")
+        if (ctx) {
+          const vw = video.videoWidth || 160
+          const vh = video.videoHeight || 160
+          const scale = Math.max(160 / vw, 160 / vh)
+          const dw = vw * scale
+          const dh = vh * scale
+          ctx.drawImage(video, (160 - dw) / 2, (160 - dh) / 2, dw, dh)
+          setPoster(canvas.toDataURL("image/jpeg", 0.7))
+        }
+      } catch {}
+      video.pause()
+      video.removeAttribute("src")
+      video.load()
+    }
+
+    video.addEventListener("seeked", capture, { once: true })
+    video.addEventListener("loadeddata", () => { if (!disposed) video.currentTime = 0.1 }, { once: true })
+    video.src = resolved
+
+    return () => {
+      disposed = true
+      video.pause()
+      video.removeAttribute("src")
+      video.load()
+    }
+  }, [resolved])
 
   return (
     <button
       onClick={() => setLightbox({ src: resolved || "", alt: alt || "", type: "video" })}
       className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1 relative"
     >
-      <video src={resolved} muted autoPlay loop playsInline className="w-20 h-20 object-cover" />
+      {poster ? (
+        <img src={poster} alt={alt || ""} className="w-20 h-20 object-cover" />
+      ) : (
+        <div className="w-20 h-20 bg-overlay-6" />
+      )}
       <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="white" className="drop-shadow-md">
           <path d="M4 2.5v11l9-5.5z" />
