@@ -39,7 +39,7 @@ if (-not $SkipFrontend -and $LinkedPackages.Count -gt 0) {
         Push-Location "$packagesRoot\$pkg"
         try {
             $ErrorActionPreference = "Continue"
-            Invoke-Expression "$PackageManager run build"
+            cmd /c "$PackageManager run build 2>&1"
             $ErrorActionPreference = "Stop"
             if ($LASTEXITCODE -ne 0) { throw "Package @redbamboo/$pkg build failed" }
         } finally {
@@ -55,7 +55,7 @@ if (-not $SkipFrontend) {
     Push-Location $FrontendDir
     try {
         $ErrorActionPreference = "Continue"
-        Invoke-Expression "$PackageManager run build"
+        cmd /c "$PackageManager run build 2>&1"
         $ErrorActionPreference = "Stop"
         if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
     } finally {

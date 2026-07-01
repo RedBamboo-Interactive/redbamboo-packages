@@ -44,6 +44,7 @@ const COLOR = {
   result: "color-mix(in oklch, var(--color-accent-teal), black 30%)",
   error: "var(--color-accent-red)",
   nova: "rgb(236 72 153)",
+  event: "rgb(251 146 60)",
   fallback: "var(--color-text-disabled)",
 }
 
@@ -90,10 +91,15 @@ function novaEventIcon(type: string): string {
   }
 }
 
+function isEventPart(part: MessagePart): boolean {
+  return part.type === "tool_use" && !!part.toolName?.startsWith("event:")
+}
+
 export function getPartColor(part: MessagePart): string {
   if (part.type === "thinking") return COLOR.thinking
   if (part.type === "error") return COLOR.error
   if (part.type === "tool_result") return COLOR.result
+  if (isEventPart(part)) return COLOR.event
   if (part.type === "tool_use" && part.toolName) {
     if (matchTool(readOnlyTools, part.toolName)) return COLOR.readOnly
     if (matchTool(mutatingTools, part.toolName)) return COLOR.mutating
@@ -339,7 +345,7 @@ function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
 function partLabel(part: MessagePart): string {
   switch (part.type) {
     case "thinking": return "Thinking"
-    case "tool_use": return part.toolName || "Tool"
+    case "tool_use": return part.toolName?.startsWith("event:") ? part.toolName.slice(6) : part.toolName || "Tool"
     case "tool_result": return "Result"
     case "error": return "Error"
     default: return part.type
@@ -377,11 +383,12 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink }: {
       <div className="flex flex-wrap gap-[3px] py-1.5 px-0.5">
         {parts.filter(p => p.type !== "tool_result").map((part, i) => {
           const inFlight = isLive && !!part.isPartial
+          const event = isEventPart(part)
           return (
             <button
               key={i}
               onClick={() => handleClick(part)}
-              className={`w-2.5 h-2.5 rounded-[2px] transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
+              className={`${event ? "w-2.5 h-2.5 rounded-full" : "w-2.5 h-2.5 rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
               style={{ backgroundColor: getPartColor(part) }}
               title={partLabel(part)}
             />

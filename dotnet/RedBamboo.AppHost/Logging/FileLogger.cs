@@ -51,7 +51,8 @@ public class FileLogger : IAsyncDisposable
         _currentDate = dateStr;
 
         var filePath = Path.Combine(_logDirectory, $"{dateStr}.log");
-        _writer = new StreamWriter(filePath, append: true) { AutoFlush = false };
+        var stream = new FileStream(filePath, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        _writer = new StreamWriter(stream) { AutoFlush = false };
 
         CleanupOldFiles();
     }
