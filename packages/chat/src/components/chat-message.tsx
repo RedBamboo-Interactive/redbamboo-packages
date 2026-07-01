@@ -95,11 +95,23 @@ function isEventPart(part: MessagePart): boolean {
   return part.type === "tool_use" && !!part.toolName?.startsWith("event:")
 }
 
+function getEventMeta(part: MessagePart): { color?: string; icon?: string } {
+  if (!part.toolInput) return {}
+  try {
+    const data = JSON.parse(part.toolInput)
+    return { color: data.color ?? undefined, icon: data.icon ?? undefined }
+  } catch { return {} }
+}
+
 export function getPartColor(part: MessagePart): string {
   if (part.type === "thinking") return COLOR.thinking
   if (part.type === "error") return COLOR.error
   if (part.type === "tool_result") return COLOR.result
-  if (isEventPart(part)) return COLOR.event
+  if (isEventPart(part)) {
+    const meta = getEventMeta(part)
+    const raw = meta.color ?? COLOR.event
+    return `color-mix(in oklch, ${raw}, var(--color-text-disabled) 40%)`
+  }
   if (part.type === "tool_use" && part.toolName) {
     if (matchTool(readOnlyTools, part.toolName)) return COLOR.readOnly
     if (matchTool(mutatingTools, part.toolName)) return COLOR.mutating
@@ -380,7 +392,7 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink }: {
 
   return (
     <>
-      <div className="flex flex-wrap gap-[3px] py-1.5 px-0.5">
+      <div className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5">
         {parts.filter(p => p.type !== "tool_result").map((part, i) => {
           const inFlight = isLive && !!part.isPartial
           const event = isEventPart(part)
@@ -388,7 +400,7 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink }: {
             <button
               key={i}
               onClick={() => handleClick(part)}
-              className={`${event ? "w-2.5 h-2.5 rounded-full" : "w-2.5 h-2.5 rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
+              className={`w-2.5 h-2.5 ${event ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
               style={{ backgroundColor: getPartColor(part) }}
               title={partLabel(part)}
             />

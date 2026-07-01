@@ -297,7 +297,7 @@ export function Composer({
         : "Send a message..."
 
   return (
-    <div className="px-3 pt-3 pb-5 shrink-0">
+    <div data-slot="composer" className="px-3 pt-3 pb-5 shrink-0">
       {enableImageAttachments && (
         <input
           ref={imageInputRef}
