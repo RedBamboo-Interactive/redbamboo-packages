@@ -32,6 +32,13 @@ export interface ChatEvent {
   toolInput?: string | null
   toolResult?: string | null
   messageId?: string | null
+  /**
+   * Provider-neutral message identity minted server-side. All events of one
+   * assistant turn share it, and the persisted records carry the same value —
+   * so a block built from the stream and the same block rebuilt from history
+   * get the same id. Absent on events from older backends.
+   */
+  messageUid?: string | null
 }
 
 export interface ChatBackend {
@@ -219,4 +226,5 @@ export interface ChatPanelProps {
     disabled: boolean
     hasImages: boolean
   }) => React.ReactNode
+  renderMessageExtra?: (block: MessageBlock, index: number) => React.ReactNode
 }

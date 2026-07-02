@@ -180,6 +180,7 @@ interface ChatMessageProps {
   assistantAvatar?: string
   senderName?: string
   senderAvatarUrl?: string
+  extra?: React.ReactNode
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -196,6 +197,7 @@ export const ChatMessage = memo(function ChatMessage({
   assistantAvatar,
   senderName,
   senderAvatarUrl,
+  extra,
 }: ChatMessageProps) {
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
@@ -252,6 +254,7 @@ export const ChatMessage = memo(function ChatMessage({
             )}
           </div>
         </div>
+        {extra}
       </div>
     )
   }
@@ -322,6 +325,7 @@ export const ChatMessage = memo(function ChatMessage({
           />
         )}
       </div>
+      {extra}
     </div>
   )
 })

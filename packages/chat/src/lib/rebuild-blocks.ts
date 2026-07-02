@@ -9,6 +9,9 @@ export interface PersistedMessage {
   toolInput?: string | null
   toolResult?: string | null
   messageId?: string | null
+  /** Provider-neutral message uid (see ChatEvent.messageUid). Used as the
+   * block id when present so streamed and reloaded blocks share identity. */
+  messageUid?: string | null
   timestamp: string
   attachmentsJson?: string | null
 }
@@ -30,7 +33,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
         } catch { /* ignore parse errors */ }
       }
       const userBlock: MessageBlock = {
-        id: `db-${rec.id}`,
+        id: rec.messageUid || `db-${rec.id}`,
         role: "user",
         parts: [part],
         timestamp: rec.timestamp,
@@ -50,8 +53,10 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
     }
 
     if (!currentBlock || currentBlock.role !== "assistant") {
+      // Block identity = uid of the run's first record, matching the id the
+      // streaming path assigned when this block was first rendered live.
       currentBlock = {
-        id: `db-${rec.id}`,
+        id: rec.messageUid || `db-${rec.id}`,
         role: "assistant",
         parts: [],
         timestamp: rec.timestamp,

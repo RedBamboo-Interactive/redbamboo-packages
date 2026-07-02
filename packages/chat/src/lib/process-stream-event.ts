@@ -82,8 +82,10 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
   let lastBlock = msgs[msgs.length - 1]
 
   if (!lastBlock || lastBlock.role !== "assistant") {
+    // Prefer the server-minted message uid: the persisted records of this
+    // turn carry the same value, so the block keeps its id across a reload.
     lastBlock = {
-      id: `assistant-${Date.now()}-${partIdCounter++}`,
+      id: event.messageUid || `assistant-${Date.now()}-${partIdCounter++}`,
       role: "assistant",
       parts: [],
       timestamp: new Date().toISOString(),

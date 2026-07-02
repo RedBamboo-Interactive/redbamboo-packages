@@ -23,7 +23,7 @@ export function ChatPanel(props: ChatPanelProps) {
     resolveImageSrc, resolveFileLink, permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, draftStorageKey,
     speechBackend, handsFreeEnabled, pushToTalkKey,
-    renderStatusLine, renderComposerInlineAction,
+    renderStatusLine, renderComposerInlineAction, renderMessageExtra,
   } = props
 
   const voice = useVoiceInput(speechBackend ? {
@@ -206,6 +206,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 assistantAvatar={props.assistantAvatar}
                 senderName={senderAgent?.name}
                 senderAvatarUrl={senderAgent?.avatarUrl}
+                extra={renderMessageExtra?.(block, index)}
               />
             )
           })}
