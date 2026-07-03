@@ -227,4 +227,5 @@ export interface ChatPanelProps {
     hasImages: boolean
   }) => React.ReactNode
   renderMessageExtra?: (block: MessageBlock, index: number) => React.ReactNode
+  renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode
 }

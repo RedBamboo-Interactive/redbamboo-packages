@@ -181,6 +181,7 @@ interface ChatMessageProps {
   senderName?: string
   senderAvatarUrl?: string
   extra?: React.ReactNode
+  sideActions?: React.ReactNode
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -198,6 +199,7 @@ export const ChatMessage = memo(function ChatMessage({
   senderName,
   senderAvatarUrl,
   extra,
+  sideActions,
 }: ChatMessageProps) {
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
@@ -224,13 +226,18 @@ export const ChatMessage = memo(function ChatMessage({
     }
 
     return (
-      <div className="mb-3 msg-enter-user group/msg">
+      <div className="mb-3 msg-enter-user group/msg relative">
         {contextData && (
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
+        <div className="absolute left-full ml-1.5 top-0 flex flex-col items-center gap-0.5">
+          {sideActions}
+          <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150">
+            <MessageMetadata block={block} inline />
+          </div>
+        </div>
         <div className="flex justify-end">
           <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
-            <MessageMetadata block={block} />
             {senderName && (
               <div className="flex items-center gap-1.5 mb-1.5">
                 {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
@@ -280,9 +287,14 @@ export const ChatMessage = memo(function ChatMessage({
   }
 
   return (
-    <div className="mb-4 min-w-0 group/msg">
+    <div className="mb-4 min-w-0 group/msg relative">
+      <div className="absolute right-full mr-1.5 top-0 flex flex-col items-center gap-0.5">
+        {sideActions}
+        <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150">
+          {!isLiveBlock && <MessageMetadata block={block} inline />}
+        </div>
+      </div>
       <div className="relative max-w-full min-w-0 overflow-hidden">
-        {!isLiveBlock && <MessageMetadata block={block} />}
         {senderName && (
           <div className="flex items-center gap-1.5 mb-1.5">
             {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
@@ -969,7 +981,7 @@ function formatTimestamp(iso: string): string {
 
 const novaContextKeys = new Set(["timestamp", "day", "device", "input", "discussion", "agent", "outfit", "activeDiscussionCount", "archivedDiscussionCount", "otherAgentDiscussionCount"])
 
-function MessageMetadata({ block }: { block: MessageBlock }) {
+function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: boolean }) {
   const [open, setOpen] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
   const meta = block.metadata
@@ -987,10 +999,13 @@ function MessageMetadata({ block }: { block: MessageBlock }) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="absolute top-1 right-1 opacity-20 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-40 hover:!opacity-100 transition-opacity duration-150 p-1 cursor-pointer z-10"
+        className={inline
+          ? "w-6 h-6 flex items-center justify-center rounded-full bg-overlay-4 hover:bg-overlay-8 text-text-disabled hover:text-text-muted transition-colors cursor-pointer"
+          : "absolute top-1 right-1 opacity-20 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-40 hover:!opacity-100 transition-opacity duration-150 p-1 cursor-pointer z-10"
+        }
         title="Message info"
       >
-        <i className="fa-solid fa-circle-info text-[10px] text-text-muted" />
+        <i className={inline ? "fa-light fa-circle-info text-[11px]" : "fa-solid fa-circle-info text-[10px] text-text-muted"} />
       </button>
 
       <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
