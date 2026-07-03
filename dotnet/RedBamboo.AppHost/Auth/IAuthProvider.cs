@@ -12,5 +12,8 @@ public record ExternalIdentity(
     string Email,
     string? Name,
     string? AvatarUrl,
-    string Provider
+    string Provider,
+    string? AccessToken = null,
+    string? RefreshToken = null,
+    int ExpiresIn = 0
 );

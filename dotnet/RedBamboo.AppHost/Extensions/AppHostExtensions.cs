@@ -1,3 +1,4 @@
+using System.Net.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
@@ -90,6 +91,19 @@ public static class AppHostExtensions
             services.AddSingleton(options.Google);
             services.AddHttpClient<GoogleAuthProvider>();
             services.AddSingleton<IAuthProvider>(sp => sp.GetRequiredService<GoogleAuthProvider>());
+
+            services.AddSingleton<GoogleTokenStore>(sp =>
+            {
+                var googleOpts = sp.GetRequiredService<GoogleAuthOptions>();
+                var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+                return new GoogleTokenStore(googleOpts, httpClient);
+            });
+            services.AddSingleton<GoogleApiProxy>(sp =>
+            {
+                var tokenStore = sp.GetRequiredService<GoogleTokenStore>();
+                var httpClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient();
+                return new GoogleApiProxy(tokenStore, httpClient);
+            });
         }
 
         services.AddSingleton<AuthenticatedHttpClientFactory>();

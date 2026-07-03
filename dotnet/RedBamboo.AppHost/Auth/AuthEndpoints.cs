@@ -81,6 +81,19 @@ public static class AuthEndpoints
                 catch { /* RedLeaf may be unavailable */ }
 
                 var userId = user?.Id ?? identity.ProviderId;
+
+                if (identity.AccessToken is not null)
+                {
+                    var tokenStore = sp.GetService<GoogleTokenStore>();
+                    if (tokenStore is not null)
+                    {
+                        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(
+                            identity.ExpiresIn > 0 ? identity.ExpiresIn - 60 : 3540);
+                        try { await tokenStore.StoreTokensAsync(userId, identity.AccessToken, identity.RefreshToken, expiresAt); }
+                        catch { /* non-fatal — login still proceeds */ }
+                    }
+                }
+
                 var email = user?.Email ?? identity.Email;
                 var name = user?.Name ?? identity.Name;
                 var roles = user?.Roles ?? ["admin"];
@@ -213,6 +226,62 @@ public static class AuthEndpoints
 
                 return Results.Ok(new { id = sub, email, name, roles, avatarUrl });
             });
+
+        registry.MapGet("/auth/google/calendar", "Get Google Calendar events for the current user",
+            async (HttpContext context, IServiceProvider sp) =>
+            {
+                var proxy = sp.GetService<GoogleApiProxy>();
+                if (proxy is null)
+                    return Results.Json(new { error = "not_configured" }, statusCode: 503);
+
+                var userId = context.User.FindFirstValue("sub");
+                if (userId is null)
+                    return Results.Json(new { error = "not_authenticated" }, statusCode: 401);
+
+                DateTimeOffset timeMin, timeMax;
+                if (!DateTimeOffset.TryParse(context.Request.Query["timeMin"].FirstOrDefault(), out timeMin))
+                    timeMin = DateTimeOffset.UtcNow;
+                if (!DateTimeOffset.TryParse(context.Request.Query["timeMax"].FirstOrDefault(), out timeMax))
+                    timeMax = timeMin.AddDays(7);
+
+                try
+                {
+                    var events = await proxy.GetCalendarEventsAsync(userId, timeMin, timeMax);
+                    return Results.Ok(events);
+                }
+                catch (Exception ex)
+                {
+                    return Results.Json(new { error = "upstream_error", message = ex.Message }, statusCode: 502);
+                }
+            })
+            .WithParam("timeMin", "string", description: "ISO 8601 start time (defaults to now)")
+            .WithParam("timeMax", "string", description: "ISO 8601 end time (defaults to now + 7 days)");
+
+        registry.MapGet("/auth/google/fitness/steps", "Get step count from Google Fit for a given date",
+            async (HttpContext context, IServiceProvider sp) =>
+            {
+                var proxy = sp.GetService<GoogleApiProxy>();
+                if (proxy is null)
+                    return Results.Json(new { error = "not_configured" }, statusCode: 503);
+
+                var userId = context.User.FindFirstValue("sub");
+                if (userId is null)
+                    return Results.Json(new { error = "not_authenticated" }, statusCode: 401);
+
+                if (!DateOnly.TryParse(context.Request.Query["date"].FirstOrDefault(), out var date))
+                    date = DateOnly.FromDateTime(DateTime.UtcNow);
+
+                try
+                {
+                    var steps = await proxy.GetStepsAsync(userId, date);
+                    return Results.Ok(new { date = date.ToString("yyyy-MM-dd"), steps });
+                }
+                catch (Exception ex)
+                {
+                    return Results.Json(new { error = "upstream_error", message = ex.Message }, statusCode: 502);
+                }
+            })
+            .WithParam("date", "string", description: "Date in YYYY-MM-DD format (defaults to today)");
     }
 
     private static IResult ClearAuthCookiesAndReturn(HttpContext context, AuthOptions options, IResult result)

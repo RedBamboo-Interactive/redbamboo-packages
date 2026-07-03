@@ -20,12 +20,21 @@ public sealed class GoogleAuthProvider : IAuthProvider
 
     public string GetAuthorizeUrl(string redirectUri, string state)
     {
+        var scopes = new List<string>
+        {
+            "openid email profile",
+            "https://www.googleapis.com/auth/calendar.readonly",
+            "https://www.googleapis.com/auth/fitness.activity.read"
+        };
+        scopes.AddRange(_options.ExtraScopes);
+
         var query = string.Join("&",
             $"client_id={Uri.EscapeDataString(_options.ClientId)}",
             $"redirect_uri={Uri.EscapeDataString(redirectUri)}",
             $"response_type=code",
-            $"scope={Uri.EscapeDataString("openid email profile")}",
+            $"scope={Uri.EscapeDataString(string.Join(" ", scopes))}",
             $"access_type=offline",
+            $"prompt=consent",
             $"state={Uri.EscapeDataString(state)}"
         );
         return $"https://accounts.google.com/o/oauth2/v2/auth?{query}";
@@ -55,12 +64,19 @@ public sealed class GoogleAuthProvider : IAuthProvider
         };
         var googlePayload = await GoogleJsonWebSignature.ValidateAsync(idToken, validationSettings);
 
+        var accessToken = json.TryGetProperty("access_token", out var at) ? at.GetString() : null;
+        var refreshToken = json.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null;
+        var expiresIn = json.TryGetProperty("expires_in", out var ei) ? ei.GetInt32() : 3600;
+
         return new ExternalIdentity(
             ProviderId: googlePayload.Subject,
             Email: googlePayload.Email,
             Name: googlePayload.Name,
             AvatarUrl: googlePayload.Picture,
-            Provider: Name
+            Provider: Name,
+            AccessToken: accessToken,
+            RefreshToken: refreshToken,
+            ExpiresIn: expiresIn
         );
     }
 }
