@@ -27,6 +27,7 @@ import { useCommand } from "./use-command"
 import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
+import type { SwitcherApp } from "./app-switcher"
 import { askNova, scrapeDOMContext } from "./ask-nova"
 import type { AskNovaContext } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
@@ -137,6 +138,28 @@ function SuiteAppCommands() {
     <>
       {SUITE_APPS.map((app) => (
         <SuiteAppCommand key={app.port} app={app} enabled={app.port !== current?.port} />
+      ))}
+    </>
+  )
+}
+
+function ProvidedAppCommand({ app }: { app: SwitcherApp }) {
+  useCommand(`app-shell:open-${app.id}`, {
+    label: `Open ${app.name}`,
+    description: app.description,
+    group: "Apps",
+    keywords: ["switch", "app", app.name.toLowerCase()],
+    action: () => app.onSelect?.(),
+    enabled: !app.disabled && !app.active && !!app.onSelect,
+  })
+  return null
+}
+
+function ProvidedAppCommands({ apps }: { apps: SwitcherApp[] }) {
+  return (
+    <>
+      {apps.map((app) => (
+        <ProvidedAppCommand key={app.id} app={app} />
       ))}
     </>
   )
@@ -300,6 +323,7 @@ function AppShellInner({
   menuItems,
   children,
   className,
+  switcherApps,
 }: AppShellProps) {
   const { user, logout } = useAuth()
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -445,7 +469,7 @@ function AppShellInner({
         {children}
       </div>
 
-      <AppSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} />
+      <AppSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} apps={switcherApps} />
 
       <ShellCommands
         onAbout={openAbout}
@@ -457,7 +481,7 @@ function AppShellInner({
         canInstall={canInstall}
         install={install}
       />
-      <SuiteAppCommands />
+      {switcherApps ? <ProvidedAppCommands apps={switcherApps} /> : <SuiteAppCommands />}
       <AskNovaCommands appName={config.name} />
       <CommandPalette />
 

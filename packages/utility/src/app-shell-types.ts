@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import type { FeedbackSubmission, FeedbackResult } from "./feedback-dialog"
+import type { SwitcherApp } from "./app-switcher"
 
 export interface AppShellBrand {
   icon: string
@@ -41,4 +42,10 @@ export interface AppShellProps {
   menuItems?: ReactNode
   children: ReactNode
   className?: string
+  /**
+   * Host-supplied app list for the switcher (and its "Open …" commands).
+   * Replaces Red Suite port discovery — used by Leaf, where apps are
+   * plugin routes on the same origin.
+   */
+  switcherApps?: SwitcherApp[]
 }

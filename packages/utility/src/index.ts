@@ -13,7 +13,13 @@ export { useCommand } from "./use-command"
 export { CommandPalette, openCommandPalette } from "./command-palette"
 export { AppShell } from "./app-shell"
 export { AppSwitcher } from "./app-switcher"
-export type { AppSwitcherProps } from "./app-switcher"
+export type { AppSwitcherProps, SwitcherApp, SwitcherAppStatus } from "./app-switcher"
+
+export type {
+  LeafAppPlugin,
+  LeafPluginCommand,
+  LeafPluginCommandContext,
+} from "./leaf-plugin"
 export { ShareDialog } from "./share-dialog"
 export { useInstallPrompt } from "./use-install-prompt"
 
