@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect } from "react"
+import { memo, useState, useRef, useEffect, useCallback } from "react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
@@ -201,6 +201,38 @@ export const ChatMessage = memo(function ChatMessage({
   extra,
   sideActions,
 }: ChatMessageProps) {
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const didFire = useRef(false)
+
+  const onTouchStart = useCallback(() => {
+    didFire.current = false
+    longPressTimer.current = setTimeout(() => {
+      didFire.current = true
+      setActionsOpen(true)
+    }, 500)
+  }, [])
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+  }, [])
+
+  const onContextMenu = useCallback((e: React.MouseEvent) => {
+    if (didFire.current) e.preventDefault()
+  }, [])
+
+  useEffect(() => {
+    if (!actionsOpen) return
+    const dismiss = () => setActionsOpen(false)
+    const id = setTimeout(() => {
+      document.addEventListener("touchstart", dismiss, { once: true })
+      document.addEventListener("mousedown", dismiss, { once: true })
+    }, 0)
+    return () => { clearTimeout(id); document.removeEventListener("touchstart", dismiss); document.removeEventListener("mousedown", dismiss) }
+  }, [actionsOpen])
+
+  const touchProps = { onTouchStart, onTouchEnd: cancelLongPress, onTouchMove: cancelLongPress, onContextMenu }
+
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
     const content = rawContent
@@ -226,16 +258,10 @@ export const ChatMessage = memo(function ChatMessage({
     }
 
     return (
-      <div className="mb-3 msg-enter-user group/msg relative">
+      <div className="mb-3 msg-enter-user group/msg relative" data-actions={actionsOpen || undefined} {...touchProps}>
         {contextData && (
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
-        <div className="absolute left-full ml-1.5 top-0 flex flex-col items-center gap-0.5">
-          {sideActions}
-          <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150">
-            <MessageMetadata block={block} inline />
-          </div>
-        </div>
         <div className="flex justify-end">
           <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
             {senderName && (
@@ -259,6 +285,12 @@ export const ChatMessage = memo(function ChatMessage({
             {content && (
               <p className="text-sm whitespace-pre-wrap break-words font-serif"><Emojify text={content} /></p>
             )}
+          </div>
+        </div>
+        <div className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex flex-row-reverse items-center gap-1 mt-1 md:mt-0 md:absolute md:left-full md:ml-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
+          {sideActions}
+          <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
+            <MessageMetadata block={block} inline />
           </div>
         </div>
         {extra}
@@ -287,13 +319,7 @@ export const ChatMessage = memo(function ChatMessage({
   }
 
   return (
-    <div className="mb-4 min-w-0 group/msg relative">
-      <div className="absolute right-full mr-1.5 top-0 flex flex-col items-center gap-0.5">
-        {sideActions}
-        <div className="opacity-0 group-hover/msg:opacity-100 transition-opacity duration-150">
-          {!isLiveBlock && <MessageMetadata block={block} inline />}
-        </div>
-      </div>
+    <div className="mb-4 min-w-0 group/msg relative" data-actions={actionsOpen || undefined} {...touchProps}>
       <div className="relative max-w-full min-w-0 overflow-hidden">
         {senderName && (
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -336,6 +362,12 @@ export const ChatMessage = memo(function ChatMessage({
             onAnswer={onAnswerQuestion}
           />
         )}
+      </div>
+      <div className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex flex-row items-center gap-1 mt-1 md:mt-0 md:absolute md:right-full md:mr-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
+        {sideActions}
+        <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
+          {!isLiveBlock && <MessageMetadata block={block} inline />}
+        </div>
       </div>
       {extra}
     </div>
