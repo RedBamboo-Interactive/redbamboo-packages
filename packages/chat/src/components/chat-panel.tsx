@@ -81,22 +81,33 @@ export function ChatPanel(props: ChatPanelProps) {
   const startIndexRef = useRef(startIndex)
   startIndexRef.current = startIndex
   const expandAnchorRef = useRef<{ height: number; top: number } | null>(null)
+  const snapToBottomRef = useRef(false)
 
   const revealEarlier = useCallback(() => {
     const el = scrollRef.current
-    if (!el || startIndexRef.current === 0 || expandAnchorRef.current) return
+    if (!el || startIndexRef.current === 0 || expandAnchorRef.current || snapToBottomRef.current) return
     expandAnchorRef.current = { height: el.scrollHeight, top: el.scrollTop }
     setStartIndex(i => Math.max(0, i - CHUNK))
   }, [])
 
-  // Keep the viewport anchored on the previously-visible message when older
-  // ones are prepended above it.
+  // After a window change: keep the viewport anchored on the previously-visible
+  // message when older ones are prepended above it, or jump to the bottom when
+  // the window just snapped back to the tail.
   useLayoutEffect(() => {
-    const anchor = expandAnchorRef.current
-    if (!anchor) return
-    expandAnchorRef.current = null
     const el = scrollRef.current
-    if (el) el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
+    // Snap wins over a pending anchor restore: when both were queued in the
+    // same batch (reveal then scroll-to-bottom), the click is the later intent.
+    if (snapToBottomRef.current) {
+      snapToBottomRef.current = false
+      expandAnchorRef.current = null
+      if (el) el.scrollTop = el.scrollHeight
+      return
+    }
+    const anchor = expandAnchorRef.current
+    if (anchor) {
+      expandAnchorRef.current = null
+      if (el) el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
+    }
   }, [startIndex])
 
   const lastAssistantIndex = useMemo(() => {
@@ -142,9 +153,18 @@ export function ChatPanel(props: ChatPanelProps) {
   const scrollToBottom = useCallback(() => {
     shouldAutoScroll.current = true
     setShowScrollBtn(false)
-    // Release any history revealed while scrolled up.
-    setStartIndex(Math.max(0, messageCountRef.current - WINDOW))
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
+    const tail = Math.max(0, messageCountRef.current - WINDOW)
+    if (startIndexRef.current !== tail) {
+      // History was revealed: the DOM above the viewport is about to be
+      // released, so a smooth scroll started now would animate toward a stale
+      // scrollHeight (and pass through the near-top zone, re-triggering
+      // revealEarlier). Snap the window and jump in the layout effect instead,
+      // after the re-render, with revealEarlier suppressed until then.
+      snapToBottomRef.current = true
+      setStartIndex(tail)
+    } else {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
+    }
   }, [])
 
   const defaultVoiceAction = !speechBackend ? null : (
