@@ -339,4 +339,10 @@ export interface Fetcher {
 export interface GitHubClientConfig {
   rootPath: string
   repo?: string
+  /**
+   * Base path for endpoints reached outside the Fetcher (EventSource streams).
+   * Defaults to "/api" — hosts that mount the endpoints elsewhere (e.g. the
+   * CodeRed Leaf plugin at /api/apps/codered) pass their prefix here.
+   */
+  apiBase?: string
 }

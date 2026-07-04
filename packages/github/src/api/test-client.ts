@@ -89,7 +89,7 @@ export function createTestClient(fetcher: Fetcher, config: GitHubClientConfig): 
       })}`),
 
     streamTestRun: (id, onEvent, onError) => {
-      const es = new EventSource(`/api/tests/${id}/stream?${base()}`)
+      const es = new EventSource(`${config.apiBase ?? "/api"}/tests/${id}/stream?${base()}`)
       es.onmessage = (e) => {
         try {
           onEvent(JSON.parse(e.data))
