@@ -161,7 +161,9 @@ public static class AppHostExtensions
         string appName,
         Func<TunnelConfig> getTunnelConfig,
         LogService? logService = null,
-        Dictionary<string, string>? proxyRoutes = null)
+        Dictionary<string, string>? proxyRoutes = null,
+        bool mapRemoteAccess = true,
+        bool mapAutoStart = true)
     {
         var broadcaster = app.Services.GetService<WebSocketBroadcaster>();
         var telemetry = app.Services.GetService<TelemetryService>();
@@ -170,9 +172,13 @@ public static class AppHostExtensions
             hasLogs: logService is not null,
             hasTelemetry: telemetry is not null,
             proxyRoutes: proxyRoutes);
-        RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
+        // Headless children (e.g. Compute under the Leaf kernel) skip these: the parent
+        // owns the one tunnel and the one autostart entry.
+        if (mapRemoteAccess)
+            RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
 #if WINDOWS
-        Startup.AutoStartEndpoints.MapAutoStartEndpoints(app, appName);
+        if (mapAutoStart)
+            Startup.AutoStartEndpoints.MapAutoStartEndpoints(app, appName);
 #endif
 
         if (logService is not null)
