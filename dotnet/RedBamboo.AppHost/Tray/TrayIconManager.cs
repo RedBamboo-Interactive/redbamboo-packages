@@ -66,6 +66,15 @@ public class TrayIconManager : IDisposable
         };
         menu.Items.Add(statusItem);
 
+        if (_config.GetSubMenuEntries != null)
+        {
+            menu.Items.Add(new System.Windows.Controls.MenuItem
+            {
+                Header = _config.SubMenuHeader ?? "Apps",
+                Tag = "submenu",
+            });
+        }
+
         if (_config.EnableAutoStartToggle)
         {
             menu.Items.Add(new System.Windows.Controls.Separator());
@@ -131,12 +140,41 @@ public class TrayIconManager : IDisposable
             header = "Running";
         }
 
+        IReadOnlyList<TrayMenuEntry>? subMenuEntries = null;
+        if (_config.GetSubMenuEntries != null)
+            subMenuEntries = await _config.GetSubMenuEntries();
+
         foreach (System.Windows.Controls.MenuItem item in menu.Items.OfType<System.Windows.Controls.MenuItem>())
         {
             if (item.Tag?.ToString() == "status")
                 item.Header = header;
             else if (item.Tag?.ToString() == "autostart")
                 item.IsChecked = StartupManager.IsEnabled(_config.AppName);
+            else if (item.Tag?.ToString() == "submenu" && subMenuEntries != null)
+                RebuildSubMenu(item, subMenuEntries);
+        }
+    }
+
+    private static void RebuildSubMenu(System.Windows.Controls.MenuItem parent, IReadOnlyList<TrayMenuEntry> entries)
+    {
+        parent.Items.Clear();
+
+        if (entries.Count == 0)
+        {
+            parent.Items.Add(new System.Windows.Controls.MenuItem { Header = "None", IsEnabled = false });
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            var child = new System.Windows.Controls.MenuItem
+            {
+                Header = entry.Label,
+                IsEnabled = entry.Activate != null,
+            };
+            if (entry.Activate is { } activate)
+                child.Click += (_, _) => activate();
+            parent.Items.Add(child);
         }
     }
 
