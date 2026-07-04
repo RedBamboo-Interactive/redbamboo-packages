@@ -143,11 +143,23 @@ function isPlanFile(path: string): boolean {
 }
 
 export function extractPlanFileContent(messages: MessageBlock[]): string | null {
+  // Cheap containment pre-check: this runs on every stream event, and parsing
+  // every tool input of a long conversation is what makes it expensive.
+  const mayHavePlan = messages.some((block) =>
+    block.role === "assistant" && block.parts.some((part) =>
+      part.type === "tool_use"
+      && (part.toolName === "Write" || part.toolName === "Edit")
+      && part.toolInput?.includes(".claude"),
+    ),
+  )
+  if (!mayHavePlan) return null
+
   let planContent: string | null = null
   for (const block of messages) {
     if (block.role !== "assistant") continue
     for (const part of block.parts) {
       if (part.type !== "tool_use" || !part.toolInput) continue
+      if (part.toolName !== "Write" && part.toolName !== "Edit") continue
       try {
         const input = JSON.parse(part.toolInput)
         if (part.toolName === "Write" && isPlanFile(input.file_path || "")) {
@@ -182,6 +194,15 @@ interface ChatMessageProps {
   senderAvatarUrl?: string
   extra?: React.ReactNode
   sideActions?: React.ReactNode
+  /** Index of the block in the full message list, for the render callbacks. */
+  blockIndex?: number
+  /**
+   * Render-function alternatives to `extra`/`sideActions`. Prefer these from
+   * list renderers: element props are recreated every parent render and defeat
+   * this component's memo(), while a stable function keeps it effective.
+   */
+  renderExtra?: (block: MessageBlock, index: number) => React.ReactNode
+  renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -200,7 +221,12 @@ export const ChatMessage = memo(function ChatMessage({
   senderAvatarUrl,
   extra,
   sideActions,
+  blockIndex = 0,
+  renderExtra,
+  renderSideActions,
 }: ChatMessageProps) {
+  const extraNode = extra ?? renderExtra?.(block, blockIndex)
+  const sideActionsNode = sideActions ?? renderSideActions?.(block, blockIndex)
   const [actionsOpen, setActionsOpen] = useState(false)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didFire = useRef(false)
@@ -288,12 +314,12 @@ export const ChatMessage = memo(function ChatMessage({
           </div>
         </div>
         <div className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex flex-row-reverse items-center gap-1 mt-1 md:mt-0 md:absolute md:left-full md:ml-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
-          {sideActions}
+          {sideActionsNode}
           <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
             <MessageMetadata block={block} inline />
           </div>
         </div>
-        {extra}
+        {extraNode}
       </div>
     )
   }
@@ -364,12 +390,12 @@ export const ChatMessage = memo(function ChatMessage({
         )}
       </div>
       <div className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex flex-row items-center gap-1 mt-1 md:mt-0 md:absolute md:right-full md:mr-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
-        {sideActions}
+        {sideActionsNode}
         <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
           {!isLiveBlock && <MessageMetadata block={block} inline />}
         </div>
       </div>
-      {extra}
+      {extraNode}
     </div>
   )
 })

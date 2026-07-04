@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react"
 import type { ChatPanelProps, MessageBlock as MessageBlockType } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
@@ -7,6 +7,16 @@ import { Composer } from "./composer"
 import { StreamingStatusLine } from "./streaming-status-line"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
+
+// Windowed rendering: long conversations are read from the tail, so only the
+// last WINDOW blocks are mounted. Scrolling up (or the "earlier messages"
+// pill) reveals CHUNK more; re-pinning to the bottom releases them again.
+const WINDOW = 40
+const CHUNK = 80
+
+function hasExitPlanPart(block: MessageBlockType): boolean {
+  return block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
+}
 
 export function ChatPanel(props: ChatPanelProps) {
   const internal = useChatStream(props.backend ?? null)
@@ -43,6 +53,52 @@ export function ChatPanel(props: ChatPanelProps) {
   const [showScrollBtn, setShowScrollBtn] = useState(false)
   const planFileContent = useMemo(() => extractPlanFileContent(messages), [messages])
 
+  // --- Render window over the message list ---
+  const [startIndex, setStartIndex] = useState(() => Math.max(0, messages.length - WINDOW))
+  const sessionKey = sessionId ?? null
+  const [prevSessionKey, setPrevSessionKey] = useState(sessionKey)
+  const [prevLen, setPrevLen] = useState(messages.length)
+
+  // Render-time adjustments (never paint a stale window):
+  // - conversation switch → jump to the tail, pinned to the bottom
+  // - list grows while pinned → slide the window, releasing old blocks
+  // - list shrinks below the window start (clear/reload) → clamp
+  if (sessionKey !== prevSessionKey) {
+    setPrevSessionKey(sessionKey)
+    setPrevLen(messages.length)
+    setStartIndex(Math.max(0, messages.length - WINDOW))
+    shouldAutoScroll.current = true
+  } else if (messages.length !== prevLen) {
+    setPrevLen(messages.length)
+    const tail = Math.max(0, messages.length - WINDOW)
+    if (shouldAutoScroll.current) {
+      if (startIndex !== tail) setStartIndex(tail)
+    } else if (startIndex >= messages.length) {
+      setStartIndex(tail)
+    }
+  }
+
+  const startIndexRef = useRef(startIndex)
+  startIndexRef.current = startIndex
+  const expandAnchorRef = useRef<{ height: number; top: number } | null>(null)
+
+  const revealEarlier = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || startIndexRef.current === 0 || expandAnchorRef.current) return
+    expandAnchorRef.current = { height: el.scrollHeight, top: el.scrollTop }
+    setStartIndex(i => Math.max(0, i - CHUNK))
+  }, [])
+
+  // Keep the viewport anchored on the previously-visible message when older
+  // ones are prepended above it.
+  useLayoutEffect(() => {
+    const anchor = expandAnchorRef.current
+    if (!anchor) return
+    expandAnchorRef.current = null
+    const el = scrollRef.current
+    if (el) el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
+  }, [startIndex])
+
   const lastAssistantIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "assistant") return i
@@ -78,11 +134,16 @@ export function ChatPanel(props: ChatPanelProps) {
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
     shouldAutoScroll.current = atBottom
     setShowScrollBtn(!atBottom)
-  }, [])
+    if (el.scrollTop < 300) revealEarlier()
+  }, [revealEarlier])
 
+  const messageCountRef = useRef(messages.length)
+  messageCountRef.current = messages.length
   const scrollToBottom = useCallback(() => {
     shouldAutoScroll.current = true
     setShowScrollBtn(false)
+    // Release any history revealed while scrolled up.
+    setStartIndex(Math.max(0, messageCountRef.current - WINDOW))
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [])
 
@@ -179,13 +240,28 @@ export function ChatPanel(props: ChatPanelProps) {
     )
   }
 
+  const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
+
   return (
     <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
       {header && <div className="shrink-0">{header}</div>}
 
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden py-3">
         <div ref={contentRef} className="max-w-3xl mx-auto px-4 min-w-0">
-          {messages.map((block: MessageBlockType, index: number) => {
+          {startIndex > 0 && (
+            <button
+              onClick={revealEarlier}
+              className="w-full flex items-center gap-3 py-2 mb-2 text-[11px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+              title="Show earlier messages"
+            >
+              <span className="h-px flex-1 bg-overlay-6" />
+              <i className="fa-solid fa-chevron-up text-[9px]" />
+              <span>{startIndex} earlier message{startIndex === 1 ? "" : "s"}</span>
+              <span className="h-px flex-1 bg-overlay-6" />
+            </button>
+          )}
+          {visibleMessages.map((block: MessageBlockType, i: number) => {
+            const index = startIndex + i
             const isLastAssistant = index === lastAssistantIndex
             const senderAgent = block.senderAgentId && props.resolveAgentInfo
               ? props.resolveAgentInfo(block.senderAgentId)
@@ -194,11 +270,12 @@ export function ChatPanel(props: ChatPanelProps) {
               <ChatMessage
                 key={block.id}
                 block={block}
-                isStreaming={isStreaming}
+                blockIndex={index}
+                isStreaming={isStreaming && isLastAssistant}
                 isLastAssistantBlock={isLastAssistant}
                 permissionMode={permissionMode}
                 onExecutePlan={onExecutePlan}
-                planFileContent={planFileContent}
+                planFileContent={hasExitPlanPart(block) ? planFileContent : null}
                 isPendingQuestion={isLastAssistant && !!pendingQuestion}
                 onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
                 resolveImageSrc={resolveImageSrc}
@@ -206,8 +283,8 @@ export function ChatPanel(props: ChatPanelProps) {
                 assistantAvatar={props.assistantAvatar}
                 senderName={senderAgent?.name}
                 senderAvatarUrl={senderAgent?.avatarUrl}
-                extra={renderMessageExtra?.(block, index)}
-                sideActions={renderSideActions?.(block, index)}
+                renderExtra={renderMessageExtra}
+                renderSideActions={renderSideActions}
               />
             )
           })}
