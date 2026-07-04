@@ -16,8 +16,21 @@ $ErrorActionPreference = "Stop"
 
 # ── Stop ──
 Write-Host "=== Stopping $AppName ===" -ForegroundColor Cyan
-Get-Process -Name ($AppName -replace '\.exe$','') -ErrorAction SilentlyContinue |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+$procName = $AppName -replace '\.exe$',''
+$procs = Get-Process -Name $procName -ErrorAction SilentlyContinue
+if ($procs) {
+    # Graceful close first (WPF OnExit runs, child processes cleaned up)
+    $procs | ForEach-Object { $_.CloseMainWindow() | Out-Null }
+    $graceful = (Get-Date).AddSeconds(5)
+    while ((Get-Date) -lt $graceful) {
+        $alive = Get-Process -Name $procName -ErrorAction SilentlyContinue
+        if (-not $alive) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    # Force-kill anything that survived
+    Get-Process -Name $procName -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+}
 
 foreach ($extra in $ExtraKill) {
     Invoke-Expression $extra 2>$null
