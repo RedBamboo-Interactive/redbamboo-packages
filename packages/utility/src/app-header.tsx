@@ -58,7 +58,7 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary", color, 
         ))}
       </span>
       {caret && (
-        <i aria-hidden className="fa-solid fa-chevron-down text-[9px] opacity-60 shrink-0" />
+        <i aria-hidden className="fa-solid fa-chevron-down text-[9px] opacity-60 shrink-0 text-muted-foreground" />
       )}
     </div>
   )
