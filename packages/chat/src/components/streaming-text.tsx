@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import { rehypeTwemoji } from "../lib/rehype-twemoji"
 
-// Module-level lightbox state — survives component remounts from markdown re-renders
+// Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
 const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
 function isVideoSrc(src?: string): boolean { return !!src && VIDEO_EXTENSIONS.test(src) }
 
@@ -15,16 +15,8 @@ function setLightbox(s: typeof lightboxState) { lightboxState = s; listeners.for
 function subscribeLightbox(cb: () => void) { listeners.add(cb); return () => { listeners.delete(cb) } }
 function getLightbox() { return lightboxState }
 
-let lightboxMounted = 0
-function MediaLightbox() {
+export function MediaLightbox() {
   const state = useSyncExternalStore(subscribeLightbox, getLightbox)
-  const isFirst = useRef(false)
-
-  useEffect(() => {
-    if (lightboxMounted === 0) isFirst.current = true
-    lightboxMounted++
-    return () => { lightboxMounted--; isFirst.current = false }
-  }, [])
 
   useEffect(() => {
     if (!state) return
@@ -33,7 +25,7 @@ function MediaLightbox() {
     return () => document.removeEventListener("keydown", handler)
   }, [state])
 
-  if (!state || !isFirst.current) return null
+  if (!state) return null
 
   return createPortal(
     <div
@@ -186,17 +178,14 @@ export function StreamingText({
   }), [])
 
   return (
-    <>
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
-        components={mdComponents}
-        urlTransform={(u: string) => u}
-      >
-        {content.slice(0, revealed)}
-      </Markdown>
-      <MediaLightbox />
-    </>
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
+      components={mdComponents}
+      urlTransform={(u: string) => u}
+    >
+      {content.slice(0, revealed)}
+    </Markdown>
   )
 }
 
@@ -221,16 +210,13 @@ export function MarkdownRenderer({
   }), [])
 
   return (
-    <>
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
-        components={mdComponents}
-        urlTransform={(u: string) => u}
-      >
-        {content}
-      </Markdown>
-      <MediaLightbox />
-    </>
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
+      components={mdComponents}
+      urlTransform={(u: string) => u}
+    >
+      {content}
+    </Markdown>
   )
 }

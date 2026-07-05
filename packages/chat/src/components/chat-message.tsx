@@ -14,7 +14,8 @@ import { Emojify } from "./emojify"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
 import { rehypeTwemoji } from "../lib/rehype-twemoji"
 import { ToolInputView } from "./tool-input-view"
-import { ToolOutputView } from "./tool-output-view"
+import { ToolOutputView } from "./tool-output"
+import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
 
@@ -189,6 +190,12 @@ interface ChatMessageProps {
   onAnswerQuestion?: (answer: string) => void
   resolveImageSrc?: (src: string) => string | undefined
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
+  /**
+   * Resolve a frieze event to a navigation action (e.g. open the discussion a
+   * discussion-activity event points at). Return undefined when the event
+   * isn't linkable — the affordance is hidden in that case.
+   */
+  resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
   assistantAvatar?: string
   senderName?: string
   senderAvatarUrl?: string
@@ -216,6 +223,7 @@ export const ChatMessage = memo(function ChatMessage({
   onAnswerQuestion,
   resolveImageSrc,
   resolveFileLink,
+  resolveEventLink,
   assistantAvatar,
   senderName,
   senderAvatarUrl,
@@ -368,7 +376,7 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} />
+              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} />
             </div>
           )
         )}
@@ -448,11 +456,13 @@ function findPairedResult(allParts: MessagePart[], toolUsePart: MessagePart): Me
   return undefined
 }
 
-function PartFrieze({ parts, allParts, isLive, resolveFileLink }: {
+function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc, resolveEventLink }: {
   parts: MessagePart[]
   allParts: MessagePart[]
   isLive?: boolean
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
+  resolveImageSrc?: (src: string) => string | undefined
+  resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
 }) {
   const [selected, setSelected] = useState<{ part: MessagePart; result?: MessagePart } | null>(null)
 
@@ -482,7 +492,7 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink }: {
         })}
       </div>
 
-      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} />
+      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} />
     </>
   )
 }
@@ -514,14 +524,17 @@ function extractToolFile(part: MessagePart): { path: string; line?: number } | n
   }
 }
 
-function PartModal({ part, pairedResult, open, onClose, resolveFileLink }: {
+function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolveImageSrc, resolveEventLink }: {
   part?: MessagePart
   pairedResult?: MessagePart
   open: boolean
   onClose: () => void
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
+  resolveImageSrc?: (src: string) => string | undefined
+  resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
 }) {
   if (!part) return null
+  const event = parseEventPart(part)
   const category = toolCategory(part)
   const isToolUse = part.type === "tool_use"
   const resultContent = pairedResult?.content || (isToolUse ? undefined : part.content)
@@ -529,6 +542,37 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink }: {
 
   const toolFile = resolveFileLink ? extractToolFile(part) : null
   const openFile = toolFile ? resolveFileLink?.(toolFile.path, { line: toolFile.line }) : undefined
+
+  if (event) {
+    return (
+      <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+        <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
+            <div
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: getPartColor(part) }}
+            />
+            {event.icon && <i className={`${event.icon} text-sm`} style={{ color: event.color ?? undefined }} />}
+            <DialogTitle className="text-sm capitalize">{event.key}</DialogTitle>
+            {event.timestamp && (
+              <span className="ml-auto mr-7 text-[10px] font-mono text-text-disabled">
+                {formatTimestamp(event.timestamp)}
+              </span>
+            )}
+          </DialogHeader>
+
+          <div className="overflow-y-auto p-4 flex-1 min-h-0">
+            <EventView
+              event={event}
+              resolveImageSrc={resolveImageSrc}
+              resolveEventLink={resolveEventLink}
+              onNavigate={onClose}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
@@ -563,6 +607,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink }: {
                 toolName={part.toolName || "Unknown"}
                 toolInput={part.toolInput}
                 onOpenFile={openFile ? () => { onClose(); openFile() } : undefined}
+                resolveImageSrc={resolveImageSrc}
               />
             </div>
           )}
@@ -571,7 +616,15 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink }: {
             <>
               <div className="border-t border-border-subtle my-3" />
               <div className="text-[10px] uppercase text-text-muted mb-1.5 font-semibold">Output</div>
-              <ToolOutputView content={resultContent} isError={isError} />
+              <ToolOutputView
+                content={resultContent}
+                isError={isError}
+                toolName={part.toolName}
+                toolInput={part.toolInput}
+                resolveFileLink={resolveFileLink}
+                resolveImageSrc={resolveImageSrc}
+                onNavigate={onClose}
+              />
             </>
           )}
 
@@ -583,7 +636,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink }: {
           )}
 
           {!isToolUse && part.type === "tool_result" && part.content && (
-            <ToolOutputView content={part.content} isError={isError} />
+            <ToolOutputView content={part.content} isError={isError} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} onNavigate={onClose} />
           )}
 
           {!isToolUse && part.type === "error" && part.content && (
@@ -1039,12 +1092,15 @@ function formatTimestamp(iso: string): string {
 
 const novaContextKeys = new Set(["timestamp", "day", "device", "input", "discussion", "agent", "outfit", "activeDiscussionCount", "archivedDiscussionCount", "otherAgentDiscussionCount"])
 
+// Structured payloads rendered elsewhere (event modals) — not for the info dialog.
+const hiddenMetaKeys = new Set(["eventData"])
+
 function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: boolean }) {
   const [open, setOpen] = useState(false)
   const [showRaw, setShowRaw] = useState(false)
   const meta = block.metadata
   const novaMetaEntries = meta ? Object.entries(meta).filter(([k, v]) => novaContextKeys.has(k) && v != null) : []
-  const otherEntries = meta ? Object.entries(meta).filter(([k, v]) => !novaContextKeys.has(k) && v != null) : []
+  const otherEntries = meta ? Object.entries(meta).filter(([k, v]) => !novaContextKeys.has(k) && !hiddenMetaKeys.has(k) && v != null) : []
   const toolUseCount = block.parts.filter(p => p.type === "tool_use").length
   const imageCount = block.parts.reduce((n, p) => n + (p.images?.length ?? 0), 0)
   const hasAudio = block.parts.some(p => p.type === "audio")

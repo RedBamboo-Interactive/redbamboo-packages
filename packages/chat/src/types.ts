@@ -198,6 +198,12 @@ export interface ChatPanelProps {
    * opened — the jump button is hidden in that case.
    */
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
+  /**
+   * Resolve a frieze event to a navigation action (e.g. open the discussion a
+   * discussion-activity event points at). Return undefined when the event
+   * isn't linkable — the affordance is hidden in that case.
+   */
+  resolveEventLink?: (event: import("./components/event-view").ParsedEvent) => (() => void) | undefined
   permissionMode?: string
   onTogglePlanMode?: () => void
   onExecutePlan?: () => void

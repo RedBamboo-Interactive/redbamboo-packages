@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { ToolInputView } from "./tool-input-view"
-import { ToolOutputView } from "./tool-output-view"
+import { ToolOutputView } from "./tool-output"
 
 interface Props {
   toolName: string
@@ -37,7 +37,7 @@ export function ToolCallCard({ toolName, toolInput, toolResult }: Props) {
             <div className="p-2">
               <div className="text-[10px] uppercase text-text-muted mb-1 font-semibold">Result</div>
               <div className="max-h-60 overflow-y-auto">
-                <ToolOutputView content={toolResult} />
+                <ToolOutputView content={toolResult} toolName={toolName} toolInput={toolInput} />
               </div>
             </div>
           )}

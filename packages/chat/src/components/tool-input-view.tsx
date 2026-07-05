@@ -1,13 +1,17 @@
+import { useState } from "react"
 import { JsonHighlight } from "@redbamboo/utility"
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i
 
 interface Props {
   toolName: string
   toolInput: string
   /** When provided, file paths render as links that trigger this action. */
   onOpenFile?: () => void
+  resolveImageSrc?: (src: string) => string | undefined
 }
 
-export function ToolInputView({ toolName, toolInput, onOpenFile }: Props) {
+export function ToolInputView({ toolName, toolInput, onOpenFile, resolveImageSrc }: Props) {
   let parsed: Record<string, unknown> = {}
   try {
     parsed = JSON.parse(toolInput)
@@ -17,7 +21,7 @@ export function ToolInputView({ toolName, toolInput, onOpenFile }: Props) {
 
   switch (toolName) {
     case "Read":
-      return <ReadView p={parsed} onOpen={onOpenFile} />
+      return <ReadView p={parsed} onOpen={onOpenFile} resolveImageSrc={resolveImageSrc} />
     case "Edit":
       return <EditView p={parsed} onOpen={onOpenFile} />
     case "Write":
@@ -64,18 +68,31 @@ function Tag({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ReadView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => void }) {
+function ReadView({ p, onOpen, resolveImageSrc }: { p: Record<string, unknown>; onOpen?: () => void; resolveImageSrc?: (src: string) => string | undefined }) {
   const path = p.file_path as string | undefined
   const offset = p.offset as number | undefined
   const limit = p.limit as number | undefined
+  const isImage = path && IMAGE_EXT.test(path)
+  const imageSrc = isImage && resolveImageSrc ? resolveImageSrc(path) : undefined
+  const [imgFailed, setImgFailed] = useState(false)
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {path && <FilePath path={path} onOpen={onOpen} />}
       {(offset != null || limit != null) && (
         <div className="flex gap-2">
           {offset != null && <Tag>offset {offset}</Tag>}
           {limit != null && <Tag>limit {limit}</Tag>}
         </div>
+      )}
+      {imageSrc && !imgFailed && (
+        <img
+          src={imageSrc}
+          alt={path}
+          loading="lazy"
+          className="max-h-64 rounded-md border border-border-subtle object-contain"
+          onError={() => setImgFailed(true)}
+        />
       )}
     </div>
   )

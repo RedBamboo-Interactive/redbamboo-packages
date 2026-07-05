@@ -234,7 +234,7 @@ export function CommandPalette({
           id="command-palette-listbox"
           role="listbox"
           data-slot="command-palette-list"
-          className="-mx-5 max-h-72 overflow-y-auto border-t border-foreground-a10 p-2"
+          className="-mx-5 flex-1 min-h-0 overflow-y-auto border-t border-foreground-a10 p-2"
         >
           {flat.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">

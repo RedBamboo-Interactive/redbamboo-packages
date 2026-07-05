@@ -7,6 +7,7 @@ import { Composer } from "./composer"
 import { StreamingStatusLine } from "./streaming-status-line"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
+import { MediaLightbox } from "./streaming-text"
 
 // Windowed rendering: long conversations are read from the tail, so only the
 // last WINDOW blocks are mounted. Scrolling up (or the "earlier messages"
@@ -30,7 +31,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const {
     sessionId, disabled = false, onAnswerQuestion, onResume,
     placeholder, className, header, footer,
-    resolveImageSrc, resolveFileLink, permissionMode, onTogglePlanMode, onExecutePlan,
+    resolveImageSrc, resolveFileLink, resolveEventLink, permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, draftStorageKey,
     speechBackend, handsFreeEnabled, pushToTalkKey,
     renderStatusLine, renderComposerInlineAction, renderMessageExtra, renderSideActions,
@@ -300,6 +301,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
                 resolveImageSrc={resolveImageSrc}
                 resolveFileLink={resolveFileLink}
+                resolveEventLink={resolveEventLink}
                 assistantAvatar={props.assistantAvatar}
                 senderName={senderAgent?.name}
                 senderAvatarUrl={senderAgent?.avatarUrl}
@@ -324,6 +326,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
       {footer}
       {composerEl}
+      <MediaLightbox />
     </div>
   )
 }
