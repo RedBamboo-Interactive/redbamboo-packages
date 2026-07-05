@@ -16,7 +16,8 @@ import {
   useToast,
 } from "@redbamboo/ui"
 import { AuthProvider, useAuth } from "./auth-provider"
-import { AppHeader } from "./app-header"
+import { AppHeader, AppHeaderBrand } from "./app-header"
+import { AppMenu } from "./app-menu"
 import { AboutDialog } from "./about-dialog"
 import { FeedbackDialog } from "./feedback-dialog"
 import type { FeedbackSubmission } from "./feedback-dialog"
@@ -324,9 +325,12 @@ function AppShellInner({
   children,
   className,
   switcherApps,
+  activeApp,
+  appSwitcherStyle,
 }: AppShellProps) {
   const { user, logout } = useAuth()
   const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [appMenuOpen, setAppMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -334,8 +338,20 @@ function AppShellInner({
   const { canInstall, install } = useInstallPrompt()
 
   const shareUrl = config.share?.url()
+  const dropdownSwitcher = appSwitcherStyle === "dropdown"
 
-  const openSwitcher = useCallback(() => setSwitcherOpen(true), [])
+  const brand = activeApp
+    ? {
+        icon: activeApp.icon,
+        nameParts: activeApp.nameParts ?? (["", activeApp.name] as [string, string]),
+        color: activeApp.color,
+      }
+    : config.brand
+
+  const openSwitcher = useCallback(
+    () => (dropdownSwitcher ? setAppMenuOpen(true) : setSwitcherOpen(true)),
+    [dropdownSwitcher],
+  )
   const openAbout = useCallback(() => setAboutOpen(true), [])
   const openFeedback = useCallback(() => setFeedbackOpen(true), [])
   const openShare = useCallback(() => setShareOpen(true), [])
@@ -389,7 +405,18 @@ function AppShellInner({
         data-slot="app-shell"
         className={className ?? "flex h-full w-full flex-col"}
       >
-        <AppHeader brand={config.brand} breadcrumb={breadcrumb} onBrandClick={openSwitcher}>
+        <AppHeader
+          brand={brand}
+          brandSlot={
+            dropdownSwitcher ? (
+              <AppMenu apps={switcherApps ?? []} open={appMenuOpen} onOpenChange={setAppMenuOpen}>
+                <AppHeaderBrand {...brand} caret />
+              </AppMenu>
+            ) : undefined
+          }
+          breadcrumb={breadcrumb}
+          onBrandClick={dropdownSwitcher ? undefined : openSwitcher}
+        >
           {headerContent}
           <DropdownMenu>
             <DropdownMenuTrigger

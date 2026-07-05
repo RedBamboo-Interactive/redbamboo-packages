@@ -14,6 +14,8 @@ export { CommandPalette, openCommandPalette } from "./command-palette"
 export { AppShell } from "./app-shell"
 export { AppSwitcher } from "./app-switcher"
 export type { AppSwitcherProps, SwitcherApp, SwitcherAppStatus } from "./app-switcher"
+export { AppMenu } from "./app-menu"
+export type { AppMenuProps } from "./app-menu"
 
 export type {
   LeafAppPlugin,

@@ -48,4 +48,15 @@ export interface AppShellProps {
    * plugin routes on the same origin.
    */
   switcherApps?: SwitcherApp[]
+  /**
+   * When set, the header brand renders this app (icon/nameParts/color)
+   * instead of config.brand — the shell shows "you are here".
+   */
+  activeApp?: SwitcherApp
+  /**
+   * "modal" (default): brand click opens the AppSwitcher dialog.
+   * "dropdown": brand becomes an AppMenu trigger with a caret, listing
+   * switcherApps in place.
+   */
+  appSwitcherStyle?: "modal" | "dropdown"
 }
