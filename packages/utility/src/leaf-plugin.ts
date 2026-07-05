@@ -32,4 +32,10 @@ export interface LeafAppPlugin {
   Page: ComponentType
   /** Commands contributed to the shell command palette. */
   commands?: LeafPluginCommand[]
+  /**
+   * Components rendered at shell-level positions outside the plugin's route
+   * tree (e.g. a background layer behind all apps). Keyed by the layer id
+   * declared in plugin.json `frontend.shell.layers`.
+   */
+  shellLayers?: Record<string, ComponentType>
 }
