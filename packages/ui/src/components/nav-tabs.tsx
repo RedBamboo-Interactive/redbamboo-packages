@@ -17,13 +17,19 @@ interface NavTabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean
   icon?: string
   shortcut?: string
+  /** Override the active-state accent (defaults to var(--color-primary)). */
+  accentColor?: string
 }
 
-function NavTab({ active, icon, shortcut, children, className, ...props }: NavTabProps) {
+function NavTab({ active, icon, shortcut, accentColor, children, className, style, ...props }: NavTabProps) {
   const label = typeof children === "string" ? children : undefined
+  const activeStyle = active && accentColor
+    ? { color: accentColor, background: `color-mix(in srgb, ${accentColor} 15%, transparent)`, ...style }
+    : style
   return (
     <button
-      className={navTabClass(active ?? false, className)}
+      className={navTabClass(active ?? false, !accentColor, className)}
+      style={activeStyle}
       data-command={shortcut && label ? label : undefined}
       data-command-shortcut={shortcut}
       data-command-group={shortcut ? "Navigate" : undefined}
@@ -37,11 +43,11 @@ function NavTab({ active, icon, shortcut, children, className, ...props }: NavTa
   )
 }
 
-function navTabClass(active: boolean, className?: string) {
+function navTabClass(active: boolean, useThemeColor: boolean, className?: string) {
   return cn(
     "flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-colors",
     active
-      ? "text-primary bg-primary-a15"
+      ? useThemeColor ? "text-primary bg-primary-a15" : ""
       : "text-text-muted hover:text-contrast hover:bg-overlay-10",
     className,
   )
