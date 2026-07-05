@@ -56,8 +56,7 @@ function AppMenu({ apps, open, onOpenChange, children }: AppMenuProps) {
                 <i className={cn(app.icon, "relative text-xs")} />
               </span>
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                <span className="text-muted-foreground">{parts[0]}</span>
-                <span style={{ color: app.color }}>{parts[1]}</span>
+                {app.name}
               </span>
               {app.status ? (
                 <span
