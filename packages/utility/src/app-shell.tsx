@@ -343,8 +343,8 @@ function AppShellInner({
   const brand = activeApp
     ? {
         icon: activeApp.icon,
-        nameParts: activeApp.nameParts ?? (["", activeApp.name] as [string, string]),
-        color: activeApp.color,
+        nameParts: activeApp.nameParts ?? ([activeApp.name, ""] as [string, string]),
+        color: activeApp.nameParts ? activeApp.color : undefined,
       }
     : config.brand
 
