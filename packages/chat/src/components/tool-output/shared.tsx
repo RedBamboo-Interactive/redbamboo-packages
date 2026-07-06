@@ -101,7 +101,7 @@ export function OutputFileLink({ path, line, resolvers, className }: {
       title="Open in editor"
     >
       {path}
-      <i className="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
+      <i className="ph-fill ph-arrow-square-out text-[9px] opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
     </button>
   )
 }

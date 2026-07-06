@@ -92,7 +92,7 @@ export function IssuesTab({
             className="h-7 text-xs ml-auto"
             onClick={onNewIssue}
           >
-            <i className="fa-solid fa-plus text-[10px] mr-1" />
+            <i className="ph-fill ph-plus text-[10px] mr-1" />
             New Issue
           </Button>
         )}
@@ -105,7 +105,7 @@ export function IssuesTab({
             disabled={page <= 1}
             onClick={() => onPageChange(page - 1)}
           >
-            <i className="fa-solid fa-chevron-left text-[10px]" />
+            <i className="ph-fill ph-caret-left text-[10px]" />
           </Button>
           <span className="text-[11px] tabular-nums">
             {page}/{totalPages || 1}
@@ -117,7 +117,7 @@ export function IssuesTab({
             disabled={page >= totalPages}
             onClick={() => onPageChange(page + 1)}
           >
-            <i className="fa-solid fa-chevron-right text-[10px]" />
+            <i className="ph-fill ph-caret-right text-[10px]" />
           </Button>
         </div>
       </PanelHeader>
@@ -125,7 +125,7 @@ export function IssuesTab({
       <div className="flex-1 min-h-0 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <i className="fa-solid fa-spinner fa-spin text-text-muted" />
+            <i className="ph-fill ph-spinner animate-spin text-text-muted" />
           </div>
         ) : issues.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-sm text-text-muted">

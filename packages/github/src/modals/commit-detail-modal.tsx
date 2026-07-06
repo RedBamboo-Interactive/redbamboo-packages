@@ -35,7 +35,7 @@ export function CommitDetailModal({
       size="md"
     >
       <ModalHeader
-        icon={<i className="fa-solid fa-code-commit text-base text-text-muted" />}
+        icon={<i className="ph-fill ph-git-commit text-base text-text-muted" />}
         title={
           <code className="text-sm font-mono bg-overlay-8 px-1.5 py-0.5 rounded">
             {commit.short_hash}
@@ -90,7 +90,7 @@ export function CommitDetailModal({
               </div>
             ) : (
               <div className="flex items-center gap-2 text-sm text-text-muted">
-                <i className="fa-solid fa-spinner fa-spin text-[11px]" />
+                <i className="ph-fill ph-spinner animate-spin text-[11px]" />
                 <span className="capitalize">{review.status}</span>
               </div>
             )}
@@ -141,7 +141,7 @@ export function CommitDetailModal({
           <ModalSection section="health-check" heading="Health Check">
             {healthCheck.status === "pending" || healthCheck.status === "running" ? (
               <div className="flex items-center gap-2 text-sm text-text-muted">
-                <i className="fa-solid fa-spinner fa-spin text-[11px]" />
+                <i className="ph-fill ph-spinner animate-spin text-[11px]" />
                 <span>{healthCheck.status === "pending" ? "Queued" : "Running"}</span>
               </div>
             ) : (
@@ -151,9 +151,9 @@ export function CommitDetailModal({
                   : "border-yellow-500/30 bg-yellow-500/10"
               }`}>
                 {healthCheck.verdict === "healthy" ? (
-                  <i className="fa-solid fa-circle-check text-base text-emerald-400" />
+                  <i className="ph-fill ph-check-circle text-base text-emerald-400" />
                 ) : (
-                  <i className="fa-solid fa-triangle-exclamation text-base text-accent-gold" />
+                  <i className="ph-fill ph-warning text-base text-accent-gold" />
                 )}
                 <div className="min-w-0 flex-1">
                   <span className="text-sm font-semibold capitalize">{healthCheck.verdict}</span>
@@ -172,7 +172,7 @@ export function CommitDetailModal({
               onClick={() => onReview(commit)}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-overlay-6 text-text-muted hover:bg-overlay-10 hover:text-contrast transition-colors"
             >
-              <i className="fa-solid fa-robot text-[11px]" />
+              <i className="ph-fill ph-robot text-[11px]" />
               Review
             </button>
           )}
@@ -181,7 +181,7 @@ export function CommitDetailModal({
               onClick={() => onHealthCheck(commit)}
               className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-overlay-6 text-text-muted hover:bg-overlay-10 hover:text-contrast transition-colors"
             >
-              <i className="fa-solid fa-flask text-[11px]" />
+              <i className="ph-fill ph-flask text-[11px]" />
               Health Check
             </button>
           )}
@@ -189,7 +189,7 @@ export function CommitDetailModal({
           {githubUrl && (
             <a href={githubUrl} target="_blank" rel="noopener noreferrer" className="ml-auto">
               <Button variant="ghost" size="sm">
-                <i className="fa-brands fa-github text-[11px] mr-1.5" />
+                <i className="ph-fill ph-github-logo text-[11px] mr-1.5" />
                 View on GitHub
               </Button>
             </a>

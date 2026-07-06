@@ -103,9 +103,9 @@ function ItemList<T>({
             className="flex items-center justify-center gap-2 px-4 py-3 text-[12px] text-accent-teal hover:text-contrast transition-colors border-b border-overlay-6 hover:bg-overlay-4"
           >
             {loading ? (
-              <i className="fa-solid fa-spinner fa-spin text-xs" />
+              <i className="ph-fill ph-spinner animate-spin text-xs" />
             ) : (
-              <i className="fa-solid fa-chevron-down text-xs" />
+              <i className="ph-fill ph-caret-down text-xs" />
             )}
             <span>Load more</span>
           </button>

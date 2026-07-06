@@ -72,7 +72,7 @@ export function TackleDetailModal({
                     className="text-xs underline flex items-center gap-1"
                   >
                     #{tackle.pull_request_number}
-                    <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" />
+                    <i className="ph-fill ph-arrow-square-out text-[9px]" />
                   </a>
                 </p>
               )}
@@ -88,17 +88,17 @@ export function TackleDetailModal({
           <div className="flex gap-4 text-sm">
             <div className="flex items-center gap-1.5">
               {tackle.ai_approved ? (
-                <i className="fa-solid fa-circle-check text-sm text-emerald-400" />
+                <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
               ) : (
-                <i className="fa-solid fa-circle-xmark text-sm text-text-muted opacity-30" />
+                <i className="ph-fill ph-x-circle text-sm text-text-muted opacity-30" />
               )}
               <span>AI Review</span>
             </div>
             <div className="flex items-center gap-1.5">
               {tackle.human_approved ? (
-                <i className="fa-solid fa-circle-check text-sm text-emerald-400" />
+                <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
               ) : (
-                <i className="fa-solid fa-circle-xmark text-sm text-text-muted opacity-30" />
+                <i className="ph-fill ph-x-circle text-sm text-text-muted opacity-30" />
               )}
               <span>Human Approval</span>
             </div>
@@ -110,7 +110,7 @@ export function TackleDetailModal({
 
           {isPending && (
             <div className="flex flex-col items-center justify-center py-6 text-text-muted">
-              <i className="fa-solid fa-spinner fa-spin text-2xl mb-3" />
+              <i className="ph-fill ph-spinner animate-spin text-2xl mb-3" />
               <p className="text-sm">
                 {tackle.status === "pending" ? "Queued..." : "Claude is implementing the fix..."}
               </p>
@@ -119,21 +119,21 @@ export function TackleDetailModal({
 
           {tackle.status === "merging" && (
             <div className="flex flex-col items-center justify-center py-6 text-text-muted">
-              <i className="fa-solid fa-spinner fa-spin text-2xl mb-3" />
+              <i className="ph-fill ph-spinner animate-spin text-2xl mb-3" />
               <p className="text-sm">Merging...</p>
             </div>
           )}
 
           {tackle.status === "merged" && (
             <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 rounded-md p-3 text-sm">
-              <i className="fa-solid fa-code-merge text-sm" />
+              <i className="ph-fill ph-git-merge text-sm" />
               Merged successfully
             </div>
           )}
 
           {tackle.status === "dismissed" && (
             <div className="flex items-center gap-2 text-text-muted bg-overlay-5 rounded-md p-3 text-sm">
-              <i className="fa-solid fa-ban text-sm" />
+              <i className="ph-fill ph-prohibit text-sm" />
               Dismissed
             </div>
           )}
@@ -142,25 +142,25 @@ export function TackleDetailModal({
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-border flex-none">
           {canApprove && onApprove && (
             <Button size="sm" variant="outline" onClick={() => onApprove(tackle)} className="text-emerald-400">
-              <i className="fa-solid fa-check text-[11px] mr-1.5" />
+              <i className="ph-fill ph-check text-[11px] mr-1.5" />
               Approve
             </Button>
           )}
           {canMerge && onMerge && (
             <Button size="sm" variant="outline" onClick={() => onMerge(tackle)} className="text-emerald-400">
-              <i className="fa-solid fa-code-merge text-[11px] mr-1.5" />
+              <i className="ph-fill ph-git-merge text-[11px] mr-1.5" />
               Merge
             </Button>
           )}
           {tackle.status === "dismissed" && onRetackle && (
             <Button size="sm" variant="outline" onClick={() => onRetackle(tackle)}>
-              <i className="fa-solid fa-rotate-left text-[11px] mr-1.5" />
+              <i className="ph-fill ph-arrow-counter-clockwise text-[11px] mr-1.5" />
               Re-tackle
             </Button>
           )}
           {!isPending && tackle.status !== "merged" && tackle.status !== "merging" && tackle.status !== "dismissed" && onDismiss && (
             <Button size="sm" variant="ghost" onClick={() => onDismiss(tackle)} className="text-text-muted">
-              <i className="fa-solid fa-xmark text-[11px] mr-1.5" />
+              <i className="ph-fill ph-x text-[11px] mr-1.5" />
               Dismiss
             </Button>
           )}

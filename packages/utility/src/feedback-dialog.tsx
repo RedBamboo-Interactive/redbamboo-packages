@@ -167,7 +167,7 @@ function FeedbackDialog({
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
-              <i className="fa-solid fa-message text-lg text-primary" />
+              <i className="ph-fill ph-chat text-lg text-primary" />
             </div>
             <div>
               <DialogTitle>Report Feedback</DialogTitle>
@@ -203,7 +203,7 @@ function FeedbackDialog({
               data-slot="feedback-submit"
               disabled={!canSubmit}
             >
-              <i className="fa-solid fa-paper-plane" />
+              <i className="ph-fill ph-paper-plane" />
               Send
             </Button>
           </DialogFooter>

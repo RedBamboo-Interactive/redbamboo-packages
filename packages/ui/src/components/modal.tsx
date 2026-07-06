@@ -69,7 +69,7 @@ export function ModalHeader({ icon, title, badges, subtitle, onClose, closeLabel
           </div>
         </div>
         <Button variant="ghost" size="icon-xs" onClick={onClose} aria-label={closeLabel ?? "Close"}>
-          <i className="fa-solid fa-xmark w-4 h-4" />
+          <i className="ph-fill ph-x w-4 h-4" />
         </Button>
       </div>
     </CardHeader>

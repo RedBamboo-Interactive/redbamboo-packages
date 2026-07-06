@@ -23,11 +23,11 @@ export interface SuiteApp {
 }
 
 export const SUITE_APPS: readonly SuiteApp[] = [
-  { port: 18800, name: "RedCompute", nameParts: ["Red", "Compute"], icon: "fa-solid fa-microchip", color: "#26A69A", description: "AI compute service" },
-  { port: 18801, name: "CodeRed", nameParts: ["Code", "Red"], icon: "fa-solid fa-terminal", color: "#E55B5B", description: "Development tools" },
-  { port: 18802, name: "RedMatter", nameParts: ["Red", "Matter"], icon: "fa-solid fa-fire", color: "#D4A03C", description: "Game engine CMS" },
-  { port: 18803, name: "Nova", nameParts: ["No", "va"], icon: "fa-solid fa-star", color: "#C74B7A", description: "AI assistant" },
-  { port: 18804, name: "RedLeaf", nameParts: ["Red", "Leaf"], icon: "fa-solid fa-leaf", color: "#66BB6A", description: "Content & knowledge" },
+  { port: 18800, name: "RedCompute", nameParts: ["Red", "Compute"], icon: "ph-fill ph-cpu", color: "#26A69A", description: "AI compute service" },
+  { port: 18801, name: "CodeRed", nameParts: ["Code", "Red"], icon: "ph-fill ph-terminal", color: "#E55B5B", description: "Development tools" },
+  { port: 18802, name: "RedMatter", nameParts: ["Red", "Matter"], icon: "ph-fill ph-fire", color: "#D4A03C", description: "Game engine CMS" },
+  { port: 18803, name: "Nova", nameParts: ["No", "va"], icon: "ph-fill ph-star", color: "#C74B7A", description: "AI assistant" },
+  { port: 18804, name: "RedLeaf", nameParts: ["Red", "Leaf"], icon: "ph-fill ph-leaf", color: "#66BB6A", description: "Content & knowledge" },
 ] as const
 
 export const SUITE_PORTS: readonly number[] = SUITE_APPS.map((a) => a.port)

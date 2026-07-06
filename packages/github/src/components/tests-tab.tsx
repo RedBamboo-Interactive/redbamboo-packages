@@ -119,7 +119,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
           onClick={handleRunAll}
           disabled={runningSuites.size > 0}
         >
-          <i className="fa-solid fa-play text-[10px] mr-1" />
+          <i className="ph-fill ph-play text-[10px] mr-1" />
           Run All
         </Button>
       </PanelHeader>
@@ -127,7 +127,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
       <div className="flex-1 min-h-0 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <i className="fa-solid fa-spinner fa-spin text-text-muted" />
+            <i className="ph-fill ph-spinner animate-spin text-text-muted" />
           </div>
         ) : filteredSuites.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-sm text-text-muted">
@@ -144,13 +144,13 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
                 <div key={suite.key} className="px-4 py-3">
                   <div className="flex items-center gap-2 mb-2">
                     {isRunning ? (
-                      <i className="fa-solid fa-spinner fa-spin text-sm text-text-muted" />
+                      <i className="ph-fill ph-spinner animate-spin text-sm text-text-muted" />
                     ) : latest?.passed === true ? (
-                      <i className="fa-solid fa-circle-check text-sm text-emerald-400" />
+                      <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
                     ) : latest?.passed === false ? (
-                      <i className="fa-solid fa-circle-xmark text-sm text-red-400" />
+                      <i className="ph-fill ph-x-circle text-sm text-red-400" />
                     ) : (
-                      <i className="fa-solid fa-minus text-sm text-text-muted" />
+                      <i className="ph-fill ph-minus text-sm text-text-muted" />
                     )}
 
                     <span className="text-sm font-medium">{suite.display_name}</span>
@@ -177,7 +177,7 @@ export function TestsTab({ suites, loading, testClient, onRefresh }: Props) {
                       disabled={isRunning}
                       title="Run Suite"
                     >
-                      <i className="fa-solid fa-play text-[10px]" />
+                      <i className="ph-fill ph-play text-[10px]" />
                     </Button>
                   </div>
 

@@ -136,7 +136,7 @@ function MusicEventView({ event }: { event: ParsedEvent }) {
             />
           ) : (
             <div className="w-14 h-14 rounded-md bg-overlay-6 flex items-center justify-center shrink-0">
-              <i className={`${event.icon ?? "fa-solid fa-music"} text-lg text-text-disabled`} />
+              <i className={`${event.icon ?? "ph-fill ph-music-notes"} text-lg text-text-disabled`} />
             </div>
           )}
           <div className="min-w-0 flex-1">
@@ -149,7 +149,7 @@ function MusicEventView({ event }: { event: ParsedEvent }) {
           <div className="flex gap-2 flex-wrap px-3 pb-3">
             {place && (
               <Tag>
-                <i className="fa-solid fa-volume-high mr-1" />
+                <i className="ph-fill ph-speaker-high mr-1" />
                 {place}
               </Tag>
             )}
@@ -192,14 +192,14 @@ function SteamEventView({ event }: { event: ParsedEvent }) {
             {status && <Tag>{status}</Tag>}
             {duration && (
               <Tag>
-                <i className="fa-regular fa-clock mr-1" />
+                <i className="ph ph-clock mr-1" />
                 {duration}
               </Tag>
             )}
           </div>
           {shownFriends.length > 0 && (
             <p className="text-xs text-text-muted">
-              <i className="fa-solid fa-user-group mr-1.5 text-text-disabled" />
+              <i className="ph-fill ph-users mr-1.5 text-text-disabled" />
               With {shownFriends.join(", ")}
               {extraFriends > 0 ? ` +${extraFriends} more` : ""}
             </p>
@@ -243,16 +243,16 @@ function LocationEventView({ event }: { event: ParsedEvent }) {
 
 /** WMO weather code (0–99) → FontAwesome icon class. */
 function wmoIcon(code: number | undefined): string {
-  if (code == null) return "fa-solid fa-cloud-sun"
-  if (code === 0) return "fa-solid fa-sun"
-  if (code <= 2) return "fa-solid fa-cloud-sun"
-  if (code === 3) return "fa-solid fa-cloud"
-  if (code === 45 || code === 48) return "fa-solid fa-smog"
-  if (code >= 51 && code <= 67) return "fa-solid fa-cloud-rain"
-  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "fa-solid fa-snowflake"
-  if (code >= 80 && code <= 82) return "fa-solid fa-cloud-showers-heavy"
-  if (code >= 95) return "fa-solid fa-cloud-bolt"
-  return "fa-solid fa-cloud-sun"
+  if (code == null) return "ph-fill ph-cloud-sun"
+  if (code === 0) return "ph-fill ph-sun"
+  if (code <= 2) return "ph-fill ph-cloud-sun"
+  if (code === 3) return "ph-fill ph-cloud"
+  if (code === 45 || code === 48) return "ph-fill ph-cloud-fog"
+  if (code >= 51 && code <= 67) return "ph-fill ph-cloud-rain"
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return "ph-fill ph-snowflake"
+  if (code >= 80 && code <= 82) return "ph-fill ph-cloud-rain"
+  if (code >= 95) return "ph-fill ph-cloud-lightning"
+  return "ph-fill ph-cloud-sun"
 }
 
 function WeatherEventView({ event }: { event: ParsedEvent }) {
@@ -277,13 +277,13 @@ function WeatherEventView({ event }: { event: ParsedEvent }) {
           <div className="flex gap-2 flex-wrap px-4 pb-3">
             {wind != null && (
               <Tag>
-                <i className="fa-solid fa-wind mr-1" />
+                <i className="ph-fill ph-wind mr-1" />
                 {Math.round(wind)} km/h
               </Tag>
             )}
             {precip != null && precip > 0 && (
               <Tag>
-                <i className="fa-solid fa-droplet mr-1" />
+                <i className="ph-fill ph-drop mr-1" />
                 {precip.toFixed(1)} mm
               </Tag>
             )}
@@ -320,7 +320,7 @@ function DiscussionEventView({ event, resolveEventLink, onNavigate }: {
                 title="Open discussion"
               >
                 <span className="truncate">{title}</span>
-                <i className="fa-solid fa-arrow-up-right-from-square text-[9px] opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
+                <i className="ph-fill ph-arrow-square-out text-[9px] opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
               </button>
             ) : (
               <span className="text-sm font-medium text-text-primary truncate">{title}</span>
@@ -370,7 +370,7 @@ function HueEventView({ event }: { event: ParsedEvent }) {
         <div className="p-3 space-y-2.5">
           <div className="flex items-center gap-2">
             <i
-              className="fa-solid fa-lightbulb text-sm"
+              className="ph-fill ph-lightbulb text-sm"
               style={{ color: on ? "#FFB84D" : "var(--color-text-disabled)" }}
             />
             <span className="text-sm font-medium text-text-primary flex-1 min-w-0 truncate">{room}</span>
@@ -392,10 +392,10 @@ function HueEventView({ event }: { event: ParsedEvent }) {
 
 function deviceIcon(name: string): string {
   const n = name.toLowerCase()
-  if (/iphone|pixel|galaxy|phone/.test(n)) return "fa-solid fa-mobile-screen"
-  if (/macbook|laptop|thinkpad/.test(n)) return "fa-solid fa-laptop"
-  if (/ipad|tablet/.test(n)) return "fa-solid fa-tablet-screen-button"
-  return "fa-solid fa-desktop"
+  if (/iphone|pixel|galaxy|phone/.test(n)) return "ph-fill ph-device-mobile"
+  if (/macbook|laptop|thinkpad/.test(n)) return "ph-fill ph-laptop"
+  if (/ipad|tablet/.test(n)) return "ph-fill ph-device-tablet"
+  return "ph-fill ph-desktop"
 }
 
 function DeviceEventView({ event }: { event: ParsedEvent }) {

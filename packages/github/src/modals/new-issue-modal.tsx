@@ -3,9 +3,9 @@ import { Button, Input, Badge } from "@redbamboo/ui"
 import type { IssueClient } from "../api/issue-client"
 
 const TYPES = [
-  { value: "bug", label: "Bug", icon: "fa-solid fa-bug" },
-  { value: "feature", label: "Feature", icon: "fa-solid fa-lightbulb" },
-  { value: "other", label: "Other", icon: "fa-solid fa-ellipsis" },
+  { value: "bug", label: "Bug", icon: "ph-fill ph-bug" },
+  { value: "feature", label: "Feature", icon: "ph-fill ph-lightbulb" },
+  { value: "other", label: "Other", icon: "ph-fill ph-dots-three" },
 ] as const
 
 const LABEL_OPTIONS = [
@@ -157,7 +157,7 @@ export function NewIssueModal({ open, onClose, issueClient, onCreated }: Props) 
 
           {submitting && (
             <div className="flex items-center gap-2 text-sm text-text-muted">
-              <i className="fa-solid fa-spinner fa-spin text-[11px]" />
+              <i className="ph-fill ph-spinner animate-spin text-[11px]" />
               <span>{status || "Starting..."}</span>
             </div>
           )}
@@ -168,7 +168,7 @@ export function NewIssueModal({ open, onClose, issueClient, onCreated }: Props) 
             }`}>
               {result.ok ? (
                 <>
-                  <i className="fa-solid fa-circle-check text-sm mt-0.5 flex-none" />
+                  <i className="ph-fill ph-check-circle text-sm mt-0.5 flex-none" />
                   <div>
                     <p className="font-medium">
                       Issue created{result.refined_title ? `: ${result.refined_title}` : ""}
@@ -180,14 +180,14 @@ export function NewIssueModal({ open, onClose, issueClient, onCreated }: Props) 
                         rel="noopener noreferrer"
                         className="flex items-center gap-1 mt-1 text-xs underline"
                       >
-                        View on GitHub <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" />
+                        View on GitHub <i className="ph-fill ph-arrow-square-out text-[9px]" />
                       </a>
                     )}
                   </div>
                 </>
               ) : (
                 <>
-                  <i className="fa-solid fa-circle-xmark text-sm mt-0.5 flex-none" />
+                  <i className="ph-fill ph-x-circle text-sm mt-0.5 flex-none" />
                   <p>{result.error}</p>
                 </>
               )}
@@ -207,7 +207,7 @@ export function NewIssueModal({ open, onClose, issueClient, onCreated }: Props) 
             >
               {submitting ? (
                 <>
-                  <i className="fa-solid fa-spinner fa-spin text-[11px] mr-1.5" />
+                  <i className="ph-fill ph-spinner animate-spin text-[11px] mr-1.5" />
                   Creating...
                 </>
               ) : (

@@ -337,7 +337,7 @@ export function Composer({
                     onClick={() => removeImage(i)}
                     className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500-a80 hover:bg-red-500 text-white text-[10px] flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   >
-                    <i className="fa-solid fa-xmark" />
+                    <i className="ph-fill ph-x" />
                   </button>
                 </div>
               ))}
@@ -365,7 +365,7 @@ export function Composer({
                 className="w-7 h-7 flex items-center justify-center rounded text-muted-a50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Attach image"
               >
-                <i className="fa-solid fa-image text-xs" />
+                <i className="ph-fill ph-image text-xs" />
               </button>
             )}
             {enableFileAttachments && (
@@ -375,7 +375,7 @@ export function Composer({
                 className="w-7 h-7 flex items-center justify-center rounded text-muted-a50 hover:text-text-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Attach file"
               >
-                <i className="fa-solid fa-paperclip text-xs" />
+                <i className="ph-fill ph-paperclip text-xs" />
               </button>
             )}
           </div>
@@ -390,7 +390,7 @@ export function Composer({
               } disabled:opacity-30 disabled:cursor-not-allowed`}
               title="Toggle plan mode (Shift+Tab)"
             >
-              <i className={`fa-solid ${isPlan ? "fa-compass-drafting" : "fa-bolt"} w-3 inline-block text-center`} />
+              <i className={`ph-fill ${isPlan ? "ph-compass-tool" : "ph-lightning"} w-3 inline-block text-center`} />
               {isPlan ? "Plan" : "Act"}
             </button>
           )}
@@ -400,7 +400,7 @@ export function Composer({
               className="w-full flex-1 px-3 py-2 rounded-md bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400 transition-colors flex items-center justify-center"
               title="Interrupt (Escape)"
             >
-              <i className="fa-solid fa-stop text-sm" />
+              <i className="ph-fill ph-stop text-sm" />
             </button>
           ) : disabled && onResume ? (
             <button
@@ -408,7 +408,7 @@ export function Composer({
               className="w-full flex-1 px-3 py-2 rounded-md bg-accent-gold-a20 hover:bg-accent-gold-a30 text-accent-gold transition-colors flex items-center justify-center"
               title="Resume session (Enter)"
             >
-              <i className="fa-solid fa-rotate-right text-sm" />
+              <i className="ph-fill ph-arrow-clockwise text-sm" />
             </button>
           ) : (
             <button
@@ -416,7 +416,7 @@ export function Composer({
               disabled={disabled || (!value.trim() && images.length === 0)}
               className="w-full flex-1 px-3 py-2 rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
-              <i className="fa-solid fa-paper-plane text-sm" />
+              <i className="ph-fill ph-paper-plane text-sm" />
             </button>
           )}
         </div>

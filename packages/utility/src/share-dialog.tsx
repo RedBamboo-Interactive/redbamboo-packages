@@ -49,7 +49,7 @@ function ShareDialog({
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
-              <i className="fa-solid fa-qrcode text-lg text-primary" />
+              <i className="ph-fill ph-qr-code text-lg text-primary" />
             </div>
             <div>
               <DialogTitle>{title}</DialogTitle>
@@ -69,7 +69,7 @@ function ShareDialog({
               className="flex-1 truncate font-mono text-[10px]"
             />
             <Button variant="outline" size="sm" onClick={copyUrl}>
-              <i className="fa-solid fa-copy" />
+              <i className="ph-fill ph-copy" />
               Copy
             </Button>
           </div>

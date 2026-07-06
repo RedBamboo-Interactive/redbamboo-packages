@@ -207,9 +207,9 @@ export function ChatPanel(props: ChatPanelProps) {
         ) : voice.state === "processing" ? (
           <MorphSpinner color="#fbbf24" />
         ) : voice.state === "error" ? (
-          <i className="fa-solid fa-triangle-exclamation text-xs" />
+          <i className="ph-fill ph-warning text-xs" />
         ) : (
-          <i className="fa-solid fa-microphone text-xs" />
+          <i className="ph-fill ph-microphone text-xs" />
         )}
         {voiceLabel && <span className="text-xs font-medium">{voiceLabel}</span>}
       </button>
@@ -251,7 +251,7 @@ export function ChatPanel(props: ChatPanelProps) {
       <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 ${className || ""}`}>
         <div className="flex-1 flex items-center justify-center text-text-muted">
           <div className="text-center">
-            <i className="fa-regular fa-square-terminal text-3xl mx-auto mb-3 opacity-30" />
+            <i className="ph ph-terminal-window text-3xl mx-auto mb-3 opacity-30" />
             <p className="text-sm">Send a message to get started</p>
           </div>
         </div>
@@ -276,7 +276,7 @@ export function ChatPanel(props: ChatPanelProps) {
               title="Show earlier messages"
             >
               <span className="h-px flex-1 bg-overlay-6" />
-              <i className="fa-solid fa-chevron-up text-[9px]" />
+              <i className="ph-fill ph-caret-up text-[9px]" />
               <span>{startIndex} earlier message{startIndex === 1 ? "" : "s"}</span>
               <span className="h-px flex-1 bg-overlay-6" />
             </button>
@@ -320,7 +320,7 @@ export function ChatPanel(props: ChatPanelProps) {
           className="absolute bottom-20 right-6 w-8 h-8 rounded-full bg-overlay-10 hover:bg-overlay-20 flex items-center justify-center transition-colors shadow-lg border border-border-subtle"
           title="Scroll to bottom"
         >
-          <i className="fa-solid fa-arrow-down text-xs" />
+          <i className="ph-fill ph-arrow-down text-xs" />
         </button>
       )}
 

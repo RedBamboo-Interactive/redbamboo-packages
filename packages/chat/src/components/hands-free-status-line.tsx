@@ -30,7 +30,7 @@ export function HandsFreeStatusLine({ sessionId, className }: HandsFreeStatusLin
 
       {exchangeState === "speaking" && (
         <div className="flex items-center gap-2 text-sm py-1">
-          <i className="fa-solid fa-volume-high text-xs text-teal-400 animate-pulse" />
+          <i className="ph-fill ph-speaker-high text-xs text-teal-400 animate-pulse" />
           <span className="text-text-muted flex-1 line-clamp-2">{lastSummary}</span>
           {queueBadge}
           <button
@@ -74,7 +74,7 @@ export function HandsFreeStatusLine({ sessionId, className }: HandsFreeStatusLin
                 : "bg-red-500-a20 text-red-400 hover:bg-red-500-a30 active:bg-red-500-a40"
             }`}
           >
-            <i className="fa-solid fa-microphone text-xs" />
+            <i className="ph-fill ph-microphone text-xs" />
             {exchangeState === "listening" ? "Release to send" : "Hold to talk"}
           </button>
         </div>
@@ -91,14 +91,14 @@ export function HandsFreeStatusLine({ sessionId, className }: HandsFreeStatusLin
 
       {exchangeState === "sending" && (
         <div className="flex items-center gap-2 text-text-muted text-sm py-1">
-          <i className="fa-solid fa-paper-plane text-xs text-teal-400" />
+          <i className="ph-fill ph-paper-plane text-xs text-teal-400" />
           <span>Sending...</span>
         </div>
       )}
 
       {exchangeState === "error" && (
         <div className="flex items-center gap-2 py-1">
-          <i className="fa-solid fa-triangle-exclamation text-sm text-amber-400" />
+          <i className="ph-fill ph-warning text-sm text-amber-400" />
           <span className="text-amber-400 text-sm">{error}</span>
         </div>
       )}

@@ -121,7 +121,7 @@ export function LogPanel({
             onClick={onClear}
             title="Clear logs"
           >
-            <i className="fa-solid fa-trash-can text-xs" />
+            <i className="ph-fill ph-trash text-xs" />
           </button>
         )}
       </PanelHeader>
@@ -135,14 +135,14 @@ export function LogPanel({
       >
         <FilterPillGroup
           label="Level"
-          icon="fa-solid fa-layer-group"
+          icon="ph-fill ph-stack"
           options={levelOptions}
           value={levelFilter}
           onChange={setLevelFilter}
         />
         <FilterPillGroup
           label="Source"
-          icon="fa-solid fa-tag"
+          icon="ph-fill ph-tag"
           options={sourceOptions}
           value={sourceFilter}
           onChange={setSourceFilter}

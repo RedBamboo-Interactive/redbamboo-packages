@@ -105,7 +105,7 @@ export class RedSuiteNavigator {
   }
 
   async openMenu(): Promise<void> {
-    await this.page.locator('button:has(i.fa-bars)').click()
+    await this.page.locator('button:has(i.ph-list)').click()
   }
 
   async waitForContent(): Promise<void> {

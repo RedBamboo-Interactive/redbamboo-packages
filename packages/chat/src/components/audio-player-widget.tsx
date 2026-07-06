@@ -63,7 +63,7 @@ export function AudioPlayerWidget({ src, avatarSrc }: AudioPlayerWidgetProps) {
             <img src={avatarSrc} alt="" className="absolute inset-0 w-full h-full object-cover object-top" />
           ) : (
             <div className="absolute inset-0 bg-overlay-10 flex items-center justify-center">
-              <i className="fa-solid fa-microphone text-base text-text-muted" />
+              <i className="ph-fill ph-microphone text-base text-text-muted" />
             </div>
           )}
           <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-center pb-1.5 transition-opacity duration-150 ${
@@ -80,7 +80,7 @@ export function AudioPlayerWidget({ src, avatarSrc }: AudioPlayerWidgetProps) {
                 ))}
               </div>
             ) : (
-              <i className="fa-solid fa-play text-[11px] text-white ml-0.5" />
+              <i className="ph-fill ph-play text-[11px] text-white ml-0.5" />
             )}
           </div>
         </div>

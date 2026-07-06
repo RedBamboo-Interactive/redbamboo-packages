@@ -17,8 +17,8 @@ export function ToolCallCard({ toolName, toolInput, toolResult }: Props) {
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-1.5 text-xs bg-overlay-3 hover:bg-overlay-6 transition-colors"
       >
-        <i className={`fa-solid fa-chevron-right transition-transform text-[10px] ${expanded ? "rotate-90" : ""}`} />
-        <i className="fa-solid fa-wrench text-text-muted" />
+        <i className={`ph-fill ph-caret-right transition-transform text-[10px] ${expanded ? "rotate-90" : ""}`} />
+        <i className="ph-fill ph-wrench text-text-muted" />
         <span className="font-mono font-medium text-amber-300">{toolName}</span>
         {toolResult && !expanded && (
           <span className="ml-auto text-text-muted truncate max-w-[200px]">

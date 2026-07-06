@@ -195,7 +195,7 @@ export function CommandPalette({
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
-              <i className="fa-solid fa-terminal text-lg text-primary" />
+              <i className="ph-fill ph-terminal text-lg text-primary" />
             </div>
             <div>
               <DialogTitle>Command Palette</DialogTitle>

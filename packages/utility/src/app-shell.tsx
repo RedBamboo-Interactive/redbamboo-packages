@@ -269,7 +269,7 @@ function AskNovaModal({ context, capturingScreenshot, onClose }: { context: AskN
         <DialogHeader className="px-4 py-3 border-b border-border-subtle">
           <div className="flex items-center gap-2">
             <div className="flex size-8 items-center justify-center rounded-lg bg-pink-500-a10">
-              <i className="fa-solid fa-star text-sm text-pink-400" />
+              <i className="ph-fill ph-star text-sm text-pink-400" />
             </div>
             <div className="min-w-0">
               <DialogTitle className="text-sm">Ask Nova</DialogTitle>
@@ -308,7 +308,7 @@ function AskNovaModal({ context, capturingScreenshot, onClose }: { context: AskN
               className="rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
               style={{ width: "2.75rem", flex: "1 1 0" }}
             >
-              <i className={`fa-solid ${sending ? "fa-spinner fa-spin" : "fa-paper-plane"} text-sm`} />
+              <i className={`ph-fill ${sending ? "ph-spinner animate-spin" : "ph-paper-plane"} text-sm`} />
             </button>
           </div>
         </div>
@@ -428,7 +428,7 @@ function AppShellInner({
                 />
               }
             >
-              <i className="fa-solid fa-bars" />
+              <i className="ph-fill ph-list" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {menuItems && (
@@ -440,22 +440,22 @@ function AppShellInner({
               <DropdownMenuGroup>
                 {shareUrl && (
                   <DropdownMenuItem onClick={openShare}>
-                    <i className="fa-solid fa-qrcode size-4 text-center" />
+                    <i className="ph-fill ph-qr-code size-4 text-center" />
                     Share
                   </DropdownMenuItem>
                 )}
                 {canInstall && (
                   <DropdownMenuItem onClick={install}>
-                    <i className="fa-solid fa-download size-4 text-center" />
+                    <i className="ph-fill ph-download size-4 text-center" />
                     Install
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={openFeedback}>
-                  <i className="fa-solid fa-bug size-4 text-center" />
+                  <i className="ph-fill ph-bug size-4 text-center" />
                   Report Feedback
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={openCommandPalette}>
-                  <i className="fa-solid fa-terminal size-4 text-center" />
+                  <i className="ph-fill ph-terminal size-4 text-center" />
                   Command Palette
                   <DropdownMenuShortcut>
                     {isMac ? "⌘K" : "Ctrl+K"}
@@ -463,7 +463,7 @@ function AppShellInner({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={openAbout}>
-                  <i className="fa-solid fa-circle-info size-4 text-center" />
+                  <i className="ph-fill ph-info size-4 text-center" />
                   About {config.name}
                 </DropdownMenuItem>
               </DropdownMenuGroup>
@@ -484,7 +484,7 @@ function AppShellInner({
                     </div>
                   </div>
                   <DropdownMenuItem onClick={() => logout()}>
-                    <i className="fa-solid fa-right-from-bracket size-4 text-center" />
+                    <i className="ph-fill ph-sign-out size-4 text-center" />
                     Sign Out
                   </DropdownMenuItem>
                 </>

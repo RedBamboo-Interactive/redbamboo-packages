@@ -69,7 +69,7 @@ function AppMenu({ apps, open, onOpenChange, children }: AppMenuProps) {
                   {app.status.label}
                 </span>
               ) : app.active ? (
-                <i className="fa-solid fa-check ml-auto shrink-0 text-[10px] text-muted-foreground" />
+                <i className="ph-fill ph-check ml-auto shrink-0 text-[10px] text-muted-foreground" />
               ) : null}
             </DropdownMenuItem>
           )

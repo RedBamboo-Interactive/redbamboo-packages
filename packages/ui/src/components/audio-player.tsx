@@ -78,7 +78,7 @@ export function AudioPlayer({ src, label }: AudioPlayerProps) {
           onClick={toggle}
           className="w-8 h-8 rounded-full bg-primary-a20 hover:bg-primary-a30 flex items-center justify-center transition-colors shrink-0"
         >
-          <i className={`fa-solid ${playing ? "fa-pause" : "fa-play"} text-primary text-[11px] ${playing ? "" : "ml-0.5"}`} />
+          <i className={`ph-fill ${playing ? "ph-pause" : "ph-play"} text-primary text-[11px] ${playing ? "" : "ml-0.5"}`} />
         </button>
 
         <span className="text-[11px] font-mono text-text-muted w-9 text-right shrink-0">
