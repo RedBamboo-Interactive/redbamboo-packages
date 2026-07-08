@@ -142,6 +142,7 @@ export interface ContextIndicatorProps {
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
+  children?: React.ReactNode
 }
 
 // --- Stream event processing ---

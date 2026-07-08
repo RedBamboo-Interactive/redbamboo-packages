@@ -17,6 +17,7 @@ interface Props {
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
+  children?: React.ReactNode
 }
 
 const DEFAULT_MAX_CONTEXT = 200_000
@@ -178,7 +179,7 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   )
 }
 
-export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOptions, effortOptions, qualityTierOptions, onConfigChange }: Props) {
+export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOptions, effortOptions, qualityTierOptions, onConfigChange, children }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
   const pct = getContextPercent(s)
@@ -295,6 +296,8 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
               </div>
             )}
           </div>
+
+          {children}
         </div>
       </DialogContent>
     </Dialog>
