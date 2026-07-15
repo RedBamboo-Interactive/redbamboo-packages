@@ -37,7 +37,7 @@ function NavTab({ active, icon, shortcut, accentColor, children, className, styl
     >
       {icon && <i className={cn(icon, "text-xs")} />}
       {typeof children === "string" ? (
-        <span className={icon ? "hidden sm:inline" : undefined}>{children}</span>
+        <span className={icon ? "max-sm:hidden" : undefined}>{children}</span>
       ) : children}
     </button>
   )
