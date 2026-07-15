@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using RedBamboo.AppHost.Auth;
 using RedBamboo.AppHost.Tunnel;
 using RedBamboo.AppHost.WebSockets;
 
@@ -118,6 +120,8 @@ public static class DiscoveryEndpoints
                 }).ToList();
             }
 
+            var authMode = app.Services.GetService<AuthOptions>()?.Mode.ToString();
+
             return Results.Ok(new
             {
                 service = descriptor.ServiceName,
@@ -127,6 +131,7 @@ public static class DiscoveryEndpoints
                 api_base = descriptor.ApiBase,
                 iconClass = descriptor.IconClass,
                 iconColor = descriptor.IconColor,
+                authMode,
                 capabilities,
                 app_endpoints = appEndpoints,
                 proxies,
