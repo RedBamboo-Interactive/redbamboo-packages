@@ -19,7 +19,7 @@ export function UncommittedDetailModal({ open, repo, onClose }: Props) {
       size="md"
     >
       <ModalHeader
-        icon={<i className="ph-fill ph-git-commit text-base text-text-disabled" />}
+        icon={<i className="ph-bold ph-git-commit text-base text-text-disabled" />}
         title={
           <code className="text-sm font-mono bg-overlay-8 px-1.5 py-0.5 rounded text-text-disabled">
             <GhostHash />

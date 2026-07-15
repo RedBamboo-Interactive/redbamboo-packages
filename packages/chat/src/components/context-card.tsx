@@ -21,7 +21,7 @@ function resolveApp(name: string): AppMeta {
   const app = SUITE_APPS.find((a) => a.name.toLowerCase() === key)
   return app
     ? { icon: app.icon, color: app.color, label: app.name }
-    : { icon: "ph-fill ph-circle", color: "var(--color-text-muted)", label: name }
+    : { icon: "ph-bold ph-circle", color: "var(--color-text-muted)", label: name }
 }
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ export function PendingContextBanner({ context, onDismiss }: PendingContextBanne
         className="w-6 h-6 flex items-center justify-center rounded hover:bg-overlay-10 text-text-muted hover:text-text-primary transition-colors shrink-0"
         title="Dismiss context"
       >
-        <i className="ph-fill ph-x text-xs" />
+        <i className="ph-bold ph-x text-xs" />
       </button>
     </div>
   )

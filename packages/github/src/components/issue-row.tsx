@@ -91,19 +91,19 @@ export function IssueRow({
         <div className="flex items-center gap-0.5">
           {issue.state === "open" && !tackle && onAutoTackle && (
             <button onClick={() => onAutoTackle(issue)} title="Auto Tackle" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-lightning text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-lightning text-[11px] text-text-muted opacity-60" />
             </button>
           )}
 
           {issue.state === "open" && onClose && (
             <button onClick={() => onClose(issue)} title="Close" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-x text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-x text-[11px] text-text-muted opacity-60" />
             </button>
           )}
 
           {issue.state === "closed" && onReopen && (
             <button onClick={() => onReopen(issue)} title="Reopen" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-arrow-clockwise text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-arrow-clockwise text-[11px] text-text-muted opacity-60" />
             </button>
           )}
 
@@ -115,7 +115,7 @@ export function IssueRow({
               className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors"
               onClick={(e) => e.stopPropagation()}
             >
-              <i className="ph-fill ph-arrow-square-out text-[10px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-arrow-square-out text-[10px] text-text-muted opacity-60" />
             </a>
           )}
         </div>

@@ -49,7 +49,7 @@ export function VoiceInputButton({
         title="Stop recording"
       >
         <span className="voice-input-pulse" />
-        <i className="ph-fill ph-microphone text-xs" />
+        <i className="ph-bold ph-microphone text-xs" />
         <span className="voice-input-label">{recordingLabel}</span>
       </button>
     )
@@ -64,7 +64,7 @@ export function VoiceInputButton({
         className={`voice-input-error ${className}`}
         title="Retry"
       >
-        <i className="ph-fill ph-microphone-slash text-xs" />
+        <i className="ph-bold ph-microphone-slash text-xs" />
         {error && <span className="voice-input-label">{error}</span>}
       </button>
     )
@@ -78,7 +78,7 @@ export function VoiceInputButton({
       className={`voice-input-idle ${className}`}
       title="Voice input"
     >
-      <i className="ph-fill ph-microphone text-xs" />
+      <i className="ph-bold ph-microphone text-xs" />
     </button>
   )
 }

@@ -46,7 +46,7 @@ export function CommitRow({
         {commit.short_hash}
         {unpushed && (
           <span className="ml-1 text-accent-purple" title="Not pushed">
-            <i className="ph-fill ph-arrow-up text-[9px]" />
+            <i className="ph-bold ph-arrow-up text-[9px]" />
           </span>
         )}
       </td>
@@ -73,7 +73,7 @@ export function CommitRow({
         style={review ? { cursor: "pointer" } : undefined}
       >
         {review?.status === "pending" || review?.status === "running" ? (
-          <i className="ph-fill ph-robot text-sm text-text-muted animate-pulse" />
+          <i className="ph-bold ph-robot text-sm text-text-muted animate-pulse" />
         ) : review?.verdict ? (
           verdictIcon(review.verdict)
         ) : null}
@@ -90,11 +90,11 @@ export function CommitRow({
       >
         {healthCheck?.status === "pending" ||
         healthCheck?.status === "running" ? (
-          <i className="ph-fill ph-flask text-sm text-text-muted animate-pulse" />
+          <i className="ph-bold ph-flask text-sm text-text-muted animate-pulse" />
         ) : healthCheck?.verdict === "healthy" ? (
-          <i className="ph-fill ph-flask text-sm text-emerald-400" />
+          <i className="ph-bold ph-flask text-sm text-emerald-400" />
         ) : healthCheck?.verdict === "degraded" ? (
-          <i className="ph-fill ph-flask text-sm text-accent-gold" />
+          <i className="ph-bold ph-flask text-sm text-accent-gold" />
         ) : null}
       </td>
 
@@ -109,7 +109,7 @@ export function CommitRow({
               title="Auto Review"
               className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors"
             >
-              <i className="ph-fill ph-robot text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-robot text-[11px] text-text-muted opacity-60" />
             </button>
           )}
           {onHealthCheck && (
@@ -118,7 +118,7 @@ export function CommitRow({
               title="Health Check"
               className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors"
             >
-              <i className="ph-fill ph-flask text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-flask text-[11px] text-text-muted opacity-60" />
             </button>
           )}
           {onAlign && (
@@ -127,7 +127,7 @@ export function CommitRow({
               title="Align to revision"
               className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors"
             >
-              <i className="ph-fill ph-play text-[10px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-play text-[10px] text-text-muted opacity-60" />
             </button>
           )}
         </div>

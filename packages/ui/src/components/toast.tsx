@@ -103,10 +103,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 // ── Toaster (renders toasts) ───────────────────────────────────────────
 
 const variantIcon: Record<ToastVariant, string> = {
-  default: "ph-fill ph-info",
-  success: "ph-fill ph-check",
-  error: "ph-fill ph-warning",
-  loading: "ph-fill ph-spinner animate-spin",
+  default: "ph-bold ph-info",
+  success: "ph-bold ph-check",
+  error: "ph-bold ph-warning",
+  loading: "ph-bold ph-spinner animate-spin",
 }
 
 const variantColor: Record<ToastVariant, string> = {
@@ -150,7 +150,7 @@ function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: strin
             onClick={() => onDismiss(t.id)}
             className="text-muted-foreground hover:text-foreground transition-colors text-xs p-0.5"
           >
-            <i className="ph-fill ph-x" />
+            <i className="ph-bold ph-x" />
           </button>
         </div>
       ))}

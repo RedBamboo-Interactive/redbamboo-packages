@@ -19,7 +19,7 @@ export function HealthCheckDetailModal({ open, healthCheck, onClose }: Props) {
       <div className="bg-surface border border-border rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-none">
           <div className="flex items-center gap-2">
-            <i className="ph-fill ph-flask text-sm" />
+            <i className="ph-bold ph-flask text-sm" />
             <h2 className="text-sm font-medium">Health Check</h2>
             {healthCheck.verdict && (
               <Badge
@@ -48,11 +48,11 @@ export function HealthCheckDetailModal({ open, healthCheck, onClose }: Props) {
           {!isPending && (
             <div className="flex items-center gap-4 text-sm">
               <span className="flex items-center gap-1.5">
-                <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
+                <i className="ph-bold ph-check-circle text-sm text-emerald-400" />
                 {healthCheck.passed_suites} passed
               </span>
               <span className="flex items-center gap-1.5">
-                <i className="ph-fill ph-x-circle text-sm text-red-400" />
+                <i className="ph-bold ph-x-circle text-sm text-red-400" />
                 {healthCheck.failed_suites} failed
               </span>
               <span className="text-text-muted">of {healthCheck.total_suites} suites</span>
@@ -75,9 +75,9 @@ export function HealthCheckDetailModal({ open, healthCheck, onClose }: Props) {
                   >
                     <div className="flex items-center gap-2">
                       {suite.passed ? (
-                        <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
+                        <i className="ph-bold ph-check-circle text-sm text-emerald-400" />
                       ) : (
-                        <i className="ph-fill ph-x-circle text-sm text-red-400" />
+                        <i className="ph-bold ph-x-circle text-sm text-red-400" />
                       )}
                       <span className="font-medium">{suite.display_name ?? key}</span>
                       <Badge variant="outline" className="text-[9px]">{suite.framework ?? ""}</Badge>
@@ -97,7 +97,7 @@ export function HealthCheckDetailModal({ open, healthCheck, onClose }: Props) {
 
           {isPending && (
             <div className="flex flex-col items-center justify-center py-8 text-text-muted">
-              <i className="ph-fill ph-spinner animate-spin text-2xl mb-3" />
+              <i className="ph-bold ph-spinner animate-spin text-2xl mb-3" />
               <p className="text-sm">
                 {healthCheck.status === "pending" ? "Queued..." : "Running test suites..."}
               </p>

@@ -64,7 +64,7 @@ function AboutDialog({
 
         {hasUpdate && (
           <div className="flex items-center gap-2 rounded-lg border border-accent-teal-a30 bg-accent-teal-a5 px-3 py-2 text-sm text-accent-teal">
-            <i className="ph-fill ph-arrow-circle-up text-xs" />
+            <i className="ph-bold ph-arrow-circle-up text-xs" />
             <span>
               Version <strong>{fmtVersion(latestVersion)}</strong> available
             </span>
@@ -90,7 +90,7 @@ function AboutDialog({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <i className="ph-fill ph-github-logo" />
+                  <i className="ph-bold ph-github-logo" />
                   {app.name}
                 </a>
               )}
@@ -101,7 +101,7 @@ function AboutDialog({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  <i className="ph-fill ph-github-logo" />
+                  <i className="ph-bold ph-github-logo" />
                   RedBamboo Interactive
                 </a>
               )}

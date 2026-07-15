@@ -9,16 +9,16 @@ interface Props {
 }
 
 const SEVERITY_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
-  error: { icon: "ph-fill ph-x-circle", color: "text-red-400", bg: "bg-red-500/10" },
-  warning: { icon: "ph-fill ph-warning", color: "text-yellow-400", bg: "bg-yellow-500/10" },
-  warn: { icon: "ph-fill ph-warning", color: "text-yellow-400", bg: "bg-yellow-500/10" },
-  info: { icon: "ph-fill ph-info", color: "text-blue-400", bg: "bg-blue-500/10" },
+  error: { icon: "ph-bold ph-x-circle", color: "text-red-400", bg: "bg-red-500/10" },
+  warning: { icon: "ph-bold ph-warning", color: "text-yellow-400", bg: "bg-yellow-500/10" },
+  warn: { icon: "ph-bold ph-warning", color: "text-yellow-400", bg: "bg-yellow-500/10" },
+  info: { icon: "ph-bold ph-info", color: "text-blue-400", bg: "bg-blue-500/10" },
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
-  security: "ph-fill ph-shield-chevron",
-  quality: "ph-fill ph-file-code",
-  testing: "ph-fill ph-flask",
+  security: "ph-bold ph-shield-chevron",
+  quality: "ph-bold ph-file-code",
+  testing: "ph-bold ph-flask",
 }
 
 export function ReviewDetailModal({ open, review, onClose }: Props) {
@@ -43,7 +43,7 @@ export function ReviewDetailModal({ open, review, onClose }: Props) {
             )}
             {isPending && (
               <span className="flex items-center gap-1.5 text-xs text-text-muted">
-                <i className="ph-fill ph-spinner animate-spin text-[11px]" />
+                <i className="ph-bold ph-spinner animate-spin text-[11px]" />
                 {review.status === "pending" ? "Queued..." : "Reviewing..."}
               </span>
             )}
@@ -112,9 +112,9 @@ export function ReviewDetailModal({ open, review, onClose }: Props) {
                 <div key={suite} className="flex items-center gap-2 bg-overlay-5 rounded-md px-3 py-2 text-sm">
                   {result.ran ? (
                     result.passed ? (
-                      <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
+                      <i className="ph-bold ph-check-circle text-sm text-emerald-400" />
                     ) : (
-                      <i className="ph-fill ph-x-circle text-sm text-red-400" />
+                      <i className="ph-bold ph-x-circle text-sm text-red-400" />
                     )
                   ) : (
                     <span className="size-4 rounded-full border border-border" />
@@ -135,9 +135,9 @@ export function ReviewDetailModal({ open, review, onClose }: Props) {
               {Object.entries(review.checks).map(([name, check]) => (
                 <div key={name} className="flex items-center gap-2 bg-overlay-5 rounded-md px-3 py-2 text-sm">
                   {check.pass ? (
-                    <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
+                    <i className="ph-bold ph-check-circle text-sm text-emerald-400" />
                   ) : (
-                    <i className="ph-fill ph-x-circle text-sm text-red-400" />
+                    <i className="ph-bold ph-x-circle text-sm text-red-400" />
                   )}
                   <span className="font-medium capitalize">{name}</span>
                   {check.notes && <span className="text-xs text-text-muted ml-2">{check.notes}</span>}
@@ -148,7 +148,7 @@ export function ReviewDetailModal({ open, review, onClose }: Props) {
 
           {isPending && (
             <div className="flex flex-col items-center justify-center py-8 text-text-muted">
-              <i className="ph-fill ph-spinner animate-spin text-2xl mb-3" />
+              <i className="ph-bold ph-spinner animate-spin text-2xl mb-3" />
               <p className="text-sm">
                 {review.status === "pending" ? "Review is queued..." : "Claude is reviewing the code..."}
               </p>

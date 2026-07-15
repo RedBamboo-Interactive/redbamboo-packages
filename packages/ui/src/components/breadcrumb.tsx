@@ -19,7 +19,7 @@ export function Breadcrumb({ items, onNavigate, className }: BreadcrumbProps) {
         {items.map((item, i) => (
           <li key={i} className={cn("flex items-center gap-1.5", i === items.length - 1 ? "min-w-0" : "shrink-0")}>
             {i > 0 && (
-              <i className="ph-fill ph-caret-right text-[8px] text-text-muted opacity-50" />
+              <i className="ph-bold ph-caret-right text-[8px] text-text-muted opacity-50" />
             )}
             {item.href ? (
               <button

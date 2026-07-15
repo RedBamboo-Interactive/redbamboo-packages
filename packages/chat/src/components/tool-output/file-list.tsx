@@ -3,10 +3,10 @@ import { ExpandableText, OutputFileLink, isImagePath, type OutputResolvers } fro
 const CODE_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|py|cs|rs|go|java|rb|php|css|scss|html|ps1|sh|sql|json|ya?ml|toml|xml)$/i
 
 function fileIcon(path: string): string {
-  if (/[\\/]$/.test(path)) return "ph-fill ph-folder"
-  if (isImagePath(path)) return "ph-fill ph-image"
-  if (CODE_EXTENSIONS.test(path)) return "ph-fill ph-file-code"
-  return "ph-fill ph-file-text"
+  if (/[\\/]$/.test(path)) return "ph-bold ph-folder"
+  if (isImagePath(path)) return "ph-bold ph-image"
+  if (CODE_EXTENSIONS.test(path)) return "ph-bold ph-file-code"
+  return "ph-bold ph-file-text"
 }
 
 /** Glob output: one linked row per file with a type icon. */

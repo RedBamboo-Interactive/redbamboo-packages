@@ -55,7 +55,7 @@ function FilePath({ path, onOpen }: { path: string; onOpen?: () => void }) {
       title="Open in editor"
     >
       {path}
-      <i className="ph-fill ph-arrow-square-out text-[9px] opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
+      <i className="ph-bold ph-arrow-square-out text-[9px] opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />
     </button>
   )
 }
@@ -179,7 +179,7 @@ function GrepView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => vo
     <div className="space-y-2">
       {pattern && (
         <div className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 font-mono text-xs">
-          <i className="ph-fill ph-magnifying-glass text-[10px] text-text-disabled" />
+          <i className="ph-bold ph-magnifying-glass text-[10px] text-text-disabled" />
           <span className="text-amber-300-a90">{pattern}</span>
         </div>
       )}
@@ -204,7 +204,7 @@ function GlobView({ p, onOpen }: { p: Record<string, unknown>; onOpen?: () => vo
     <div className="space-y-2">
       {pattern && (
         <div className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 font-mono text-xs">
-          <i className="ph-fill ph-tree-view text-[10px] text-text-disabled" />
+          <i className="ph-bold ph-tree-view text-[10px] text-text-disabled" />
           <span className="text-amber-300-a90">{pattern}</span>
         </div>
       )}
@@ -242,7 +242,7 @@ function WebSearchView({ p }: { p: Record<string, unknown> }) {
   const query = p.query as string | undefined
   return query ? (
     <div className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 font-mono text-xs">
-      <i className="ph-fill ph-globe text-[10px] text-text-disabled" />
+      <i className="ph-bold ph-globe text-[10px] text-text-disabled" />
       <span>{query}</span>
     </div>
   ) : <JsonHighlight json={JSON.stringify(p, null, 2)} />
@@ -252,7 +252,7 @@ function WebFetchView({ p }: { p: Record<string, unknown> }) {
   const url = p.url as string | undefined
   return url ? (
     <div className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 font-mono text-xs">
-      <i className="ph-fill ph-globe text-[10px] text-text-disabled" />
+      <i className="ph-bold ph-globe text-[10px] text-text-disabled" />
       <span className="text-blue-300-a80">{url}</span>
     </div>
   ) : <JsonHighlight json={JSON.stringify(p, null, 2)} />

@@ -42,7 +42,7 @@ function ResizableHandle({
     >
       {withHandle && (
         <div className="z-10 flex h-5 w-3 items-center justify-center rounded-sm bg-surface-elevated opacity-0 transition-opacity duration-200 group-hover/handle:opacity-100 group-data-[resize-handle-active]/handle:opacity-100">
-          <i className="ph-fill ph-dots-six-vertical text-[8px] text-muted-a50" />
+          <i className="ph-bold ph-dots-six-vertical text-[8px] text-muted-a50" />
         </div>
       )}
     </Separator>

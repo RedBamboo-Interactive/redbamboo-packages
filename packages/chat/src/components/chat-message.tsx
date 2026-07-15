@@ -86,9 +86,9 @@ function parseNovaEvent(content: string): NovaEvent | null {
 
 function novaEventIcon(type: string): string {
   switch (type) {
-    case "http-check": return "ph-fill ph-broadcast"
-    case "ai-session": return "ph-fill ph-brain"
-    default: return "ph-fill ph-lightning"
+    case "http-check": return "ph-bold ph-broadcast"
+    case "ai-session": return "ph-bold ph-brain"
+    default: return "ph-bold ph-lightning"
   }
 }
 
@@ -684,7 +684,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
     <>
       <div className="my-3 rounded-lg border border-violet-500-a30 bg-violet-500-a8 p-3">
         <div className="flex items-center gap-2 mb-2">
-          <i className="ph-fill ph-compass-tool text-sm text-violet-400" />
+          <i className="ph-bold ph-compass-tool text-sm text-violet-400" />
           <span className="text-sm font-medium text-violet-300">Plan ready for review</span>
         </div>
         <p className="text-xs text-text-muted mb-3">
@@ -696,7 +696,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
               onClick={onExecute}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500-a25 hover:bg-violet-500-a40 text-violet-200 text-xs font-medium transition-colors"
             >
-              <i className="ph-fill ph-play" />
+              <i className="ph-bold ph-play" />
               Execute Plan
             </button>
           )}
@@ -705,13 +705,13 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
               onClick={() => setShowPlan(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-violet-500-a15 hover:bg-violet-500-a30 text-violet-300 text-xs font-medium transition-colors"
             >
-              <i className="ph-fill ph-eye" />
+              <i className="ph-bold ph-eye" />
               View Plan
             </button>
           )}
           {alreadyExecuting && (
             <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-              <i className="ph-fill ph-check text-xs text-green-400" />
+              <i className="ph-bold ph-check text-xs text-green-400" />
               Plan accepted — executing
             </span>
           )}
@@ -721,7 +721,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
       <Dialog open={showPlan && !!planText} onOpenChange={v => { if (!v) setShowPlan(false) }}>
         <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-            <i className="ph-fill ph-compass-tool text-sm text-violet-400" />
+            <i className="ph-bold ph-compass-tool text-sm text-violet-400" />
             <DialogTitle className="text-sm text-violet-300">Plan</DialogTitle>
           </DialogHeader>
 
@@ -737,7 +737,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
                 onClick={() => { onExecute(); setShowPlan(false) }}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-violet-500-a25 hover:bg-violet-500-a40 text-violet-200 text-sm font-medium transition-colors"
               >
-                <i className="ph-fill ph-play" />
+                <i className="ph-bold ph-play" />
                 Execute Plan
               </button>
             </div>
@@ -844,13 +844,13 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
     return (
       <div className="my-3 rounded-lg border border-teal-500-a30 bg-teal-500-a8 p-3">
         <div className="flex items-center gap-2 mb-2">
-          <i className="ph-fill ph-question text-sm text-teal-400" />
+          <i className="ph-bold ph-question text-sm text-teal-400" />
           <span className="text-sm font-medium text-teal-300">Question</span>
         </div>
         <p className="text-sm text-text-primary mb-3 font-serif">{question}</p>
         {answered ? (
           <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-            <i className="ph-fill ph-check text-xs text-green-400" />
+            <i className="ph-bold ph-check text-xs text-green-400" />
             Answered
           </span>
         ) : onAnswer ? (
@@ -869,7 +869,7 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
               disabled={!freeText.trim()}
               className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-teal-500-a25 hover:bg-teal-500-a40 text-teal-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              <i className="ph-fill ph-paper-plane" />
+              <i className="ph-bold ph-paper-plane" />
               Answer
             </button>
           </div>
@@ -881,7 +881,7 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
   return (
     <div className="my-3 rounded-lg border border-teal-500-a30 bg-teal-500-a8 p-3">
       <div className="flex items-center gap-2 mb-3">
-        <i className="ph-fill ph-question text-sm text-teal-400" />
+        <i className="ph-bold ph-question text-sm text-teal-400" />
         <span className="text-sm font-medium text-teal-300">Question</span>
       </div>
 
@@ -919,7 +919,7 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
                     }`}>
                       {isSelected && (
                         q.multiSelect
-                          ? <i className="ph-fill ph-check text-[9px] text-teal-300" />
+                          ? <i className="ph-bold ph-check text-[9px] text-teal-300" />
                           : <span className="w-2 h-2 rounded-full bg-teal-400" />
                       )}
                     </span>
@@ -947,7 +947,7 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
                 }`}>
                   {otherActive.get(qIdx) && (
                     q.multiSelect
-                      ? <i className="ph-fill ph-check text-[9px] text-teal-300" />
+                      ? <i className="ph-bold ph-check text-[9px] text-teal-300" />
                       : <span className="w-2 h-2 rounded-full bg-teal-400" />
                   )}
                 </span>
@@ -979,7 +979,7 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
       <div className="mt-3">
         {answered ? (
           <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-            <i className="ph-fill ph-check text-xs text-green-400" />
+            <i className="ph-bold ph-check text-xs text-green-400" />
             Answered
           </span>
         ) : onAnswer ? (
@@ -988,7 +988,7 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
             disabled={!canSubmit()}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-teal-500-a25 hover:bg-teal-500-a40 text-teal-200 text-xs font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <i className="ph-fill ph-paper-plane" />
+            <i className="ph-bold ph-paper-plane" />
             Submit
           </button>
         ) : null}
@@ -1119,13 +1119,13 @@ function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: bool
         }
         title="Message info"
       >
-        <i className={inline ? "ph-light ph-info text-[11px]" : "ph-fill ph-info text-[10px] text-text-muted"} />
+        <i className={inline ? "ph-light ph-info text-[11px]" : "ph-bold ph-info text-[10px] text-text-muted"} />
       </button>
 
       <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
         <DialogContent className="max-w-sm max-h-[70vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-            <i className="ph-fill ph-info text-sm text-text-muted" />
+            <i className="ph-bold ph-info text-sm text-text-muted" />
             <DialogTitle className="text-sm">Message Info</DialogTitle>
           </DialogHeader>
 
@@ -1177,7 +1177,7 @@ function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: bool
                   onClick={() => setShowRaw(!showRaw)}
                   className="text-[10px] text-accent hover:text-accent-hover mt-2 cursor-pointer flex items-center gap-1"
                 >
-                  <i className={`${showRaw ? "ph-fill ph-caret-down" : "ph-fill ph-caret-right"} text-[8px]`} />
+                  <i className={`${showRaw ? "ph-bold ph-caret-down" : "ph-bold ph-caret-right"} text-[8px]`} />
                   {showRaw ? "Hide" : "Show"} raw context
                 </button>
                 {showRaw && (

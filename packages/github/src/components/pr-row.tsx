@@ -55,7 +55,7 @@ export function PrRow({
       {showRepoCol && (
         <td className="px-3 py-2 w-28">
           <span className="flex items-center gap-1.5 text-xs font-medium">
-            <i className="ph-fill ph-git-pull-request text-sm text-emerald-400" />
+            <i className="ph-bold ph-git-pull-request text-sm text-emerald-400" />
             #{pr.number}
           </span>
         </td>
@@ -64,7 +64,7 @@ export function PrRow({
       <td className="px-3 py-2 w-20 text-xs font-mono text-text-muted truncate">
         {!showRepoCol && (
           <span className="inline-flex items-center gap-1 mr-1.5 font-medium text-contrast font-sans">
-            <i className="ph-fill ph-git-pull-request text-emerald-400" />
+            <i className="ph-bold ph-git-pull-request text-emerald-400" />
             #{pr.number}
           </span>
         )}
@@ -103,7 +103,7 @@ export function PrRow({
         style={review ? { cursor: "pointer" } : undefined}
       >
         {review?.status === "pending" || review?.status === "running" ? (
-          <i className="ph-fill ph-spinner animate-spin text-sm text-text-muted" />
+          <i className="ph-bold ph-spinner animate-spin text-sm text-text-muted" />
         ) : review?.verdict ? (
           verdictIcon(review.verdict)
         ) : null}
@@ -120,11 +120,11 @@ export function PrRow({
       >
         {healthCheck?.status === "pending" ||
         healthCheck?.status === "running" ? (
-          <i className="ph-fill ph-spinner animate-spin text-sm text-text-muted" />
+          <i className="ph-bold ph-spinner animate-spin text-sm text-text-muted" />
         ) : healthCheck?.verdict === "healthy" ? (
-          <i className="ph-fill ph-flask text-sm text-emerald-400" />
+          <i className="ph-bold ph-flask text-sm text-emerald-400" />
         ) : healthCheck?.verdict === "degraded" ? (
-          <i className="ph-fill ph-flask text-sm text-accent-gold" />
+          <i className="ph-bold ph-flask text-sm text-accent-gold" />
         ) : null}
       </td>
 
@@ -152,37 +152,37 @@ export function PrRow({
 
           {onReview && (
             <button onClick={() => onReview(pr)} title="Auto Review" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-robot text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-robot text-[11px] text-text-muted opacity-60" />
             </button>
           )}
 
           {onHealthCheck && (
             <button onClick={() => onHealthCheck(pr)} title="Health Check" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-flask text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-flask text-[11px] text-text-muted opacity-60" />
             </button>
           )}
 
           {canApprove && onApprove && (
             <button onClick={() => onApprove(tackle)} title="Approve" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-check text-[11px] text-emerald-400" />
+              <i className="ph-bold ph-check text-[11px] text-emerald-400" />
             </button>
           )}
 
           {canMerge && onMerge && (
             <button onClick={() => onMerge(tackle)} title="Merge" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-git-merge text-[11px] text-emerald-400" />
+              <i className="ph-bold ph-git-merge text-[11px] text-emerald-400" />
             </button>
           )}
 
           {tackle && !isBusy && tackle.status !== "merged" && onDismiss && (
             <button onClick={() => onDismiss(tackle)} title="Dismiss" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-x text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-x text-[11px] text-text-muted opacity-60" />
             </button>
           )}
 
           {tackle?.status === "dismissed" && onRetackle && (
             <button onClick={() => onRetackle(tackle)} title="Re-tackle" className="w-7 h-7 flex items-center justify-center rounded hover:bg-overlay-10 transition-colors">
-              <i className="ph-fill ph-arrow-counter-clockwise text-[11px] text-text-muted opacity-60" />
+              <i className="ph-bold ph-arrow-counter-clockwise text-[11px] text-text-muted opacity-60" />
             </button>
           )}
         </div>

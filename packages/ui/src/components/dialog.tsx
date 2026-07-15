@@ -66,7 +66,7 @@ function DialogContent({
               />
             }
           >
-            <i className="ph-fill ph-x" />
+            <i className="ph-bold ph-x" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

@@ -3,13 +3,13 @@ import type { ReviewVerdict } from "../types"
 export function verdictIcon(verdict: ReviewVerdict) {
   switch (verdict) {
     case "pass":
-      return <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
+      return <i className="ph-bold ph-check-circle text-sm text-emerald-400" />
     case "pass_with_notes":
-      return <i className="ph-fill ph-warning text-sm text-yellow-400" />
+      return <i className="ph-bold ph-warning text-sm text-yellow-400" />
     case "reject":
-      return <i className="ph-fill ph-x-circle text-sm text-red-400" />
+      return <i className="ph-bold ph-x-circle text-sm text-red-400" />
     case "pending_human":
-      return <i className="ph-fill ph-question text-sm text-blue-400" />
+      return <i className="ph-bold ph-question text-sm text-blue-400" />
   }
 }
 
@@ -17,21 +17,21 @@ export function tackleStatusIcon(status: string) {
   switch (status) {
     case "pending":
     case "running":
-      return <i className="ph-fill ph-spinner animate-spin text-sm text-text-muted" />
+      return <i className="ph-bold ph-spinner animate-spin text-sm text-text-muted" />
     case "awaiting_review":
       return null
     case "awaiting_merge":
-      return <i className="ph-fill ph-check-circle text-sm text-emerald-400" />
+      return <i className="ph-bold ph-check-circle text-sm text-emerald-400" />
     case "awaiting_human_loop":
-      return <i className="ph-fill ph-user-focus text-sm text-accent-gold" />
+      return <i className="ph-bold ph-user-focus text-sm text-accent-gold" />
     case "merging":
-      return <i className="ph-fill ph-spinner animate-spin text-sm text-emerald-400" />
+      return <i className="ph-bold ph-spinner animate-spin text-sm text-emerald-400" />
     case "merged":
-      return <i className="ph-fill ph-git-merge text-sm text-emerald-400" />
+      return <i className="ph-bold ph-git-merge text-sm text-emerald-400" />
     case "failed":
-      return <i className="ph-fill ph-x-circle text-sm text-red-400" />
+      return <i className="ph-bold ph-x-circle text-sm text-red-400" />
     case "dismissed":
-      return <i className="ph-fill ph-prohibit text-sm text-text-muted" />
+      return <i className="ph-bold ph-prohibit text-sm text-text-muted" />
     default:
       return null
   }
@@ -40,12 +40,12 @@ export function tackleStatusIcon(status: string) {
 export function issueTypeIcon(labels: { name: string }[]) {
   const names = labels.map((l) => l.name)
   if (names.includes("bug"))
-    return <i className="ph-fill ph-bug text-sm text-red-400" />
+    return <i className="ph-bold ph-bug text-sm text-red-400" />
   if (names.includes("feature-request") || names.includes("enhancement"))
-    return <i className="ph-fill ph-lightbulb text-sm text-yellow-400" />
+    return <i className="ph-bold ph-lightbulb text-sm text-yellow-400" />
   if (names.includes("ai-reported"))
-    return <i className="ph-fill ph-robot text-sm text-blue-400" />
-  return <i className="ph-fill ph-radio-button text-sm text-text-muted" />
+    return <i className="ph-bold ph-robot text-sm text-blue-400" />
+  return <i className="ph-bold ph-radio-button text-sm text-text-muted" />
 }
 
 export function timeAgo(iso: string): string {
