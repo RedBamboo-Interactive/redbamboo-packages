@@ -52,7 +52,10 @@ if (-not $SkipFrontend -and $LinkedPackages.Count -gt 0) {
         Push-Location "$packagesRoot\$pkg"
         try {
             $ErrorActionPreference = "Continue"
-            & $PackageManager run build
+            # cmd /c "...2>&1" merges pnpm's stderr banner into stdout at the cmd.exe
+            # level, so PowerShell 5.1 never wraps it as a red NativeCommandError.
+            # Do NOT change to "& $PackageManager run build" -- that regresses (see a7a5586).
+            cmd /c "$PackageManager run build 2>&1"
             $ErrorActionPreference = "Stop"
             if ($LASTEXITCODE -ne 0) { throw "Package @redbamboo/$pkg build failed" }
         } finally {
@@ -68,7 +71,12 @@ if (-not $SkipFrontend) {
     Push-Location $FrontendDir
     try {
         $ErrorActionPreference = "Continue"
-        & $PackageManager run build
+        # cmd /c "...2>&1" merges pnpm's stderr banner (e.g. "$ vite build" from the
+        # "tsc -b && vite build" shell emulation) into stdout at the cmd.exe level, so
+        # PowerShell 5.1 never wraps it as a red NativeCommandError. Exit code still
+        # propagates, so real build failures are caught below.
+        # Do NOT change to "& $PackageManager run build" -- that regresses (see a7a5586).
+        cmd /c "$PackageManager run build 2>&1"
         $ErrorActionPreference = "Stop"
         if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
     } finally {

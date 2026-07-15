@@ -38,7 +38,6 @@ function AppMenu({ apps, open, onOpenChange, children }: AppMenuProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-56">
         {apps.map((app) => {
-          const parts = app.nameParts ?? ["", app.name]
           return (
             <DropdownMenuItem
               key={app.id}
