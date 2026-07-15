@@ -327,6 +327,7 @@ function AppShellInner({
   switcherApps,
   activeApp,
   appSwitcherStyle,
+  onReorder,
 }: AppShellProps) {
   const { user, logout } = useAuth()
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -409,7 +410,7 @@ function AppShellInner({
           brand={brand}
           brandSlot={
             dropdownSwitcher ? (
-              <AppMenu apps={switcherApps ?? []} open={appMenuOpen} onOpenChange={setAppMenuOpen}>
+              <AppMenu apps={switcherApps ?? []} open={appMenuOpen} onOpenChange={setAppMenuOpen} onReorder={onReorder}>
                 <AppHeaderBrand {...brand} caret />
               </AppMenu>
             ) : undefined

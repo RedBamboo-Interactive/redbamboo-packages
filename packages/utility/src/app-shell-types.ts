@@ -59,4 +59,6 @@ export interface AppShellProps {
    * switcherApps in place.
    */
   appSwitcherStyle?: "modal" | "dropdown"
+  /** Called when the user reorders apps via drag-and-drop in the dropdown switcher. */
+  onReorder?: (ids: string[]) => void
 }
