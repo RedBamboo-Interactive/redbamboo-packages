@@ -46,9 +46,9 @@ function AppItemContent({ app, showGrip }: { app: SwitcherApp; showGrip: boolean
         >
           {app.status.label}
         </span>
-      ) : app.active ? (
-        <i className="ph-bold ph-check ml-auto shrink-0 text-[10px] text-muted-foreground" />
-      ) : null}
+      ) : (
+        <i className={cn("ph-bold ph-check ml-auto shrink-0 text-[10px] text-muted-foreground", !app.active && "invisible")} />
+      )}
     </>
   )
 }
