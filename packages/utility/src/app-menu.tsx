@@ -24,7 +24,7 @@ function AppItemContent({ app, showGrip }: { app: SwitcherApp; showGrip: boolean
   return (
     <>
       {showGrip && (
-        <i className="ph-bold ph-dots-six-vertical shrink-0 text-xs text-muted-foreground cursor-grab" />
+        <i className="ph-bold ph-dots-six-vertical shrink-0 text-xs text-muted-foreground opacity-0 group-hover/row:opacity-100 transition-opacity cursor-grab" />
       )}
       <span
         className="relative flex size-6 shrink-0 items-center justify-center rounded"
@@ -171,7 +171,7 @@ function AppMenu({ apps, open, onOpenChange, onReorder, children }: AppMenuProps
                       onOpenChange?.(false)
                     }}
                     className={cn(
-                      "relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground",
+                      "group/row relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground",
                       app.disabled && "pointer-events-none opacity-50",
                       app.active && "bg-overlay-6",
                       isDragSource && "opacity-40",
