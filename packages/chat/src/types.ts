@@ -8,12 +8,15 @@ export interface MessageBlock {
 }
 
 export interface MessagePart {
-  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio"
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image"
   content: string
   toolName?: string
   toolInput?: string
   images?: ImageAttachment[]
   isPartial?: boolean
+  url?: string
+  mediaType?: string
+  base64?: string
 }
 
 export interface ImageAttachment {

@@ -374,6 +374,16 @@ export const ChatMessage = memo(function ChatMessage({
             <div key={i} className="msg-enter-ai my-2">
               <AudioPlayerWidget src={group.parts[0].content} avatarSrc={assistantAvatar} />
             </div>
+          ) : group.kind === "image" ? (
+            <div key={i} className="msg-enter-ai my-2">
+              <img
+                src={group.parts[0].url
+                  ? (resolveImageSrc ? resolveImageSrc(group.parts[0].url) ?? group.parts[0].url : group.parts[0].url)
+                  : group.parts[0].base64 ? `data:${group.parts[0].mediaType ?? "image/png"};base64,${group.parts[0].base64}` : ""}
+                alt=""
+                className="max-h-64 rounded-md border border-overlay-10"
+              />
+            </div>
           ) : (
             <div key={i} className="msg-enter-ai">
               <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} />
@@ -411,6 +421,7 @@ export const ChatMessage = memo(function ChatMessage({
 type PartGroup =
   | { kind: "text"; parts: [MessagePart] }
   | { kind: "audio"; parts: [MessagePart] }
+  | { kind: "image"; parts: [MessagePart] }
   | { kind: "frieze"; parts: MessagePart[]; isLive?: boolean }
 
 function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
@@ -425,9 +436,9 @@ function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
   }
 
   for (const part of parts) {
-    if (part.type === "text" || part.type === "audio") {
+    if (part.type === "text" || part.type === "audio" || part.type === "image") {
       flushFrieze()
-      groups.push({ kind: part.type === "audio" ? "audio" : "text", parts: [part] })
+      groups.push({ kind: part.type === "audio" ? "audio" : part.type === "image" ? "image" : "text", parts: [part] })
     } else {
       frieze.push(part)
     }
