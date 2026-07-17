@@ -329,7 +329,7 @@ function AppShellInner({
   appSwitcherStyle,
   onReorder,
 }: AppShellProps) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [appMenuOpen, setAppMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -471,22 +471,23 @@ function AppShellInner({
               {user && (
                 <>
                   <DropdownMenuSeparator />
-                  <div className="flex items-center gap-3 px-3 py-2">
-                    <div className="size-8 rounded-full bg-primary-a20 flex items-center justify-center text-xs font-medium text-primary shrink-0 overflow-hidden">
-                      {user.avatarUrl ? (
-                        <img src={user.avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        (user.name?.[0] || user.email[0]).toUpperCase()
-                      )}
+                  <DropdownMenuItem
+                    onClick={() => window.dispatchEvent(new CustomEvent("open-settings", { detail: { section: "account" } }))}
+                    className="!p-0"
+                  >
+                    <div className="flex items-center gap-3 px-3 py-2 w-full">
+                      <div className="size-8 rounded-full bg-primary-a20 flex items-center justify-center text-xs font-medium text-primary shrink-0 overflow-hidden">
+                        {user.avatarUrl ? (
+                          <img src={user.avatarUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          (user.name?.[0] || user.email[0]).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{user.name || "User"}</div>
+                        <div className="text-xs text-muted-foreground truncate">{user.email}</div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{user.name || "User"}</div>
-                      <div className="text-xs text-muted-foreground truncate">{user.email}</div>
-                    </div>
-                  </div>
-                  <DropdownMenuItem onClick={() => logout()}>
-                    <i className="ph-bold ph-sign-out size-4 text-center" />
-                    Sign Out
                   </DropdownMenuItem>
                 </>
               )}

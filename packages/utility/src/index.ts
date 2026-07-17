@@ -21,6 +21,7 @@ export type {
   LeafAppPlugin,
   LeafPluginCommand,
   LeafPluginCommandContext,
+  LeafPluginSettingsPanel,
 } from "./leaf-plugin"
 export { ShareDialog } from "./share-dialog"
 export { useInstallPrompt } from "./use-install-prompt"

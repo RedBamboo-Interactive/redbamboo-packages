@@ -21,6 +21,26 @@ export interface LeafPluginCommand extends Omit<Command, "action"> {
 }
 
 /**
+ * Settings the plugin contributes to the kernel Settings panel, rendered
+ * inline as tabs alongside the built-in sections. Discovery is declarative:
+ * plugin.json `frontend.settings` puts the tab metadata (label/icon) into the
+ * plugin entity so the shell can list tabs without loading the bundle — the
+ * components here are only imported when a tab is first opened.
+ */
+export interface LeafPluginSettingsPanel {
+  /**
+   * Single-tab contribution (plugin.json `frontend.settings` with no
+   * sections). The tab uses the plugin's name and icon.
+   */
+  Component?: ComponentType
+  /**
+   * Multi-tab contribution: one component per section, keyed by the section
+   * id declared in plugin.json `frontend.settings.sections`.
+   */
+  sections?: Record<string, ComponentType>
+}
+
+/**
  * The frontend contract a Leaf plugin's web package exports (as `plugin`).
  * The shell lazy-imports the package, mounts `Page` under /apps/{id}, and
  * aggregates `commands` into the command palette.
@@ -38,4 +58,6 @@ export interface LeafAppPlugin {
    * declared in plugin.json `frontend.shell.layers`.
    */
   shellLayers?: Record<string, ComponentType>
+  /** Settings tabs contributed to the kernel Settings panel. */
+  settingsPanel?: LeafPluginSettingsPanel
 }
