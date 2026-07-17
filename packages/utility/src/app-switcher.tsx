@@ -79,6 +79,10 @@ export interface SwitcherApp {
   disabled?: boolean
   active?: boolean
   onSelect?: () => void
+  /** Unread notification count; renders as a pill when > 0. */
+  badge?: number
+  /** Tooltip for the badge pill (e.g. recent notification titles). */
+  badgeTooltip?: string
 }
 
 export interface AppSwitcherProps {

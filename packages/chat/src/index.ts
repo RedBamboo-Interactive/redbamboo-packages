@@ -56,3 +56,7 @@ export type { SpeechTransport, PromptRequest, CreateSpeechBackendOptions } from 
 export { processStreamEvent, parseStructuredQuestions } from "./lib/process-stream-event"
 export { rebuildBlocks } from "./lib/rebuild-blocks"
 export type { PersistedMessage } from "./lib/rebuild-blocks"
+export { buildSharePayload } from "./lib/share-payload"
+export type { SharePayload, ShareMessage, ShareMetadata } from "./lib/share-payload"
+export { ShareDialog } from "./components/share-dialog"
+export type { ShareDialogProps } from "./components/share-dialog"

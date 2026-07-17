@@ -36,6 +36,14 @@ function AppItemContent({ app, showGrip }: { app: SwitcherApp; showGrip: boolean
       <span className="min-w-0 flex-1 truncate text-sm font-medium">
         {app.name}
       </span>
+      {(app.badge ?? 0) > 0 && (
+        <span
+          className="shrink-0 min-w-4 rounded-full bg-primary text-primary-foreground text-[10px] px-1 text-center font-medium leading-4"
+          title={app.badgeTooltip}
+        >
+          {app.badge! > 99 ? "99+" : app.badge}
+        </span>
+      )}
       {app.status ? (
         <span
           className="ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
@@ -53,7 +61,8 @@ function AppItemContent({ app, showGrip }: { app: SwitcherApp; showGrip: boolean
   )
 }
 
-function AppMenu({ apps, open, onOpenChange, onReorder, children }: AppMenuProps) {
+function AppMenu({ apps, open, onOpenChange, onReorder, children: triggerChildren }: AppMenuProps) {
+  const hasUnread = apps.some((a) => (a.badge ?? 0) > 0)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
   const [dropIndicator, setDropIndicator] = useState<{
     idx: number
@@ -129,7 +138,12 @@ function AppMenu({ apps, open, onOpenChange, onReorder, children }: AppMenuProps
           />
         }
       >
-        {children}
+        <div className="relative">
+          {triggerChildren}
+          {hasUnread && (
+            <span className="absolute -top-0.5 -right-1 size-2 rounded-full bg-primary" />
+          )}
+        </div>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-56">
         <div
