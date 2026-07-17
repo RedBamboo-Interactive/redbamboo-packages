@@ -188,6 +188,9 @@ export interface ChatPanelProps {
   // Shared props
   sessionId?: string | null
   disabled?: boolean
+  /** Read-only surfaces (e.g. Nova's heartbeat discussion): render the message
+   * list without mounting the composer at all. */
+  hideComposer?: boolean
   pendingQuestion?: PendingQuestion | null
   onAnswerQuestion?: (answer: string) => void
   onResume?: () => void | Promise<void>

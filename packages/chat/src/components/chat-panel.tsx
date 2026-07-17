@@ -29,7 +29,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const pendingQuestion = props.pendingQuestion !== undefined ? props.pendingQuestion : internal.pendingQuestion
 
   const {
-    sessionId, disabled = false, onAnswerQuestion, onResume,
+    sessionId, disabled = false, hideComposer = false, onAnswerQuestion, onResume,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, draftStorageKey,
@@ -226,7 +226,7 @@ export function ChatPanel(props: ChatPanelProps) {
         ? <PendingQuestionLine />
         : null
 
-  const composerEl = (
+  const composerEl = hideComposer ? null : (
     <Composer
       onSend={sendMessage}
       onInterrupt={interrupt}

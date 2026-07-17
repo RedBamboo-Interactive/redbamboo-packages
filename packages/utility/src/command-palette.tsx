@@ -188,7 +188,7 @@ export function CommandPalette({
       <DialogContent
         data-slot="command-palette"
         showCloseButton={false}
-        className="sm:max-w-lg overflow-hidden"
+        className="sm:max-w-lg max-h-[min(480px,80svh)] overflow-hidden"
         onKeyDown={onKeyDown}
       >
         {/* Header — matches About/Feedback pattern */}
