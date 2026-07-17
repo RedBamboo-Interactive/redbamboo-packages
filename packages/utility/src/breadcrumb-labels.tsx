@@ -1,20 +1,32 @@
-import { createContext, useContext, useState, useCallback, useEffect } from "react"
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react"
 
 interface LabelEntry {
   label: string
   icon?: string
 }
 
+export interface PluginCrumb {
+  label: string
+  icon?: string
+  href: string
+}
+
 export interface BreadcrumbLabelContextValue {
   labels: Map<string, LabelEntry>
   setLabel: (path: string, label: string, icon?: string) => void
   removeLabel: (path: string) => void
+  pluginCrumbs: PluginCrumb[]
+  setPluginCrumbs: (items: PluginCrumb[]) => void
 }
 
 export const BreadcrumbLabelContext = createContext<BreadcrumbLabelContextValue | null>(null)
 
+const EMPTY_CRUMBS: PluginCrumb[] = []
+
 export function BreadcrumbLabelProvider({ children }: { children: React.ReactNode }) {
   const [labels, setLabels] = useState<Map<string, LabelEntry>>(() => new Map())
+  const [pluginCrumbs, setPluginCrumbsRaw] = useState<PluginCrumb[]>(EMPTY_CRUMBS)
+  const prevRef = useRef<string>("")
 
   const setLabel = useCallback((path: string, label: string, icon?: string) => {
     setLabels(prev => {
@@ -35,8 +47,15 @@ export function BreadcrumbLabelProvider({ children }: { children: React.ReactNod
     })
   }, [])
 
+  const setPluginCrumbs = useCallback((items: PluginCrumb[]) => {
+    const key = JSON.stringify(items)
+    if (key === prevRef.current) return
+    prevRef.current = key
+    setPluginCrumbsRaw(items.length === 0 ? EMPTY_CRUMBS : items)
+  }, [])
+
   return (
-    <BreadcrumbLabelContext.Provider value={{ labels, setLabel, removeLabel }}>
+    <BreadcrumbLabelContext.Provider value={{ labels, setLabel, removeLabel, pluginCrumbs, setPluginCrumbs }}>
       {children}
     </BreadcrumbLabelContext.Provider>
   )
