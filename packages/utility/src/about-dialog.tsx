@@ -131,7 +131,7 @@ function AboutDialog({
           </div>
         </div>
 
-        <DialogFooter showCloseButton className={banner ? "px-6 pb-4" : undefined}>
+        <DialogFooter showCloseButton className={banner ? "mx-0 mb-0 px-6 py-4" : undefined}>
           <p className="mr-auto text-xs text-muted-foreground">MIT License</p>
         </DialogFooter>
       </DialogContent>
