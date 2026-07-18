@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import {
   cn,
   Dialog,
@@ -24,6 +25,7 @@ export interface AboutDialogProps {
   latestVersion?: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  banner?: ReactNode
 }
 
 function fmtVersion(v: string) {
@@ -37,79 +39,99 @@ function AboutDialog({
   latestVersion,
   open,
   onOpenChange,
+  banner,
 }: AboutDialogProps) {
   const hasUpdate = latestVersion && latestVersion !== app.version
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-slot="about-dialog">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            {app.icon && (
-              <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
-                <i className={cn(app.icon, "text-lg text-primary")} />
-              </div>
-            )}
-            <div>
-              <DialogTitle>{app.name}</DialogTitle>
-              <Badge variant="secondary" className="mt-1.5 text-[0.7rem]">
-                {fmtVersion(app.version)}
-              </Badge>
-            </div>
+      <DialogContent data-slot="about-dialog" className={banner ? "p-0 gap-0 overflow-hidden" : undefined}>
+        {banner && (
+          <div className="relative h-40 overflow-hidden">
+            {banner}
           </div>
+        )}
+        <DialogHeader className={banner ? "px-6 pt-4" : undefined}>
+          {!banner && (
+            <div className="flex items-center gap-3">
+              {app.icon && (
+                <div className="flex size-10 items-center justify-center rounded-lg bg-primary-a10">
+                  <i className={cn(app.icon, "text-lg text-primary")} />
+                </div>
+              )}
+              <div>
+                <DialogTitle>{app.name}</DialogTitle>
+                <Badge variant="secondary" className="mt-1.5 text-[0.7rem]">
+                  {fmtVersion(app.version)}
+                </Badge>
+              </div>
+            </div>
+          )}
+          {banner && (
+            <div className="flex items-center gap-3">
+              <div>
+                <DialogTitle>{app.name}</DialogTitle>
+                <Badge variant="secondary" className="mt-1.5 text-[0.7rem]">
+                  {fmtVersion(app.version)}
+                </Badge>
+              </div>
+            </div>
+          )}
           {app.description && (
             <DialogDescription>{app.description}</DialogDescription>
           )}
         </DialogHeader>
 
-        {hasUpdate && (
-          <div className="flex items-center gap-2 rounded-lg border border-accent-teal-a30 bg-accent-teal-a5 px-3 py-2 text-sm text-accent-teal">
-            <i className="ph-bold ph-arrow-circle-up text-xs" />
-            <span>
-              Version <strong>{fmtVersion(latestVersion)}</strong> available
-            </span>
-          </div>
-        )}
-
-        <Separator />
-
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm font-medium">RedBamboo Interactive</p>
-            <p className="text-xs text-muted-foreground">
-              Open-source tools for creators and developers
-            </p>
-          </div>
-
-          {(appGitHub || companyGitHub) && (
-            <div className="flex flex-col gap-1.5">
-              {appGitHub && (
-                <a
-                  href={appGitHub}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <i className="ph-bold ph-github-logo" />
-                  {app.name}
-                </a>
-              )}
-              {companyGitHub && (
-                <a
-                  href={companyGitHub}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <i className="ph-bold ph-github-logo" />
-                  RedBamboo Interactive
-                </a>
-              )}
+        <div className={banner ? "px-6 space-y-4" : "space-y-4"}>
+          {hasUpdate && (
+            <div className="flex items-center gap-2 rounded-lg border border-accent-teal-a30 bg-accent-teal-a5 px-3 py-2 text-sm text-accent-teal">
+              <i className="ph-bold ph-arrow-circle-up text-xs" />
+              <span>
+                Version <strong>{fmtVersion(latestVersion)}</strong> available
+              </span>
             </div>
           )}
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium">RedBamboo Interactive</p>
+              <p className="text-xs text-muted-foreground">
+                Open-source tools for creators and developers
+              </p>
+            </div>
+
+            {(appGitHub || companyGitHub) && (
+              <div className="flex flex-col gap-1.5">
+                {appGitHub && (
+                  <a
+                    href={appGitHub}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <i className="ph-bold ph-github-logo" />
+                    {app.name}
+                  </a>
+                )}
+                {companyGitHub && (
+                  <a
+                    href={companyGitHub}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <i className="ph-bold ph-github-logo" />
+                    RedBamboo Interactive
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <DialogFooter showCloseButton>
+        <DialogFooter showCloseButton className={banner ? "px-6 pb-4" : undefined}>
           <p className="mr-auto text-xs text-muted-foreground">MIT License</p>
         </DialogFooter>
       </DialogContent>

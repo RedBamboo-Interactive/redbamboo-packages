@@ -188,7 +188,7 @@ export function CommandPalette({
       <DialogContent
         data-slot="command-palette"
         showCloseButton={false}
-        className="sm:max-w-lg max-h-[min(480px,80svh)] overflow-hidden"
+        className="max-w-lg overflow-hidden"
         onKeyDown={onKeyDown}
       >
         {/* Header — matches About/Feedback pattern */}
@@ -234,7 +234,7 @@ export function CommandPalette({
           id="command-palette-listbox"
           role="listbox"
           data-slot="command-palette-list"
-          className="-mx-5 flex-1 min-h-0 overflow-y-auto border-t border-foreground-a10 p-2"
+          className="-mx-5 min-h-0 max-h-96 overflow-y-auto border-t border-foreground-a10 p-2"
         >
           {flat.length === 0 && (
             <p className="py-6 text-center text-sm text-muted-foreground">

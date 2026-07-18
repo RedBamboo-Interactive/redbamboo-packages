@@ -328,6 +328,7 @@ function AppShellInner({
   activeApp,
   appSwitcherStyle,
   onReorder,
+  aboutBanner,
 }: AppShellProps) {
   const { user } = useAuth()
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -526,6 +527,7 @@ function AppShellInner({
         latestVersion={config.latestVersion}
         open={aboutOpen}
         onOpenChange={setAboutOpen}
+        banner={aboutBanner}
       />
 
       <FeedbackDialog

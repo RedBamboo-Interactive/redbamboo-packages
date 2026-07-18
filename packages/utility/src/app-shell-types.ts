@@ -61,4 +61,6 @@ export interface AppShellProps {
   appSwitcherStyle?: "modal" | "dropdown"
   /** Called when the user reorders apps via drag-and-drop in the dropdown switcher. */
   onReorder?: (ids: string[]) => void
+  /** Custom banner rendered at the top of the About dialog (e.g. animated hero). */
+  aboutBanner?: ReactNode
 }

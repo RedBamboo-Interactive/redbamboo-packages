@@ -5,7 +5,7 @@ import { cn } from "../utils"
 interface ItemListRowProps {
   selected?: boolean
   icon?: ReactNode
-  title: string
+  title: ReactNode
   subtitle?: ReactNode
   badge?: ReactNode
   trailing?: ReactNode
