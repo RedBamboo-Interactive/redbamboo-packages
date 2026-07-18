@@ -50,13 +50,7 @@ importers:
       tailwindcss:
         specifier: ^4.0.0
         version: 4.3.0
-      twemoji-parser:
-        specifier: ^14.0.0
-        version: 14.0.0
     devDependencies:
-      '@types/hast':
-        specifier: ^3.0.4
-        version: 3.0.4
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -1842,9 +1836,6 @@ packages:
     resolution: {integrity: sha512-mdoNxBC/cSQObGGVQ5Bpn5i+yv7j68gk3Nfm3wFjcJg3Z0Mix9jzAFfP12prmm5eVGmDKtp0yyArrs0Q+8gZHg==}
     engines: {node: '>=18.0.0'}
     hasBin: true
-
-  twemoji-parser@14.0.0:
-    resolution: {integrity: sha512-9DUOTGLOWs0pFWnh1p6NF+C3CkQ96PWmEFwhOVmT3WbecRC+68AIqpsnJXygfkFcp4aXbOp8Dwbhh/HQgvoRxA==}
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -3765,8 +3756,6 @@ snapshots:
       esbuild: 0.28.0
     optionalDependencies:
       fsevents: 2.3.3
-
-  twemoji-parser@14.0.0: {}
 
   typescript@5.9.3: {}
 

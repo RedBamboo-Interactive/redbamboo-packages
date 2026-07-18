@@ -11,6 +11,8 @@
  *   :root, :root.dark { --brand: #E55B5B; }
  */
 
+@import url("https://fonts.googleapis.com/css2?family=Noto+Emoji:wght@400;700&display=swap");
+
 @custom-variant dark (&:is(.dark *));
 
 /* ── Semantic theme tokens ──────────────────────────────────────────── */
@@ -36,10 +38,10 @@
 /* ── Tailwind theme mapping ─────────────────────────────────────────── */
 
 @theme inline {
-  --font-heading: "Inter Variable", "Inter", system-ui, sans-serif;
-  --font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
-  --font-serif: "Lora Variable", "Lora", Georgia, serif;
+  --font-heading: "Inter Variable", "Inter", system-ui, "Noto Emoji", sans-serif;
+  --font-sans: "Inter Variable", "Inter", system-ui, "Noto Emoji", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Noto Emoji", monospace;
+  --font-serif: "Lora Variable", "Lora", Georgia, "Noto Emoji", serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -487,6 +489,7 @@ body {
   background: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-variant-emoji: text;
 }
 
 * {

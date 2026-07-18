@@ -10,9 +10,7 @@ import {
 } from "@redbamboo/ui"
 import type { MessageBlock, MessagePart, ImageAttachment, StructuredQuestion } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
-import { Emojify } from "./emojify"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
-import { rehypeTwemoji } from "../lib/rehype-twemoji"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
@@ -317,7 +315,7 @@ export const ChatMessage = memo(function ChatMessage({
               </div>
             )}
             {content && (
-              <p className="text-sm whitespace-pre-wrap break-words font-serif"><Emojify text={content} /></p>
+              <p className="text-sm whitespace-pre-wrap break-words font-serif">{content}</p>
             )}
           </div>
         </div>
@@ -737,7 +735,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
           </DialogHeader>
 
           <div className="overflow-y-auto p-5 flex-1 min-h-0 text-sm leading-relaxed font-serif markdown-body">
-            <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight, rehypeTwemoji]} components={mdComponents} urlTransform={(u: string) => u}>
+            <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents} urlTransform={(u: string) => u}>
               {planText}
             </Markdown>
           </div>

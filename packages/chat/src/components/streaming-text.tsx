@@ -3,7 +3,6 @@ import { createPortal } from "react-dom"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
-import { rehypeTwemoji } from "../lib/rehype-twemoji"
 
 // Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
 const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
@@ -167,10 +166,7 @@ export function StreamingText({
   const resolveRef = useRef(resolveImageSrc)
   resolveRef.current = resolveImageSrc
   const mdComponents = useMemo(() => ({
-    img: ({ src, alt, className }: React.ImgHTMLAttributes<HTMLImageElement>) => {
-      if (className?.toString().includes("twemoji")) {
-        return <img src={src} alt={alt} className="twemoji" draggable={false} style={{ display: "inline", height: "1.2em", width: "1.2em", verticalAlign: "-0.2em", margin: "0 0.05em", filter: "invert(1) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white)", opacity: 0.8 }} />
-      }
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
       const s = src?.toString()
       if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
       return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
@@ -180,7 +176,7 @@ export function StreamingText({
   return (
     <Markdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
+      rehypePlugins={[rehypeHighlight]}
       components={mdComponents}
       urlTransform={(u: string) => u}
     >
@@ -199,10 +195,7 @@ export function MarkdownRenderer({
   const resolveRef = useRef(resolveImageSrc)
   resolveRef.current = resolveImageSrc
   const mdComponents = useMemo(() => ({
-    img: ({ src, alt, className }: React.ImgHTMLAttributes<HTMLImageElement>) => {
-      if (className?.toString().includes("twemoji")) {
-        return <img src={src} alt={alt} className="twemoji" draggable={false} style={{ display: "inline", height: "1.2em", width: "1.2em", verticalAlign: "-0.2em", margin: "0 0.05em", filter: "invert(1) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white) drop-shadow(0 0 0.15px white)", opacity: 0.8 }} />
-      }
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
       const s = src?.toString()
       if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
       return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
@@ -212,7 +205,7 @@ export function MarkdownRenderer({
   return (
     <Markdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight, rehypeTwemoji]}
+      rehypePlugins={[rehypeHighlight]}
       components={mdComponents}
       urlTransform={(u: string) => u}
     >
