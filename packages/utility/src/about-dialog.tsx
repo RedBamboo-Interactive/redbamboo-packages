@@ -82,7 +82,7 @@ function AboutDialog({
           )}
         </DialogHeader>
 
-        <div className={banner ? "px-6 space-y-4" : "space-y-4"}>
+        <div className={banner ? "px-6 pt-4 pb-4 space-y-4" : "space-y-4"}>
           {hasUpdate && (
             <div className="flex items-center gap-2 rounded-lg border border-accent-teal-a30 bg-accent-teal-a5 px-3 py-2 text-sm text-accent-teal">
               <i className="ph-bold ph-arrow-circle-up text-xs" />
