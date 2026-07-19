@@ -12,9 +12,11 @@ export interface ShareDialogProps {
   shareUrl: string | null
   loading: boolean
   error: string | null
+  title?: string
+  description?: string
 }
 
-export function ShareDialog({ open, onOpenChange, shareUrl, loading, error }: ShareDialogProps) {
+export function ShareDialog({ open, onOpenChange, shareUrl, loading, error, title = "Share conversation", description = "Anyone with this link can view a read-only snapshot of this conversation." }: ShareDialogProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {
@@ -29,7 +31,7 @@ export function ShareDialog({ open, onOpenChange, shareUrl, loading, error }: Sh
       <DialogContent className="max-w-sm p-0 gap-0">
         <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
           <i className="ph-bold ph-share-network text-sm text-text-muted" />
-          <DialogTitle className="text-sm">Share conversation</DialogTitle>
+          <DialogTitle className="text-sm">{title}</DialogTitle>
         </DialogHeader>
 
         <div className="p-4 space-y-3">
@@ -49,7 +51,7 @@ export function ShareDialog({ open, onOpenChange, shareUrl, loading, error }: Sh
           {shareUrl && !loading && (
             <>
               <p className="text-xs text-text-muted">
-                Anyone with this link can view a read-only snapshot of this conversation.
+                {description}
               </p>
               <div className="flex items-center gap-2">
                 <input
