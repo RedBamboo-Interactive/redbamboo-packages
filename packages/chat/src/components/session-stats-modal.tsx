@@ -21,18 +21,11 @@ interface Props {
 }
 
 const DEFAULT_MAX_CONTEXT = 200_000
-const CONTEXT_HINT_RE = /\[(\d+)([km])\]/i
 
+// contextWindow is resolved server-side, where a quality mode's declared window outranks
+// whatever the inference runtime reported. Nothing left to infer from the model name here.
 export function getMaxContext(stats: SessionStats): number {
-  if (stats.model) {
-    const match = stats.model.match(CONTEXT_HINT_RE)
-    if (match) {
-      const n = parseInt(match[1])
-      return n * (match[2].toLowerCase() === "m" ? 1_000_000 : 1_000)
-    }
-  }
-  if (stats.contextWindow) return stats.contextWindow
-  return DEFAULT_MAX_CONTEXT
+  return stats.contextWindow || DEFAULT_MAX_CONTEXT
 }
 
 function getContextTokens(stats: SessionStats): number {
