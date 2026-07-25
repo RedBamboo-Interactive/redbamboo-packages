@@ -1,1 +1,5 @@
 *.png
+
+# One-off browsing scratch scripts. They hardcode a personal output path
+# and are not part of the published @redbamboo/testing surface.
+browse*.cjs
