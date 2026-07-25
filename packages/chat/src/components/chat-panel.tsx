@@ -3,6 +3,7 @@ import type { ChatPanelProps, MessageBlock as MessageBlockType } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
 import { ChatMessage, extractPlanFileContent } from "./chat-message"
+import { isEventBlock } from "../lib/event-parts"
 import { Composer } from "./composer"
 import { StreamingStatusLine } from "./streaming-status-line"
 import { PendingQuestionLine } from "./pending-question-line"
@@ -113,7 +114,9 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const lastAssistantIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "assistant") return i
+      // Skip ambient event groups: a host can append one while a response is
+      // still streaming, and the live treatment belongs to the response.
+      if (messages[i].role === "assistant" && !isEventBlock(messages[i])) return i
     }
     return -1
   }, [messages])

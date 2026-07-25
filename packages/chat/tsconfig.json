@@ -2,7 +2,15 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    // Lets pure lib modules carry explicit .ts specifiers so `npm test` can run
+    // them on node:test directly. Emit is handled by vite-plugin-dts; tsc here
+    // only typechecks.
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // node:test files are not part of the shipped bundle and need @types/node,
+  // which would pull Node globals into a browser-targeted program.
+  "exclude": ["src/**/*.test.ts"]
 }

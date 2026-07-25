@@ -14,6 +14,7 @@ import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
+import { isEventPart, isEventBlock } from "../lib/event-parts"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
 
@@ -90,10 +91,6 @@ function novaEventIcon(type: string): string {
   }
 }
 
-function isEventPart(part: MessagePart): boolean {
-  return part.type === "tool_use" && !!part.toolName?.startsWith("event:")
-}
-
 function getEventMeta(part: MessagePart): { color?: string; icon?: string } {
   if (!part.toolInput) return {}
   try {
@@ -122,7 +119,9 @@ export function getPartColor(part: MessagePart): string {
 export function getSpinnerColor(messages: MessageBlock[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const block = messages[i]
-    if (block.role !== "assistant") continue
+    // Ambient event groups can trail the in-flight block; they say nothing
+    // about what the model is currently doing.
+    if (block.role !== "assistant" || isEventBlock(block)) continue
     for (let j = block.parts.length - 1; j >= 0; j--) {
       const part = block.parts[j]
       if (part.type === "thinking") return COLOR.thinking

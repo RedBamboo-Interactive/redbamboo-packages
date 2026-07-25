@@ -1,4 +1,7 @@
 import type { ChatEvent, MessageBlock, MessagePart, PendingQuestion, ProcessEventResult, StructuredQuestion } from "../types"
+// Explicit extension: this module is exercised by node:test, and bare Node ESM
+// does not resolve extensionless relative specifiers.
+import { streamTargetIndex } from "./event-parts.ts"
 
 let partIdCounter = 0
 
@@ -6,6 +9,17 @@ function finalizePartials(block: MessageBlock): MessageBlock {
   const hasPartial = block.parts.some(p => p.isPartial)
   if (!hasPartial) return block
   return { ...block, parts: block.parts.map(p => p.isPartial ? { ...p, isPartial: false } : p) }
+}
+
+/** Close out the in-flight block's partial parts, wherever it sits in the list. */
+export function finalizeStreamBlock(messages: MessageBlock[]): MessageBlock[] {
+  const idx = streamTargetIndex(messages)
+  if (idx === -1) return messages
+  const finalized = finalizePartials(messages[idx])
+  if (finalized === messages[idx]) return messages
+  const updated = [...messages]
+  updated[idx] = finalized
+  return updated
 }
 
 export function parseStructuredQuestions(raw: Record<string, unknown>): StructuredQuestion[] | undefined {
@@ -54,34 +68,26 @@ export function processStreamEvent(
   event: ChatEvent,
 ): ProcessEventResult {
   if (event.type === "status") {
-    if (!messages.length) return { messages, isStreaming: false, pendingQuestion: null }
-    const lastBlock = messages[messages.length - 1]
-    if (lastBlock.role !== "assistant") return { messages, isStreaming: false, pendingQuestion: null }
-    const finalized = finalizePartials(lastBlock)
-    const updated = finalized === lastBlock ? messages : [...messages.slice(0, -1), finalized]
-    return { messages: updated, isStreaming: false, pendingQuestion: null }
+    return { messages: finalizeStreamBlock(messages), isStreaming: false, pendingQuestion: null }
   }
 
   if (event.type === "error") {
-    const msgs = applyEvent(messages, event)
-    const lastBlock = msgs[msgs.length - 1]
-    const finalized = lastBlock?.role === "assistant" ? finalizePartials(lastBlock) : lastBlock
-    const updated = finalized === lastBlock ? msgs : [...msgs.slice(0, -1), finalized]
-    return { messages: updated, isStreaming: false, pendingQuestion: null }
+    return { messages: finalizeStreamBlock(applyEvent(messages, event)), isStreaming: false, pendingQuestion: null }
   }
 
   const msgs = applyEvent(messages, event)
-  const lastBlock = msgs[msgs.length - 1]
-  const pendingQuestion = lastBlock?.role === "assistant" ? detectPendingQuestion(lastBlock) : null
+  const idx = streamTargetIndex(msgs)
+  const pendingQuestion = idx === -1 ? null : detectPendingQuestion(msgs[idx])
   const streamingOut = pendingQuestion ? false : isStreaming
   return { messages: msgs, isStreaming: streamingOut, pendingQuestion }
 }
 
 function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] {
   const msgs = [...messages]
-  let lastBlock = msgs[msgs.length - 1]
+  const idx = streamTargetIndex(msgs)
+  let lastBlock: MessageBlock
 
-  if (!lastBlock || lastBlock.role !== "assistant") {
+  if (idx === -1) {
     // Prefer the server-minted message uid: the persisted records of this
     // turn carry the same value, so the block keeps its id across a reload.
     lastBlock = {
@@ -90,10 +96,11 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
       parts: [],
       timestamp: new Date().toISOString(),
     }
+    // Appended after any trailing event group: this turn genuinely starts now.
     msgs.push(lastBlock)
   } else {
-    lastBlock = { ...lastBlock, parts: [...lastBlock.parts] }
-    msgs[msgs.length - 1] = lastBlock
+    lastBlock = { ...msgs[idx], parts: [...msgs[idx].parts] }
+    msgs[idx] = lastBlock
   }
 
   const part: MessagePart = {

@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
+    },
+    "./event-parts": {
+      "types": "./src/lib/event-parts.ts",
+      "default": "./src/lib/event-parts.ts"
     }
   },
   "files": [
@@ -22,7 +26,7 @@
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "lint": "echo ok",
-    "test": "echo ok",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "clean": "rimraf dist"
   },
   "peerDependencies": {

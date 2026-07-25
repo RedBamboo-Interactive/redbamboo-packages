@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react"
 import type { ChatBackend, ChatEvent, MessageBlock, ImageAttachment, PendingQuestion } from "../types"
-import { processStreamEvent } from "../lib/process-stream-event"
+import { processStreamEvent, finalizeStreamBlock } from "../lib/process-stream-event"
 
 const EMPTY_MESSAGES: MessageBlock[] = []
 const noop = () => {}
@@ -56,15 +56,7 @@ export function useChatStream(backend: ChatBackend | null) {
     setIsStreaming(false)
     setPendingQuestion(null)
 
-    setMessages(prev => {
-      if (!prev.length) return prev
-      const lastBlock = prev[prev.length - 1]
-      if (lastBlock.role !== "assistant") return prev
-      const hasPartial = lastBlock.parts.some(p => p.isPartial)
-      if (!hasPartial) return prev
-      const updatedParts = lastBlock.parts.map(p => p.isPartial ? { ...p, isPartial: false } : p)
-      return [...prev.slice(0, -1), { ...lastBlock, parts: updatedParts }]
-    })
+    setMessages(prev => finalizeStreamBlock(prev))
 
     if (unsubRef.current) {
       unsubRef.current()
