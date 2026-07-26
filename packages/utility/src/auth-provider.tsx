@@ -5,37 +5,37 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 const REFRESH_INTERVAL = 780_000
 
+// The server's auth middleware grants loopback requests this identity per-request,
+// without issuing any cookies. There is no refresh token to rotate, so refreshing
+// would 401 on every cycle.
+const LOCAL_IDENTITY_ID = "local-user"
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined)
 
-  const fetchUser = useCallback(async () => {
+  const fetchUser = useCallback(async (): Promise<AuthUser | null> => {
     try {
       const res = await fetch("/auth/me", { credentials: "include" })
       if (res.ok) {
-        const data = await res.json()
+        const data = (await res.json()) as AuthUser
         setUser(data)
-        return true
+        return data
       }
       setUser(null)
-      return false
+      return null
     } catch {
       setUser(null)
-      return false
+      return null
     }
   }, [])
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/auth/refresh", { method: "POST", credentials: "include" })
-      if (res.ok) {
-        return await fetchUser()
-      }
-      return await fetchUser()
-    } catch {
-      return await fetchUser()
-    }
+      await fetch("/auth/refresh", { method: "POST", credentials: "include" })
+    } catch {}
+    return (await fetchUser()) !== null
   }, [fetchUser])
 
   const logout = useCallback(async () => {
@@ -54,10 +54,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    fetchUser().then((ok) => {
+    fetchUser().then((current) => {
       if (cancelled) return
       setIsLoading(false)
-      if (ok) {
+      if (current && current.id !== LOCAL_IDENTITY_ID) {
         intervalRef.current = setInterval(() => {
           refresh()
         }, REFRESH_INTERVAL)
