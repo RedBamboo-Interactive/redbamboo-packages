@@ -66,20 +66,47 @@ export function processStreamEvent(
   messages: MessageBlock[],
   isStreaming: boolean,
   event: ChatEvent,
+  resumePending = false,
 ): ProcessEventResult {
   if (event.type === "status") {
-    return { messages: finalizeStreamBlock(messages), isStreaming: false, pendingQuestion: null }
+    // "interrupting" fires the instant an interrupt request reaches the CLI's
+    // stdin — an ack of receipt, not a turn-ended signal. The turn is still
+    // unwinding (up to ~10s if a tool ignores cancellation), so this is NOT
+    // terminal: isStreaming stays true and the block is not finalized.
+    if (event.content === "interrupting") {
+      const idx = streamTargetIndex(messages)
+      const pendingQuestion = idx === -1 ? null : detectPendingQuestion(messages[idx])
+      return { messages, isStreaming: true, pendingQuestion, interrupting: true, resumePending }
+    }
+    // Every other status is terminal. "killed" means the CLI process was
+    // force-replaced and a write isn't safe until the follow-up "idle" (or an
+    // "error" if the resume failed) arrives — anything else, including a
+    // status string this build doesn't recognize, is treated as safe-to-write
+    // so an unfamiliar provider's vocabulary fails closed to prior behaviour.
+    return {
+      messages: finalizeStreamBlock(messages),
+      isStreaming: false,
+      pendingQuestion: null,
+      interrupting: false,
+      resumePending: event.content === "killed",
+    }
   }
 
   if (event.type === "error") {
-    return { messages: finalizeStreamBlock(applyEvent(messages, event)), isStreaming: false, pendingQuestion: null }
+    return {
+      messages: finalizeStreamBlock(applyEvent(messages, event)),
+      isStreaming: false,
+      pendingQuestion: null,
+      interrupting: false,
+      resumePending: false,
+    }
   }
 
   const msgs = applyEvent(messages, event)
   const idx = streamTargetIndex(msgs)
   const pendingQuestion = idx === -1 ? null : detectPendingQuestion(msgs[idx])
   const streamingOut = pendingQuestion ? false : isStreaming
-  return { messages: msgs, isStreaming: streamingOut, pendingQuestion }
+  return { messages: msgs, isStreaming: streamingOut, pendingQuestion, interrupting: false, resumePending }
 }
 
 function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] {

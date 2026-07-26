@@ -1,11 +1,21 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react"
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from "react"
 import type { ImageAttachment } from "../types"
 
 interface ComposerProps {
+  /**
+   * Called for every submit — Enter, the send button, and Ctrl+Enter/Ctrl+click
+   * alike. Composer has no notion of a message queue; it just reports "send
+   * this" and, when the modifier is held, follows it with `onInterrupt`. The
+   * caller (ChatPanel) decides what "send" means — enqueue-and-drain-later.
+   */
   onSend: (content: string, images?: ImageAttachment[]) => void
   onInterrupt: () => void
   disabled: boolean
   isStreaming: boolean
+  /** The transitional window after an interrupt is requested but before the turn has unwound — isStreaming is still true here. */
+  interrupting?: boolean
+  /** The backend's process was force-killed and is being replaced — not safe to drain a queue into yet, even though isStreaming is false. */
+  resumePending?: boolean
   placeholder?: string
   permissionMode?: string
   onTogglePlanMode?: () => void
@@ -17,6 +27,11 @@ interface ComposerProps {
   enableImageAttachments?: boolean
   enableFileAttachments?: boolean
   draftStorageKey?: string
+}
+
+export interface ComposerHandle {
+  /** Loads text (and images) into the composer, e.g. pulling a queued ghost back in to edit. */
+  loadDraft: (text: string, images?: ImageAttachment[]) => void
 }
 
 function readImageFile(file: File): Promise<ImageAttachment | null> {
@@ -52,11 +67,13 @@ function removeDraftFromStorage(key: string, id: string): void {
   try { localStorage.removeItem(`${key}:${id}`) } catch {}
 }
 
-export function Composer({
+export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer({
   onSend,
   onInterrupt,
   disabled,
   isStreaming,
+  interrupting,
+  resumePending,
   placeholder,
   permissionMode,
   onTogglePlanMode,
@@ -68,11 +85,11 @@ export function Composer({
   enableImageAttachments = true,
   enableFileAttachments = true,
   draftStorageKey,
-}: ComposerProps) {
+}, ref) {
   const [value, setValue] = useState("")
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
-  const [interrupted, setInterrupted] = useState(false)
+  const [ctrlHeld, setCtrlHeld] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const draftsRef = useRef<Record<string, { value: string; images: ImageAttachment[] }>>({})
   const prevSessionRef = useRef<string | null | undefined>(undefined)
@@ -120,9 +137,35 @@ export function Composer({
     if (sessionId) textareaRef.current?.focus()
   }, [sessionId])
 
+  // Ctrl held swaps the send button's icon to signal "this will also
+  // interrupt" — purely a visual affordance ahead of the click/Enter itself,
+  // which reads the modifier straight off its own event. Must clear on keyup
+  // AND on blur/visibilitychange, or alt-tabbing away with Ctrl held leaves
+  // the icon stuck lit.
   useEffect(() => {
-    if (!isStreaming) setInterrupted(false)
-  }, [isStreaming])
+    const onKeyDown = (e: KeyboardEvent) => { if (e.ctrlKey) setCtrlHeld(true) }
+    const onKeyUp = (e: KeyboardEvent) => { if (!e.ctrlKey) setCtrlHeld(false) }
+    const reset = () => setCtrlHeld(false)
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("keyup", onKeyUp)
+    window.addEventListener("blur", reset)
+    document.addEventListener("visibilitychange", reset)
+    return () => {
+      window.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("keyup", onKeyUp)
+      window.removeEventListener("blur", reset)
+      document.removeEventListener("visibilitychange", reset)
+    }
+  }, [])
+
+  useImperativeHandle(ref, () => ({
+    loadDraft: (text, imgs) => {
+      setValue(text)
+      setImages(imgs ?? [])
+      setDraftRestoreKey(k => k + 1)
+      textareaRef.current?.focus()
+    },
+  }), [])
 
   useEffect(() => {
     if (!draftStorageKey || !sessionId) return
@@ -143,8 +186,6 @@ export function Composer({
     }
   }, [draftStorageKey])
 
-  const streaming = isStreaming && !interrupted
-
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -155,16 +196,18 @@ export function Composer({
   }, [])
 
   const doInterrupt = useCallback(() => {
-    setInterrupted(true)
     onInterrupt()
     textareaRef.current?.focus()
   }, [onInterrupt])
 
-  const handleSubmit = useCallback(() => {
-    if (streaming) {
+  // Enter / the send button always ENQUEUE — one code path whether idle or
+  // streaming, so idle-drains-instantly and mid-turn-queues never diverge.
+  // Ctrl+Enter / Ctrl+click is that same enqueue followed by onInterrupt: not
+  // a second delivery path, just this one plus an interrupt.
+  const handleSubmit = useCallback((opts?: { interruptToo?: boolean }) => {
+    if (isStreaming) {
       const trimmed = value.trim()
       if (trimmed || images.length > 0) {
-        setInterrupted(true)
         onSend(trimmed, images.length > 0 ? images : undefined)
         setValue("")
         setImages([])
@@ -173,7 +216,9 @@ export function Composer({
           if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
         }
         if (textareaRef.current) textareaRef.current.style.height = "auto"
+        if (opts?.interruptToo) doInterrupt()
       } else {
+        // Nothing to queue — Enter/click on an empty box while streaming just stops the turn, like Escape.
         doInterrupt()
       }
       return
@@ -202,10 +247,10 @@ export function Composer({
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
     }
-  }, [value, images, disabled, streaming, onSend, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
+  }, [value, images, disabled, isStreaming, onSend, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape" && streaming) {
+    if (e.key === "Escape" && isStreaming) {
       e.preventDefault()
       doInterrupt()
       return
@@ -217,12 +262,12 @@ export function Composer({
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      handleSubmit()
+      handleSubmit({ interruptToo: e.ctrlKey })
     }
   }
 
   useEffect(() => {
-    if (!disabled || streaming || !onResume) return
+    if (!disabled || isStreaming || !onResume) return
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault()
@@ -231,7 +276,7 @@ export function Composer({
     }
     document.addEventListener("keydown", handler)
     return () => document.removeEventListener("keydown", handler)
-  }, [disabled, streaming, onResume])
+  }, [disabled, isStreaming, onResume])
 
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
     const items = Array.from(e.clipboardData.items)
@@ -285,16 +330,22 @@ export function Composer({
     if (fileInputRef.current) fileInputRef.current.value = ""
   }, [])
 
-  const inputDisabled = disabled && !streaming
+  const inputDisabled = disabled && !isStreaming
   const isPlan = permissionMode === "plan"
+  const hasContent = !!value.trim() || images.length > 0
+  const willInterrupt = isStreaming && (!hasContent || ctrlHeld)
 
   const defaultPlaceholder = inputDisabled
     ? "Session not active"
-    : streaming
-      ? "Press Escape to interrupt, or type a follow-up..."
-      : pendingQuestion
-        ? "Type your answer here..."
-        : "Send a message..."
+    : interrupting
+      ? "Interrupting the current turn…"
+      : isStreaming
+        ? "Press Escape to interrupt, or type to queue a follow-up..."
+        : resumePending
+          ? "Reconnecting to the session…"
+          : pendingQuestion
+            ? "Type your answer here..."
+            : "Send a message..."
 
   return (
     <div data-slot="composer" className="px-3 pt-3 pb-5 shrink-0">
@@ -354,7 +405,7 @@ export function Composer({
             rows={1}
             className="message-input-textarea w-full flex-1 resize-none bg-transparent px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none disabled:opacity-50 min-h-[6.5rem]"
           />
-          {renderInlineAction?.({ value, isStreaming: streaming, disabled: inputDisabled, hasImages: images.length > 0 })}
+          {renderInlineAction?.({ value, isStreaming, disabled: inputDisabled, hasImages: images.length > 0 })}
         </div>
         <div className="flex flex-col justify-end gap-1.5 shrink-0 w-16">
           <div className="flex justify-center gap-1">
@@ -394,13 +445,15 @@ export function Composer({
               {isPlan ? "Plan" : "Act"}
             </button>
           )}
-          {streaming ? (
+          {isStreaming ? (
             <button
-              onClick={doInterrupt}
-              className="w-full flex-1 px-3 py-2 rounded-md bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400 transition-colors flex items-center justify-center"
-              title="Interrupt (Escape)"
+              onClick={(e) => handleSubmit({ interruptToo: e.ctrlKey })}
+              className={`w-full flex-1 px-3 py-2 rounded-md transition-colors flex items-center justify-center ${
+                willInterrupt ? "bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400" : "bg-overlay-10 hover:bg-overlay-15"
+              }`}
+              title={!hasContent ? "Interrupt (Escape)" : ctrlHeld ? "Send now (interrupts the current turn)" : "Queue — sends when the current turn ends (Ctrl+Enter to send now)"}
             >
-              <i className="ph-bold ph-stop text-sm" />
+              <i className={`ph-bold ${willInterrupt ? "ph-stop" : "ph-paper-plane"} text-sm`} />
             </button>
           ) : disabled && onResume ? (
             <button
@@ -412,7 +465,7 @@ export function Composer({
             </button>
           ) : (
             <button
-              onClick={handleSubmit}
+              onClick={() => handleSubmit()}
               disabled={disabled || (!value.trim() && images.length === 0)}
               className="w-full flex-1 px-3 py-2 rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
@@ -423,4 +476,4 @@ export function Composer({
       </div>
     </div>
   )
-}
+})

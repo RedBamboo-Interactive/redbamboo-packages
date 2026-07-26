@@ -1,0 +1,66 @@
+import type { ImageAttachment } from "../types"
+
+export interface QueuedMessage {
+  id: string
+  text: string
+  images?: ImageAttachment[]
+}
+
+export function enqueue(queue: QueuedMessage[], entry: QueuedMessage): QueuedMessage[] {
+  return [...queue, entry]
+}
+
+export function cancel(queue: QueuedMessage[], id: string): QueuedMessage[] {
+  return queue.filter(m => m.id !== id)
+}
+
+/** Joins every queued entry into the single turn that gets sent when the queue drains. */
+export function coalesce(queue: QueuedMessage[]): { text: string; images?: ImageAttachment[] } | null {
+  if (queue.length === 0) return null
+  const text = queue.map(m => m.text).join("\n")
+  const images = queue.flatMap(m => m.images ?? [])
+  return { text, images: images.length > 0 ? images : undefined }
+}
+
+export interface DrainConditions {
+  queueLength: number
+  isStreaming: boolean
+  disabled: boolean
+  /**
+   * The window after the backend reports its CLI process was force-killed and
+   * is being replaced: `isStreaming` is already false there, but writing new
+   * input would race the resume (see process-stream-event.ts's "killed"
+   * handling).
+   */
+  resumePending?: boolean
+  /**
+   * The agent asked the user a question and is blocked on the answer. The
+   * session is still Active server-side, but `isStreaming` is forced false so
+   * the answer box works — draining here would post a plain message into a
+   * turn waiting on `onAnswerQuestion`, which is a different endpoint.
+   */
+  questionPending?: boolean
+}
+
+/** Every condition is a veto; the queue only moves when all of them agree. */
+export function shouldDrain({
+  queueLength,
+  isStreaming,
+  disabled,
+  resumePending = false,
+  questionPending = false,
+}: DrainConditions): boolean {
+  return queueLength > 0 && !isStreaming && !disabled && !resumePending && !questionPending
+}
+
+/**
+ * One atomic drain: coalesces the whole queue into a single send and empties
+ * it. Calling this again on the `remaining` result is a no-op (coalesce
+ * returns null on an empty queue) — the property the hook's settle timer
+ * relies on to survive firing twice for the same drain.
+ */
+export function drainStep(queue: QueuedMessage[]): { sent: { text: string; images?: ImageAttachment[] }; remaining: QueuedMessage[] } | null {
+  const sent = coalesce(queue)
+  if (!sent) return null
+  return { sent, remaining: [] }
+}

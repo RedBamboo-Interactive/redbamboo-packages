@@ -24,6 +24,9 @@ const events = (...keys: string[]): MessageBlock => ({
 const token = (content: string): ChatEvent =>
   ({ type: "text", content, toolName: null, toolInput: null, toolResult: null, messageId: null, messageUid: null })
 
+const status = (content: string | null): ChatEvent =>
+  ({ type: "status", content, toolName: null, toolInput: null, toolResult: null, messageId: null, messageUid: null })
+
 const text = (block: MessageBlock) =>
   block.parts.filter((p) => p.type === "text").map((p) => p.content).join("")
 
@@ -101,4 +104,83 @@ test("consecutive text tokens concatenate into one part", () => {
   messages = processStreamEvent(messages, true, token("c")).messages
   assert.equal(messages[1].parts.filter((p) => p.type === "text").length, 1)
   assert.equal(text(messages[1]), "abc")
+})
+
+// Regression coverage for the interrupt/kill/resume sequence: an SSE ack that
+// an interrupt request was *received* is not the same as the turn being
+// *over*, and a force-killed process is not the same as one that's safe to
+// write to again. Getting either wrong lets a queued follow-up drain into a
+// session that hasn't actually stopped (or hasn't come back yet).
+
+test("an 'interrupting' status stays streaming and does not finalize the block", () => {
+  const messages = processStreamEvent([user("q")], true, token("Hel")).messages
+  const result = processStreamEvent(messages, true, status("interrupting"))
+  assert.equal(result.isStreaming, true, "the turn has not unwound yet")
+  assert.equal(result.interrupting, true)
+  assert.equal(result.resumePending, false)
+  assert.ok(result.messages[1].parts.some((p) => p.isPartial), "block left open, not finalized")
+})
+
+test("an 'interrupting' status preserves an existing pending question instead of nulling it", () => {
+  const ask: ChatEvent = {
+    type: "tool_use", content: null, toolName: "AskUserQuestion",
+    toolInput: JSON.stringify({ question: "Which one?" }),
+    toolResult: null, messageId: null, messageUid: null,
+  }
+  const asked = processStreamEvent([user("q")], true, ask)
+  const result = processStreamEvent(asked.messages, true, status("interrupting"))
+  assert.equal(result.pendingQuestion?.question, "Which one?", "not cleared by a transitional status")
+})
+
+test("an 'interrupted' status (the graceful ack after 'interrupting') is terminal and safe", () => {
+  let messages = processStreamEvent([user("q")], true, token("Hel")).messages
+  let result = processStreamEvent(messages, true, status("interrupting"))
+  result = processStreamEvent(result.messages, result.isStreaming, status("interrupted"), result.resumePending)
+  assert.equal(result.isStreaming, false)
+  assert.equal(result.interrupting, false)
+  assert.equal(result.resumePending, false, "safe to drain the queue")
+  assert.ok(!result.messages[1].parts.some((p) => p.isPartial), "answer finalized")
+})
+
+test("a 'killed' status is terminal but NOT safe to write to — resumePending must block the drain", () => {
+  const messages = processStreamEvent([user("q")], true, token("Hel")).messages
+  const result = processStreamEvent(messages, true, status("killed"))
+  assert.equal(result.isStreaming, false, "isStreaming alone is not enough to gate a drain here")
+  assert.equal(result.resumePending, true, "the caller must check this before writing")
+})
+
+test("the 'idle' that follows a 'killed' resume clears resumePending", () => {
+  const messages = processStreamEvent([user("q")], true, token("Hel")).messages
+  const killed = processStreamEvent(messages, true, status("killed"))
+  assert.equal(killed.resumePending, true)
+  const resumed = processStreamEvent(killed.messages, killed.isStreaming, status("idle"), killed.resumePending)
+  assert.equal(resumed.resumePending, false, "resume succeeded — safe to drain again")
+  assert.equal(resumed.isStreaming, false)
+})
+
+test("an error following a 'killed' resume also clears resumePending", () => {
+  const messages = processStreamEvent([user("q")], true, token("Hel")).messages
+  const killed = processStreamEvent(messages, true, status("killed"))
+  const failed = processStreamEvent(killed.messages, killed.isStreaming, {
+    type: "error", content: "resume failed", toolName: null, toolInput: null, toolResult: null, messageId: null, messageUid: null,
+  }, killed.resumePending)
+  assert.equal(failed.resumePending, false)
+  assert.equal(failed.isStreaming, false)
+})
+
+test("an unrecognized status string fails closed to terminal-and-safe", () => {
+  const messages = processStreamEvent([user("q")], true, token("Hel")).messages
+  // A future backend value (or a different provider's own vocabulary) this
+  // build doesn't know about must behave like today's code: turn over, safe.
+  const result = processStreamEvent(messages, true, status("some-future-status"))
+  assert.equal(result.isStreaming, false)
+  assert.equal(result.interrupting, false)
+  assert.equal(result.resumePending, false)
+})
+
+test("a status with no content (older backends) is terminal-and-safe", () => {
+  const messages = processStreamEvent([user("q")], true, token("Hel")).messages
+  const result = processStreamEvent(messages, true, status(null))
+  assert.equal(result.isStreaming, false)
+  assert.equal(result.resumePending, false)
 })

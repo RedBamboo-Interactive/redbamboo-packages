@@ -171,6 +171,20 @@ export interface ProcessEventResult {
   messages: MessageBlock[]
   isStreaming: boolean
   pendingQuestion: PendingQuestion | null
+  /**
+   * True only for the transitional window between an interrupt being
+   * requested and the turn actually unwinding (backend status "interrupting").
+   * `isStreaming` stays true through this window — this flag exists so the UI
+   * can say so instead of implying normal generation is still running.
+   */
+  interrupting: boolean
+  /**
+   * True after the backend reports its CLI process was force-killed and is
+   * being replaced (status "killed"), until the follow-up status or error
+   * lands. `isStreaming` is false here, but writing new input would race the
+   * resume — callers must not treat this as safe-to-send.
+   */
+  resumePending: boolean
 }
 
 // --- ChatPanel types ---
@@ -184,6 +198,21 @@ export interface ChatPanelProps {
   isStreaming?: boolean
   onSend?: (content: string, images?: ImageAttachment[], options?: SendOptions) => void
   onInterrupt?: () => void
+  /**
+   * True during the transitional window after an interrupt is requested but
+   * before the turn has unwound. Optional: controlled-mode consumers that
+   * don't track their backend's status vocabulary this granularly can omit
+   * it and lose only the more specific "interrupting" placeholder copy.
+   */
+  interrupting?: boolean
+  /**
+   * True when the backend's process was just force-killed and is being
+   * replaced — not safe to send queued messages into yet. Optional for the
+   * same reason as `interrupting`, but omitting it means the queue may drain
+   * into a session mid-resume; see process-stream-event.ts's "killed"
+   * handling for why that's unsafe.
+   */
+  resumePending?: boolean
 
   // Shared props
   sessionId?: string | null

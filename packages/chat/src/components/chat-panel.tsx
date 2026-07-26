@@ -2,9 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } fr
 import type { ChatPanelProps, MessageBlock as MessageBlockType } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
+import { useMessageQueue } from "../hooks/use-message-queue"
 import { ChatMessage, extractPlanFileContent } from "./chat-message"
 import { isEventBlock } from "../lib/event-parts"
-import { Composer } from "./composer"
+import { Composer, type ComposerHandle } from "./composer"
+import { QueuedMessageGhost } from "./queued-message-ghost"
+import type { QueuedMessage } from "../lib/message-queue"
 import { StreamingStatusLine } from "./streaming-status-line"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
@@ -28,6 +31,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const sendMessage = props.onSend ?? internal.sendMessage
   const interrupt = props.onInterrupt ?? internal.interrupt
   const pendingQuestion = props.pendingQuestion !== undefined ? props.pendingQuestion : internal.pendingQuestion
+  const interrupting = props.interrupting ?? internal.interrupting
+  const resumePending = props.resumePending ?? internal.resumePending
 
   const {
     sessionId, disabled = false, hideComposer = false, onAnswerQuestion, onResume,
@@ -48,6 +53,33 @@ export function ChatPanel(props: ChatPanelProps) {
     handsFreeEnabled,
     pushToTalkKey,
   } : null)
+
+  const composerRef = useRef<ComposerHandle>(null)
+  const messageQueue = useMessageQueue({
+    sessionId,
+    isStreaming,
+    disabled,
+    resumePending,
+    questionPending: !!pendingQuestion,
+    onDrain: sendMessage,
+  })
+
+  const handleEditQueued = useCallback((id: string) => {
+    const item = messageQueue.pullback(id)
+    if (item) composerRef.current?.loadDraft(item.text, item.images)
+  }, [messageQueue])
+
+  const renderQueuedGhosts = useCallback((items: QueuedMessage[]) => (
+    items.map(item => (
+      <QueuedMessageGhost
+        key={item.id}
+        item={item}
+        onCancel={messageQueue.cancel}
+        onEdit={handleEditQueued}
+        onSendNow={interrupt}
+      />
+    ))
+  ), [messageQueue.cancel, handleEditQueued, interrupt])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -231,10 +263,13 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const composerEl = hideComposer ? null : (
     <Composer
-      onSend={sendMessage}
+      ref={composerRef}
+      onSend={messageQueue.add}
       onInterrupt={interrupt}
       disabled={disabled}
       isStreaming={isStreaming}
+      interrupting={interrupting}
+      resumePending={resumePending}
       placeholder={voice.interimTranscript ?? placeholder}
       permissionMode={permissionMode}
       onTogglePlanMode={onTogglePlanMode}
@@ -252,11 +287,16 @@ export function ChatPanel(props: ChatPanelProps) {
   if (messages.length === 0 && !header) {
     return (
       <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 ${className || ""}`}>
-        <div className="flex-1 flex items-center justify-center text-text-muted">
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 text-text-muted">
           <div className="text-center">
             <i className="ph ph-terminal-window text-3xl mx-auto mb-3 opacity-30" />
             <p className="text-sm">Send a message to get started</p>
           </div>
+          {messageQueue.queue.length > 0 && (
+            <div className="w-full max-w-md px-4">
+              {renderQueuedGhosts(messageQueue.queue)}
+            </div>
+          )}
         </div>
         {footer}
         {composerEl}
@@ -314,6 +354,7 @@ export function ChatPanel(props: ChatPanelProps) {
             )
           })}
           {statusLine}
+          {renderQueuedGhosts(messageQueue.queue)}
         </div>
       </div>
 
