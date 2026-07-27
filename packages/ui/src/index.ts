@@ -1,7 +1,10 @@
 // Utilities
 export { cn } from "./utils"
+export { normalizeIcon } from "./icons"
+export { ICON_MAP } from "./data/icon-map"
 
 // Components
+export { Icon } from "./components/icon"
 export { Button, buttonVariants } from "./components/button"
 
 export {
