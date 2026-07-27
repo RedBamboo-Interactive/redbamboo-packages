@@ -7,7 +7,7 @@ export interface VoiceInputParams {
   speech: SpeechBackend
   messages: MessageBlock[]
   onSend: (content: string, options?: SendOptions) => void
-  onAnswerQuestion?: (answer: string) => void
+  onAnswerQuestion?: (answer: string, payload?: import("../types").QuestionAnswerPayload) => void
   pendingQuestion?: boolean
   disabled?: boolean
   handsFreeEnabled?: boolean
@@ -116,7 +116,9 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
       setInterimTranscript(null)
 
       if (pendingRef.current && onAnswerRef.current) {
-        onAnswerRef.current(finalText)
+        // Spoken answers are freeform by nature — the same `response` channel
+        // the composer uses, never a selection.
+        onAnswerRef.current(finalText, { response: finalText })
       } else {
         onSendRef.current(finalText, { inputMethod: "voice" })
       }

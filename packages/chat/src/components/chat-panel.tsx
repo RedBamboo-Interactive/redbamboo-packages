@@ -31,11 +31,14 @@ export function ChatPanel(props: ChatPanelProps) {
   const sendMessage = props.onSend ?? internal.sendMessage
   const interrupt = props.onInterrupt ?? internal.interrupt
   const pendingQuestion = props.pendingQuestion !== undefined ? props.pendingQuestion : internal.pendingQuestion
+  const questionOutcome = props.questionOutcome !== undefined ? props.questionOutcome : internal.questionOutcome
   const interrupting = props.interrupting ?? internal.interrupting
   const resumePending = props.resumePending ?? internal.resumePending
+  // Uncontrolled mode answers through the hook, which knows the live requestId.
+  const onAnswerQuestion = props.onAnswerQuestion ?? (props.backend ? internal.answerQuestion : undefined)
 
   const {
-    sessionId, disabled = false, hideComposer = false, onAnswerQuestion, onResume,
+    sessionId, disabled = false, hideComposer = false, onResume,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, draftStorageKey,
@@ -341,6 +344,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 onExecutePlan={onExecutePlan}
                 planFileContent={hasExitPlanPart(block) ? planFileContent : null}
                 isPendingQuestion={isLastAssistant && !!pendingQuestion}
+                questionOutcome={isLastAssistant ? questionOutcome : undefined}
                 onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
                 resolveImageSrc={resolveImageSrc}
                 resolveFileLink={resolveFileLink}

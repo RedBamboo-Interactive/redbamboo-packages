@@ -29,7 +29,13 @@ export interface SendOptions {
 }
 
 export interface ChatEvent {
-  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "status"
+  /**
+   * `question` / `question_resolved` are control events, not conversation:
+   * they open and close a pending question rather than adding a message part.
+   * See process-stream-event.ts for why the pending question can't be inferred
+   * from the parts alone.
+   */
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "status" | "question" | "question_resolved"
   content?: string | null
   toolName?: string | null
   toolInput?: string | null
@@ -42,6 +48,13 @@ export interface ChatEvent {
    * get the same id. Absent on events from older backends.
    */
   messageUid?: string | null
+  /**
+   * Correlation id for the tool call the backend is parked on, carried by
+   * `question` and echoed by `question_resolved`. Clients send it back when
+   * submitting an answer. It is live-only — a reload cannot replay it, which
+   * is why those events are deliberately not persisted.
+   */
+  requestId?: string | null
 }
 
 export interface ChatBackend {
@@ -50,6 +63,12 @@ export interface ChatBackend {
   getHistory?(limit?: number): Promise<MessageBlock[]>
   interrupt?(sessionId: string): Promise<void>
   reset?(): Promise<void>
+  /**
+   * Unblock a tool call the session is parked on (Claude Code's
+   * AskUserQuestion). Not a conversation turn — backends that route answers
+   * back through `sendMessage` simply omit it.
+   */
+  answerQuestion?(sessionId: string, payload: QuestionAnswerPayload): Promise<void>
 }
 
 // --- Speech / voice types ---
@@ -165,12 +184,71 @@ export interface StructuredQuestion {
 export interface PendingQuestion {
   question: string
   questions?: StructuredQuestion[]
+  /**
+   * Correlation id from the backend's `question` event. Present only when the
+   * question is *authoritative* — i.e. the backend told us it is parked and is
+   * waiting for this exact id back. Null when the question was inferred from
+   * the message parts (the fallback path for backends that don't emit
+   * `question` events); such a question can only be answered as a plain turn.
+   */
+  requestId?: string | null
+}
+
+/**
+ * How a question stopped being pending. The first five come verbatim from the
+ * backend's `question_resolved` event; `unresolved` is minted client-side when
+ * the pending question was torn down without one — e.g. the tool errored out.
+ * Only `answered`/`declined` mean the user actually replied.
+ */
+export type QuestionOutcome =
+  | "answered"
+  | "declined"
+  | "timeout"
+  | "cancelled"
+  | "session_ended"
+  | "unresolved"
+
+/** What a client sends to unblock a parked question. */
+export interface QuestionAnswerPayload {
+  /** Echoed from the `question` event. Absent for an inferred question. */
+  requestId?: string | null
+  /**
+   * Chosen option labels, in question order. Multi-select is ONE
+   * comma-separated string per question. Positional so the server (which holds
+   * the authoritative question text) can zip them without a client mis-keying.
+   */
+  answers?: string[]
+  /**
+   * Freeform text the user typed instead of picking. It OUTRANKS `answers` at
+   * the CLI level — when set, selections are dropped — so send one or the
+   * other, never both. Free text accompanying a choice belongs comma-joined
+   * inside that choice's `answers` value.
+   */
+  response?: string
+  /** Dismiss the question without answering it. */
+  decline?: boolean
+  /** Message shown to the model when `decline` is true. */
+  reason?: string
+}
+
+/**
+ * Question lifecycle carried across events. `processStreamEvent` is pure, so
+ * the caller owns this and threads the previous value back in — same contract
+ * as `resumePending`.
+ */
+export interface QuestionState {
+  pending: PendingQuestion | null
+  /** Outcome of the most recently resolved question, or null if none has. */
+  outcome: QuestionOutcome | null
 }
 
 export interface ProcessEventResult {
   messages: MessageBlock[]
   isStreaming: boolean
+  /** Convenience alias for `question.pending`. */
   pendingQuestion: PendingQuestion | null
+  /** Thread this back into the next `processStreamEvent` call. */
+  question: QuestionState
   /**
    * True only for the transitional window between an interrupt being
    * requested and the turn actually unwinding (backend status "interrupting").
@@ -221,7 +299,19 @@ export interface ChatPanelProps {
    * list without mounting the composer at all. */
   hideComposer?: boolean
   pendingQuestion?: PendingQuestion | null
-  onAnswerQuestion?: (answer: string) => void
+  /**
+   * How the last question ended, so a resolved card can say *how* rather than
+   * defaulting to "Answered" — a timeout or a cancellation is not an answer.
+   * Omit it and a resolved card falls back to the generic answered state.
+   */
+  questionOutcome?: QuestionOutcome | null
+  /**
+   * `answer` is the human-readable form (echoed in the UI, spoken by voice);
+   * `payload` is what to send the backend. The payload is absent only from
+   * call sites that have nothing structured to say — treat it as
+   * `{ response: answer }` there.
+   */
+  onAnswerQuestion?: (answer: string, payload?: QuestionAnswerPayload) => void
   onResume?: () => void | Promise<void>
   placeholder?: string
   className?: string

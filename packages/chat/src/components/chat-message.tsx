@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@redbamboo/ui"
-import type { MessageBlock, MessagePart, ImageAttachment, StructuredQuestion } from "../types"
+import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
 import { ToolInputView } from "./tool-input-view"
@@ -184,7 +184,9 @@ interface ChatMessageProps {
   onExecutePlan?: () => void
   planFileContent?: string | null
   isPendingQuestion?: boolean
-  onAnswerQuestion?: (answer: string) => void
+  /** How the last question ended, when the host tracks it. See QuestionCard. */
+  questionOutcome?: QuestionOutcome | null
+  onAnswerQuestion?: (answer: string, payload?: QuestionAnswerPayload) => void
   resolveImageSrc?: (src: string) => string | undefined
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   /**
@@ -217,6 +219,7 @@ export const ChatMessage = memo(function ChatMessage({
   onExecutePlan,
   planFileContent,
   isPendingQuestion,
+  questionOutcome,
   onAnswerQuestion,
   resolveImageSrc,
   resolveFileLink,
@@ -235,6 +238,7 @@ export const ChatMessage = memo(function ChatMessage({
   const [actionsOpen, setActionsOpen] = useState(false)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didFire = useRef(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
 
   const onTouchStart = useCallback(() => {
     didFire.current = false
@@ -254,10 +258,21 @@ export const ChatMessage = memo(function ChatMessage({
 
   useEffect(() => {
     if (!actionsOpen) return
-    const dismiss = () => setActionsOpen(false)
+    const dismiss = (e: Event) => {
+      // Taps inside the action row are the entire point of having opened it.
+      // Dismissing on those would hide the row between `touchstart` and
+      // `touchend`, and the browser never dispatches `click` into a
+      // display:none subtree -- so on touch the reaction picker could never
+      // be opened on a message that had no reactions yet.
+      if (actionsRef.current?.contains(e.target as Node)) return
+      setActionsOpen(false)
+    }
+    // Deferred so the touch that opened the row doesn't immediately close it.
+    // Not `once`, or the first tap anywhere (including inside the row) would
+    // consume the listener and leave the row stuck open afterwards.
     const id = setTimeout(() => {
-      document.addEventListener("touchstart", dismiss, { once: true })
-      document.addEventListener("mousedown", dismiss, { once: true })
+      document.addEventListener("touchstart", dismiss)
+      document.addEventListener("mousedown", dismiss)
     }, 0)
     return () => { clearTimeout(id); document.removeEventListener("touchstart", dismiss); document.removeEventListener("mousedown", dismiss) }
   }, [actionsOpen])
@@ -318,7 +333,11 @@ export const ChatMessage = memo(function ChatMessage({
             )}
           </div>
         </div>
-        <div className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex flex-row-reverse items-center gap-1 mt-1 md:mt-0 md:absolute md:left-full md:ml-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
+        {/* Mobile styles are `max-md:`-qualified rather than unquantified base
+            utilities on purpose: the host app's Tailwind sheet loads after this
+            plugin's, so a bare `flex-row`/`gap-1` here loses to the host's own
+            copy of that class and the `md:` override never applies. */}
+        <div ref={actionsRef} className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex max-md:flex-row-reverse items-center max-md:gap-1 max-md:mt-1 md:absolute md:left-full md:ml-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
           {sideActionsNode}
           <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
             <MessageMetadata block={block} inline />
@@ -399,12 +418,13 @@ export const ChatMessage = memo(function ChatMessage({
           <QuestionCard
             question={questionText}
             questions={structuredQuestions}
-            answered={!isPendingQuestion}
+            status={questionCardStatus(!!isPendingQuestion, questionOutcome, askQuestionPart, block.parts)}
             onAnswer={onAnswerQuestion}
           />
         )}
       </div>
-      <div className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex flex-row items-center gap-1 mt-1 md:mt-0 md:absolute md:right-full md:mr-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
+      {/* `max-md:` rather than bare utilities -- see the user branch above. */}
+      <div ref={actionsRef} className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex max-md:flex-row items-center max-md:gap-1 max-md:mt-1 md:absolute md:right-full md:mr-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
         {sideActionsNode}
         <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
           {!isLiveBlock && <MessageMetadata block={block} inline />}
@@ -756,12 +776,60 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
   )
 }
 
-function QuestionCard({ question, questions, answered, onAnswer }: {
+type QuestionCardStatus = "pending" | QuestionOutcome
+
+/**
+ * What the card should say about a question that is no longer live.
+ *
+ * `questionOutcome` is authoritative and comes from the backend's
+ * `question_resolved` event, but it only exists for a question that resolved
+ * while this client was watching — a card rebuilt from history has none.
+ *
+ * There the tool result is the only evidence, and it is weak: the stream
+ * carries the result text but not its is_error flag, so all we can do is spot
+ * a wrapped error ("<error>Answer questions?</error>" — the rejection this card
+ * was born from). A rejection phrased some other way still reads as answered on
+ * a reloaded conversation. Live sessions don't rely on this.
+ */
+function questionCardStatus(
+  isPending: boolean,
+  outcome: QuestionOutcome | null | undefined,
+  askPart: MessagePart | undefined,
+  allParts: MessagePart[],
+): QuestionCardStatus {
+  if (isPending) return "pending"
+  if (outcome) return outcome
+  const result = askPart ? findPairedResult(allParts, askPart) : undefined
+  if (!result) return "unresolved"
+  return /^\s*<error>/.test(result.content) ? "unresolved" : "answered"
+}
+
+const OUTCOME_COPY: Record<QuestionOutcome, { icon: string; tone: string; label: string }> = {
+  answered: { icon: "ph-check", tone: "text-green-400", label: "Answered" },
+  declined: { icon: "ph-x", tone: "text-text-muted", label: "Dismissed without answering" },
+  timeout: { icon: "ph-clock-countdown", tone: "text-amber-400", label: "Timed out — the model carried on without an answer" },
+  cancelled: { icon: "ph-prohibit", tone: "text-amber-400", label: "Cancelled before it could be answered" },
+  session_ended: { icon: "ph-plugs", tone: "text-amber-400", label: "Session ended before it could be answered" },
+  unresolved: { icon: "ph-warning", tone: "text-amber-400", label: "No answer reached the model" },
+}
+
+function QuestionResolution({ status }: { status: QuestionOutcome }) {
+  const { icon, tone, label } = OUTCOME_COPY[status]
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
+      <i className={`ph-bold ${icon} text-xs ${tone}`} />
+      {label}
+    </span>
+  )
+}
+
+function QuestionCard({ question, questions, status, onAnswer }: {
   question: string
   questions?: StructuredQuestion[] | null
-  answered: boolean
-  onAnswer?: (answer: string) => void
+  status: QuestionCardStatus
+  onAnswer?: (answer: string, payload?: QuestionAnswerPayload) => void
 }) {
+  const answered = status !== "pending"
   const [selections, setSelections] = useState<Map<number, Set<number>>>(new Map())
   const [otherTexts, setOtherTexts] = useState<Map<number, string>>(new Map())
   const [otherActive, setOtherActive] = useState<Map<number, boolean>>(new Map())
@@ -816,29 +884,39 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
     })
   }
 
-  const buildAnswer = (): string => {
-    if (!questions?.length) return freeText.trim()
-    const parts: string[] = []
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i]
+  /**
+   * One value per question, in question order — the shape the backend zips
+   * against its own copy of the questions. Multi-select is a single
+   * comma-separated string, and "Other..." text is comma-joined into that same
+   * value rather than sent as freeform `response`, which would outrank (and so
+   * discard) the selections.
+   */
+  const buildAnswers = (): string[] =>
+    (questions ?? []).map((q, i) => {
       const selected = selections.get(i) || new Set()
       const otherText = otherActive.get(i) ? otherTexts.get(i)?.trim() : undefined
       const labels = Array.from(selected).map(idx => q.options[idx]?.label).filter(Boolean)
       if (otherText) labels.push(otherText)
-      const value = labels.join(", ")
-      if (questions.length > 1) {
-        parts.push(`${q.header || q.question}: ${value}`)
-      } else {
-        parts.push(value)
-      }
-    }
-    return parts.join("\n")
-  }
+      return labels.join(", ")
+    })
+
+  /** The same selections as one readable line, for echoing/speaking. */
+  const summarize = (answers: string[]): string =>
+    answers.length > 1
+      ? answers.map((value, i) => `${questions![i].header || questions![i].question}: ${value}`).join("\n")
+      : answers[0] ?? ""
 
   const handleSubmit = () => {
-    const answer = questions?.length ? buildAnswer() : freeText.trim()
-    if (!answer || !onAnswer) return
-    onAnswer(answer)
+    if (!onAnswer) return
+    if (!questions?.length) {
+      const text = freeText.trim()
+      if (!text) return
+      onAnswer(text, { response: text })
+      return
+    }
+    const answers = buildAnswers()
+    if (answers.some(a => !a)) return
+    onAnswer(summarize(answers), { answers })
   }
 
   const handleFreeTextKeyDown = (e: React.KeyboardEvent) => {
@@ -856,11 +934,8 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
           <span className="text-sm font-medium text-teal-300">Question</span>
         </div>
         <p className="text-sm text-text-primary mb-3 font-serif">{question}</p>
-        {answered ? (
-          <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-            <i className="ph-bold ph-check text-xs text-green-400" />
-            Answered
-          </span>
+        {status !== "pending" ? (
+          <QuestionResolution status={status} />
         ) : onAnswer ? (
           <div className="flex gap-2 items-end">
             <textarea
@@ -985,11 +1060,8 @@ function QuestionCard({ question, questions, answered, onAnswer }: {
       </div>
 
       <div className="mt-3">
-        {answered ? (
-          <span className="flex items-center gap-1.5 text-xs text-text-muted italic">
-            <i className="ph-bold ph-check text-xs text-green-400" />
-            Answered
-          </span>
+        {status !== "pending" ? (
+          <QuestionResolution status={status} />
         ) : onAnswer ? (
           <button
             onClick={handleSubmit}

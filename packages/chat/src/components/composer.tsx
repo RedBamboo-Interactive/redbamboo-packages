@@ -20,7 +20,7 @@ interface ComposerProps {
   permissionMode?: string
   onTogglePlanMode?: () => void
   pendingQuestion?: boolean
-  onAnswerQuestion?: (answer: string) => void
+  onAnswerQuestion?: (answer: string, payload?: import("../types").QuestionAnswerPayload) => void
   onResume?: () => void | Promise<void>
   sessionId?: string | null
   renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean }) => React.ReactNode
@@ -226,7 +226,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const trimmed = value.trim()
     if (pendingQuestion && onAnswerQuestion) {
       if (!trimmed) return
-      onAnswerQuestion(trimmed)
+      // Typing instead of picking is the tool's freeform `response` channel,
+      // not a conversation turn — and not an `answers` selection either: at the
+      // CLI, `response` outranks and discards any selections sent with it.
+      onAnswerQuestion(trimmed, { response: trimmed })
       setValue("")
       setImages([])
       if (sessionId) {
