@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { JsonHighlight } from "@redbamboo/utility"
+import { eventImage, type EventImage } from "../lib/event-image"
 import type { MessagePart } from "../types"
 
 /** A frieze event part decoded from its tool_use carrier. */
@@ -49,6 +50,18 @@ export interface EventViewProps {
 }
 
 export function EventView({ event, resolveImageSrc, resolveEventLink, onNavigate }: EventViewProps) {
+  const image = eventImage(event.data, resolveImageSrc)
+  const body = <EventBody event={event} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} onNavigate={onNavigate} />
+  if (!image) return body
+  return (
+    <div className="space-y-3">
+      <EventImageCard image={image} alt={event.text || event.key} />
+      {body}
+    </div>
+  )
+}
+
+function EventBody({ event, resolveImageSrc, resolveEventLink, onNavigate }: EventViewProps) {
   if (event.data) {
     switch (event.key) {
       case "spotify":
@@ -98,6 +111,44 @@ function Tag({ children }: { children: React.ReactNode }) {
     <span className="inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-muted">
       {children}
     </span>
+  )
+}
+
+/**
+ * Image attachment above the payload. Full width, capped so a portrait frame
+ * can't push the JSON off a phone screen; tapping opens it full size in a new
+ * tab, there being no lightbox to reach for.
+ */
+function EventImageCard({ image, alt }: { image: EventImage; alt: string }) {
+  const [failed, setFailed] = useState(false)
+
+  if (!image.src || image.error || failed) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-lg border border-border-subtle bg-overlay-4 px-3 py-4">
+        <i className="ph-bold ph-image-broken text-lg text-text-disabled shrink-0" />
+        <span className="text-xs text-text-muted min-w-0 break-words">
+          {image.error ?? "Image unavailable"}
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <a
+      href={image.src}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Open full size"
+      className="block rounded-lg border border-border-subtle bg-overlay-4 overflow-hidden"
+    >
+      <img
+        src={image.src}
+        alt={alt}
+        loading="lazy"
+        className="w-full max-h-[50vh] object-contain"
+        onError={() => setFailed(true)}
+      />
+    </a>
   )
 }
 
