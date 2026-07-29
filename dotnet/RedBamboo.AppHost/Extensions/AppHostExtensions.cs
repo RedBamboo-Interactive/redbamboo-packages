@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -51,16 +52,43 @@ public static class AppHostExtensions
         return services;
     }
 
-    public static IApplicationBuilder UseAppHostForwardedHeaders(this IApplicationBuilder app)
+    /// <summary>
+    /// Build the forwarded-headers options: honour X-Forwarded-For / X-Forwarded-Proto, but ONLY
+    /// when the immediate peer is a loopback proxy.
+    ///
+    /// This previously called <c>KnownNetworks.Clear()</c> AND <c>KnownProxies.Clear()</c>, which
+    /// tells ASP.NET to accept the header from any peer whatsoever. Because this middleware runs
+    /// before authentication and overwrites <c>Connection.RemoteIpAddress</c>, and because the auth
+    /// layer decides "is this local?" from that same property, any host that could reach the port
+    /// could send <c>X-Forwarded-For: 127.0.0.1</c> and be treated as a loopback caller. On a
+    /// service bound to 0.0.0.0 that is unauthenticated admin for the whole LAN.
+    ///
+    /// Loopback stays trusted deliberately: cloudflared terminates on the host and connects to
+    /// Kestrel over 127.0.0.1, so its X-Forwarded-For (carrying the real client IP) must still be
+    /// honoured or every tunnel request would look like it came from localhost.
+    ///
+    /// ForwardLimit 1 (the framework default, pinned here because it is load-bearing) takes only
+    /// the rightmost entry -- the one the trusted proxy appended -- so a client-supplied value
+    /// further left in the chain cannot win.
+    /// </summary>
+    public static ForwardedHeadersOptions CreateForwardedHeadersOptions()
     {
         var options = new ForwardedHeadersOptions
         {
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+            ForwardLimit = 1,
         };
+
+        // Trust no network range, and exactly two peers: loopback v4 and v6.
         options.KnownNetworks.Clear();
         options.KnownProxies.Clear();
-        return app.UseForwardedHeaders(options);
+        options.KnownProxies.Add(IPAddress.Loopback);
+        options.KnownProxies.Add(IPAddress.IPv6Loopback);
+        return options;
     }
+
+    public static IApplicationBuilder UseAppHostForwardedHeaders(this IApplicationBuilder app)
+        => app.UseForwardedHeaders(CreateForwardedHeadersOptions());
 
     public static IApplicationBuilder UseAppHostTelemetry(this IApplicationBuilder app)
     {
