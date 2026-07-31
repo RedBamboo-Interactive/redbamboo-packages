@@ -151,11 +151,7 @@ public static class AuthEndpoints
                     return Results.Json(new { error = "invalid_token" }, statusCode: 401);
                 }
 
-                var userTask = userStore.FindByIdAsync(validation.UserId);
-                var revokeTask = refreshTokenStore.RevokeByIdAsync(validation.EntityId);
-                await Task.WhenAll(userTask, revokeTask);
-
-                var user = userTask.Result;
+                var user = await userStore.FindByIdAsync(validation.UserId);
                 if (user is null)
                 {
                     return ClearAuthCookiesAndReturn(context, options,
@@ -165,8 +161,13 @@ public static class AuthEndpoints
                 var newAccessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles, user.AvatarUrl);
                 var newRefreshToken = jwtService.GenerateRefreshToken();
 
+                // Store the replacement before revoking the token it replaces. Revoking
+                // first means any failure past that point — a store that throws, a dropped
+                // response — leaves the client holding a cookie whose token no longer
+                // exists, and the session is dead with no way back but a re-login.
                 var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
                 await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry);
+                await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
 
                 var isSecure = context.Request.IsHttps;
 
