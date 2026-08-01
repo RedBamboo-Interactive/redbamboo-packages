@@ -36,7 +36,7 @@
   --color-domain-presence: #C74B7A;
 
   /* Operational state, intentionally separate from app/domain identity. */
-  --color-status-live: #EC4899;
+  --color-status-live: var(--color-accent-teal);
 
   --color-text-primary: #D0D1D6;
   --color-text-muted: #9B9CA2;

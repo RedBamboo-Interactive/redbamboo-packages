@@ -11,6 +11,6 @@ test("domain color constants stay aligned with the CSS design tokens", () => {
   }
 })
 
-test("live status keeps its brighter positive pink", () => {
-  assert.match(tokens, /--color-status-live:\s*#EC4899;/)
+test("live status aliases the read and positive teal", () => {
+  assert.match(tokens, /--color-status-live:\s*var\(--color-accent-teal\);/)
 })
