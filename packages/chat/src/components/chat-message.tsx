@@ -38,10 +38,10 @@ function matchTool(set: Set<string>, name?: string): boolean {
 
 const COLOR = {
   thinking: "var(--color-domain-imagination)",
-  readOnly: "var(--color-domain-technology)",
-  mutating: "var(--color-domain-technology)",
-  shell: "var(--color-domain-technology)",
-  result: "color-mix(in oklch, var(--color-domain-technology), black 30%)",
+  readOnly: "var(--color-accent-teal)",
+  mutating: "var(--color-accent-gold)",
+  shell: "var(--color-accent-gold)",
+  result: "color-mix(in oklch, var(--color-accent-teal), black 30%)",
   error: "var(--color-accent-red)",
   nova: "var(--color-domain-presence)",
   event: "var(--color-text-disabled)",
