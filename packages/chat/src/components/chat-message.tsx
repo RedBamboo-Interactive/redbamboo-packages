@@ -107,8 +107,7 @@ export function getPartColor(part: MessagePart): string {
   if (part.type === "tool_result") return COLOR.result
   if (isEventPart(part)) {
     const meta = getEventMeta(part)
-    const raw = meta.color ?? COLOR.event
-    return `color-mix(in oklch, ${raw}, var(--color-text-disabled) 40%)`
+    return meta.color ?? COLOR.event
   }
   if (part.type === "tool_use" && part.toolName) {
     const effectiveName = getEffectiveToolName(part.toolName, part.toolInput)
