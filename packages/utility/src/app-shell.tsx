@@ -20,8 +20,8 @@ import { AppHeader, AppHeaderBrand } from "./app-header"
 import { AppMenu } from "./app-menu"
 import { AboutDialog } from "./about-dialog"
 import { FeedbackDialog } from "./feedback-dialog"
-import type { FeedbackSubmission } from "./feedback-dialog"
-import { submitFeedbackViaSession } from "./submit-feedback"
+import type { FeedbackSubmission } from "./feedback-types"
+import { submitExternalFeedback } from "./submit-feedback"
 import { CommandProvider } from "./command-provider"
 import { CommandPalette, openCommandPalette } from "./command-palette"
 import { useCommand } from "./use-command"
@@ -77,6 +77,7 @@ function ShellCommands({
     label: "Report Feedback",
     description: "Report a problem or suggest an improvement",
     group: "App",
+    shortcut: isMac ? "Cmd+Alt+F" : "Ctrl+Alt+F",
     action: onFeedback,
     enabled: feedbackEnabled,
   })
@@ -376,45 +377,34 @@ function AppShellInner({
   const openFeedback = useCallback(() => setFeedbackOpen(true), [])
   const openShare = useCallback(() => setShareOpen(true), [])
 
-  const feedbackHandler = config.onFeedbackSubmit ?? submitFeedbackViaSession
-
-  const captureScreenshot = useCallback(async (): Promise<string | undefined> => {
-    try {
-      const { toPng } = await import("html-to-image")
-      const dataUrl = await toPng(document.body, {
-        pixelRatio: Math.min(1, 1280 / window.innerWidth),
-        height: window.innerHeight,
-        canvasHeight: window.innerHeight,
-        filter: (node) => !(node instanceof HTMLElement && (node.hasAttribute("data-radix-portal") || node.hasAttribute("data-base-ui-portal"))),
-      })
-      return dataUrl.split(",")[1]
-    } catch {
-      return undefined
-    }
-  }, [])
+  const feedbackHandler = config.onFeedbackSubmit
+    ?? (config.feedback
+      ? (submission: FeedbackSubmission) => submitExternalFeedback(config.feedback!, submission)
+      : undefined)
 
   const handleFeedbackSubmit = useCallback(
-    (submission: FeedbackSubmission) => {
-      const id = toast({ title: "Sending feedback...", variant: "loading" })
+    async (submission: FeedbackSubmission) => {
+      if (!feedbackHandler) {
+        throw new Error("No external feedback destination is configured.")
+      }
+      const id = toast({ title: "Preparing feedback...", variant: "loading" })
 
-      feedbackHandler(submission)
-        .then((result) => {
-          update(id, {
-            title: "Feedback sent",
-            description: result.title,
-            variant: "success",
-            action: result.issueUrl
-              ? { label: "View", onClick: () => window.open(result.issueUrl, "_blank") }
-              : undefined,
-          })
+      try {
+        const result = await feedbackHandler(submission)
+        update(id, {
+          title: "Feedback received",
+          description: result.reportId ?? result.title,
+          variant: "success",
         })
-        .catch((err: unknown) => {
-          update(id, {
-            title: "Feedback failed",
-            description: err instanceof Error ? err.message : "Unknown error",
-            variant: "error",
-          })
+        return result
+      } catch (err) {
+        update(id, {
+          title: "Feedback failed",
+          description: err instanceof Error ? err.message : "Unknown error",
+          variant: "error",
         })
+        throw err
+      }
     },
     [feedbackHandler, toast, update],
   )
@@ -473,6 +463,9 @@ function AppShellInner({
                 <DropdownMenuItem onClick={openFeedback}>
                   <i className="ph-bold ph-bug size-4 text-center" />
                   Report Feedback
+                  <DropdownMenuShortcut>
+                    {isMac ? "⌘⌥F" : "Ctrl+Alt+F"}
+                  </DropdownMenuShortcut>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={openCommandPalette}>
                   <i className="ph-bold ph-terminal size-4 text-center" />
@@ -551,7 +544,6 @@ function AppShellInner({
       <FeedbackDialog
         app={{ name: config.name, version: config.version }}
         customMetadata={config.feedbackMetadata}
-        captureScreenshot={captureScreenshot}
         onSubmit={handleFeedbackSubmit}
         open={feedbackOpen}
         onOpenChange={setFeedbackOpen}

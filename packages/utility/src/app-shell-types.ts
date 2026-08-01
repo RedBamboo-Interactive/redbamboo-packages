@@ -1,5 +1,9 @@
 import type { ReactNode } from "react"
-import type { FeedbackSubmission, FeedbackResult } from "./feedback-dialog"
+import type {
+  FeedbackDestination,
+  FeedbackSubmission,
+  FeedbackResult,
+} from "./feedback-types"
 import type { SwitcherApp } from "./app-switcher"
 
 export interface AppShellBrand {
@@ -31,6 +35,8 @@ export interface AppShellConfig {
 
   share?: AppShellShare
 
+  /** Publisher-owned public inbox used for external product feedback. */
+  feedback?: FeedbackDestination
   onFeedbackSubmit?: (submission: FeedbackSubmission) => Promise<FeedbackResult>
   feedbackMetadata?: Record<string, string>
 }

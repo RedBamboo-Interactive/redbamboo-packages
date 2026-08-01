@@ -42,13 +42,14 @@ export {
 export type {
   FeedbackCategory,
   FeedbackContext,
+  FeedbackDestination,
   FeedbackSubmission,
   FeedbackResult,
   SystemInfo,
-  FeedbackDialogProps,
-} from "./feedback-dialog"
+} from "./feedback-types"
+export type { FeedbackDialogProps } from "./feedback-dialog"
 
-export { submitFeedbackViaSession } from "./submit-feedback"
+export { submitExternalFeedback } from "./submit-feedback"
 
 export { AppHeader, AppHeaderBrand } from "./app-header"
 export type { AppHeaderProps, AppHeaderBrandProps } from "./app-header"
