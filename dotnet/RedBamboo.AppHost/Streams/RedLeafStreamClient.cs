@@ -347,6 +347,8 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
         var existing = await _http.GetAsync($"api/entity-types/{typeSlug}", ct);
         if (existing.IsSuccessStatusCode)
         {
+            if (definition?.Fields is { Length: > 0 })
+                await EnsureMissingEntityFieldsAsync(typeSlug, definition.Fields, ct);
             lock (_typeDefs) _typesRegistered.Add(typeSlug);
             return true;
         }
@@ -381,6 +383,51 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
         lock (_typeDefs) _typesRegistered.Add(typeSlug);
         _log?.Info("streams", $"Created entity type '{typeSlug}' in RedLeaf");
         return true;
+    }
+
+    /// <summary>
+    /// Add fields newly declared by an app to an entity type that already exists. Existing field
+    /// definitions remain entity-owned and are never rewritten or removed.
+    /// </summary>
+    private async Task EnsureMissingEntityFieldsAsync(string typeSlug, object[] declaredFields, CancellationToken ct)
+    {
+        using var response = await _http.GetAsync($"api/entity-types/{Uri.EscapeDataString(typeSlug)}/fields", ct);
+        if (!response.IsSuccessStatusCode) return;
+
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return;
+
+        var existingSlugs = doc.RootElement.EnumerateArray()
+            .Where(field => field.TryGetProperty("slug", out var slug) && slug.ValueKind == JsonValueKind.String)
+            .Select(field => field.GetProperty("slug").GetString()!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var field in declaredFields)
+        {
+            var fieldJson = JsonSerializer.Serialize(field);
+            using var fieldDoc = JsonDocument.Parse(fieldJson);
+            if (!fieldDoc.RootElement.TryGetProperty("name", out var nameElement)) continue;
+            var name = nameElement.GetString();
+            if (string.IsNullOrWhiteSpace(name)) continue;
+
+            var fieldSlug = name.ToLowerInvariant().Trim();
+            fieldSlug = System.Text.RegularExpressions.Regex.Replace(fieldSlug, @"[^a-z0-9\s-]", "");
+            fieldSlug = System.Text.RegularExpressions.Regex.Replace(fieldSlug, @"[\s-]+", "-").Trim('-');
+            if (existingSlugs.Contains($"{typeSlug}--{fieldSlug}")) continue;
+
+            using var content = new StringContent(fieldJson, Encoding.UTF8, "application/json");
+            using var created = await _http.PostAsync(
+                $"api/entity-types/{Uri.EscapeDataString(typeSlug)}/fields", content, ct);
+            if (created.IsSuccessStatusCode)
+            {
+                existingSlugs.Add($"{typeSlug}--{fieldSlug}");
+                _log?.Info("streams", $"Added missing field '{fieldSlug}' to entity type '{typeSlug}'");
+            }
+            else if (created.StatusCode is not HttpStatusCode.Conflict)
+            {
+                Warn($"Failed to add field '{fieldSlug}' to entity type '{typeSlug}': {(int)created.StatusCode}");
+            }
+        }
     }
 
     private async Task<Guid?> ResolveEntityIdAsync(string slug, CancellationToken ct)

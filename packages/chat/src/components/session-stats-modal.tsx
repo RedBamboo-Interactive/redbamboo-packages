@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  Icon,
 } from "@redbamboo/ui"
 import { MorphSpinner } from "./morph-spinner"
 
@@ -16,6 +17,7 @@ interface Props {
   modelOptions?: SessionConfigOption[]
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]
+  providerOptions?: SessionConfigOption[]
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
   children?: React.ReactNode
 }
@@ -118,6 +120,31 @@ function StatRow({ label, value, sub, mono }: { label: string; value: string; su
   )
 }
 
+function EntityStatRow({ label, value, option }: { label: string; value: string; option?: SessionConfigOption }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 gap-3 min-w-0">
+      <span className="text-xs text-text-muted shrink-0">{label}</span>
+      <span
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-right min-w-0 truncate"
+        style={option?.color ? { color: option.color } : undefined}
+      >
+        {(option?.icon || option?.iconSvgPath) && (
+          <Icon name={option.icon} svgPath={option.iconSvgPath} className="size-4 shrink-0" />
+        )}
+        <span className="truncate">{option?.label ?? value}</span>
+      </span>
+    </div>
+  )
+}
+
+function findOption(options: SessionConfigOption[] | undefined, value: string | null | undefined) {
+  if (!value) return undefined
+  const normalized = value.toLowerCase()
+  return options?.find(option =>
+    option.value.toLowerCase() === normalized
+    || option.aliases?.some(alias => alias.toLowerCase() === normalized))
+}
+
 function ConfigSelect({ label, value, options, onChange, disabled }: {
   label: string
   value: string
@@ -125,7 +152,7 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   onChange: (value: string) => void
   disabled?: boolean
 }) {
-  const hasIcons = options.some(o => o.icon || o.color)
+  const hasIcons = options.some(o => o.icon || o.iconSvgPath || o.color)
 
   if (hasIcons) {
     return (
@@ -145,7 +172,7 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
                 }`}
                 style={active && o.color ? { backgroundColor: `${o.color}20`, color: o.color } : undefined}
               >
-                {o.icon && <i className={o.icon} />}
+                {(o.icon || o.iconSvgPath) && <Icon name={o.icon} svgPath={o.iconSvgPath} className="size-3.5" />}
                 {o.label}
               </button>
             )
@@ -172,13 +199,16 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   )
 }
 
-export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOptions, effortOptions, qualityTierOptions, onConfigChange, children }: Props) {
+export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOptions, effortOptions, qualityTierOptions, providerOptions, onConfigChange, children }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
   const pct = getContextPercent(s)
   const toolCalls = countToolCalls(messages)
   const userMessages = messages.filter(m => m.role === "user").length
   const [updating, setUpdating] = useState(false)
+  const providerValue = s.providerEntity ?? s.provider
+  const providerOption = findOption(providerOptions, providerValue)
+  const qualityTierOption = findOption(qualityTierOptions, s.qualityTier)
 
   const hasConfig = onConfigChange && (modelOptions || effortOptions || qualityTierOptions)
 
@@ -211,6 +241,9 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
 
           {hasConfig && (
             <div className="pb-2">
+              {providerValue && (
+                <EntityStatRow label="Provider" value={providerValue} option={providerOption} />
+              )}
               {modelOptions && (
                 <ConfigSelect
                   label="Model"
@@ -223,7 +256,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
               {qualityTierOptions && (
                 <ConfigSelect
                   label="Quality"
-                  value={s.qualityTier || "standard"}
+                  value={s.qualityTier || ""}
                   options={qualityTierOptions}
                   onChange={v => handleConfigChange({ qualityTier: v })}
                   disabled={updating}
@@ -248,6 +281,12 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
           )}
 
           <div className="py-2">
+            {!hasConfig && providerValue && (
+              <EntityStatRow label="Provider" value={providerValue} option={providerOption} />
+            )}
+            {s.qualityTier && !(onConfigChange && qualityTierOptions) && (
+              <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
+            )}
             <StatRow label="Model" value={shortModel(s.model)} />
             <StatRow label={s.costEstimated ? "Est. API cost" : "Cost"} value={formatCost(s.costUsd)} />
             {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}

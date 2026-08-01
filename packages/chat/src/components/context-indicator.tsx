@@ -13,7 +13,7 @@ function ringColor(pct: number): string {
   return "var(--color-accent-red)"
 }
 
-export function ContextIndicator({ stats, messages, modelOptions, effortOptions, qualityTierOptions, onConfigChange, children }: ContextIndicatorProps) {
+export function ContextIndicator({ stats, messages, modelOptions, effortOptions, qualityTierOptions, providerOptions, onConfigChange, children }: ContextIndicatorProps) {
   const [open, setOpen] = useState(false)
   const pct = stats ? getContextPercent(stats) : null
   const offset = pct != null ? CIRCUMFERENCE * (1 - pct / 100) : CIRCUMFERENCE
@@ -66,6 +66,7 @@ export function ContextIndicator({ stats, messages, modelOptions, effortOptions,
         modelOptions={modelOptions}
         effortOptions={effortOptions}
         qualityTierOptions={qualityTierOptions}
+        providerOptions={providerOptions}
         onConfigChange={onConfigChange}
       >
         {children}

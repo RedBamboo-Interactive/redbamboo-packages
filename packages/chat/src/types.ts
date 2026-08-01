@@ -149,6 +149,8 @@ export interface SessionStats {
   contextWindow?: number | null
   effort?: string | null
   qualityTier?: string | null
+  provider?: string | null
+  providerEntity?: string | null
 }
 
 export interface SessionConfigOption {
@@ -156,6 +158,8 @@ export interface SessionConfigOption {
   label: string
   color?: string
   icon?: string
+  iconSvgPath?: string
+  aliases?: string[]
 }
 
 export interface ContextIndicatorProps {
@@ -164,6 +168,7 @@ export interface ContextIndicatorProps {
   modelOptions?: SessionConfigOption[]
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]
+  providerOptions?: SessionConfigOption[]
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
   children?: React.ReactNode
 }
