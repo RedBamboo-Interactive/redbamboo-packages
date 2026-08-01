@@ -8,7 +8,7 @@
  *   @import "tw-animate-css";
  *   @import "@redbamboo/ui/tokens.css";
  *
- *   :root, :root.dark { --brand: #E55B5B; }
+ *   :root, :root.dark { --brand: var(--color-domain-technology); }
  */
 
 @import url("https://fonts.googleapis.com/css2?family=Noto+Emoji:wght@400;700&display=swap");
@@ -27,6 +27,13 @@
   --color-accent-gold: #D4AA4F;
   --color-accent-red: #E55B5B;
   --color-accent-purple: #7C4DFF;
+
+  /* Shared domain language: apps and ambient chat use the same five worlds. */
+  --color-domain-foundation: #4A9D5B;
+  --color-domain-technology: #5B8BC4;
+  --color-domain-life: #C9944A;
+  --color-domain-imagination: #7C4DFF;
+  --color-domain-presence: #C74B7A;
 
   --color-text-primary: #D0D1D6;
   --color-text-muted: #9B9CA2;
@@ -92,7 +99,7 @@
 :root {
   color-scheme: light;
 
-  --brand: #E55B5B;
+  --brand: var(--color-domain-technology);
 
   --background: #FAFBFC;
   --foreground: #1F2328;

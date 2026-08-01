@@ -37,14 +37,14 @@ function matchTool(set: Set<string>, name?: string): boolean {
 }
 
 const COLOR = {
-  thinking: "var(--color-accent-purple)",
-  readOnly: "var(--color-accent-teal)",
-  mutating: "var(--color-accent-gold)",
-  shell: "var(--color-accent-gold)",
-  result: "color-mix(in oklch, var(--color-accent-teal), black 30%)",
+  thinking: "var(--color-domain-imagination)",
+  readOnly: "var(--color-domain-technology)",
+  mutating: "var(--color-domain-technology)",
+  shell: "var(--color-domain-technology)",
+  result: "color-mix(in oklch, var(--color-domain-technology), black 30%)",
   error: "var(--color-accent-red)",
-  nova: "rgb(236 72 153)",
-  event: "rgb(251 146 60)",
+  nova: "var(--color-domain-presence)",
+  event: "var(--color-text-disabled)",
   fallback: "var(--color-text-disabled)",
 }
 

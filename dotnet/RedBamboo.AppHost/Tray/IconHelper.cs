@@ -57,10 +57,11 @@ public static class IconHelper
 public static class StatusColors
 {
     public static Color Gray => Color.FromArgb(0x72, 0x76, 0x7D);
-    public static Color Green => Color.FromArgb(0x43, 0xA2, 0x5A);
     public static Color Red => Color.FromArgb(0xE5, 0x5B, 0x5B);
-    public static Color Teal => Color.FromArgb(0x26, 0xA6, 0x9A);
-    public static Color Gold => Color.FromArgb(0xE0, 0xA0, 0x2A);
-    public static Color Magenta => Color.FromArgb(0xC7, 0x4B, 0x7A);
+    public static Color Foundation => Color.FromArgb(0x4A, 0x9D, 0x5B);
+    public static Color Technology => Color.FromArgb(0x5B, 0x8B, 0xC4);
+    public static Color Life => Color.FromArgb(0xC9, 0x94, 0x4A);
+    public static Color Imagination => Color.FromArgb(0x7C, 0x4D, 0xFF);
+    public static Color Presence => Color.FromArgb(0xC7, 0x4B, 0x7A);
 }
 #endif

@@ -2,6 +2,8 @@
 export { cn } from "./utils"
 export { normalizeIcon } from "./icons"
 export { ICON_MAP } from "./data/icon-map"
+export { DOMAIN_COLORS } from "./domain-colors"
+export type { DomainColor } from "./domain-colors"
 
 // Components
 export { Icon } from "./components/icon"

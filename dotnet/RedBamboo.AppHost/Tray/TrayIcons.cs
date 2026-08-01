@@ -194,29 +194,43 @@ public static class TrayIcons
     {
         var path = new GraphicsPath(FillMode.Winding);
 
-        path.AddBezier(471.3f, 6.7f, 477.7f, 0.6f, 487f, -1.6f, 495.6f, 1.2f);
-        path.AddBezier(495.6f, 1.2f, 505.4f, 4.5f, 512f, 13.7f, 512f, 24f);
-        path.AddLine(512f, 24f, 512f, 210.9f);
-        path.AddBezier(512f, 210.9f, 512f, 342.1f, 403.9f, 448f, 273.2f, 448f);
-        path.AddBezier(273.2f, 448f, 196.2f, 448f, 129.8f, 398.5f, 105.7f, 329.3f);
-        path.AddBezier(105.7f, 329.3f, 70.3f, 360.1f, 48f, 405.4f, 48f, 456f);
-        path.AddBezier(48f, 456f, 48f, 469.3f, 37.3f, 480f, 24f, 480f);
-        path.AddBezier(24f, 480f, 10.7f, 480f, 0f, 469.3f, 0f, 456f);
-        path.AddBezier(0f, 456f, 0f, 381.1f, 38.2f, 315.1f, 96.1f, 276.3f);
-        path.AddBezier(96.1f, 276.3f, 131.4f, 252.7f, 173.5f, 240f, 216f, 240f);
-        path.AddLine(216f, 240f, 296f, 240f);
-        path.AddBezier(296f, 240f, 309.3f, 240f, 320f, 229.3f, 320f, 216f);
-        path.AddBezier(320f, 216f, 320f, 202.7f, 309.3f, 192f, 296f, 192f);
-        path.AddLine(296f, 192f, 216f, 192f);
-        path.AddBezier(216f, 192f, 176.3f, 192f, 138.7f, 200.8f, 105f, 216.5f);
-        path.AddBezier(105f, 216.5f, 128.3f, 146.5f, 194.2f, 96f, 272f, 96f);
-        path.AddBezier(272f, 96f, 338.4f, 96f, 387.8f, 73.9f, 420.7f, 52f);
-        path.AddBezier(420.7f, 52f, 439.9f, 39.2f, 456.2f, 23.9f, 471.4f, 6.7f);
+        // Phosphor "leaf-bold" (@phosphor-icons/web 2.1.2, MIT).
+        path.StartFigure();
+        var p = new PointF(909.68f, 159.44f);
+        path.AddBezier(p, new PointF(908.217f, 135.132f), new PointF(888.868f, 115.783f), p = new PointF(864.693f, 114.326f));
+        path.AddLine(p, p = new PointF(864.56f, 114.32f));
+        path.AddBezier(p, new PointF(706.16f, 105f), new PointF(566.2f, 123.68f), p = new PointF(448.56f, 169.8f));
+        path.AddBezier(p, new PointF(336f, 213.92f), new PointF(249.24f, 282.32f), p = new PointF(197.56f, 367.6f));
+        path.AddBezier(p, new PointF(127.08f, 484.04f), new PointF(126.92f, 625.4f), p = new PointF(195.76f, 760.36f));
+        path.AddLine(p, p = new PointF(126.04f, 830.08f));
+        path.AddBezier(p, new PointF(117.339f, 838.781f), new PointF(111.957f, 850.802f), p = new PointF(111.957f, 864.08f));
+        path.AddBezier(p, new PointF(111.957f, 890.636f), new PointF(133.485f, 912.163f), p = new PointF(160.04f, 912.163f));
+        path.AddBezier(p, new PointF(173.318f, 912.163f), new PointF(185.339f, 906.781f), p = new PointF(194.04f, 898.08f));
+        path.AddLine(p, p = new PointF(263.76f, 828.36f));
+        path.AddBezier(p, new PointF(330.72f, 862.52f), new PointF(399.28f, 879.76f), p = new PointF(465.56f, 879.76f));
+        path.AddBezier(p, new PointF(465.898f, 879.761f), new PointF(466.298f, 879.762f), p = new PointF(466.698f, 879.762f));
+        path.AddBezier(p, new PointF(536.881f, 879.762f), new PointF(602.44f, 859.967f), p = new PointF(658.097f, 825.656f));
+        path.AddLine(p, p = new PointF(656.52f, 826.561f));
+        path.AddBezier(p, new PointF(741.8f, 774.881f), new PointF(810.2f, 688.081f), p = new PointF(854.32f, 575.561f));
+        path.AddBezier(p, new PointF(900.32f, 457.841f), new PointF(919f, 317.841f), p = new PointF(909.68f, 159.441f));
+        path.CloseFigure();
+
+        path.StartFigure();
+        p = new PointF(606.64f, 744.32f);
+        path.AddBezier(p, new PointF(526.28f, 793f), new PointF(432f, 796.68f), p = new PointF(335.76f, 756f));
+        path.AddLine(p, p = new PointF(673.92f, 417.84f));
+        path.AddBezier(p, new PointF(682.621f, 409.139f), new PointF(688.003f, 397.118f), p = new PointF(688.003f, 383.84f));
+        path.AddBezier(p, new PointF(688.003f, 357.284f), new PointF(666.475f, 335.757f), p = new PointF(639.92f, 335.757f));
+        path.AddBezier(p, new PointF(626.642f, 335.757f), new PointF(614.621f, 341.139f), p = new PointF(605.92f, 349.84f));
+        path.AddLine(p, p = new PointF(268f, 688.24f));
+        path.AddBezier(p, new PointF(227.44f, 592.24f), new PointF(231.12f, 497.72f), p = new PointF(280f, 417.36f));
+        path.AddBezier(p, new PointF(363.64f, 279.24f), new PointF(562.16f, 202.48f), p = new PointF(816f, 208.36f));
+        path.AddBezier(p, new PointF(821.52f, 462.12f), new PointF(744.76f, 660.68f), p = new PointF(606.64f, 744.32f));
         path.CloseFigure();
 
         using var matrix = new Matrix();
-        matrix.Translate(-256f, -256f, MatrixOrder.Append);
-        matrix.Scale(0.75f, 0.75f, MatrixOrder.Append);
+        matrix.Translate(-512f, -512f, MatrixOrder.Append);
+        matrix.Scale(0.42f, 0.42f, MatrixOrder.Append);
         matrix.Translate(256f, 256f, MatrixOrder.Append);
         matrix.Scale(size / 512f, size / 512f, MatrixOrder.Append);
         path.Transform(matrix);

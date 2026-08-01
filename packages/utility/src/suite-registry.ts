@@ -1,3 +1,5 @@
+import { DOMAIN_COLORS } from "@redbamboo/ui"
+
 /**
  * Single source of truth for the Red Suite roster.
  *
@@ -15,7 +17,7 @@ export interface SuiteApp {
   name: string
   /** Brand name split for two-tone rendering, e.g. ["Red", "Compute"]. */
   nameParts: [string, string]
-  /** Font Awesome icon class. */
+  /** Phosphor icon class. */
   icon: string
   /** Brand accent color (hex). */
   color: string
@@ -23,11 +25,11 @@ export interface SuiteApp {
 }
 
 export const SUITE_APPS: readonly SuiteApp[] = [
-  { port: 18800, name: "RedCompute", nameParts: ["Red", "Compute"], icon: "ph-bold ph-cpu", color: "#26A69A", description: "AI compute service" },
-  { port: 18801, name: "CodeRed", nameParts: ["Code", "Red"], icon: "ph-bold ph-terminal", color: "#E55B5B", description: "Development tools" },
-  { port: 18802, name: "RedMatter", nameParts: ["Red", "Matter"], icon: "ph-bold ph-fire", color: "#D4A03C", description: "Game engine CMS" },
-  { port: 18803, name: "Nova", nameParts: ["No", "va"], icon: "ph-bold ph-star", color: "#C74B7A", description: "AI assistant" },
-  { port: 18804, name: "RedLeaf", nameParts: ["Red", "Leaf"], icon: "ph-bold ph-leaf", color: "#66BB6A", description: "Content & knowledge" },
+  { port: 18800, name: "RedCompute", nameParts: ["Red", "Compute"], icon: "ph-bold ph-cpu", color: DOMAIN_COLORS.technology, description: "AI compute service" },
+  { port: 18801, name: "CodeRed", nameParts: ["Code", "Red"], icon: "ph-bold ph-terminal", color: DOMAIN_COLORS.technology, description: "Development tools" },
+  { port: 18802, name: "RedMatter", nameParts: ["Red", "Matter"], icon: "ph-bold ph-fire", color: DOMAIN_COLORS.imagination, description: "Game engine CMS" },
+  { port: 18803, name: "Nova", nameParts: ["No", "va"], icon: "ph-bold ph-star", color: DOMAIN_COLORS.presence, description: "AI assistant" },
+  { port: 18804, name: "RedLeaf", nameParts: ["Red", "Leaf"], icon: "ph-bold ph-leaf", color: DOMAIN_COLORS.foundation, description: "Content & knowledge" },
 ] as const
 
 export const SUITE_PORTS: readonly number[] = SUITE_APPS.map((a) => a.port)
