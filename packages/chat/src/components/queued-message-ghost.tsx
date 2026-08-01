@@ -1,5 +1,6 @@
 import type { QueuedMessage } from "../lib/message-queue"
 import type { ImageAttachment } from "../types"
+import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 
 interface QueuedMessageGhostProps {
   item: QueuedMessage
@@ -19,7 +20,9 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
       <div className="flex justify-end">
         <div
           onClick={() => onEdit(item.id)}
-          className="max-w-[80%] cursor-pointer rounded-xl rounded-br-sm border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90"
+          data-chat-user-bubble
+          className="max-w-[80%] cursor-pointer border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90"
+          style={USER_BUBBLE_SHAPE_STYLE}
           title="Click to edit"
         >
           {item.images && item.images.length > 0 && (

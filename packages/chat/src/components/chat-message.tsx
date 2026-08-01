@@ -17,6 +17,7 @@ import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
 import { isEventPart, isEventBlock } from "../lib/event-parts"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
+import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 
 const readOnlyTools = new Set([
   "read", "glob", "grep", "agent", "websearch", "webfetch",
@@ -309,7 +310,11 @@ export const ChatMessage = memo(function ChatMessage({
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
         <div className="flex justify-end">
-          <div className="relative max-w-[80%] bg-overlay-10 rounded-xl rounded-br-sm px-4 py-2.5">
+          <div
+            data-chat-user-bubble
+            className="relative max-w-[80%] bg-overlay-10 px-4 py-2.5"
+            style={USER_BUBBLE_SHAPE_STYLE}
+          >
             {senderName && (
               <div className="flex items-center gap-1.5 mb-1.5">
                 {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
