@@ -41,7 +41,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const {
     sessionId, disabled = false, hideComposer = false, onResume,
     placeholder, className, header, footer,
-    resolveImageSrc, resolveFileLink, resolveEventLink, permissionMode, onTogglePlanMode, onExecutePlan,
+    resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl,
+    permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
     speechBackend, handsFreeEnabled, pushToTalkKey,
     renderStatusLine, renderComposerInlineAction, renderMessageExtra, renderSideActions,
@@ -369,6 +370,8 @@ export function ChatPanel(props: ChatPanelProps) {
                 resolveImageSrc={resolveImageSrc}
                 resolveFileLink={resolveFileLink}
                 resolveEventLink={resolveEventLink}
+                loadTranscriptPayload={loadTranscriptPayload}
+                getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl}
                 assistantAvatar={props.assistantAvatar}
                 senderName={senderAgent?.name}
                 senderAvatarUrl={senderAgent?.avatarUrl}

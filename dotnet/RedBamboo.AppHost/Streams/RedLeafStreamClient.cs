@@ -35,6 +35,15 @@ public sealed record EntityTypeDefinition(
     bool Versioning = true,
     object[]? Fields = null);
 
+/// <summary>Metadata returned after a payload-backed stream record is durably appended.</summary>
+public sealed record PayloadRecordDescriptor(
+    long RecordId,
+    bool Available,
+    long Length,
+    string ContentType,
+    string Encoding,
+    string Sha256);
+
 /// <summary>
 /// Fire-and-forget shipper to RedLeaf for suite apps. Two write shapes:
 /// append-only records to /api/streams (bounded channel, drop-oldest, bulk
@@ -124,6 +133,64 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
     {
         var json = JsonSerializer.Serialize(data);
         _channel.Writer.TryWrite(new Pending(stream, json, null, entitySlug, userId, DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
+    /// Durably append one payload-backed record linked to an entity. Unlike the
+    /// normal batched writer this is awaited because callers must not publish a
+    /// payload reference before the bytes exist.
+    /// </summary>
+    public async Task<PayloadRecordDescriptor> AppendPayloadForEntityAsync(
+        string stream,
+        string entitySlug,
+        object data,
+        ReadOnlyMemory<byte> payload,
+        string contentType,
+        string encoding,
+        string? userId = null,
+        DateTimeOffset? createdAt = null,
+        CancellationToken ct = default)
+    {
+        if (!await EnsureStreamAsync(stream, ct))
+            throw new InvalidOperationException($"Stream '{stream}' is unavailable in RedLeaf");
+
+        // Session creation is a debounced upsert. Flush it before resolving the
+        // parent so a first-turn payload cannot be written as an orphan.
+        await FlushUpsertsAsync(ct);
+        var entityId = await ResolveEntityIdAsync(entitySlug, ct)
+            ?? throw new InvalidOperationException($"Entity '{entitySlug}' is unavailable in RedLeaf");
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(JsonSerializer.Serialize(data), Encoding.UTF8, "application/json"), "data");
+        form.Add(new StringContent(entityId.ToString()), "entity_id");
+        form.Add(new StringContent((createdAt ?? DateTimeOffset.UtcNow).ToString("O")), "created_at");
+        form.Add(new StringContent(contentType), "content_type");
+        form.Add(new StringContent(encoding), "encoding");
+        if (!string.IsNullOrWhiteSpace(userId))
+            form.Add(new StringContent(userId), "user_id");
+
+        var bytes = new ByteArrayContent(payload.ToArray());
+        bytes.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
+        form.Add(bytes, "payload", "payload.bin");
+
+        using var response = await _http.PostAsync(
+            $"api/streams/{Uri.EscapeDataString(stream)}/records/payload", form, ct);
+        var json = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException(
+                $"RedLeaf rejected payload record for '{stream}': {(int)response.StatusCode} {json}",
+                null, response.StatusCode);
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var descriptor = root.GetProperty("payload");
+        return new PayloadRecordDescriptor(
+            root.GetProperty("id").GetInt64(),
+            descriptor.GetProperty("available").GetBoolean(),
+            descriptor.GetProperty("length").GetInt64(),
+            descriptor.GetProperty("contentType").GetString() ?? contentType,
+            descriptor.GetProperty("encoding").GetString() ?? encoding,
+            descriptor.GetProperty("sha256").GetString() ?? "");
     }
 
     /// <summary>

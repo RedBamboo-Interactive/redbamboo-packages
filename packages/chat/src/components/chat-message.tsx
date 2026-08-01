@@ -8,11 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@redbamboo/ui"
-import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion } from "../types"
+import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
+import { LazyToolOutput } from "./lazy-tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
 import { isEventPart, isEventBlock } from "../lib/event-parts"
 import { getEffectiveToolName } from "../lib/tool-semantics"
@@ -199,6 +200,8 @@ interface ChatMessageProps {
    * isn't linkable — the affordance is hidden in that case.
    */
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  loadTranscriptPayload?: TranscriptPayloadLoader
+  getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
   assistantAvatar?: string
   senderName?: string
   senderAvatarUrl?: string
@@ -228,6 +231,8 @@ export const ChatMessage = memo(function ChatMessage({
   resolveImageSrc,
   resolveFileLink,
   resolveEventLink,
+  loadTranscriptPayload,
+  getTranscriptPayloadDownloadUrl,
   assistantAvatar,
   senderName,
   senderAvatarUrl,
@@ -424,7 +429,7 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} />
+              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
             </div>
           )
         )}
@@ -506,13 +511,15 @@ function findPairedResult(allParts: MessagePart[], toolUsePart: MessagePart): Me
   return undefined
 }
 
-function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc, resolveEventLink }: {
+function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   parts: MessagePart[]
   allParts: MessagePart[]
   isLive?: boolean
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  loadTranscriptPayload?: TranscriptPayloadLoader
+  getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
   const [selected, setSelected] = useState<{ part: MessagePart; result?: MessagePart } | null>(null)
 
@@ -542,7 +549,7 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
         })}
       </div>
 
-      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} />
+      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
     </>
   )
 }
@@ -575,7 +582,7 @@ function extractToolFile(part: MessagePart): { path: string; line?: number } | n
   }
 }
 
-function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolveImageSrc, resolveEventLink }: {
+function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolveImageSrc, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   part?: MessagePart
   pairedResult?: MessagePart
   open: boolean
@@ -583,12 +590,15 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  loadTranscriptPayload?: TranscriptPayloadLoader
+  getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
   if (!part) return null
   const event = parseEventPart(part)
   const category = toolCategory(part)
   const isToolUse = part.type === "tool_use"
   const resultContent = pairedResult?.content || (isToolUse ? undefined : part.content)
+  const resultPayloadRef = pairedResult?.payloadRef || (isToolUse ? undefined : part.payloadRef)
   const isError = part.type === "error" || (pairedResult?.type === "tool_result" && pairedResult.content?.toLowerCase().startsWith("error"))
 
   const toolFile = resolveFileLink ? extractToolFile(part) : null
@@ -663,19 +673,35 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
             </div>
           )}
 
-          {isToolUse && resultContent && (
+          {isToolUse && (resultContent || resultPayloadRef) && (
             <>
               <div className="border-t border-border-subtle my-3" />
               <div className="text-[10px] uppercase text-text-muted mb-1.5 font-semibold">Output</div>
-              <ToolOutputView
-                content={resultContent}
-                isError={isError}
-                toolName={part.toolName}
-                toolInput={part.toolInput}
-                resolveFileLink={resolveFileLink}
-                resolveImageSrc={resolveImageSrc}
-                onNavigate={onClose}
-              />
+              {resultPayloadRef && loadTranscriptPayload ? (
+                <LazyToolOutput
+                  payloadRef={resultPayloadRef}
+                  load={loadTranscriptPayload}
+                  downloadUrl={getTranscriptPayloadDownloadUrl?.(resultPayloadRef)}
+                  isError={isError}
+                  toolName={part.toolName}
+                  toolInput={part.toolInput}
+                  resolveFileLink={resolveFileLink}
+                  resolveImageSrc={resolveImageSrc}
+                  onNavigate={onClose}
+                />
+              ) : resultContent ? (
+                <ToolOutputView
+                  content={resultContent}
+                  isError={isError}
+                  toolName={part.toolName}
+                  toolInput={part.toolInput}
+                  resolveFileLink={resolveFileLink}
+                  resolveImageSrc={resolveImageSrc}
+                  onNavigate={onClose}
+                />
+              ) : (
+                <p className="text-xs text-text-disabled italic">Output loader unavailable</p>
+              )}
             </>
           )}
 
@@ -688,6 +714,18 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
 
           {!isToolUse && part.type === "tool_result" && part.content && (
             <ToolOutputView content={part.content} isError={isError} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} onNavigate={onClose} />
+          )}
+
+          {!isToolUse && part.type === "tool_result" && part.payloadRef && loadTranscriptPayload && (
+            <LazyToolOutput
+              payloadRef={part.payloadRef}
+              load={loadTranscriptPayload}
+              downloadUrl={getTranscriptPayloadDownloadUrl?.(part.payloadRef)}
+              isError={isError}
+              resolveFileLink={resolveFileLink}
+              resolveImageSrc={resolveImageSrc}
+              onNavigate={onClose}
+            />
           )}
 
           {!isToolUse && part.type === "error" && part.content && (
@@ -706,7 +744,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
             )
           )}
 
-          {!part.content && !part.toolInput && (
+          {!part.content && !part.toolInput && !part.payloadRef && (
             <p className="text-sm text-text-muted italic">No content</p>
           )}
         </div>

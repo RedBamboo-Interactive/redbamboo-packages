@@ -232,6 +232,7 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
     content: event.content || event.toolResult || "",
     toolName: event.toolName || undefined,
     toolInput: event.toolInput || undefined,
+    payloadRef: event.payloadRef || undefined,
   }
 
   if (event.type === "text" && lastBlock.parts.length > 0) {

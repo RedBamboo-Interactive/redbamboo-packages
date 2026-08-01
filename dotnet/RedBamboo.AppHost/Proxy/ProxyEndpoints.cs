@@ -44,6 +44,9 @@ public static class ProxyEndpoints
                     if (cookie != null)
                         req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {cookie}");
                 }
+                ForwardRequestHeader(ctx, req, "Range");
+                ForwardRequestHeader(ctx, req, "If-Range");
+                ForwardRequestHeader(ctx, req, "If-None-Match");
                 if (ctx.Request.ContentLength > 0 || ctx.Request.ContentType != null)
                 {
                     req.Content = new StreamContent(ctx.Request.Body);
@@ -56,6 +59,18 @@ public static class ProxyEndpoints
                     ctx.Response.StatusCode = (int)res.StatusCode;
                     if (res.Content.Headers.ContentType != null)
                         ctx.Response.ContentType = res.Content.Headers.ContentType.ToString();
+                    if (res.Content.Headers.ContentLength is { } contentLength)
+                        ctx.Response.ContentLength = contentLength;
+                    if (res.Content.Headers.ContentRange is { } contentRange)
+                        ctx.Response.Headers.ContentRange = contentRange.ToString();
+                    if (res.Headers.AcceptRanges.Count > 0)
+                        ctx.Response.Headers.AcceptRanges = string.Join(", ", res.Headers.AcceptRanges);
+                    if (res.Headers.ETag is { } etag)
+                        ctx.Response.Headers.ETag = etag.ToString();
+                    if (res.Content.Headers.LastModified is { } lastModified)
+                        ctx.Response.Headers.LastModified = lastModified.ToString("R");
+                    if (res.Content.Headers.ContentDisposition is { } contentDisposition)
+                        ctx.Response.Headers.ContentDisposition = contentDisposition.ToString();
                     await res.Content.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
                 }
                 catch (HttpRequestException)
@@ -65,5 +80,11 @@ public static class ProxyEndpoints
                 }
             });
         }
+    }
+
+    private static void ForwardRequestHeader(HttpContext context, HttpRequestMessage request, string name)
+    {
+        if (context.Request.Headers.TryGetValue(name, out var values))
+            request.Headers.TryAddWithoutValidation(name, values.ToArray());
     }
 }

@@ -1,4 +1,4 @@
-import type { MessageBlock, MessagePart } from "../types"
+import type { MessageBlock, MessagePart, TranscriptPayloadRef } from "../types"
 
 export interface PersistedMessage {
   id: number | string
@@ -8,6 +8,7 @@ export interface PersistedMessage {
   toolName?: string | null
   toolInput?: string | null
   toolResult?: string | null
+  payloadRef?: TranscriptPayloadRef | null
   messageId?: string | null
   /** Provider-neutral message uid (see ChatEvent.messageUid). Used as the
    * block id when present so streamed and reloaded blocks share identity. */
@@ -74,6 +75,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       content: rec.content || rec.toolResult || "",
       toolName: rec.toolName ?? undefined,
       toolInput: rec.toolInput ?? undefined,
+      payloadRef: rec.payloadRef ?? undefined,
     }
 
     if (rec.eventType === "text" && currentBlock.parts.length > 0) {

@@ -18,7 +18,38 @@ export interface MessagePart {
   url?: string
   mediaType?: string
   base64?: string
+  payloadRef?: TranscriptPayloadRef
 }
+
+export interface TranscriptPayloadRef {
+  recordId: number
+  kind: string
+  length: number
+  contentType: string
+  encoding: string
+  sha256: string
+  available: boolean
+}
+
+export interface TranscriptPayloadRange {
+  start: number
+  /** Exclusive byte offset. */
+  end: number
+}
+
+export interface TranscriptPayloadChunk {
+  bytes: Uint8Array
+  start: number
+  /** Exclusive byte offset. */
+  end: number
+  total: number
+}
+
+export type TranscriptPayloadLoader = (
+  ref: TranscriptPayloadRef,
+  range: TranscriptPayloadRange,
+  signal: AbortSignal,
+) => Promise<TranscriptPayloadChunk>
 
 export interface ImageAttachment {
   mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"
@@ -71,6 +102,7 @@ export interface ChatEvent {
   toolName?: string | null
   toolInput?: string | null
   toolResult?: string | null
+  payloadRef?: TranscriptPayloadRef | null
   messageId?: string | null
   /**
    * Provider-neutral message identity minted server-side. All events of one
@@ -369,6 +401,10 @@ export interface ChatPanelProps {
    * isn't linkable — the affordance is hidden in that case.
    */
   resolveEventLink?: (event: import("./components/event-view").ParsedEvent) => (() => void) | undefined
+  /** Fetch transcript bytes on demand. Closed tool modals never call it. */
+  loadTranscriptPayload?: TranscriptPayloadLoader
+  /** Optional full-output download URL for payload-backed transcript parts. */
+  getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
   permissionMode?: string
   onTogglePlanMode?: () => void
   onExecutePlan?: () => void

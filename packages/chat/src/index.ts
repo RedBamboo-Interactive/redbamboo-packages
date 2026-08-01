@@ -3,6 +3,10 @@ import "./chat.css"
 export type {
   MessageBlock,
   MessagePart,
+  TranscriptPayloadRef,
+  TranscriptPayloadRange,
+  TranscriptPayloadChunk,
+  TranscriptPayloadLoader,
   ImageAttachment,
   ChatInputPart,
   UploadedAttachment,
@@ -32,6 +36,7 @@ export type {
 } from "./types"
 
 export { ChatPanel } from "./components/chat-panel"
+export { fetchTranscriptPayload } from "./lib/http-transcript-payload"
 export { ChatMessage, getPartColor, getSpinnerColor, extractPlanFileContent } from "./components/chat-message"
 export { ContextSquare, PendingContextBanner, parseContextFromMessage, extractRawContextXml } from "./components/context-card"
 export type { ContextCardData, ContextSquareProps, PendingContextBannerProps } from "./components/context-card"
