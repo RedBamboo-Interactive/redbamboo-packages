@@ -1,6 +1,11 @@
 import type { ComponentType } from "react"
 import type { Command } from "./types"
 
+/** Props handed by a host plugin to a component mounted in one of its slots. */
+export interface LeafPluginExtensionProps {
+  context: Readonly<Record<string, unknown>>
+}
+
 /**
  * Context handed to plugin-contributed command actions. Plugins are mounted
  * inside the Leaf shell's router, but their command actions may fire from
@@ -58,6 +63,12 @@ export interface LeafAppPlugin {
    * declared in plugin.json `frontend.shell.layers`.
    */
   shellLayers?: Record<string, ComponentType>
+  /**
+   * Components contributed to another plugin's declared frontend slots. Keys
+   * match `frontend.extensions[].id` in plugin.json. The shell keeps these
+   * lazy and isolated so a broken optional extension cannot take its host down.
+   */
+  extensions?: Record<string, ComponentType<LeafPluginExtensionProps>>
   /** Settings tabs contributed to the kernel Settings panel. */
   settingsPanel?: LeafPluginSettingsPanel
 }

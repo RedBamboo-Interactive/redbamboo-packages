@@ -21,8 +21,14 @@ export type {
   LeafAppPlugin,
   LeafPluginCommand,
   LeafPluginCommandContext,
+  LeafPluginExtensionProps,
   LeafPluginSettingsPanel,
 } from "./leaf-plugin"
+export { PluginExtensionSlot, registerPluginExtension } from "./plugin-extension"
+export type {
+  LeafPluginExtensionRegistration,
+  PluginExtensionSlotProps,
+} from "./plugin-extension"
 export { ShareDialog } from "./share-dialog"
 export { useInstallPrompt } from "./use-install-prompt"
 
