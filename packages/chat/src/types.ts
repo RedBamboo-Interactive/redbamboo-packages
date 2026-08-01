@@ -141,6 +141,7 @@ export interface SessionStats {
   status?: string
   startedAt?: string
   costUsd?: number | null
+  costEstimated?: boolean
   messageCount?: number
   outputTokens?: number | null
   cachedInputTokens?: number | null

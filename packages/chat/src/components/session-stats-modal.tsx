@@ -249,7 +249,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
 
           <div className="py-2">
             <StatRow label="Model" value={shortModel(s.model)} />
-            <StatRow label="Cost" value={formatCost(s.costUsd)} />
+            <StatRow label={s.costEstimated ? "Est. API cost" : "Cost"} value={formatCost(s.costUsd)} />
             {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}
             {s.status && <StatRow label="Status" value={s.status} />}
           </div>
