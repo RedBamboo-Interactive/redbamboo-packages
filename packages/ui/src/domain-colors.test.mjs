@@ -10,3 +10,7 @@ test("domain color constants stay aligned with the CSS design tokens", () => {
     assert.match(tokens, new RegExp(`--color-domain-${domain}:\\s*${hex};`))
   }
 })
+
+test("live status keeps its brighter positive pink", () => {
+  assert.match(tokens, /--color-status-live:\s*#EC4899;/)
+})

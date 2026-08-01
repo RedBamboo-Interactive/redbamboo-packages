@@ -35,6 +35,9 @@
   --color-domain-imagination: #7C4DFF;
   --color-domain-presence: #C74B7A;
 
+  /* Operational state, intentionally separate from app/domain identity. */
+  --color-status-live: #EC4899;
+
   --color-text-primary: #D0D1D6;
   --color-text-muted: #9B9CA2;
   --color-text-disabled: #6B6F77;
@@ -363,6 +366,11 @@
 /* accent-purple */
 @utility bg-accent-purple-a20 { background-color: rgb(from var(--color-accent-purple) r g b / 0.20); }
 @utility text-accent-purple-a60 { color: rgb(from var(--color-accent-purple) r g b / 0.60); }
+
+/* status-live */
+@utility bg-status-live-a20 { background-color: rgb(from var(--color-status-live) r g b / 0.20); }
+@utility bg-status-live-a30 { background-color: rgb(from var(--color-status-live) r g b / 0.30); }
+@utility ring-status-live-a50 { outline-color: rgb(from var(--color-status-live) r g b / 0.50); }
 
 /* primary */
 @utility bg-primary-a10 { background-color: rgb(from var(--primary) r g b / 0.10); }

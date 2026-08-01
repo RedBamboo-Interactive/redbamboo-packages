@@ -43,7 +43,7 @@ const COLOR = {
   shell: "var(--color-accent-gold)",
   result: "color-mix(in oklch, var(--color-accent-teal), black 30%)",
   error: "var(--color-accent-red)",
-  nova: "var(--color-domain-presence)",
+  nova: "var(--color-status-live)",
   event: "var(--color-text-disabled)",
   fallback: "var(--color-text-disabled)",
 }
@@ -1094,7 +1094,7 @@ function NovaEventSquare({ event }: { event: NovaEvent }) {
         <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
             <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: COLOR.nova }} />
-            <i className={`${novaEventIcon(event.type)} text-sm text-pink-400`} />
+            <i className={`${novaEventIcon(event.type)} text-sm text-status-live`} />
             <DialogTitle className="text-sm">{displaySource}</DialogTitle>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled">
               {event.type}
