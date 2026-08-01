@@ -339,6 +339,24 @@ function AppShellInner({
   const { toast, update } = useToast()
   const { canInstall, install } = useInstallPrompt()
 
+  // The active app owns interaction colour across the whole document. Menus,
+  // dialogs and toasts are portalled under <body>, so scoping --brand to the
+  // app's content subtree would leave those controls on the host's accent.
+  useEffect(() => {
+    const appColor = activeApp?.color
+    if (!appColor) return
+
+    const root = document.documentElement
+    const previousValue = root.style.getPropertyValue("--brand")
+    const previousPriority = root.style.getPropertyPriority("--brand")
+    root.style.setProperty("--brand", appColor)
+
+    return () => {
+      if (previousValue) root.style.setProperty("--brand", previousValue, previousPriority)
+      else root.style.removeProperty("--brand")
+    }
+  }, [activeApp?.color])
+
   const shareUrl = config.share?.url()
   const dropdownSwitcher = appSwitcherStyle === "dropdown"
 
