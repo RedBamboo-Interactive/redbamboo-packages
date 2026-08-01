@@ -58,6 +58,7 @@ export { createSpeechBackend, createProxySpeechTransport, DEFAULT_REFORMULATE_PR
 export type { SpeechTransport, PromptRequest, CreateSpeechBackendOptions } from "./lib/speech-backend"
 export { processStreamEvent, parseStructuredQuestions } from "./lib/process-stream-event"
 export { EVENT_TOOL_PREFIX, isEventPart, isEventBlock, streamTargetIndex } from "./lib/event-parts"
+export { getEffectiveToolName } from "./lib/tool-semantics"
 export { rebuildBlocks } from "./lib/rebuild-blocks"
 export type { PersistedMessage } from "./lib/rebuild-blocks"
 export { buildSharePayload } from "./lib/share-payload"

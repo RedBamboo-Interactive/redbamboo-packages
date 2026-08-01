@@ -15,6 +15,7 @@ import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
 import { isEventPart, isEventBlock } from "../lib/event-parts"
+import { getEffectiveToolName } from "../lib/tool-semantics"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
@@ -110,9 +111,10 @@ export function getPartColor(part: MessagePart): string {
     return `color-mix(in oklch, ${raw}, var(--color-text-disabled) 40%)`
   }
   if (part.type === "tool_use" && part.toolName) {
-    if (matchTool(readOnlyTools, part.toolName)) return COLOR.readOnly
-    if (matchTool(mutatingTools, part.toolName)) return COLOR.mutating
-    if (matchTool(shellTools, part.toolName)) return COLOR.shell
+    const effectiveName = getEffectiveToolName(part.toolName, part.toolInput)
+    if (matchTool(readOnlyTools, effectiveName)) return COLOR.readOnly
+    if (matchTool(mutatingTools, effectiveName)) return COLOR.mutating
+    if (matchTool(shellTools, effectiveName)) return COLOR.shell
   }
   return COLOR.fallback
 }
@@ -127,9 +129,10 @@ export function getSpinnerColor(messages: MessageBlock[]): string {
       const part = block.parts[j]
       if (part.type === "thinking") return COLOR.thinking
       if (part.type === "tool_use" && part.toolName) {
-        if (matchTool(readOnlyTools, part.toolName)) return COLOR.readOnly
-        if (matchTool(mutatingTools, part.toolName)) return COLOR.mutating
-        if (matchTool(shellTools, part.toolName)) return COLOR.shell
+        const effectiveName = getEffectiveToolName(part.toolName, part.toolInput)
+        if (matchTool(readOnlyTools, effectiveName)) return COLOR.readOnly
+        if (matchTool(mutatingTools, effectiveName)) return COLOR.mutating
+        if (matchTool(shellTools, effectiveName)) return COLOR.shell
       }
       if (part.type === "text") return COLOR.readOnly
     }
@@ -472,7 +475,7 @@ function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
 function partLabel(part: MessagePart): string {
   switch (part.type) {
     case "thinking": return "Thinking"
-    case "tool_use": return part.toolName?.startsWith("event:") ? part.toolName.slice(6) : part.toolName || "Tool"
+    case "tool_use": return part.toolName?.startsWith("event:") ? part.toolName.slice(6) : getEffectiveToolName(part.toolName, part.toolInput) || "Tool"
     case "tool_result": return "Result"
     case "error": return "Error"
     default: return part.type
@@ -532,9 +535,10 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
 
 function toolCategory(part: MessagePart): string | null {
   if (part.type !== "tool_use" || !part.toolName) return null
-  if (matchTool(readOnlyTools, part.toolName)) return "read-only"
-  if (matchTool(mutatingTools, part.toolName)) return "mutating"
-  if (matchTool(shellTools, part.toolName)) return "shell"
+  const effectiveName = getEffectiveToolName(part.toolName, part.toolInput)
+  if (matchTool(readOnlyTools, effectiveName)) return "read-only"
+  if (matchTool(mutatingTools, effectiveName)) return "mutating"
+  if (matchTool(shellTools, effectiveName)) return "shell"
   return null
 }
 
