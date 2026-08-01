@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react"
-import type { ChatBackend, ChatEvent, MessageBlock, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, QuestionState } from "../types"
+import type { ChatBackend, ChatEvent, ChatInputPart, MessageBlock, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, QuestionState, UploadedAttachment } from "../types"
 import { processStreamEvent, finalizeStreamBlock } from "../lib/process-stream-event"
 
 const EMPTY_MESSAGES: MessageBlock[] = []
@@ -90,8 +90,44 @@ export function useChatStream(backend: ChatBackend | null) {
 
       if (unsubRef.current) unsubRef.current()
       unsubRef.current = backend.subscribe(sessionId, processEvent)
-    } catch {
+    } catch (error) {
+      setMessages(previous => previous.filter(message => message.id !== userBlock.id))
       setIsStreaming(false)
+      throw error
+    }
+  }, [backend, processEvent])
+
+  const sendInput = useCallback(async (input: ChatInputPart[], attachments: UploadedAttachment[]) => {
+    if (!backend) return
+    if (!backend.sendInput) throw new Error("This chat backend does not support file attachments")
+    const text = input
+      .filter((part): part is Extract<ChatInputPart, { type: "text" }> => part.type === "text")
+      .map(part => part.text)
+      .join("\n")
+    const userBlock: MessageBlock = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      parts: [{ type: "text", content: text, attachments }],
+      timestamp: new Date().toISOString(),
+    }
+    setMessages(previous => [...previous, userBlock])
+    setIsStreaming(true)
+    questionRef.current = NO_QUESTION
+    setPendingQuestion(null)
+    setQuestionOutcome(null)
+    setInterrupting(false)
+    resumePendingRef.current = false
+    setResumePending(false)
+
+    try {
+      const { sessionId } = await backend.sendInput(input, attachments)
+      sessionIdRef.current = sessionId
+      unsubRef.current?.()
+      unsubRef.current = backend.subscribe(sessionId, processEvent)
+    } catch (error) {
+      setMessages(previous => previous.filter(message => message.id !== userBlock.id))
+      setIsStreaming(false)
+      throw error
     }
   }, [backend, processEvent])
 
@@ -153,11 +189,12 @@ export function useChatStream(backend: ChatBackend | null) {
       interrupting: false,
       resumePending: false,
       sendMessage: noopAsync as (text: string, images?: ImageAttachment[]) => Promise<void>,
+      sendInput: noopAsync as (input: ChatInputPart[], attachments: UploadedAttachment[]) => Promise<void>,
       interrupt: noop,
       reset: noopAsync,
       answerQuestion: noopAsync as (answer: string, payload?: QuestionAnswerPayload) => Promise<void>,
     }
   }
 
-  return { messages, isStreaming, pendingQuestion, questionOutcome, interrupting, resumePending, sendMessage, interrupt, reset, answerQuestion }
+  return { messages, isStreaming, pendingQuestion, questionOutcome, interrupting, resumePending, sendMessage, sendInput, interrupt, reset, answerQuestion }
 }

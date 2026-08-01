@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from "react"
-import type { ImageAttachment } from "../types"
+import type { AttachmentTransport, DraftAttachment, ImageAttachment, UploadedAttachment } from "../types"
+import { AttachmentCard } from "./attachment-card"
+import { acceptedAttachmentFiles } from "../lib/attachment-selection"
 
 interface ComposerProps {
   /**
@@ -9,6 +11,7 @@ interface ComposerProps {
    * caller (ChatPanel) decides what "send" means — enqueue-and-drain-later.
    */
   onSend: (content: string, images?: ImageAttachment[]) => void
+  onSendInput?: (content: string, attachments: UploadedAttachment[]) => void
   onInterrupt: () => void
   disabled: boolean
   isStreaming: boolean
@@ -23,15 +26,16 @@ interface ComposerProps {
   onAnswerQuestion?: (answer: string, payload?: import("../types").QuestionAnswerPayload) => void
   onResume?: () => void | Promise<void>
   sessionId?: string | null
-  renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean }) => React.ReactNode
+  renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
   enableImageAttachments?: boolean
   enableFileAttachments?: boolean
+  attachmentTransport?: AttachmentTransport
   draftStorageKey?: string
 }
 
 export interface ComposerHandle {
   /** Loads text (and images) into the composer, e.g. pulling a queued ghost back in to edit. */
-  loadDraft: (text: string, images?: ImageAttachment[]) => void
+  loadDraft: (text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[]) => void
 }
 
 function readImageFile(file: File): Promise<ImageAttachment | null> {
@@ -52,13 +56,44 @@ function readImageFile(file: File): Promise<ImageAttachment | null> {
 
 const DRAFT_SAVE_DELAY = 300
 
-function loadDraftFromStorage(key: string, id: string): string | null {
-  try { return localStorage.getItem(`${key}:${id}`) } catch { return null }
+interface StoredDraft { text: string; attachments: UploadedAttachment[] }
+
+function readyAttachments(attachments: DraftAttachment[]): UploadedAttachment[] {
+  return attachments
+    .filter(attachment => attachment.state === "ready")
+    .map(({ clientId: _clientId, state: _state, error: _error, previewUrl: _previewUrl, file: _file, ...attachment }) => attachment)
 }
 
-function saveDraftToStorage(key: string, id: string, text: string): void {
+function restoreAttachments(attachments: UploadedAttachment[], transport?: AttachmentTransport): DraftAttachment[] {
+  return attachments.map(attachment => ({
+    ...attachment,
+    clientId: `restored-${attachment.id}`,
+    state: "ready",
+    previewUrl: attachment.kind === "image"
+      ? transport?.getDownloadUrl?.(attachment) ?? attachment.downloadUrl
+      : undefined,
+  }))
+}
+
+function newClientId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `attachment-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function loadDraftFromStorage(key: string, id: string): StoredDraft | null {
   try {
-    if (text) localStorage.setItem(`${key}:${id}`, text)
+    const raw = localStorage.getItem(`${key}:${id}`)
+    if (!raw) return null
+    try {
+      const parsed = JSON.parse(raw) as StoredDraft
+      if (typeof parsed.text === "string" && Array.isArray(parsed.attachments)) return parsed
+    } catch { /* legacy drafts were stored as plain text */ }
+    return { text: raw, attachments: [] }
+  } catch { return null }
+}
+
+function saveDraftToStorage(key: string, id: string, text: string, attachments: UploadedAttachment[]): void {
+  try {
+    if (text || attachments.length > 0) localStorage.setItem(`${key}:${id}`, JSON.stringify({ text, attachments }))
     else localStorage.removeItem(`${key}:${id}`)
   } catch {}
 }
@@ -69,6 +104,7 @@ function removeDraftFromStorage(key: string, id: string): void {
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer({
   onSend,
+  onSendInput,
   onInterrupt,
   disabled,
   isStreaming,
@@ -83,22 +119,28 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   sessionId,
   renderInlineAction,
   enableImageAttachments = true,
-  enableFileAttachments = true,
+  enableFileAttachments,
+  attachmentTransport,
   draftStorageKey,
 }, ref) {
   const [value, setValue] = useState("")
   const [images, setImages] = useState<ImageAttachment[]>([])
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [ctrlHeld, setCtrlHeld] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const draftsRef = useRef<Record<string, { value: string; images: ImageAttachment[] }>>({})
+  const draftsRef = useRef<Record<string, { value: string; images: ImageAttachment[]; attachments: DraftAttachment[] }>>({})
   const prevSessionRef = useRef<string | null | undefined>(undefined)
   const valueRef = useRef(value)
   const imagesRef = useRef(images)
+  const attachmentsRef = useRef(attachments)
+  const removedUploadsRef = useRef(new Set<string>())
   const [draftRestoreKey, setDraftRestoreKey] = useState(0)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   valueRef.current = value
   imagesRef.current = images
+  attachmentsRef.current = attachments
+  const fileAttachmentsEnabled = enableFileAttachments ?? !!attachmentTransport
 
   useEffect(() => {
     const isInitial = prevSessionRef.current === undefined
@@ -107,24 +149,26 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     if (isSwitch) {
       const prevId = prevSessionRef.current
       if (prevId) {
-        draftsRef.current[prevId] = { value: valueRef.current, images: imagesRef.current }
-        if (draftStorageKey) saveDraftToStorage(draftStorageKey, prevId, valueRef.current)
+        draftsRef.current[prevId] = { value: valueRef.current, images: imagesRef.current, attachments: attachmentsRef.current }
+        if (draftStorageKey) saveDraftToStorage(draftStorageKey, prevId, valueRef.current, readyAttachments(attachmentsRef.current))
       }
       const draft = sessionId ? draftsRef.current[sessionId] : undefined
       const storedText = draftStorageKey && sessionId ? loadDraftFromStorage(draftStorageKey, sessionId) : null
-      setValue(draft?.value ?? storedText ?? "")
+      setValue(draft?.value ?? storedText?.text ?? "")
       setImages(draft?.images ?? [])
+      setAttachments(draft?.attachments ?? restoreAttachments(storedText?.attachments ?? [], attachmentTransport))
       setDraftRestoreKey(k => k + 1)
     } else if (isInitial && draftStorageKey && sessionId) {
       const saved = loadDraftFromStorage(draftStorageKey, sessionId)
       if (saved) {
-        setValue(saved)
+        setValue(saved.text)
+        setAttachments(restoreAttachments(saved.attachments, attachmentTransport))
         setDraftRestoreKey(k => k + 1)
       }
     }
 
     prevSessionRef.current = sessionId
-  }, [sessionId, draftStorageKey])
+  }, [sessionId, draftStorageKey, attachmentTransport])
 
   useLayoutEffect(() => {
     if (draftRestoreKey > 0 && textareaRef.current) {
@@ -159,22 +203,23 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [])
 
   useImperativeHandle(ref, () => ({
-    loadDraft: (text, imgs) => {
+    loadDraft: (text, imgs, atts) => {
       setValue(text)
       setImages(imgs ?? [])
+      setAttachments(restoreAttachments(atts ?? [], attachmentTransport))
       setDraftRestoreKey(k => k + 1)
       textareaRef.current?.focus()
     },
-  }), [])
+  }), [attachmentTransport])
 
   useEffect(() => {
     if (!draftStorageKey || !sessionId) return
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
-      saveDraftToStorage(draftStorageKey, sessionId, value)
+      saveDraftToStorage(draftStorageKey, sessionId, value, readyAttachments(attachments))
     }, DRAFT_SAVE_DELAY)
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current) }
-  }, [value, draftStorageKey, sessionId])
+  }, [value, attachments, draftStorageKey, sessionId])
 
   useEffect(() => {
     if (!draftStorageKey) return
@@ -182,18 +227,80 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       const id = prevSessionRef.current
       const text = valueRef.current
-      if (id && text) saveDraftToStorage(draftStorageKey, id, text)
+      if (id && (text || attachmentsRef.current.length > 0))
+        saveDraftToStorage(draftStorageKey, id, text, readyAttachments(attachmentsRef.current))
     }
   }, [draftStorageKey])
 
   const imageInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const uploadDraft = useCallback(async (draft: DraftAttachment) => {
+    if (!attachmentTransport || !draft.file) return
+    try {
+      const uploaded = await attachmentTransport.upload(draft.file)
+      if (removedUploadsRef.current.delete(draft.clientId)) {
+        if (draft.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.previewUrl)
+        await attachmentTransport.delete(uploaded.id).catch(() => {})
+        return
+      }
+      setAttachments(previous => previous.map(item => item.clientId === draft.clientId
+        ? { ...uploaded, clientId: item.clientId, state: "ready", previewUrl: item.previewUrl }
+        : item))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Upload failed"
+      setAttachments(previous => previous.map(item => item.clientId === draft.clientId
+        ? { ...item, state: "error", error: message }
+        : item))
+    }
+  }, [attachmentTransport])
+
+  const addUploadedFiles = useCallback(async (files: File[]) => {
+    if (!attachmentTransport) return
+    const drafts = files.map<DraftAttachment>(file => ({
+      id: "",
+      clientId: newClientId(),
+      kind: file.type.startsWith("image/") ? "image" : "file",
+      name: file.name,
+      mediaType: file.type || "application/octet-stream",
+      size: file.size,
+      downloadUrl: "",
+      state: "uploading",
+      previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+      file,
+    }))
+    setAttachments(previous => [...previous, ...drafts])
+    await Promise.all(drafts.map(uploadDraft))
+  }, [attachmentTransport, uploadDraft])
+
   const addImages = useCallback(async (files: File[]) => {
+    if (attachmentTransport) {
+      await addUploadedFiles(files)
+      return
+    }
     const results = await Promise.all(files.map(readImageFile))
-    const valid = results.filter((r): r is ImageAttachment => r !== null)
-    if (valid.length) setImages(prev => [...prev, ...valid])
-  }, [])
+    const valid = results.filter((result): result is ImageAttachment => result !== null)
+    if (valid.length) setImages(previous => [...previous, ...valid])
+  }, [attachmentTransport, addUploadedFiles])
+
+  const retryAttachment = useCallback((clientId: string) => {
+    const draft = attachmentsRef.current.find(item => item.clientId === clientId)
+    if (!draft?.file) return
+    setAttachments(previous => previous.map(item => item.clientId === clientId
+      ? { ...item, state: "uploading", error: undefined }
+      : item))
+    void uploadDraft({ ...draft, state: "uploading", error: undefined })
+  }, [uploadDraft])
+
+  const removeAttachment = useCallback((clientId: string) => {
+    const draft = attachmentsRef.current.find(item => item.clientId === clientId)
+    setAttachments(previous => previous.filter(item => item.clientId !== clientId))
+    if (draft?.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.previewUrl)
+    if (draft?.state === "uploading") removedUploadsRef.current.add(clientId)
+    if (draft?.state === "ready" && draft.id && attachmentTransport) {
+      void attachmentTransport.delete(draft.id).catch(() => {})
+    }
+  }, [attachmentTransport])
 
   const doInterrupt = useCallback(() => {
     onInterrupt()
@@ -205,17 +312,31 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // Ctrl+Enter / Ctrl+click is that same enqueue followed by onInterrupt: not
   // a second delivery path, just this one plus an interrupt.
   const handleSubmit = useCallback((opts?: { interruptToo?: boolean }) => {
+    const ready = readyAttachments(attachments)
+    const uploadsPending = attachments.some(attachment => attachment.state !== "ready")
+    if (uploadsPending) return
+    const clearComposer = () => {
+      for (const attachment of attachments) {
+        if (attachment.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(attachment.previewUrl)
+      }
+      setValue("")
+      setImages([])
+      setAttachments([])
+      if (sessionId) {
+        delete draftsRef.current[sessionId]
+        if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
+      }
+      if (textareaRef.current) textareaRef.current.style.height = "auto"
+    }
+    const deliver = (trimmed: string) => {
+      if (ready.length > 0 && onSendInput) onSendInput(trimmed, ready)
+      else onSend(trimmed, images.length > 0 ? images : undefined)
+      clearComposer()
+    }
     if (isStreaming) {
       const trimmed = value.trim()
-      if (trimmed || images.length > 0) {
-        onSend(trimmed, images.length > 0 ? images : undefined)
-        setValue("")
-        setImages([])
-        if (sessionId) {
-          delete draftsRef.current[sessionId]
-          if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
-        }
-        if (textareaRef.current) textareaRef.current.style.height = "auto"
+      if (trimmed || images.length > 0 || ready.length > 0) {
+        deliver(trimmed)
         if (opts?.interruptToo) doInterrupt()
       } else {
         // Nothing to queue — Enter/click on an empty box while streaming just stops the turn, like Escape.
@@ -230,27 +351,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       // not a conversation turn — and not an `answers` selection either: at the
       // CLI, `response` outranks and discards any selections sent with it.
       onAnswerQuestion(trimmed, { response: trimmed })
-      setValue("")
-      setImages([])
-      if (sessionId) {
-        delete draftsRef.current[sessionId]
-        if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
-      }
-      if (textareaRef.current) textareaRef.current.style.height = "auto"
+      clearComposer()
       return
     }
-    if ((!trimmed && images.length === 0) || disabled) return
-    onSend(trimmed, images.length > 0 ? images : undefined)
-    setValue("")
-    setImages([])
-    if (sessionId) {
-      delete draftsRef.current[sessionId]
-      if (draftStorageKey) removeDraftFromStorage(draftStorageKey, sessionId)
-    }
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-    }
-  }, [value, images, disabled, isStreaming, onSend, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
+    if ((!trimmed && images.length === 0 && ready.length === 0) || disabled) return
+    deliver(trimmed)
+  }, [value, images, attachments, disabled, isStreaming, onSend, onSendInput, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape" && isStreaming) {
@@ -282,6 +388,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [disabled, isStreaming, onResume])
 
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    if (!enableImageAttachments) return
     const items = Array.from(e.clipboardData.items)
     const imageFiles = items
       .filter(item => item.type.startsWith("image/"))
@@ -291,14 +398,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       e.preventDefault()
       await addImages(imageFiles)
     }
-  }, [addImages])
+  }, [addImages, enableImageAttachments])
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"))
-    if (files.length > 0) await addImages(files)
-  }, [addImages])
+    const files = acceptedAttachmentFiles(Array.from(e.dataTransfer.files), enableImageAttachments, fileAttachmentsEnabled)
+    if (files.length === 0) return
+    if (attachmentTransport) await addUploadedFiles(files)
+    else await addImages(files.filter(file => file.type.startsWith("image/")))
+  }, [addImages, addUploadedFiles, attachmentTransport, enableImageAttachments, fileAttachmentsEnabled])
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value)
@@ -318,24 +427,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [addImages])
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    if (files.length === 0) return
-    const parts: string[] = []
-    for (const file of files) {
-      const text = await file.text()
-      parts.push(files.length > 1 ? `--- ${file.name} ---\n${text}` : text)
-    }
-    setValue(prev => prev + (prev ? "\n" : "") + parts.join("\n\n"))
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px"
-    }
+    const files = acceptedAttachmentFiles(Array.from(e.target.files || []), enableImageAttachments, fileAttachmentsEnabled)
+    if (files.length > 0) await addUploadedFiles(files)
     if (fileInputRef.current) fileInputRef.current.value = ""
-  }, [])
+  }, [addUploadedFiles, enableImageAttachments, fileAttachmentsEnabled])
 
   const inputDisabled = disabled && !isStreaming
   const isPlan = permissionMode === "plan"
-  const hasContent = !!value.trim() || images.length > 0
+  const hasContent = !!value.trim() || images.length > 0 || attachments.some(attachment => attachment.state === "ready")
+  const attachmentBusy = attachments.some(attachment => attachment.state !== "ready")
   const willInterrupt = isStreaming && (!hasContent || ctrlHeld)
 
   const defaultPlaceholder = inputDisabled
@@ -362,7 +462,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           onChange={handleImageSelect}
         />
       )}
-      {enableFileAttachments && (
+      {fileAttachmentsEnabled && (
         <input
           ref={fileInputRef}
           type="file"
@@ -397,6 +497,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               ))}
             </div>
           )}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-3 pt-2.5">
+              {attachments.map(attachment => attachment.kind === "image" ? (
+                <div key={attachment.clientId} className="relative group">
+                  <img
+                    src={attachment.previewUrl || attachment.downloadUrl}
+                    alt={attachment.name}
+                    className={`h-16 w-16 object-cover rounded-md border ${attachment.state === "error" ? "border-red-500-a60" : "border-overlay-10"}`}
+                  />
+                  {attachment.state === "uploading" && (
+                    <div className="absolute inset-0 rounded-md bg-black/50 flex items-center justify-center"><i className="ph-bold ph-spinner animate-spin text-white" /></div>
+                  )}
+                  {attachment.state === "error" && (
+                    <button type="button" onClick={() => retryAttachment(attachment.clientId)} className="absolute inset-0 rounded-md bg-red-950/70 text-[10px] text-white px-1" title={attachment.error}>Retry</button>
+                  )}
+                  <button type="button" onClick={() => removeAttachment(attachment.clientId)} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500-a80 hover:bg-red-500 text-white text-[10px] flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" aria-label={`Remove ${attachment.name}`}>
+                    <i className="ph-bold ph-x" />
+                  </button>
+                </div>
+              ) : (
+                <AttachmentCard key={attachment.clientId} attachment={attachment} onRemove={() => removeAttachment(attachment.clientId)} onRetry={() => retryAttachment(attachment.clientId)} />
+              ))}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={value}
@@ -408,7 +532,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             rows={1}
             className="message-input-textarea w-full flex-1 resize-none bg-transparent px-3 py-2 text-sm font-serif placeholder:text-text-muted focus:outline-none disabled:opacity-50 min-h-[6.5rem]"
           />
-          {renderInlineAction?.({ value, isStreaming, disabled: inputDisabled, hasImages: images.length > 0 })}
+          {renderInlineAction?.({ value, isStreaming, disabled: inputDisabled, hasImages: images.length > 0, hasAttachments: attachments.length > 0 })}
         </div>
         <div className="flex flex-col justify-end gap-1.5 shrink-0 w-16">
           <div className="flex justify-center gap-1">
@@ -422,7 +546,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 <i className="ph-bold ph-image text-xs" />
               </button>
             )}
-            {enableFileAttachments && (
+            {fileAttachmentsEnabled && (
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={inputDisabled}
@@ -469,7 +593,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           ) : (
             <button
               onClick={() => handleSubmit()}
-              disabled={disabled || (!value.trim() && images.length === 0)}
+              disabled={disabled || attachmentBusy || (!value.trim() && images.length === 0 && attachments.length === 0)}
               className="w-full flex-1 px-3 py-2 rounded-md bg-overlay-10 hover:bg-overlay-15 disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
             >
               <i className="ph-bold ph-paper-plane text-sm" />

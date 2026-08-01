@@ -1,9 +1,11 @@
-import type { ImageAttachment } from "../types"
+import type { ImageAttachment, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
   id: string
   text: string
   images?: ImageAttachment[]
+  attachments?: UploadedAttachment[]
+  deliveryError?: string
 }
 
 export function enqueue(queue: QueuedMessage[], entry: QueuedMessage): QueuedMessage[] {
@@ -15,11 +17,12 @@ export function cancel(queue: QueuedMessage[], id: string): QueuedMessage[] {
 }
 
 /** Joins every queued entry into the single turn that gets sent when the queue drains. */
-export function coalesce(queue: QueuedMessage[]): { text: string; images?: ImageAttachment[] } | null {
+export function coalesce(queue: QueuedMessage[]): { text: string; images?: ImageAttachment[]; attachments?: UploadedAttachment[] } | null {
   if (queue.length === 0) return null
   const text = queue.map(m => m.text).join("\n")
   const images = queue.flatMap(m => m.images ?? [])
-  return { text, images: images.length > 0 ? images : undefined }
+  const attachments = queue.flatMap(m => m.attachments ?? [])
+  return { text, images: images.length > 0 ? images : undefined, attachments: attachments.length > 0 ? attachments : undefined }
 }
 
 export interface DrainConditions {
@@ -59,7 +62,7 @@ export function shouldDrain({
  * returns null on an empty queue) — the property the hook's settle timer
  * relies on to survive firing twice for the same drain.
  */
-export function drainStep(queue: QueuedMessage[]): { sent: { text: string; images?: ImageAttachment[] }; remaining: QueuedMessage[] } | null {
+export function drainStep(queue: QueuedMessage[]): { sent: { text: string; images?: ImageAttachment[]; attachments?: UploadedAttachment[] }; remaining: QueuedMessage[] } | null {
   const sent = coalesce(queue)
   if (!sent) return null
   return { sent, remaining: [] }

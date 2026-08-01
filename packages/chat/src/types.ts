@@ -13,6 +13,7 @@ export interface MessagePart {
   toolName?: string
   toolInput?: string
   images?: ImageAttachment[]
+  attachments?: UploadedAttachment[]
   isPartial?: boolean
   url?: string
   mediaType?: string
@@ -22,6 +23,36 @@ export interface MessagePart {
 export interface ImageAttachment {
   mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp"
   base64: string
+}
+
+export type ChatInputPart =
+  | { type: "text"; text: string }
+  | { type: "attachment"; attachmentId: string }
+
+export interface UploadedAttachment {
+  id: string
+  kind: "image" | "file"
+  name: string
+  mediaType: string
+  size: number
+  sha256?: string
+  downloadUrl: string
+  expiresAt?: string | null
+}
+
+export interface DraftAttachment extends UploadedAttachment {
+  clientId: string
+  state: "uploading" | "ready" | "error"
+  error?: string
+  previewUrl?: string
+  /** In-memory only, retained so a failed upload can be retried. */
+  file?: File
+}
+
+export interface AttachmentTransport {
+  upload(file: File, signal?: AbortSignal): Promise<UploadedAttachment>
+  delete(attachmentId: string): Promise<void>
+  getDownloadUrl?(attachment: UploadedAttachment): string
 }
 
 export interface SendOptions {
@@ -59,6 +90,7 @@ export interface ChatEvent {
 
 export interface ChatBackend {
   sendMessage(text: string, images?: ImageAttachment[]): Promise<{ sessionId: string }>
+  sendInput?(input: ChatInputPart[], attachments: UploadedAttachment[]): Promise<{ sessionId: string }>
   subscribe(sessionId: string, onEvent: (event: ChatEvent) => void): () => void
   getHistory?(limit?: number): Promise<MessageBlock[]>
   interrupt?(sessionId: string): Promise<void>
@@ -281,6 +313,7 @@ export interface ChatPanelProps {
   messages?: MessageBlock[]
   isStreaming?: boolean
   onSend?: (content: string, images?: ImageAttachment[], options?: SendOptions) => void
+  onSendInput?: (input: ChatInputPart[], attachments: UploadedAttachment[], options?: SendOptions) => void | Promise<void>
   onInterrupt?: () => void
   /**
    * True during the transitional window after an interrupt is requested but
@@ -341,6 +374,7 @@ export interface ChatPanelProps {
   onExecutePlan?: () => void
   enableImageAttachments?: boolean
   enableFileAttachments?: boolean
+  attachmentTransport?: AttachmentTransport
   draftStorageKey?: string
 
   // Voice integration
@@ -363,6 +397,7 @@ export interface ChatPanelProps {
     isStreaming: boolean
     disabled: boolean
     hasImages: boolean
+    hasAttachments: boolean
   }) => React.ReactNode
   renderMessageExtra?: (block: MessageBlock, index: number) => React.ReactNode
   renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode

@@ -19,6 +19,7 @@ import { getEffectiveToolName } from "../lib/tool-semantics"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
+import { AttachmentCard } from "./attachment-card"
 
 const readOnlyTools = new Set([
   "read", "glob", "grep", "agent", "websearch", "webfetch",
@@ -301,8 +302,9 @@ export const ChatMessage = memo(function ChatMessage({
     const contextXml = contextData ? extractRawContextXml(rawContent) : undefined
     const contextScreenshot = block.parts[0]?.images?.[0]
     const nonContextImages = block.parts[0]?.images?.slice(contextData ? 1 : 0)
+    const attachments = block.parts.flatMap(part => part.attachments ?? [])
 
-    if (contextData && !content && (!nonContextImages || nonContextImages.length === 0)) {
+    if (contextData && !content && (!nonContextImages || nonContextImages.length === 0) && attachments.length === 0) {
       return <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
     }
 
@@ -332,6 +334,19 @@ export const ChatMessage = memo(function ChatMessage({
                     alt=""
                     className="max-h-48 rounded-md border border-overlay-10"
                   />
+                ))}
+              </div>
+            )}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {attachments.map(attachment => attachment.kind === "image" ? (
+                  <a key={attachment.id} href={attachment.downloadUrl} target="_blank" rel="noreferrer" title={`Open ${attachment.name}`}>
+                    <img src={attachment.downloadUrl} alt={attachment.name} className="max-h-48 rounded-md border border-overlay-10" />
+                  </a>
+                ) : (
+                  <a key={attachment.id} href={`${attachment.downloadUrl}${attachment.downloadUrl.includes("?") ? "&" : "?"}download=true`} className="block no-underline" download={attachment.name}>
+                    <AttachmentCard attachment={attachment} />
+                  </a>
                 ))}
               </div>
             )}

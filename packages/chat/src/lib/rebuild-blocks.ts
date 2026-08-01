@@ -30,6 +30,9 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
           if (Array.isArray(attachments.images) && attachments.images.length > 0) {
             part.images = attachments.images
           }
+          if (Array.isArray(attachments.attachments) && attachments.attachments.length > 0) {
+            part.attachments = attachments.attachments
+          }
         } catch { /* ignore parse errors */ }
       }
       const userBlock: MessageBlock = {
@@ -98,6 +101,9 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
           currentBlock.parts.push({ type: "audio", content: attachments.audioUrl })
         if (Array.isArray(attachments.images) && attachments.images.length > 0) {
           part.images = attachments.images
+        }
+        if (Array.isArray(attachments.attachments) && attachments.attachments.length > 0) {
+          part.attachments = attachments.attachments
         }
       } catch { /* ignore parse errors */ }
     }

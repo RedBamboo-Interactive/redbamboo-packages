@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react"
-import type { ImageAttachment } from "../types"
+import type { ImageAttachment, UploadedAttachment } from "../types"
 import { enqueue, cancel as cancelEntry, drainStep, shouldDrain, type QueuedMessage } from "../lib/message-queue"
 import { loadQueue, saveQueue, pruneStaleQueues } from "../lib/message-queue-storage"
 
@@ -29,10 +29,11 @@ export interface UseMessageQueueOptions {
    * rather than the queue — so the drain has to hold.
    */
   questionPending?: boolean
-  onDrain: (text: string, images?: ImageAttachment[]) => void
+  onDrain: (text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[]) => void | Promise<void>
+  onDiscardAttachments?: (attachments: UploadedAttachment[]) => void
 }
 
-export function useMessageQueue({ sessionId, isStreaming, disabled, resumePending = false, questionPending = false, onDrain }: UseMessageQueueOptions) {
+export function useMessageQueue({ sessionId, isStreaming, disabled, resumePending = false, questionPending = false, onDrain, onDiscardAttachments }: UseMessageQueueOptions) {
   const [queue, setQueue] = useState<QueuedMessage[]>(() => {
     const storage = getStorage()
     return sessionId && storage ? loadQueue(storage, sessionId) : []
@@ -62,6 +63,8 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
   questionPendingRef.current = questionPending
   const onDrainRef = useRef(onDrain)
   onDrainRef.current = onDrain
+  const onDiscardAttachmentsRef = useRef(onDiscardAttachments)
+  onDiscardAttachmentsRef.current = onDiscardAttachments
 
   // The settle delay only earns its keep when the drain is waiting on a turn
   // to end, because that is the only moment isStreaming can flicker. Queueing
@@ -97,7 +100,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     // isStreaming (or a resumePending that hasn't cleared yet) can still
     // block this from firing.
     if (!shouldDrain({
-      queueLength: queueRef.current.length,
+      queueLength: queueRef.current.some(message => message.deliveryError) ? 0 : queueRef.current.length,
       isStreaming: isStreamingRef.current,
       disabled: disabledRef.current,
       resumePending: resumePendingRef.current,
@@ -106,17 +109,27 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     const result = drainStep(queueRef.current)
     if (!result) return
     setQueue(result.remaining)
-    onDrainRef.current(result.sent.text, result.sent.images)
+    Promise.resolve(onDrainRef.current(result.sent.text, result.sent.images, result.sent.attachments)).catch(error => {
+      const message = error instanceof Error ? error.message : "Message delivery failed"
+      const recovered: QueuedMessage = {
+        id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        ...result.sent,
+        deliveryError: message,
+      }
+      setQueue(previous => [recovered, ...previous])
+    })
   }, [])
 
+  const hasDeliveryError = queue.some(message => message.deliveryError)
   useEffect(() => {
-    if (!shouldDrain({ queueLength: queue.length, isStreaming, disabled, resumePending, questionPending })) return
+    const queueLength = hasDeliveryError ? 0 : queue.length
+    if (!shouldDrain({ queueLength, isStreaming, disabled, resumePending, questionPending })) return
     const timer = setTimeout(drain, sawStreamingRef.current ? DRAIN_SETTLE_MS : 0)
     // Any dependency change before the timer fires (queue mutated, streaming
     // flickered, disabled/resumePending/questionPending toggled) cancels it —
     // the next run of this effect decides fresh whether a new timer is warranted.
     return () => clearTimeout(timer)
-  }, [queue.length, isStreaming, disabled, resumePending, questionPending, drain])
+  }, [queue.length, hasDeliveryError, isStreaming, disabled, resumePending, questionPending, drain])
 
   const add = useCallback((text: string, images?: ImageAttachment[]) => {
     // Queued into a quiet session: this drain isn't waiting on anything, so it
@@ -126,7 +139,15 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     setQueue(prev => enqueue(prev, entry))
   }, [])
 
+  const addInput = useCallback((text: string, attachments: UploadedAttachment[]) => {
+    if (!isStreamingRef.current) sawStreamingRef.current = false
+    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, text, attachments }
+    setQueue(previous => enqueue(previous, entry))
+  }, [])
+
   const cancel = useCallback((id: string) => {
+    const item = queueRef.current.find(message => message.id === id)
+    if (item?.attachments?.length) onDiscardAttachmentsRef.current?.(item.attachments)
     setQueue(prev => cancelEntry(prev, id))
   }, [])
 
@@ -137,5 +158,9 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     return item
   }, [])
 
-  return { queue, add, cancel, pullback }
+  const retry = useCallback((id: string) => {
+    setQueue(previous => previous.map(message => message.id === id ? { ...message, deliveryError: undefined } : message))
+  }, [])
+
+  return { queue, add, addInput, cancel, pullback, retry }
 }

@@ -28,6 +28,16 @@ test("coalesce joins multiple queued entries into one turn", () => {
   assert.deepEqual(result?.images?.map(i => i.base64), ["AAA", "BBB"], "images merged in order")
 })
 
+test("coalesce preserves staged attachment IDs and mixed ordering", () => {
+  const file = { id: "att_file", kind: "file" as const, name: "notes.txt", mediaType: "text/plain", size: 4, downloadUrl: "/file" }
+  const image = { id: "att_image", kind: "image" as const, name: "image.png", mediaType: "image/png", size: 8, downloadUrl: "/image" }
+  const result = coalesce([
+    { id: "a", text: "review", attachments: [file] },
+    { id: "b", text: "and compare", attachments: [image] },
+  ])
+  assert.deepEqual(result?.attachments?.map(attachment => attachment.id), ["att_file", "att_image"])
+})
+
 test("coalesce on an empty queue is null, not an empty send", () => {
   assert.equal(coalesce([]), null)
 })

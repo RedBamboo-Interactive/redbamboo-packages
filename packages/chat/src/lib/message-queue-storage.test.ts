@@ -25,6 +25,15 @@ test("save then load round-trips the queue for a session", () => {
   assert.deepEqual(loadQueue(storage, "session-1"), queue)
 })
 
+test("staged attachment metadata survives queue refresh without bytes", () => {
+  const storage = new FakeStorage()
+  const attachment = { id: "att_123", kind: "file" as const, name: "proposal.pdf", mediaType: "application/pdf", size: 42, downloadUrl: "/attachment" }
+  const queue: QueuedMessage[] = [{ id: "a", text: "", attachments: [attachment], deliveryError: "try again" }]
+  saveQueue(storage, "session-files", queue, 1000)
+  assert.deepEqual(loadQueue(storage, "session-files"), queue)
+  assert.equal(storage.getItem("rb-chat-queue:session-files")?.includes("base64"), false)
+})
+
 test("loading an unknown session returns an empty queue, not an error", () => {
   const storage = new FakeStorage()
   assert.deepEqual(loadQueue(storage, "never-saved"), [])

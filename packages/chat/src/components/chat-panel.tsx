@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react"
-import type { ChatPanelProps, MessageBlock as MessageBlockType } from "../types"
+import type { ChatInputPart, ChatPanelProps, ImageAttachment, MessageBlock as MessageBlockType, UploadedAttachment } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
 import { useMessageQueue } from "../hooks/use-message-queue"
@@ -29,6 +29,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const messages = props.messages ?? internal.messages
   const isStreaming = props.isStreaming ?? internal.isStreaming
   const sendMessage = props.onSend ?? internal.sendMessage
+  const sendInput = props.onSendInput ?? internal.sendInput
   const interrupt = props.onInterrupt ?? internal.interrupt
   const pendingQuestion = props.pendingQuestion !== undefined ? props.pendingQuestion : internal.pendingQuestion
   const questionOutcome = props.questionOutcome !== undefined ? props.questionOutcome : internal.questionOutcome
@@ -41,7 +42,7 @@ export function ChatPanel(props: ChatPanelProps) {
     sessionId, disabled = false, hideComposer = false, onResume,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, permissionMode, onTogglePlanMode, onExecutePlan,
-    enableImageAttachments, enableFileAttachments, draftStorageKey,
+    enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
     speechBackend, handsFreeEnabled, pushToTalkKey,
     renderStatusLine, renderComposerInlineAction, renderMessageExtra, renderSideActions,
   } = props
@@ -58,18 +59,31 @@ export function ChatPanel(props: ChatPanelProps) {
   } : null)
 
   const composerRef = useRef<ComposerHandle>(null)
+  const drainMessage = useCallback((text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[]) => {
+    if (attachments?.length) {
+      const input: ChatInputPart[] = []
+      if (text) input.push({ type: "text", text })
+      input.push(...attachments.map(attachment => ({ type: "attachment" as const, attachmentId: attachment.id })))
+      return Promise.resolve(sendInput(input, attachments))
+    }
+    return Promise.resolve(sendMessage(text, images))
+  }, [sendInput, sendMessage])
   const messageQueue = useMessageQueue({
     sessionId,
     isStreaming,
     disabled,
     resumePending,
     questionPending: !!pendingQuestion,
-    onDrain: sendMessage,
+    onDrain: drainMessage,
+    onDiscardAttachments: attachments => {
+      if (!attachmentTransport) return
+      for (const attachment of attachments) void attachmentTransport.delete(attachment.id).catch(() => {})
+    },
   })
 
   const handleEditQueued = useCallback((id: string) => {
     const item = messageQueue.pullback(id)
-    if (item) composerRef.current?.loadDraft(item.text, item.images)
+    if (item) composerRef.current?.loadDraft(item.text, item.images, item.attachments)
   }, [messageQueue])
 
   const renderQueuedGhosts = useCallback((items: QueuedMessage[]) => (
@@ -79,7 +93,11 @@ export function ChatPanel(props: ChatPanelProps) {
         item={item}
         onCancel={messageQueue.cancel}
         onEdit={handleEditQueued}
-        onSendNow={interrupt}
+        onSendNow={id => {
+          const item = messageQueue.queue.find(message => message.id === id)
+          if (item?.deliveryError) messageQueue.retry(id)
+          else interrupt()
+        }}
       />
     ))
   ), [messageQueue.cancel, handleEditQueued, interrupt])
@@ -268,6 +286,7 @@ export function ChatPanel(props: ChatPanelProps) {
     <Composer
       ref={composerRef}
       onSend={messageQueue.add}
+      onSendInput={messageQueue.addInput}
       onInterrupt={interrupt}
       disabled={disabled}
       isStreaming={isStreaming}
@@ -282,6 +301,7 @@ export function ChatPanel(props: ChatPanelProps) {
       sessionId={sessionId}
       enableImageAttachments={enableImageAttachments}
       enableFileAttachments={enableFileAttachments}
+      attachmentTransport={attachmentTransport}
       draftStorageKey={draftStorageKey}
       renderInlineAction={inlineAction}
     />
