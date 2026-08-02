@@ -33,11 +33,14 @@ export function WsEventProvider({
   }, [])
 
   useEffect(() => {
+    const emit = (event: WsEvent) => {
+      for (const handler of handlersRef.current) handler(event)
+    }
     const handle = createWebSocket({
       url,
-      onEvent: (event) => {
-        for (const handler of handlersRef.current) handler(event)
-      },
+      onEvent: emit,
+      onConnect: () => emit({ type: "websocket.connected", data: null }),
+      onDisconnect: () => emit({ type: "websocket.disconnected", data: null }),
       onReconnect,
       onVisibilityChange,
       reconnectMs,

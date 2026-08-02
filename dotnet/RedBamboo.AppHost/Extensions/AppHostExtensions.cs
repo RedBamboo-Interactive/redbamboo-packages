@@ -190,6 +190,7 @@ public static class AppHostExtensions
         Func<TunnelConfig> getTunnelConfig,
         LogService? logService = null,
         Dictionary<string, string>? proxyRoutes = null,
+        IReadOnlyList<string>? wsProxyUpstreams = null,
         bool mapRemoteAccess = true,
         bool mapAutoStart = true)
     {
@@ -221,10 +222,10 @@ public static class AppHostExtensions
             TelemetryEndpoints.MapTelemetryEndpoints(app, telemetry);
         }
 
-        List<ProxyRouteConfig>? wsProxyRoutes = null;
+        var wsProxyRoutes = new List<ProxyRouteConfig>();
+        var seenWsUpstreams = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (proxyRoutes is { Count: > 0 })
         {
-            var seenWsUpstreams = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var routes = proxyRoutes.Select(kv => new ProxyRouteConfig
             {
                 PathPrefix = kv.Key,
@@ -232,7 +233,25 @@ public static class AppHostExtensions
                 ProxyWebSocket = seenWsUpstreams.Add(kv.Value),
             }).ToList();
             ProxyEndpoints.MapProxyEndpoints(app, routes, appName);
-            wsProxyRoutes = routes.Where(r => r.ProxyWebSocket).ToList();
+            wsProxyRoutes.AddRange(routes.Where(r => r.ProxyWebSocket));
+        }
+
+        // Some hosts implement their own HTTP proxy because they must stamp trust-boundary
+        // metadata (RedLeaf's Compute provenance is one example) but still need the shared
+        // root /ws endpoint to merge upstream events. Keep that configuration independent
+        // from HTTP proxy route registration so the two endpoint maps cannot conflict.
+        if (wsProxyUpstreams is { Count: > 0 })
+        {
+            foreach (var upstream in wsProxyUpstreams)
+            {
+                if (string.IsNullOrWhiteSpace(upstream) || !seenWsUpstreams.Add(upstream)) continue;
+                wsProxyRoutes.Add(new ProxyRouteConfig
+                {
+                    PathPrefix = "",
+                    UpstreamBaseUrl = upstream,
+                    ProxyWebSocket = true,
+                });
+            }
         }
 
         if (broadcaster is not null)
@@ -264,7 +283,8 @@ public static class AppHostExtensions
                 }
             }
 
-            WebSocketEndpoints.MapWebSocketEndpoints(app, broadcaster, wsProxyRoutes);
+            WebSocketEndpoints.MapWebSocketEndpoints(app, broadcaster,
+                wsProxyRoutes.Count > 0 ? wsProxyRoutes : null);
         }
 
         WarnOnUnregisteredRoutes(app, descriptor, proxyRoutes);

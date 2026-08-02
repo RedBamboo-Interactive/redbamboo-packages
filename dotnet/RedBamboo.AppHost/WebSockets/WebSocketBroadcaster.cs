@@ -14,7 +14,9 @@ public record WsEventSchema(
 
 public class WebSocketBroadcaster
 {
-    private readonly ConcurrentDictionary<string, WebSocket> _clients = new();
+    private sealed record ClientConnection(WebSocket Socket, SemaphoreSlim SendGate);
+
+    private readonly ConcurrentDictionary<string, ClientConnection> _clients = new();
     private readonly List<WsEventSchema> _schemas = new();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -34,26 +36,51 @@ public class WebSocketBroadcaster
         var bytes = Encoding.UTF8.GetBytes(message);
         var segment = new ArraySegment<byte>(bytes);
 
-        foreach (var (id, ws) in _clients)
+        foreach (var id in _clients.Keys)
         {
-            if (ws.State != WebSocketState.Open)
-            {
-                _clients.TryRemove(id, out _);
-                continue;
-            }
-
-            try
-            {
-                _ = ws.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
-            }
-            catch
-            {
-                _clients.TryRemove(id, out _);
-            }
+            _ = SendToClientAsync(id, segment, WebSocketMessageType.Text, true, CancellationToken.None);
         }
     }
 
-    internal void AddClient(string id, WebSocket ws) => _clients[id] = ws;
+    /// <summary>
+    /// Send a local or relayed frame through the client's single writer. System.Net.WebSockets
+    /// supports only one concurrent send; without this gate a kernel event racing a Compute
+    /// stream frame can fault the upstream relay and strand the browser on a local-only socket.
+    /// </summary>
+    internal async Task<bool> SendToClientAsync(
+        string id,
+        ArraySegment<byte> payload,
+        WebSocketMessageType messageType,
+        bool endOfMessage,
+        CancellationToken ct)
+    {
+        if (!_clients.TryGetValue(id, out var client)) return false;
+
+        await client.SendGate.WaitAsync(ct);
+        try
+        {
+            if (client.Socket.State != WebSocketState.Open)
+            {
+                _clients.TryRemove(id, out _);
+                return false;
+            }
+
+            await client.Socket.SendAsync(payload, messageType, endOfMessage, ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or ObjectDisposedException)
+        {
+            _clients.TryRemove(id, out _);
+            return false;
+        }
+        finally
+        {
+            client.SendGate.Release();
+        }
+    }
+
+    internal void AddClient(string id, WebSocket ws)
+        => _clients[id] = new ClientConnection(ws, new SemaphoreSlim(1, 1));
 
     internal bool RemoveClient(string id) => _clients.TryRemove(id, out _);
 

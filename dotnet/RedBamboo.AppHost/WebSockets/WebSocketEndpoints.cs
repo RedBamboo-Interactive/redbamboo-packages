@@ -53,7 +53,7 @@ public static class WebSocketEndpoints
                             .TrimEnd('/') + "/ws");
 
                     relayTasks.Add(Task.Run(
-                        () => RelayWithReconnect(ws, wsUri, authHeader, cookie, relayCts.Token),
+                        () => RelayWithReconnect(ws, broadcaster, id, wsUri, authHeader, cookie, relayCts.Token),
                         relayCts.Token));
                 }
             }
@@ -85,6 +85,8 @@ public static class WebSocketEndpoints
 
     private static async Task RelayWithReconnect(
         WebSocket browser,
+        WebSocketBroadcaster broadcaster,
+        string browserId,
         Uri upstreamUri,
         string? authHeader,
         string? authCookie,
@@ -107,14 +109,18 @@ public static class WebSocketEndpoints
                 await upstream.ConnectAsync(upstreamUri, ct);
                 retryDelay = TimeSpan.FromSeconds(2);
 
-                await browser.SendAsync(UpstreamConnectedMsg, WebSocketMessageType.Text, true, ct);
+                if (!await broadcaster.SendToClientAsync(browserId,
+                        new ArraySegment<byte>(UpstreamConnectedMsg), WebSocketMessageType.Text, true, ct))
+                    return;
 
                 while (upstream.State == WebSocketState.Open && browser.State == WebSocketState.Open)
                 {
                     var result = await upstream.ReceiveAsync(buf, ct);
                     if (result.MessageType == WebSocketMessageType.Close) break;
-                    await browser.SendAsync(new ArraySegment<byte>(buf, 0, result.Count),
-                        result.MessageType, result.EndOfMessage, ct);
+                    if (!await broadcaster.SendToClientAsync(browserId,
+                            new ArraySegment<byte>(buf, 0, result.Count),
+                            result.MessageType, result.EndOfMessage, ct))
+                        return;
                 }
             }
             catch (OperationCanceledException) { return; }
@@ -130,7 +136,9 @@ public static class WebSocketEndpoints
 
             try
             {
-                await browser.SendAsync(UpstreamDisconnectedMsg, WebSocketMessageType.Text, true, ct);
+                if (!await broadcaster.SendToClientAsync(browserId,
+                        new ArraySegment<byte>(UpstreamDisconnectedMsg), WebSocketMessageType.Text, true, ct))
+                    return;
             }
             catch { return; }
 

@@ -23,6 +23,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   let closed = false
   let hasConnected = false
+  let lastResumeReconnectAt = 0
 
   function cleanup() {
     if (ws) {
@@ -75,13 +76,29 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   function handleVisibilityChange() {
     if (closed || document.visibilityState !== "visible") return
     opts.onVisibilityChange?.()
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      connect()
-    }
+    reconnectAfterResume()
+  }
+
+  function reconnectAfterResume() {
+    if (closed || (typeof document !== "undefined" && document.visibilityState !== "visible")) return
+
+    // Mobile browsers can freeze a background tab without closing its TCP socket.
+    // readyState then remains OPEN forever even though no frames are delivered. A
+    // visibility/pageshow/online signal is authoritative evidence that the client
+    // crossed a lifecycle boundary, so replace the socket regardless of readyState.
+    // Debounce because Android commonly emits pageshow and visibilitychange together.
+    const now = Date.now()
+    if (now - lastResumeReconnectAt < 250) return
+    lastResumeReconnectAt = now
+    connect()
   }
 
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", handleVisibilityChange)
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("pageshow", reconnectAfterResume)
+    window.addEventListener("online", reconnectAfterResume)
   }
 
   connect()
@@ -92,6 +109,10 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
       cleanup()
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibilityChange)
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("pageshow", reconnectAfterResume)
+        window.removeEventListener("online", reconnectAfterResume)
       }
     },
   }
