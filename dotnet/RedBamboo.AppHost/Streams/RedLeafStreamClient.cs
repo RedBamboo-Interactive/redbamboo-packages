@@ -79,18 +79,26 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
     private readonly ConcurrentDictionary<string, Guid> _entityIds = new();
     private DateTimeOffset _lastWarn = DateTimeOffset.MinValue;
 
+    private sealed class RefreshingJwtHandler(JwtService jwtService) : DelegatingHandler(new HttpClientHandler())
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var token = jwtService.GenerateAccessToken("system", "system@redsuite", "System", ["admin"]);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            return base.SendAsync(request, ct);
+        }
+    }
+
     public RedLeafStreamClient(string redLeafBaseUrl, string appName, JwtService jwtService, LogService? log = null)
     {
         _appName = appName;
         _log = log;
 
-        var token = jwtService.GenerateAccessToken("system", "system@redsuite", "System", ["admin"]);
-        _http = new HttpClient
+        _http = new HttpClient(new RefreshingJwtHandler(jwtService))
         {
             BaseAddress = new Uri(redLeafBaseUrl.TrimEnd('/') + "/"),
             Timeout = TimeSpan.FromSeconds(15),
         };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {token}");
 
         _channel = Channel.CreateBounded<Pending>(
             new BoundedChannelOptions(ChannelCapacity) { FullMode = BoundedChannelFullMode.DropOldest });
@@ -202,6 +210,84 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
     {
         var json = JsonSerializer.Serialize(data);
         _pendingUpserts[slug] = new PendingUpsert(slug, typeSlug, name, json);
+    }
+
+    /// <summary>
+    /// Durably upsert one entity and return only after RedLeaf acknowledges it. This is the
+    /// audit/outbox boundary; callers retain their local outbox row until this completes.
+    /// </summary>
+    public async Task<Guid> UpsertEntityAsync(string slug, string typeSlug, string name, object data,
+        CancellationToken ct = default)
+    {
+        if (!await EnsureEntityTypeAsync(typeSlug, ct))
+            throw new InvalidOperationException($"Entity type '{typeSlug}' is unavailable in RedLeaf");
+
+        var dataJson = JsonSerializer.Serialize(data);
+        var body = $"{{\"name\":{JsonSerializer.Serialize(name)},\"type_slug\":{JsonSerializer.Serialize(typeSlug)},\"data\":{dataJson}}}";
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+        using var response = await _http.PutAsync($"api/entities/by-slug/{Uri.EscapeDataString(slug)}", content, ct);
+        var json = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException(
+                $"RedLeaf rejected upsert of '{slug}': {(int)response.StatusCode} {json}", null, response.StatusCode);
+
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("id", out var idEl) || !Guid.TryParse(idEl.GetString(), out var id))
+            throw new InvalidOperationException($"RedLeaf upsert of '{slug}' returned no entity id");
+        _entityIds[slug] = id;
+        return id;
+    }
+
+    /// <summary>
+    /// Durably append one idempotent stream record linked to an entity slug. RedLeaf treats
+    /// <paramref name="externalId"/> as unique within the stream, so an ambiguous timeout can
+    /// be retried without duplicating an immutable audit event.
+    /// </summary>
+    public async Task AppendForEntityAsync(string stream, string entitySlug, object data,
+        string externalId, string? userId = null, DateTimeOffset? createdAt = null,
+        CancellationToken ct = default)
+    {
+        if (!await EnsureStreamAsync(stream, ct))
+            throw new InvalidOperationException($"Stream '{stream}' is unavailable in RedLeaf");
+
+        var entityId = await ResolveEntityIdAsync(entitySlug, ct)
+            ?? throw new InvalidOperationException($"Entity '{entitySlug}' is unavailable in RedLeaf");
+        var body = JsonSerializer.Serialize(new
+        {
+            records = new[]
+            {
+                new
+                {
+                    external_id = externalId,
+                    data,
+                    entity_id = entityId,
+                    user_id = userId,
+                    created_at = createdAt ?? DateTimeOffset.UtcNow,
+                },
+            },
+        });
+        using var content = new StringContent(body, Encoding.UTF8, "application/json");
+        using var response = await _http.PostAsync($"api/streams/{Uri.EscapeDataString(stream)}/records", content, ct);
+        var json = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException(
+                $"RedLeaf rejected record '{externalId}' for '{stream}': {(int)response.StatusCode} {json}",
+                null, response.StatusCode);
+    }
+
+    public async Task<bool> EntityExistsAsync(string slug, CancellationToken ct = default)
+    {
+        using var response = await _http.GetAsync($"api/entities/{Uri.EscapeDataString(slug)}", ct);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> RecordExistsAsync(string stream, string externalId, CancellationToken ct = default)
+    {
+        using var response = await _http.GetAsync(
+            $"api/streams/{Uri.EscapeDataString(stream)}/records?external_id={Uri.EscapeDataString(externalId)}&limit=1", ct);
+        if (!response.IsSuccessStatusCode) return false;
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        return doc.RootElement.TryGetProperty("count", out var count) && count.GetInt32() > 0;
     }
 
     private async Task RunAsync(CancellationToken ct)
