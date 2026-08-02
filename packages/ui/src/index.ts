@@ -26,6 +26,13 @@ export {
 
 export { Input } from "./components/input"
 export { Label } from "./components/label"
+export { ProtectedValueField } from "./components/protected-value-field"
+export type {
+  ProtectedValueFieldProps,
+  ProtectedValueStatus,
+  ProtectedValueProtection,
+  ProtectedValueVerification,
+} from "./components/protected-value-field"
 
 export {
   Tabs,

@@ -46,6 +46,35 @@ public sealed class JwtService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    /// <summary>
+    /// Mint a narrowly identified suite-service token. Delegation and verified provenance are
+    /// explicit claims so loopback location alone never grants either trust boundary.
+    /// </summary>
+    public string GenerateServiceAccessToken(string serviceId, bool computeProvenance = false,
+        bool computeDelegateUser = false)
+    {
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, $"service:{serviceId}"),
+            new(JwtRegisteredClaimNames.Email, $"{serviceId}@redsuite"),
+            new(JwtRegisteredClaimNames.Name, serviceId),
+            new("roles", JsonSerializer.Serialize(new[] { "service" }), JsonClaimValueTypes.JsonArray),
+            new("client_id", serviceId),
+            new("compute_provenance", computeProvenance ? "true" : "false"),
+            new("compute_delegate_user", computeDelegateUser ? "true" : "false"),
+        };
+
+        var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(
+            issuer: _options.Issuer,
+            audience: _options.Audience,
+            claims: claims,
+            notBefore: DateTime.UtcNow,
+            expires: DateTime.UtcNow.Add(_options.AccessTokenLifetime),
+            signingCredentials: credentials);
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     public string GenerateRefreshToken()
     {
         var bytes = RandomNumberGenerator.GetBytes(32);
