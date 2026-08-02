@@ -384,6 +384,12 @@ export interface ChatPanelProps {
    */
   onAnswerQuestion?: (answer: string, payload?: QuestionAnswerPayload) => void
   onResume?: () => void | Promise<void>
+  /** Whether older history exists beyond the currently loaded tail. */
+  hasEarlierMessages?: boolean
+  /** Load the next older history page while preserving the current viewport. */
+  onLoadEarlier?: () => void | Promise<void>
+  /** True while an older history page is being fetched. */
+  isLoadingEarlier?: boolean
   placeholder?: string
   className?: string
   header?: React.ReactNode

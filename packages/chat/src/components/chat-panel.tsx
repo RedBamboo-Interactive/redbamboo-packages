@@ -40,6 +40,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const {
     sessionId, disabled = false, hideComposer = false, onResume,
+    hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl,
     permissionMode, onTogglePlanMode, onExecutePlan,
@@ -114,6 +115,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const sessionKey = sessionId ?? null
   const [prevSessionKey, setPrevSessionKey] = useState(sessionKey)
   const [prevLen, setPrevLen] = useState(messages.length)
+  const snapToBottomRef = useRef(false)
 
   // Render-time adjustments (never paint a stale window):
   // - conversation switch → jump to the tail, pinned to the bottom
@@ -124,11 +126,13 @@ export function ChatPanel(props: ChatPanelProps) {
     setPrevLen(messages.length)
     setStartIndex(Math.max(0, messages.length - WINDOW))
     shouldAutoScroll.current = true
+    snapToBottomRef.current = true
   } else if (messages.length !== prevLen) {
     setPrevLen(messages.length)
     const tail = Math.max(0, messages.length - WINDOW)
     if (shouldAutoScroll.current) {
       if (startIndex !== tail) setStartIndex(tail)
+      snapToBottomRef.current = true
     } else if (startIndex >= messages.length) {
       setStartIndex(tail)
     }
@@ -136,15 +140,32 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const startIndexRef = useRef(startIndex)
   startIndexRef.current = startIndex
-  const expandAnchorRef = useRef<{ height: number; top: number } | null>(null)
-  const snapToBottomRef = useRef(false)
+  const expandAnchorRef = useRef<{ height: number; top: number; messageCount: number; startIndex: number } | null>(null)
 
   const revealEarlier = useCallback(() => {
     const el = scrollRef.current
-    if (!el || startIndexRef.current === 0 || expandAnchorRef.current || snapToBottomRef.current) return
-    expandAnchorRef.current = { height: el.scrollHeight, top: el.scrollTop }
-    setStartIndex(i => Math.max(0, i - CHUNK))
-  }, [])
+    if (!el || expandAnchorRef.current || snapToBottomRef.current) return
+    if (startIndexRef.current > 0) {
+      expandAnchorRef.current = {
+        height: el.scrollHeight,
+        top: el.scrollTop,
+        messageCount: messages.length,
+        startIndex: startIndexRef.current,
+      }
+      setStartIndex(i => Math.max(0, i - CHUNK))
+      return
+    }
+    if (!hasEarlierMessages || !onLoadEarlier || isLoadingEarlier) return
+    expandAnchorRef.current = {
+      height: el.scrollHeight,
+      top: el.scrollTop,
+      messageCount: messages.length,
+      startIndex: startIndexRef.current,
+    }
+    void Promise.resolve(onLoadEarlier()).catch(() => {
+      expandAnchorRef.current = null
+    })
+  }, [hasEarlierMessages, isLoadingEarlier, messages.length, onLoadEarlier])
 
   // After a window change: keep the viewport anchored on the previously-visible
   // message when older ones are prepended above it, or jump to the bottom when
@@ -160,11 +181,11 @@ export function ChatPanel(props: ChatPanelProps) {
       return
     }
     const anchor = expandAnchorRef.current
-    if (anchor) {
+    if (anchor && (messages.length > anchor.messageCount || startIndex !== anchor.startIndex || !hasEarlierMessages)) {
       expandAnchorRef.current = null
       if (el) el.scrollTop = anchor.top + (el.scrollHeight - anchor.height)
     }
-  }, [startIndex])
+  }, [startIndex, sessionKey, messages.length, hasEarlierMessages])
 
   const lastAssistantIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -203,7 +224,7 @@ export function ChatPanel(props: ChatPanelProps) {
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
     shouldAutoScroll.current = atBottom
     setShowScrollBtn(!atBottom)
-    if (el.scrollTop < 300) revealEarlier()
+    if (!atBottom && el.scrollTop < 300) revealEarlier()
   }, [revealEarlier])
 
   const messageCountRef = useRef(messages.length)
@@ -336,15 +357,16 @@ export function ChatPanel(props: ChatPanelProps) {
 
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden py-3">
         <div ref={contentRef} className="max-w-3xl mx-auto px-4 min-w-0">
-          {startIndex > 0 && (
+          {(startIndex > 0 || hasEarlierMessages) && (
             <button
               onClick={revealEarlier}
+              disabled={isLoadingEarlier}
               className="w-full flex items-center gap-3 py-2 mb-2 text-[11px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
               title="Show earlier messages"
             >
               <span className="h-px flex-1 bg-overlay-6" />
-              <i className="ph-bold ph-caret-up text-[9px]" />
-              <span>{startIndex} earlier message{startIndex === 1 ? "" : "s"}</span>
+              <i className={`ph-bold ${isLoadingEarlier ? "ph-spinner animate-spin" : "ph-caret-up"} text-[9px]`} />
+              <span>{startIndex > 0 ? `${startIndex} earlier message${startIndex === 1 ? "" : "s"}` : "Earlier messages"}</span>
               <span className="h-px flex-1 bg-overlay-6" />
             </button>
           )}
