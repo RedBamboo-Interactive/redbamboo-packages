@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { eventImage } from "./event-image.ts"
+import { eventImage, isImageUrl } from "./event-image.ts"
 
 /** The payload shape the smart-home plugin emits for camera-person events. */
 const cameraPayload = {
@@ -77,6 +77,13 @@ test("tolerates non-string values in the image keys", () => {
 
 test("query strings and fragments don't defeat the extension check", () => {
   assert.deepEqual(eventImage({ asset_url: "/a.webp?v=2" }), { src: "/a.webp?v=2" })
+})
+
+test("recognizes image link targets", () => {
+  assert.equal(isImageUrl("http://127.0.0.1:18804/api/assets/id.png"), true)
+  assert.equal(isImageUrl("https://cdn.example/art.avif?size=large#preview"), true)
+  assert.equal(isImageUrl("/api/assets/report.pdf"), false)
+  assert.equal(isImageUrl(undefined), false)
 })
 
 test("data URLs are accepted", () => {

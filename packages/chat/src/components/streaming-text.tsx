@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
+import { isImageUrl } from "../lib/event-image"
 
 // Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
 const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
@@ -62,6 +63,20 @@ function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: string; res
       <img src={resolved} alt={alt || ""} loading="lazy" className="w-20 h-20 object-cover" />
     </button>
   )
+}
+
+function MarkdownLink({
+  href,
+  children,
+  resolve,
+  ...props
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { resolve?: (s: string) => string | undefined }) {
+  if (isImageUrl(href)) {
+    const alt = typeof children === "string" ? children : ""
+    return <ImageThumbnail src={href} alt={alt} resolve={resolve} />
+  }
+
+  return <a href={href} {...props}>{children}</a>
 }
 
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
@@ -171,6 +186,9 @@ export function StreamingText({
       if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
       return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
     },
+    a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
+      <MarkdownLink href={href} resolve={resolveRef.current} {...props}>{children}</MarkdownLink>
+    ),
   }), [])
 
   return (
@@ -200,6 +218,9 @@ export function MarkdownRenderer({
       if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
       return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
     },
+    a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
+      <MarkdownLink href={href} resolve={resolveRef.current} {...props}>{children}</MarkdownLink>
+    ),
   }), [])
 
   return (

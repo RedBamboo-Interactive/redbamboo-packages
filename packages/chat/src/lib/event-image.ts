@@ -9,6 +9,11 @@
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|avif|bmp|svg)(?:[?#]|$)/i
 
+/** True when a URL identifies an image without needing a network probe. */
+export function isImageUrl(value: string | undefined): boolean {
+  return !!value && (IMAGE_EXT.test(value) || value.startsWith("data:image/"))
+}
+
 /** Payload keys carrying a ready-made URL. */
 const URL_KEYS = ["asset_url", "assetUrl", "image_url", "imageUrl"]
 /** Payload keys carrying an id that resolves to `/api/assets/{id}`. */
@@ -52,7 +57,7 @@ export function eventImage(
   // A declared image media type stands in for an extension, since asset ids
   // don't always carry one.
   const declared = firstStr(data, MEDIA_TYPE_KEYS)?.startsWith("image/") ?? false
-  const isImage = (v: string) => declared || IMAGE_EXT.test(v) || v.startsWith("data:image/")
+  const isImage = (v: string) => declared || isImageUrl(v)
 
   const url = URL_KEYS.map(k => str(data, k)).find(v => v && isImage(v))
   const id = url ? undefined : ID_KEYS.map(k => str(data, k)).find(v => v && isImage(v))
