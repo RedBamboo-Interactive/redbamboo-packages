@@ -1,0 +1,69 @@
+.rb-workflow-viewer {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 0.5rem;
+  background: var(--background, #23252d);
+}
+
+.rb-workflow-viewer .react-flow__pane { cursor: grab; }
+.rb-workflow-viewer .react-flow__pane:active { cursor: grabbing; }
+
+.rb-workflow-node {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 210px;
+  min-height: 92px;
+  padding: 16px 20px;
+  border: 2px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 16px;
+  color: var(--contrast, #f2f2f4);
+  background: var(--card, #2c2e37);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.rb-workflow-node-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rb-workflow-node-title i { color: var(--primary, #d64c82); font-size: 18px; }
+
+.rb-workflow-port.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--card, #2c2e37);
+  background: var(--text-muted, #81838c);
+}
+
+.rb-workflow-port-event.react-flow__handle { background: var(--color-accent-gold, #bd9850); }
+
+.rb-workflow-port-label {
+  position: absolute;
+  max-width: 82px;
+  overflow: hidden;
+  color: var(--text-muted, #9c9ea8);
+  font-size: 10px;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.rb-workflow-port-label-input { left: 11px; text-align: left; }
+.rb-workflow-port-label-output { right: 11px; text-align: right; }
+.rb-workflow-edge { stroke: var(--text-muted, #8b8d96); stroke-width: 2; }
+.rb-workflow-edge-event { stroke: var(--color-accent-gold, #bd9850); stroke-width: 2; stroke-dasharray: 7 4; }
+
+.rb-workflow-empty {
+  padding: 1rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 0.5rem;
+  color: var(--text-muted, #9c9ea8);
+  font-size: 0.75rem;
+  background: var(--overlay-5, rgba(255, 255, 255, 0.03));
+}
