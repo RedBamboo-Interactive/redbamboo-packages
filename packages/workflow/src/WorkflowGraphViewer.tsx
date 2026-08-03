@@ -102,6 +102,7 @@ function Viewer({ graph: source, nodeTypes = [], className, ariaLabel, minHeight
 
   return <div className={`rb-workflow-viewer ${className ?? ""}`} style={{ minHeight }} role="img" aria-label={ariaLabel ?? "Workflow graph"}>
     <ReactFlow
+      style={{ minHeight }}
       nodes={nodes}
       edges={edges}
       nodeTypes={types}
