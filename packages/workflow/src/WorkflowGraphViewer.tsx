@@ -1,12 +1,8 @@
 import { useMemo } from "react"
 import {
   Background,
-  BaseEdge,
-  Handle,
-  Position,
   ReactFlow,
   ReactFlowProvider,
-  getSmoothStepPath,
   type EdgeProps,
   type NodeProps,
 } from "@xyflow/react"
@@ -16,56 +12,47 @@ import {
   normalizeWorkflowGraph,
   type WorkflowGraph,
   type WorkflowNodeTypeDefinition,
-  type WorkflowPortDefinition,
 } from "./graph"
+import { WorkflowNodeSurface, type WorkflowNodePortPresentation } from "./WorkflowNodeSurface"
+import { WorkflowSmoothStepEdge } from "./WorkflowSmoothStepEdge"
 
 type ViewerNodeData = Record<string, unknown> & {
   label: string
   definition?: WorkflowNodeTypeDefinition
+  eventInput?: boolean
 }
 
-function Port({ port, side, index, count }: {
-  port: WorkflowPortDefinition
-  side: "input" | "output"
-  index: number
-  count: number
-}) {
-  const top = `${((index + 1) / (count + 1)) * 100}%`
-  const event = port.portType === "event" || port.fieldType === "event"
-  return <>
-    <Handle
-      type={side === "input" ? "target" : "source"}
-      position={side === "input" ? Position.Left : Position.Right}
-      id={port.id}
-      className={`rb-workflow-port ${event ? "rb-workflow-port-event" : ""}`}
-      style={{ top }}
-      isConnectable={false}
-    />
-    <span className={`rb-workflow-port-label rb-workflow-port-label-${side}`} style={{ top }}>
-      {port.label ?? port.id}
-    </span>
-  </>
+function presentPorts(ports: WorkflowNodeTypeDefinition["inputs"]): WorkflowNodePortPresentation[] {
+  return (ports ?? []).map(port => ({
+    id: port.id,
+    label: port.label ?? port.id,
+    title: port.fieldType,
+    color: port.portType === "event" || port.fieldType === "event"
+      ? "var(--color-accent-gold, #bd9850)"
+      : undefined,
+  }))
 }
 
 function ViewerNode({ data }: NodeProps) {
   const node = data as ViewerNodeData
   const definition = node.definition
-  const inputs = definition?.inputs ?? []
-  const outputs = definition?.outputs ?? []
-  return <div className="rb-workflow-node">
-    <div className="rb-workflow-node-title">
-      <i className={definition?.icon ?? "ph-bold ph-gear"} aria-hidden="true" />
-      <span>{node.label}</span>
-    </div>
-    {inputs.map((port, index) => <Port key={`in-${port.id}`} port={port} side="input" index={index} count={inputs.length} />)}
-    {outputs.map((port, index) => <Port key={`out-${port.id}`} port={port} side="output" index={index} count={outputs.length} />)}
-  </div>
+  return <WorkflowNodeSurface
+    label={node.label}
+    icon={<i className={definition?.icon ?? "ph-bold ph-gear"} aria-hidden="true" />}
+    inputs={presentPorts(definition?.inputs)}
+    outputs={presentPorts(definition?.outputs)}
+    eventInput={node.eventInput ? { opacity: 0.5 } : false}
+  />
 }
 
 function ViewerEdge(props: EdgeProps) {
-  const [path] = getSmoothStepPath(props)
   const event = props.targetHandleId === "__event" || props.sourceHandleId === "__event"
-  return <BaseEdge {...props} path={path} className={event ? "rb-workflow-edge-event" : "rb-workflow-edge"} />
+  return <WorkflowSmoothStepEdge
+    {...props}
+    style={event
+      ? { ...props.style, stroke: "var(--color-accent-gold, #bd9850)", strokeWidth: 2, strokeDasharray: "6 3", opacity: 0.7 }
+      : { ...props.style, stroke: "var(--border, #8b8d96)", strokeWidth: 2 }}
+  />
 }
 
 export interface WorkflowGraphViewerProps {
@@ -88,8 +75,9 @@ function Viewer({ graph: source, nodeTypes = [], className, ariaLabel, minHeight
       ...node.data,
       label: node.data.label ?? definitions.get(node.type ?? "")?.label ?? node.type ?? node.id,
       definition: definitions.get(node.type ?? ""),
+      eventInput: graph.edges.some(edge => edge.target === node.id && edge.targetHandle === "__event"),
     },
-  })), [definitions, graph.nodes])
+  })), [definitions, graph.edges, graph.nodes])
   const edges = useMemo(() => graph.edges.map((edge, index) => ({
     ...edge,
     id: edge.id ?? `${edge.source}-${edge.target}-${index}`,
@@ -108,9 +96,9 @@ function Viewer({ graph: source, nodeTypes = [], className, ariaLabel, minHeight
       nodeTypes={types}
       edgeTypes={edgeTypes}
       fitView
-      fitViewOptions={{ padding: 0.22, maxZoom: 1.15 }}
+      fitViewOptions={{ padding: 0.2 }}
       minZoom={0.25}
-      maxZoom={1.8}
+      maxZoom={2}
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}

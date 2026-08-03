@@ -12,7 +12,7 @@ export default defineConfig({
       fileName: "index",
     },
     rollupOptions: {
-      external: ["react", "react-dom", "react/jsx-runtime"],
+      external: ["@xyflow/react", "react", "react-dom", "react/jsx-runtime"],
     },
   },
 })
