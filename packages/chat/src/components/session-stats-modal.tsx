@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { MessageBlock, SessionStats, SessionConfigOption } from "../types"
+import type { MessageBlock, SessionStats, SessionConfigOption, SessionAgentInfo } from "../types"
 import {
   Button,
   Dialog,
@@ -17,6 +17,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   stats: SessionStats | null
   messages: MessageBlock[]
+  agent?: SessionAgentInfo | null
   modelOptions?: SessionConfigOption[]
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]
@@ -173,6 +174,35 @@ function EntityStatRow({ label, value, option }: { label: string; value: string;
   )
 }
 
+function AgentEntityCard({ agent }: { agent: SessionAgentInfo }) {
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null)
+  const showAvatar = !!agent.avatarUrl && failedAvatarUrl !== agent.avatarUrl
+
+  return (
+    <div
+      className="flex items-center gap-3 rounded-lg border border-overlay-6 bg-overlay-3 px-3 py-2.5"
+      title={agent.id}
+    >
+      {showAvatar ? (
+        <img
+          src={agent.avatarUrl!}
+          alt=""
+          className="size-9 shrink-0 rounded-full object-cover"
+          onError={() => setFailedAvatarUrl(agent.avatarUrl ?? null)}
+        />
+      ) : (
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-overlay-10 text-text-muted">
+          <span aria-hidden="true" className="text-sm font-medium">{agent.name[0]?.toUpperCase() ?? "?"}</span>
+        </span>
+      )}
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium text-contrast">{agent.name}</div>
+        <div className="text-[11px] text-text-muted">Agent</div>
+      </div>
+    </div>
+  )
+}
+
 function findOption(options: SessionConfigOption[] | undefined, value: string | null | undefined) {
   if (!value) return undefined
   const normalized = value.toLowerCase()
@@ -235,7 +265,7 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   )
 }
 
-export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOptions, effortOptions, qualityTierOptions, providerOptions, onConfigChange, children }: Props) {
+export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, onConfigChange, children }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
   const pct = getContextPercent(s)
@@ -264,6 +294,8 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
         <DialogHeader>
           <DialogTitle>Session Info</DialogTitle>
         </DialogHeader>
+
+        {agent && <AgentEntityCard agent={agent} />}
 
         {children}
 

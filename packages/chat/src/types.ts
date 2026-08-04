@@ -226,9 +226,16 @@ export interface SessionConfigOption {
   aliases?: string[]
 }
 
+export interface SessionAgentInfo {
+  id: string
+  name: string
+  avatarUrl?: string | null
+}
+
 export interface ContextIndicatorProps {
   stats: SessionStats | null
   messages: MessageBlock[]
+  agent?: SessionAgentInfo | null
   modelOptions?: SessionConfigOption[]
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]

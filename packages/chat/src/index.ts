@@ -32,6 +32,7 @@ export type {
   HandsFreeContextValue,
   SessionStats,
   SessionConfigOption,
+  SessionAgentInfo,
   ContextIndicatorProps,
 } from "./types"
 
