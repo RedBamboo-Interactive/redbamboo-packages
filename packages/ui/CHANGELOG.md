@@ -1,5 +1,12 @@
 # @redbamboo/ui
 
+## 0.4.0
+
+### Minor Changes
+
+- 484259b: Add canonical AI-native entity identity/card primitives, direct entity-link helpers, and migrate
+  shared Session Info agent presentation onto the design-system component.
+
 ## 0.3.0
 
 ### Minor Changes

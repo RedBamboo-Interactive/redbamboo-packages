@@ -1,5 +1,15 @@
 # @redbamboo/chat
 
+## 0.3.2
+
+### Patch Changes
+
+- 484259b: Add canonical AI-native entity identity/card primitives, direct entity-link helpers, and migrate
+  shared Session Info agent presentation onto the design-system component.
+- Updated dependencies [484259b]
+  - @redbamboo/ui@0.4.0
+  - @redbamboo/utility@0.3.0
+
 ## 0.3.1
 
 ### Patch Changes
