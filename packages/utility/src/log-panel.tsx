@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { FilterBar, FilterPillGroup, PanelHeader, cn } from "@redbamboo/ui"
+import { Button, FilterBar, FilterPillGroup, PanelHeader, cn } from "@redbamboo/ui"
 import type { LogEntry, LogLevel } from "./log-types"
 import { LOG_LEVELS, LOG_LEVEL_COLORS, LOG_LEVEL_SEVERITY } from "./log-types"
 
@@ -17,6 +17,7 @@ export interface LogPanelProps {
   paused?: boolean
   onPauseChange?: (paused: boolean) => void
   onClear?: () => void
+  onClose?: () => void
   onRefresh?: () => void
   errorCount?: number
   warnCount?: number
@@ -28,6 +29,7 @@ export function LogPanel({
   connected,
   paused = false,
   onClear,
+  onClose,
   className,
 }: LogPanelProps) {
   const [search, setSearch] = useState("")
@@ -116,13 +118,26 @@ export function LogPanel({
         ) : undefined}
       >
         {onClear && (
-          <button
-            className="text-text-muted hover:text-contrast transition-colors cursor-pointer p-1"
+          <Button
+            variant="ghost"
+            size="icon-xs"
             onClick={onClear}
             title="Clear logs"
+            aria-label="Clear logs"
           >
-            <i className="ph-bold ph-trash text-xs" />
-          </button>
+            <i className="ph-bold ph-trash" />
+          </Button>
+        )}
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onClose}
+            title="Close console"
+            aria-label="Close console"
+          >
+            <i className="ph-bold ph-x" />
+          </Button>
         )}
       </PanelHeader>
 
