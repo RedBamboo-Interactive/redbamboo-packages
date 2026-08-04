@@ -265,6 +265,8 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
           <DialogTitle>Session Info</DialogTitle>
         </DialogHeader>
 
+        {children}
+
         <div className="divide-y divide-overlay-6 min-w-0">
           {(s.name || s.jobHash || s.sessionId || s.discussionId) && (
             <div className="pb-2">
@@ -364,8 +366,6 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
               </div>
             )}
           </div>
-
-          {children}
         </div>
       </DialogContent>
     </Dialog>
