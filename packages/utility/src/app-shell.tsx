@@ -123,6 +123,7 @@ function SuiteAppCommand({ app, enabled }: { app: (typeof SUITE_APPS)[number]; e
   useCommand(`app-shell:open-${app.name.toLowerCase()}`, {
     label: `Open ${app.name}`,
     description: `${app.description} (port ${app.port})`,
+    source: { id: app.name.toLowerCase(), label: app.name, icon: app.icon, color: app.color },
     group: "Apps",
     keywords: ["switch", "app", app.name.toLowerCase()],
     action: () => {
@@ -148,7 +149,10 @@ function SuiteAppCommands() {
 function ProvidedAppCommand({ app }: { app: SwitcherApp }) {
   useCommand(`app-shell:open-${app.id}`, {
     label: `Open ${app.name}`,
-    description: app.description,
+    description: app.description
+      ? `Open ${app.name}. ${app.description}`
+      : `Open the ${app.name} app.`,
+    source: { id: app.id, label: app.name, icon: app.icon, color: app.color },
     group: "Apps",
     keywords: ["switch", "app", app.name.toLowerCase()],
     action: () => app.onSelect?.(),
@@ -209,6 +213,8 @@ function AskNovaCommands({ appName }: { appName: string }) {
 
   useCommand("ask-nova", {
     label: "Ask Nova about this page",
+    description: "Open Nova with this page, its current selection, and a screenshot attached as context.",
+    source: { id: "nova", label: "Nova", icon: "ph-bold ph-star", color: "#C74B7A" },
     group: "AI",
     shortcut: "Ctrl+Shift+N",
     keywords: ["nova", "ai", "ask", "question", "help", "context"],
@@ -218,6 +224,8 @@ function AskNovaCommands({ appName }: { appName: string }) {
 
   useCommand("ask-nova-selection", {
     label: "Ask Nova about selection",
+    description: "Open Nova with the selected text and surrounding page context attached.",
+    source: { id: "nova", label: "Nova", icon: "ph-bold ph-star", color: "#C74B7A" },
     group: "AI",
     keywords: ["nova", "ai", "selection", "highlight", "text"],
     action: openModal,
@@ -563,9 +571,15 @@ function AppShellInner({
 }
 
 function AppShell(props: AppShellProps) {
+  const commandSource = {
+    id: props.config.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    label: props.config.name,
+    icon: props.config.icon,
+  }
+
   return (
     <AuthProvider>
-      <CommandProvider>
+      <CommandProvider source={commandSource}>
         <ToastProvider>
           <AppShellInner {...props} />
         </ToastProvider>

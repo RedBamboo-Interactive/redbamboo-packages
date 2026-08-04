@@ -17,11 +17,15 @@ interface NavTabProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean
   icon?: string
   shortcut?: string
+  /** Command-palette help text when this tab exposes a shortcut. */
+  commandDescription?: string
+  /** App or extension shown as the command's source badge. */
+  commandSource?: { id: string; label: string; icon?: string; color?: string }
   /** Override the active-state accent (defaults to var(--color-primary)). */
   accentColor?: string
 }
 
-function NavTab({ active, icon, shortcut, accentColor, children, className, style, ...props }: NavTabProps) {
+function NavTab({ active, icon, shortcut, commandDescription, commandSource, accentColor, children, className, style, ...props }: NavTabProps) {
   const label = typeof children === "string" ? children : undefined
   const activeStyle = active && accentColor
     ? { color: accentColor, background: `color-mix(in srgb, ${accentColor} 15%, transparent)`, ...style }
@@ -31,8 +35,13 @@ function NavTab({ active, icon, shortcut, accentColor, children, className, styl
       className={navTabClass(active ?? false, !accentColor, className)}
       style={activeStyle}
       data-command={shortcut && label ? label : undefined}
+      data-command-description={shortcut && label ? (commandDescription ?? `Open the ${label} section.`) : undefined}
       data-command-shortcut={shortcut}
       data-command-group={shortcut ? "Navigate" : undefined}
+      data-command-source={shortcut ? commandSource?.label : undefined}
+      data-command-source-id={shortcut ? commandSource?.id : undefined}
+      data-command-source-icon={shortcut ? commandSource?.icon : undefined}
+      data-command-source-color={shortcut ? commandSource?.color : undefined}
       {...props}
     >
       {icon && <i className={cn(icon, "text-xs")} />}

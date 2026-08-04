@@ -54,6 +54,16 @@ function matchCommand(query: string, cmd: Command): number {
     if (groupScore > 0) return groupScore
   }
 
+  if (cmd.description) {
+    const descriptionScore = fuzzyScore(query, cmd.description)
+    if (descriptionScore > 0) return descriptionScore
+  }
+
+  if (cmd.source) {
+    const sourceScore = fuzzyScore(query, cmd.source.label)
+    if (sourceScore > 0) return sourceScore
+  }
+
   if (cmd.keywords) {
     let best = -1
     for (const kw of cmd.keywords) {
@@ -283,20 +293,43 @@ export function CommandPalette({
         </div>
 
         {/* Footer — shows selected command info */}
-        <DialogFooter className="-mx-5 -mb-5 mt-0">
+        <DialogFooter className="mt-0 block min-h-[5.5rem]">
           {selectedCommand ? (
-            <div className="mr-auto flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{selectedCommand.label}</span>
-              {selectedCommand.group && (
-                <Badge variant="secondary" className="text-[0.65rem]">
-                  {selectedCommand.group}
-                </Badge>
-              )}
-              {selectedCommand.shortcut && (
-                <Badge variant="outline" className="text-[0.65rem]">
-                  {selectedCommand.shortcut}
-                </Badge>
-              )}
+            <div className="w-full min-w-0 text-left">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate text-xs font-medium text-foreground">
+                  {selectedCommand.label}
+                </span>
+                {selectedCommand.source && (
+                  <Badge
+                    variant="outline"
+                    className="shrink-0 gap-1.5 text-[0.65rem]"
+                    style={selectedCommand.source.color ? {
+                      color: selectedCommand.source.color,
+                      borderColor: `color-mix(in srgb, ${selectedCommand.source.color} 55%, transparent)`,
+                      backgroundColor: `color-mix(in srgb, ${selectedCommand.source.color} 10%, transparent)`,
+                    } : undefined}
+                  >
+                    {selectedCommand.source.icon && (
+                      <i className={cn(selectedCommand.source.icon, "text-[0.7rem]")} aria-hidden />
+                    )}
+                    {selectedCommand.source.label}
+                  </Badge>
+                )}
+                {selectedCommand.group && (
+                  <span className="shrink-0 text-[0.65rem] text-muted-foreground">
+                    {selectedCommand.group}
+                  </span>
+                )}
+                {selectedCommand.shortcut && (
+                  <kbd className="ml-auto shrink-0 text-xs tracking-widest text-muted-a60">
+                    {selectedCommand.shortcut}
+                  </kbd>
+                )}
+              </div>
+              <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                {selectedCommand.description || `Run ${selectedCommand.label}.`}
+              </p>
             </div>
           ) : (
             <p className="mr-auto text-xs text-muted-foreground">

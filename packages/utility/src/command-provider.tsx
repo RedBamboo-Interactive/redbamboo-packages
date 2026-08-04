@@ -6,7 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react"
-import type { Command } from "./types"
+import type { Command, CommandSource } from "./types"
 
 interface CommandStore {
   register(command: Command): void
@@ -35,6 +35,7 @@ function syncWindowMirror(snapshot: Command[]) {
     id: c.id,
     label: c.label,
     description: c.description,
+    source: c.source,
     group: c.group,
     shortcut: c.shortcut,
     keywords: c.keywords,
@@ -102,6 +103,7 @@ function createCommandStore(): CommandStore {
 }
 
 const CommandStoreContext = createContext<CommandStore | null>(null)
+const CommandSourceContext = createContext<CommandSource | undefined>(undefined)
 
 export function useCommandStore(): CommandStore {
   const store = useContext(CommandStoreContext)
@@ -114,11 +116,29 @@ export function useCommandList(): Command[] {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
 
+export function useCommandSource(): CommandSource | undefined {
+  return useContext(CommandSourceContext)
+}
+
+export function CommandScope({
+  source,
+  children,
+}: {
+  source: CommandSource
+  children: ReactNode
+}) {
+  return (
+    <CommandSourceContext.Provider value={source}>
+      {children}
+    </CommandSourceContext.Provider>
+  )
+}
+
 // ── DOM auto-discovery ────────────────────────────────────────────────
 
 const DOM_PREFIX = "__dom:"
 
-function scanDOM(store: CommandStore) {
+function scanDOM(store: CommandStore, defaultSource?: CommandSource) {
   const seen = new Set<string>()
   const elements = document.querySelectorAll<HTMLElement>("[data-command]")
 
@@ -131,10 +151,22 @@ function scanDOM(store: CommandStore) {
     seen.add(id)
 
     const keywords = el.getAttribute("data-command-keywords")
+    const sourceLabel = el.getAttribute("data-command-source")
+    const sourceId = el.getAttribute("data-command-source-id")
+    const sourceIcon = el.getAttribute("data-command-source-icon")
+    const sourceColor = el.getAttribute("data-command-source-color")
     store.register({
       id,
       label,
-      description: el.getAttribute("data-command-description") ?? undefined,
+      description: el.getAttribute("data-command-description") ?? `Run ${label}.`,
+      source: sourceLabel
+        ? {
+            id: sourceId ?? sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            label: sourceLabel,
+            icon: sourceIcon ?? undefined,
+            color: sourceColor ?? undefined,
+          }
+        : defaultSource,
       group: el.getAttribute("data-command-group") ?? undefined,
       shortcut: el.getAttribute("data-command-shortcut") ?? undefined,
       keywords: keywords ? keywords.split(",").map((k) => k.trim()) : undefined,
@@ -218,9 +250,11 @@ export interface CommandProviderProps {
   children: ReactNode
   /** Scan the DOM for elements with `data-command` attributes. Default `true`. */
   discover?: boolean
+  /** Default owner for commands registered inside this provider. */
+  source?: CommandSource
 }
 
-export function CommandProvider({ children, discover = true }: CommandProviderProps) {
+export function CommandProvider({ children, discover = true, source }: CommandProviderProps) {
   const storeRef = useRef<CommandStore | null>(null)
   if (!storeRef.current) storeRef.current = createCommandStore()
   const store = storeRef.current
@@ -228,26 +262,36 @@ export function CommandProvider({ children, discover = true }: CommandProviderPr
   useEffect(() => {
     if (!discover) return
 
-    scanDOM(store)
+    scanDOM(store, source)
 
     let timeout: ReturnType<typeof setTimeout>
     const observer = new MutationObserver(() => {
       clearTimeout(timeout)
-      timeout = setTimeout(() => scanDOM(store), 100)
+      timeout = setTimeout(() => scanDOM(store, source), 100)
     })
 
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-command"],
+      attributeFilter: [
+        "data-command",
+        "data-command-description",
+        "data-command-group",
+        "data-command-shortcut",
+        "data-command-keywords",
+        "data-command-source",
+        "data-command-source-id",
+        "data-command-source-icon",
+        "data-command-source-color",
+      ],
     })
 
     return () => {
       observer.disconnect()
       clearTimeout(timeout)
     }
-  }, [store, discover])
+  }, [store, discover, source?.id, source?.label, source?.icon, source?.color])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -292,7 +336,9 @@ export function CommandProvider({ children, discover = true }: CommandProviderPr
 
   return (
     <CommandStoreContext.Provider value={store}>
-      {children}
+      <CommandSourceContext.Provider value={source}>
+        {children}
+      </CommandSourceContext.Provider>
     </CommandStoreContext.Provider>
   )
 }

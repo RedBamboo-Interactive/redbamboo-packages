@@ -1,4 +1,4 @@
-export type { Command, CommandPaletteProps } from "./types"
+export type { Command, CommandPaletteProps, CommandSource } from "./types"
 export type { CommandProviderProps } from "./command-provider"
 export type {
   AppShellConfig,
@@ -8,7 +8,7 @@ export type {
 } from "./app-shell-types"
 export type { ShareDialogProps } from "./share-dialog"
 
-export { CommandProvider, useCommandStore, useCommandList } from "./command-provider"
+export { CommandProvider, CommandScope, useCommandStore, useCommandList } from "./command-provider"
 export { useCommand } from "./use-command"
 export { CommandPalette, openCommandPalette } from "./command-palette"
 export { AppShell } from "./app-shell"

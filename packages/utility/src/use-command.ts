@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import { useCommandStore } from "./command-provider"
+import { useCommandSource, useCommandStore } from "./command-provider"
 import type { Command } from "./types"
 
 type CommandOptions = Omit<Command, "id"> & { enabled?: boolean }
@@ -7,6 +7,8 @@ type CommandOptions = Omit<Command, "id"> & { enabled?: boolean }
 export function useCommand(id: string, options: CommandOptions) {
   const { enabled = true } = options
   const store = useCommandStore()
+  const inheritedSource = useCommandSource()
+  const source = options.source ?? inheritedSource
   const ref = useRef(options)
   ref.current = options
 
@@ -19,6 +21,7 @@ export function useCommand(id: string, options: CommandOptions) {
       id,
       label: options.label,
       description: options.description,
+      source,
       group: options.group,
       icon: options.icon,
       shortcut: options.shortcut,
@@ -26,5 +29,18 @@ export function useCommand(id: string, options: CommandOptions) {
       action: () => ref.current.action(),
     })
     return () => store.unregister(id)
-  }, [store, id, enabled, options.label, options.description, options.group, options.icon, options.shortcut])
+  }, [
+    store,
+    id,
+    enabled,
+    options.label,
+    options.description,
+    options.group,
+    options.icon,
+    options.shortcut,
+    source?.id,
+    source?.label,
+    source?.icon,
+    source?.color,
+  ])
 }
