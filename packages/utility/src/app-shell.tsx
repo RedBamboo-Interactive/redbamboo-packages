@@ -77,7 +77,7 @@ function ShellCommands({
     label: "Report Feedback",
     description: "Report a problem or suggest an improvement",
     group: "App",
-    shortcut: isMac ? "Cmd+Alt+F" : "Ctrl+Alt+F",
+    shortcut: "Ctrl+F4",
     action: onFeedback,
     enabled: feedbackEnabled,
   })
@@ -464,7 +464,7 @@ function AppShellInner({
                   <i className="ph-bold ph-bug size-4 text-center" />
                   Report Feedback
                   <DropdownMenuShortcut>
-                    {isMac ? "⌘⌥F" : "Ctrl+Alt+F"}
+                    Ctrl+F4
                   </DropdownMenuShortcut>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={openCommandPalette}>
