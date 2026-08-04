@@ -357,70 +357,75 @@ export function ChatPanel(props: ChatPanelProps) {
     <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
       {header && <div className="shrink-0">{header}</div>}
 
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto overflow-x-hidden py-3">
-        <div ref={contentRef} className="max-w-3xl mx-auto px-4 min-w-0">
-          {(startIndex > 0 || hasEarlierMessages) && (
-            <button
-              onClick={revealEarlier}
-              disabled={isLoadingEarlier}
-              className="w-full flex items-center gap-3 py-2 mb-2 text-[11px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
-              title="Show earlier messages"
-            >
-              <span className="h-px flex-1 bg-overlay-6" />
-              <i className={`ph-bold ${isLoadingEarlier ? "ph-spinner animate-spin" : "ph-caret-up"} text-[9px]`} />
-              <span>{startIndex > 0 ? `${startIndex} earlier message${startIndex === 1 ? "" : "s"}` : "Earlier messages"}</span>
-              <span className="h-px flex-1 bg-overlay-6" />
-            </button>
-          )}
-          {timelineRows.map((row) => {
-            const block = row.block
-            const index = row.sourceIndices[row.sourceIndices.length - 1] ?? 0
-            const isLastAssistant = row.sourceIndices.includes(lastAssistantIndex)
-            const senderAgent = block.senderAgentId && props.resolveAgentInfo
-              ? props.resolveAgentInfo(block.senderAgentId)
-              : undefined
-            return (
-              <ChatMessage
-                key={row.key}
-                block={block}
-                blockIndex={index}
-                isStreaming={isStreaming && isLastAssistant}
-                isLastAssistantBlock={isLastAssistant}
-                permissionMode={permissionMode}
-                onExecutePlan={onExecutePlan}
-                planFileContent={hasExitPlanPart(block) ? planFileContent : null}
-                isPendingQuestion={isLastAssistant && !!pendingQuestion}
-                questionOutcome={isLastAssistant ? questionOutcome : undefined}
-                onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
-                resolveImageSrc={resolveImageSrc}
-                resolveFileLink={resolveFileLink}
-                resolveEventLink={resolveEventLink}
-                loadTranscriptPayload={loadTranscriptPayload}
-                getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl}
-                assistantAvatar={props.assistantAvatar}
-                senderName={row.ownsSender ? senderAgent?.name : undefined}
-                senderAvatarUrl={row.ownsSender ? senderAgent?.avatarUrl : undefined}
-                renderExtra={row.ownsActions ? renderMessageExtra : undefined}
-                renderSideActions={row.ownsActions ? renderSideActions : undefined}
-                compactAfter={row.compactAfter}
-                showActions={row.ownsActions}
-              />
-            )
-          })}
-          {statusLine}
-          {renderQueuedGhosts(messageQueue.queue)}
+      {/* The jump control belongs to the history viewport, not the whole chat.
+          Composer height is deliberately irrelevant: attachments, textarea
+          growth and the mobile keyboard can all resize it independently. */}
+      <div className="relative flex-1 min-h-0">
+        <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto overflow-x-hidden py-3">
+          <div ref={contentRef} className="max-w-3xl mx-auto px-4 min-w-0">
+            {(startIndex > 0 || hasEarlierMessages) && (
+              <button
+                onClick={revealEarlier}
+                disabled={isLoadingEarlier}
+                className="w-full flex items-center gap-3 py-2 mb-2 text-[11px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+                title="Show earlier messages"
+              >
+                <span className="h-px flex-1 bg-overlay-6" />
+                <i className={`ph-bold ${isLoadingEarlier ? "ph-spinner animate-spin" : "ph-caret-up"} text-[9px]`} />
+                <span>{startIndex > 0 ? `${startIndex} earlier message${startIndex === 1 ? "" : "s"}` : "Earlier messages"}</span>
+                <span className="h-px flex-1 bg-overlay-6" />
+              </button>
+            )}
+            {timelineRows.map((row) => {
+              const block = row.block
+              const index = row.sourceIndices[row.sourceIndices.length - 1] ?? 0
+              const isLastAssistant = row.sourceIndices.includes(lastAssistantIndex)
+              const senderAgent = block.senderAgentId && props.resolveAgentInfo
+                ? props.resolveAgentInfo(block.senderAgentId)
+                : undefined
+              return (
+                <ChatMessage
+                  key={row.key}
+                  block={block}
+                  blockIndex={index}
+                  isStreaming={isStreaming && isLastAssistant}
+                  isLastAssistantBlock={isLastAssistant}
+                  permissionMode={permissionMode}
+                  onExecutePlan={onExecutePlan}
+                  planFileContent={hasExitPlanPart(block) ? planFileContent : null}
+                  isPendingQuestion={isLastAssistant && !!pendingQuestion}
+                  questionOutcome={isLastAssistant ? questionOutcome : undefined}
+                  onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
+                  resolveImageSrc={resolveImageSrc}
+                  resolveFileLink={resolveFileLink}
+                  resolveEventLink={resolveEventLink}
+                  loadTranscriptPayload={loadTranscriptPayload}
+                  getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl}
+                  assistantAvatar={props.assistantAvatar}
+                  senderName={row.ownsSender ? senderAgent?.name : undefined}
+                  senderAvatarUrl={row.ownsSender ? senderAgent?.avatarUrl : undefined}
+                  renderExtra={row.ownsActions ? renderMessageExtra : undefined}
+                  renderSideActions={row.ownsActions ? renderSideActions : undefined}
+                  compactAfter={row.compactAfter}
+                  showActions={row.ownsActions}
+                />
+              )
+            })}
+            {statusLine}
+            {renderQueuedGhosts(messageQueue.queue)}
+          </div>
         </div>
-      </div>
 
-      {showScrollBtn && (
-        <button
-          onClick={scrollToBottom}
-          className="absolute bottom-20 right-6 w-8 h-8 rounded-full bg-overlay-10 hover:bg-overlay-20 flex items-center justify-center transition-colors shadow-lg border border-border-subtle"
-          title="Scroll to bottom"
-        >
-          <i className="ph-bold ph-arrow-down text-xs" />
-        </button>
-      )}
+        {showScrollBtn && (
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-3 right-4 z-10 w-8 h-8 rounded-full bg-overlay-10 hover:bg-overlay-20 flex items-center justify-center transition-colors shadow-lg border border-border-subtle"
+            title="Scroll to bottom"
+          >
+            <i className="ph-bold ph-arrow-down text-xs" />
+          </button>
+        )}
+      </div>
 
       {footer}
       {composerEl}
