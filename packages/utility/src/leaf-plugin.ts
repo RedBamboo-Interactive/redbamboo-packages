@@ -47,14 +47,14 @@ export interface LeafPluginSettingsPanel {
 
 /**
  * The frontend contract a Leaf plugin's web package exports (as `plugin`).
- * The shell lazy-imports the package, mounts `Page` under /apps/{id}, and
- * aggregates `commands` into the command palette.
+ * The shell lazy-imports the package, mounts `Page` when the manifest declares
+ * a route, and aggregates optional contributions into their host surfaces.
  */
 export interface LeafAppPlugin {
   /** Plugin id — matches plugin.json `id` and the plugin entity slug. */
   id: string
-  /** Root page component, mounted under /apps/{id}. */
-  Page: ComponentType
+  /** Root page component. Required only when plugin.json declares frontend.route. */
+  Page?: ComponentType
   /** Commands contributed to the shell command palette. */
   commands?: LeafPluginCommand[]
   /**
@@ -63,6 +63,11 @@ export interface LeafAppPlugin {
    * declared in plugin.json `frontend.shell.layers`.
    */
   shellLayers?: Record<string, ComponentType>
+  /**
+   * Headless lifecycle components mounted while the authenticated shell and plugin
+   * are enabled. They render nothing and dispose their effects on unmount.
+   */
+  shellServices?: Record<string, ComponentType>
   /**
    * Components contributed to another plugin's declared frontend slots. Keys
    * match `frontend.extensions[].id` in plugin.json. The shell keeps these
