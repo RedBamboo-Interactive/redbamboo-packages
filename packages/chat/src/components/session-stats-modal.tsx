@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  EntityCard,
   Icon,
   buttonVariants,
 } from "@redbamboo/ui"
@@ -174,35 +175,6 @@ function EntityStatRow({ label, value, option }: { label: string; value: string;
   )
 }
 
-function AgentEntityCard({ agent }: { agent: SessionAgentInfo }) {
-  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null)
-  const showAvatar = !!agent.avatarUrl && failedAvatarUrl !== agent.avatarUrl
-
-  return (
-    <div
-      className="flex items-center gap-3 rounded-lg border border-overlay-6 bg-overlay-3 px-3 py-2.5"
-      title={agent.id}
-    >
-      {showAvatar ? (
-        <img
-          src={agent.avatarUrl!}
-          alt=""
-          className="size-9 shrink-0 rounded-full object-cover"
-          onError={() => setFailedAvatarUrl(agent.avatarUrl ?? null)}
-        />
-      ) : (
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-overlay-10 text-text-muted">
-          <span aria-hidden="true" className="text-sm font-medium">{agent.name[0]?.toUpperCase() ?? "?"}</span>
-        </span>
-      )}
-      <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-contrast">{agent.name}</div>
-        <div className="text-[11px] text-text-muted">Agent</div>
-      </div>
-    </div>
-  )
-}
-
 function findOption(options: SessionConfigOption[] | undefined, value: string | null | undefined) {
   if (!value) return undefined
   const normalized = value.toLowerCase()
@@ -295,7 +267,35 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
           <DialogTitle>Session Info</DialogTitle>
         </DialogHeader>
 
-        {agent && <AgentEntityCard agent={agent} />}
+        {agent && (
+          <EntityCard
+            entity={{ id: agent.id, typeSlug: "agent", name: agent.name }}
+            visual={{
+              src: agent.avatarUrl,
+              fallbackText: agent.name,
+              shape: "circle",
+            }}
+            subtitle="Agent"
+            size="md"
+            variant="outlined"
+            current
+            action={agent.href ? {
+              kind: "link",
+              href: agent.href,
+              ariaLabel: `Open ${agent.name} agent entity`,
+            } : undefined}
+            actions={agent.href ? (
+              <a
+                href={agent.href}
+                className={buttonVariants({ variant: "ghost", size: "icon-xs", className: "text-text-muted" })}
+                aria-label={`Open ${agent.name} agent entity`}
+                title={`Open ${agent.name} agent entity`}
+              >
+                <Icon name="ph-bold ph-arrow-square-out" aria-hidden="true" className="size-4" />
+              </a>
+            ) : undefined}
+          />
+        )}
 
         {children}
 

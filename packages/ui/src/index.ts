@@ -24,6 +24,20 @@ export {
   CardContent,
 } from "./components/card"
 
+export { EntityCard, EntityIdentity, queryEntityCards } from "./components/entity-card"
+export type {
+  EntityCardAction,
+  EntityCardDescriptor,
+  EntityCardDetail,
+  EntityCardEntity,
+  EntityCardProps,
+  EntityCardVisual,
+  EntityIdentityProps,
+} from "./components/entity-card"
+
+export { findUiComponents, UI_COMPONENT_CATALOG } from "./component-catalog"
+export type { UiComponentDescriptor } from "./component-catalog"
+
 export { Input } from "./components/input"
 export { Label } from "./components/label"
 export { ProtectedValueField } from "./components/protected-value-field"

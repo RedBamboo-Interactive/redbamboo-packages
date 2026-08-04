@@ -46,7 +46,32 @@ function App() {
 }
 ```
 
+### Canonical entity references
+
+Use `EntityCard` anywhere a concrete RedBamboo entity appears in a list, picker,
+form, modal, or provenance surface. The card keeps secondary controls outside its
+primary link/button and exposes stable `data-entity-*` semantics for browser agents.
+
+```tsx
+import { EntityCard } from '@redbamboo/ui'
+import { getEntityHref } from '@redbamboo/utility'
+
+<EntityCard
+  entity={{ id: agent.id, typeSlug: 'agent', name: agent.name }}
+  visual={{ src: agent.avatarUrl, shape: 'circle' }}
+  subtitle="Agent"
+  action={{ kind: 'link', href: getEntityHref('agent', agent.id) }}
+/>
+```
+
+Use `EntityIdentity` when a richer surface needs the canonical avatar, name, and
+metadata anatomy but has its own outer layout. `UI_COMPONENT_CATALOG`,
+`findUiComponents()`, and `queryEntityCards()` provide machine-readable discovery.
+
 ## Components
+
+- **EntityCard** — canonical compact entity reference with link, selection, and AI-readable semantics
+- **EntityIdentity** — reusable identity anatomy for richer entity surfaces
 
 - **Button** — multi-variant, multi-size with CVA
 - **Card** — composite (Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter)

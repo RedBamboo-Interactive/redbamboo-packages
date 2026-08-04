@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react"
+import { queryEntityCards } from "@redbamboo/ui"
 import { NOVA_PORT, SUITE_PORTS } from "./suite-registry"
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -62,6 +63,32 @@ export function scrapeDOMContext(): Record<string, unknown> {
   const selectedItem = document.querySelector<HTMLElement>('[data-slot="item-list-row"][data-selected]')
   if (selectedItem) {
     ctx.selectedItem = selectedItem.textContent?.trim()?.replace(/\s+/g, " ") || undefined
+  }
+
+  const entityCards = queryEntityCards().filter(card => card.visible)
+  const currentEntity = entityCards.find(card => card.focused)
+    ?? entityCards.find(card => card.current)
+    ?? entityCards.find(card => card.selected)
+  if (currentEntity) {
+    ctx.currentEntity = {
+      id: currentEntity.id,
+      typeSlug: currentEntity.typeSlug,
+      name: currentEntity.name,
+      href: currentEntity.href,
+    }
+  }
+
+  const selectedEntities = entityCards
+    .filter(card => card.selected && card !== currentEntity)
+    .slice(0, 5)
+    .map(card => ({
+      id: card.id,
+      typeSlug: card.typeSlug,
+      name: card.name,
+      href: card.href,
+    }))
+  if (selectedEntities.length > 0) {
+    ctx.selectedEntities = selectedEntities
   }
 
   const heading = document.querySelector<HTMLElement>("h1, h2")

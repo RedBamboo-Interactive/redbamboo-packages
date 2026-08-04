@@ -59,6 +59,8 @@ export { JsonHighlight } from "./json-highlight"
 export { createLocalStore, useLocalStore } from "./local-store"
 export type { LocalStore } from "./local-store"
 
+export { getEntityHref } from "./entity-links"
+
 export { createRemoteConnection, applyConnectionParams, autoConnect } from "./remote-connection"
 export type { ConnectionConfig, RemoteConnectionStore } from "./remote-connection"
 

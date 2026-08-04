@@ -230,6 +230,8 @@ export interface SessionAgentInfo {
   id: string
   name: string
   avatarUrl?: string | null
+  /** Canonical entity route. When present, the agent card is directly navigable. */
+  href?: string | null
 }
 
 export interface ContextIndicatorProps {

@@ -1,0 +1,16 @@
+import assert from "node:assert/strict"
+import { test } from "node:test"
+import { findUiComponents, UI_COMPONENT_CATALOG } from "./component-catalog.ts"
+
+test("the entity card is discoverable by domain, behavior, and AI-native intent", () => {
+  assert.equal(findUiComponents("entity")[0]?.id, "entity-card")
+  assert.equal(findUiComponents("avatar")[0]?.id, "entity-card")
+  assert.equal(findUiComponents("ai-native")[0]?.id, "entity-card")
+})
+
+test("the entity card catalog documents its stable machine selectors", () => {
+  const card = UI_COMPONENT_CATALOG.find((component) => component.id === "entity-card")
+  assert.ok(card)
+  assert.ok(card.selectors.includes('[data-slot="entity-card"]'))
+  assert.ok(card.exports.includes("queryEntityCards"))
+})
