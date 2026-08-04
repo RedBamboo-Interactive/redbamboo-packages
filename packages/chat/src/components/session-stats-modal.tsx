@@ -1,13 +1,16 @@
 import { useState } from "react"
 import type { MessageBlock, SessionStats, SessionConfigOption } from "../types"
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   Icon,
+  buttonVariants,
 } from "@redbamboo/ui"
 import { MorphSpinner } from "./morph-spinner"
+import { getSessionResourceHref, type SessionResourceKind } from "../lib/session-resource-links"
 
 interface Props {
   open: boolean
@@ -58,7 +61,7 @@ function formatTokens(n?: number | null): string {
 }
 
 function formatCost(cost?: number | null): string {
-  if (cost == null) return "$0.00"
+  if (cost == null) return "--"
   return `$${cost.toFixed(4)}`
 }
 
@@ -86,24 +89,57 @@ function countToolCalls(messages: MessageBlock[]): number {
   return count
 }
 
-function CopyBadge({ label, value, short }: { label: string; value: string; short?: string }) {
+const RESOURCE_DESTINATIONS: Record<SessionResourceKind, string> = {
+  job: "Compute job",
+  session: "CodeRed session",
+  discussion: "Nova discussion",
+}
+
+function IdentifierRow({ label, value, kind }: { label: string; value: string; kind: SessionResourceKind }) {
   const [copied, setCopied] = useState(false)
-  const display = short ?? value
-  const handleCopy = () => {
-    navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+  const destination = RESOURCE_DESTINATIONS[kind]
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard access can be denied by the browser. Leave the action in its
+      // neutral state instead of claiming the value was copied.
+    }
   }
+
   return (
     <div className="flex items-center justify-between py-1.5 gap-3">
       <span className="text-xs text-text-muted shrink-0">{label}</span>
-      <button
-        onClick={handleCopy}
-        className="font-mono text-[11px] px-2 py-0.5 rounded bg-overlay-6 hover:bg-overlay-10 text-text-muted hover:text-contrast transition-colors cursor-pointer"
-        title={copied ? "Copied!" : `Copy ${value}`}
-      >
-        {copied ? "Copied!" : `#${display}`}
-      </button>
+      <div className="flex items-center gap-1 min-w-0">
+        <code
+          className="min-w-0 max-w-28 truncate font-mono text-[11px] leading-6 px-2 rounded-md bg-overlay-6 text-text-muted"
+          title={value}
+        >
+          #{value.slice(0, 8)}
+        </code>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          onClick={handleCopy}
+          className={copied ? "text-accent-teal" : "text-text-muted"}
+          aria-label={copied ? `${label} copied` : `Copy ${label}`}
+          title={copied ? "Copied" : `Copy ${label}`}
+        >
+          <i aria-hidden="true" className={`ph-bold ${copied ? "ph-check" : "ph-copy"} text-xs`} />
+        </Button>
+        <a
+          href={getSessionResourceHref(kind, value)}
+          className={buttonVariants({ variant: "ghost", size: "icon-xs", className: "text-text-muted" })}
+          aria-label={`Open ${destination}`}
+          title={`Open ${destination}`}
+        >
+          <i aria-hidden="true" className="ph-bold ph-arrow-square-out text-xs" />
+        </a>
+      </div>
     </div>
   )
 }
@@ -233,9 +269,9 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
           {(s.name || s.jobHash || s.sessionId || s.discussionId) && (
             <div className="pb-2">
               {s.name && <StatRow label="Name" value={s.name} />}
-              {s.jobHash && <CopyBadge label="Job hash" value={s.jobHash} short={s.jobHash.slice(0, 8)} />}
-              {s.sessionId && <CopyBadge label="Session ID" value={s.sessionId} short={s.sessionId.slice(0, 8)} />}
-              {s.discussionId && <CopyBadge label="Discussion ID" value={s.discussionId} short={s.discussionId.slice(0, 8)} />}
+              {s.jobHash && <IdentifierRow label="Job hash" value={s.jobHash} kind="job" />}
+              {s.sessionId && <IdentifierRow label="Session ID" value={s.sessionId} kind="session" />}
+              {s.discussionId && <IdentifierRow label="Discussion ID" value={s.discussionId} kind="discussion" />}
             </div>
           )}
 
@@ -288,7 +324,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, modelOp
               <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
             )}
             <StatRow label="Model" value={shortModel(s.model)} />
-            <StatRow label={s.costEstimated ? "Est. API cost" : "Cost"} value={formatCost(s.costUsd)} />
+            <StatRow label={s.costEstimated ? "Est. standard API cost" : "Cost"} value={formatCost(s.costUsd)} />
             {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}
             {s.status && <StatRow label="Status" value={s.status} />}
           </div>
