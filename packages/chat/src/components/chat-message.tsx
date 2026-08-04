@@ -216,6 +216,10 @@ interface ChatMessageProps {
    */
   renderExtra?: (block: MessageBlock, index: number) => React.ReactNode
   renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode
+  /** Projected segments of one canonical message should not add message spacing. */
+  compactAfter?: boolean
+  /** Activity rows spanning multiple canonical messages have no single owner. */
+  showActions?: boolean
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -241,9 +245,11 @@ export const ChatMessage = memo(function ChatMessage({
   blockIndex = 0,
   renderExtra,
   renderSideActions,
+  compactAfter = false,
+  showActions = true,
 }: ChatMessageProps) {
-  const extraNode = extra ?? renderExtra?.(block, blockIndex)
-  const sideActionsNode = sideActions ?? renderSideActions?.(block, blockIndex)
+  const extraNode = showActions ? (extra ?? renderExtra?.(block, blockIndex)) : null
+  const sideActionsNode = showActions ? (sideActions ?? renderSideActions?.(block, blockIndex)) : null
   const [actionsOpen, setActionsOpen] = useState(false)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didFire = useRef(false)
@@ -396,7 +402,7 @@ export const ChatMessage = memo(function ChatMessage({
   }
 
   return (
-    <div className="mb-4 min-w-0 group/msg relative" data-actions={actionsOpen || undefined} {...touchProps}>
+    <div className={`${compactAfter ? "mb-0" : "mb-4"} min-w-0 group/msg relative`} data-actions={actionsOpen || undefined} {...touchProps}>
       <div className="relative max-w-full min-w-0 overflow-hidden">
         {senderName && (
           <div className="flex items-center gap-1.5 mb-1.5">
@@ -451,12 +457,14 @@ export const ChatMessage = memo(function ChatMessage({
         )}
       </div>
       {/* `max-md:` rather than bare utilities -- see the user branch above. */}
-      <div ref={actionsRef} className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex max-md:flex-row items-center max-md:gap-1 max-md:mt-1 md:absolute md:right-full md:mr-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
-        {sideActionsNode}
-        <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
-          {!isLiveBlock && <MessageMetadata block={block} inline />}
+      {showActions && (
+        <div ref={actionsRef} className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex max-md:flex-row items-center max-md:gap-1 max-md:mt-1 md:absolute md:right-full md:mr-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
+          {sideActionsNode}
+          <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
+            {!isLiveBlock && <MessageMetadata block={block} inline />}
+          </div>
         </div>
-      </div>
+      )}
       {extraNode}
     </div>
   )

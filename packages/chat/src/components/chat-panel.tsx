@@ -5,6 +5,7 @@ import { useVoiceInput } from "../hooks/use-voice-input"
 import { useMessageQueue } from "../hooks/use-message-queue"
 import { ChatMessage, extractPlanFileContent } from "./chat-message"
 import { isEventBlock } from "../lib/event-parts"
+import { projectActivityTimeline } from "../lib/activity-timeline"
 import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
 import type { QueuedMessage } from "../lib/message-queue"
@@ -350,6 +351,7 @@ export function ChatPanel(props: ChatPanelProps) {
   }
 
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
+  const timelineRows = projectActivityTimeline(visibleMessages, startIndex)
 
   return (
     <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
@@ -370,15 +372,16 @@ export function ChatPanel(props: ChatPanelProps) {
               <span className="h-px flex-1 bg-overlay-6" />
             </button>
           )}
-          {visibleMessages.map((block: MessageBlockType, i: number) => {
-            const index = startIndex + i
-            const isLastAssistant = index === lastAssistantIndex
+          {timelineRows.map((row) => {
+            const block = row.block
+            const index = row.sourceIndices[row.sourceIndices.length - 1] ?? 0
+            const isLastAssistant = row.sourceIndices.includes(lastAssistantIndex)
             const senderAgent = block.senderAgentId && props.resolveAgentInfo
               ? props.resolveAgentInfo(block.senderAgentId)
               : undefined
             return (
               <ChatMessage
-                key={block.id}
+                key={row.key}
                 block={block}
                 blockIndex={index}
                 isStreaming={isStreaming && isLastAssistant}
@@ -395,10 +398,12 @@ export function ChatPanel(props: ChatPanelProps) {
                 loadTranscriptPayload={loadTranscriptPayload}
                 getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl}
                 assistantAvatar={props.assistantAvatar}
-                senderName={senderAgent?.name}
-                senderAvatarUrl={senderAgent?.avatarUrl}
-                renderExtra={renderMessageExtra}
-                renderSideActions={renderSideActions}
+                senderName={row.ownsSender ? senderAgent?.name : undefined}
+                senderAvatarUrl={row.ownsSender ? senderAgent?.avatarUrl : undefined}
+                renderExtra={row.ownsActions ? renderMessageExtra : undefined}
+                renderSideActions={row.ownsActions ? renderSideActions : undefined}
+                compactAfter={row.compactAfter}
+                showActions={row.ownsActions}
               />
             )
           })}
