@@ -69,6 +69,7 @@ export type { ConnectPromptProps } from "./connect-prompt"
 
 export { RemoteAccessProvider, useRemoteAccess } from "./remote-access-provider"
 export type { RemoteAccessStatus, RemoteAccessContextValue } from "./remote-access-provider"
+export { buildAppReloadUrl, reloadApp } from "./reload-app"
 
 export { AuthProvider, useAuth } from "./auth-provider"
 export type { AuthUser, AuthContextValue } from "./auth-types"

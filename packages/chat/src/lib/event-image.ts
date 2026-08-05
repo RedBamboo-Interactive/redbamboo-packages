@@ -1,3 +1,5 @@
+import { resolveChatMediaSrc } from "./media-url.ts"
+
 /**
  * Image attachments on event payloads.
  *
@@ -64,5 +66,5 @@ export function eventImage(
   const raw = url ?? (id ? `/api/assets/${id}` : undefined)
   if (!raw) return null
 
-  return { src: resolveImageSrc?.(raw) ?? raw }
+  return { src: resolveChatMediaSrc(raw, resolveImageSrc) }
 }

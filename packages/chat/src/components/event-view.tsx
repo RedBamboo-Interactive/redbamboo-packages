@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { JsonHighlight } from "@redbamboo/utility"
 import { eventImage, type EventImage } from "../lib/event-image"
+import { resolveChatMediaSrc } from "../lib/media-url"
 import type { MessagePart } from "../types"
 
 /** A frieze event part decoded from its tool_use carrier. */
@@ -392,7 +393,7 @@ function OutfitEventView({ event, resolveImageSrc }: {
   const data = event.data!
   const asset = str(data, "asset")
   const name = str(data, "outfitName")
-  const src = asset ? (resolveImageSrc?.(asset) ?? asset) : undefined
+  const src = resolveChatMediaSrc(asset, resolveImageSrc)
 
   return (
     <div data-slot="event-view">

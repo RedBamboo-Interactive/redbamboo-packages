@@ -10,6 +10,7 @@ import {
 } from "@redbamboo/ui"
 import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
+import { resolveChatMediaSrc } from "../lib/media-url"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
@@ -427,7 +428,7 @@ export const ChatMessage = memo(function ChatMessage({
             <div key={i} className="msg-enter-ai my-2">
               <img
                 src={group.parts[0].url
-                  ? (resolveImageSrc ? resolveImageSrc(group.parts[0].url) ?? group.parts[0].url : group.parts[0].url)
+                  ? resolveChatMediaSrc(group.parts[0].url, resolveImageSrc)
                   : group.parts[0].base64 ? `data:${group.parts[0].mediaType ?? "image/png"};base64,${group.parts[0].base64}` : ""}
                 alt=""
                 className="max-h-64 rounded-md border border-overlay-10"
@@ -772,7 +773,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
 
   const mdComponents = {
     img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
-      const resolved = src && resolveImageSrc ? (resolveImageSrc(src.toString()) ?? src.toString()) : src?.toString()
+      const resolved = resolveChatMediaSrc(src?.toString(), resolveImageSrc)
       return <img src={resolved} alt={alt?.toString() || ""} className="max-w-full rounded" />
     },
   }

@@ -33,6 +33,7 @@ import { askNova, scrapeDOMContext } from "./ask-nova"
 import type { AskNovaContext } from "./ask-nova"
 import type { AppShellProps } from "./app-shell-types"
 import { SUITE_APPS, NOVA_PORT, currentSuiteApp } from "./suite-registry"
+import { reloadApp } from "./reload-app"
 
 const isMac =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent)
@@ -88,6 +89,14 @@ function ShellCommands({
     group: "App",
     shortcut: isMac ? "⌘K" : "Ctrl+K",
     action: openCommandPalette,
+  })
+
+  useCommand("app-shell:reload", {
+    label: "Reload App",
+    description: "Reload the app and fetch current frontend assets",
+    group: "App",
+    keywords: ["reload", "refresh", "update", "pwa"],
+    action: reloadApp,
   })
 
   useCommand("app-shell:share", {
@@ -481,6 +490,10 @@ function AppShellInner({
                   <DropdownMenuShortcut>
                     {isMac ? "⌘K" : "Ctrl+K"}
                   </DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={reloadApp}>
+                  <i className="ph-bold ph-arrow-clockwise size-4 text-center" />
+                  Reload App
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={openAbout}>

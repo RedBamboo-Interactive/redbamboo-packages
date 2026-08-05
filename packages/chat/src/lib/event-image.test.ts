@@ -86,6 +86,13 @@ test("recognizes image link targets", () => {
   assert.equal(isImageUrl(undefined), false)
 })
 
+test("loopback RedLeaf event images use the current chat origin", () => {
+  assert.deepEqual(
+    eventImage({ image_url: "http://127.0.0.1:18804/api/assets/id.png?v=2" }),
+    { src: "/api/assets/id.png?v=2" },
+  )
+})
+
 test("data URLs are accepted", () => {
   const src = "data:image/png;base64,iVBORw0KGgo="
   assert.deepEqual(eventImage({ image_url: src }), { src })

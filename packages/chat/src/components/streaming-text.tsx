@@ -4,6 +4,7 @@ import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import { isImageUrl } from "../lib/event-image"
+import { resolveChatMediaSrc } from "../lib/media-url"
 
 // Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
 const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
@@ -48,12 +49,8 @@ export function MediaLightbox() {
   )
 }
 
-function resolveSrc(src?: string, resolve?: (s: string) => string | undefined) {
-  return src && resolve ? (resolve(src) ?? src) : src
-}
-
 function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
-  const resolved = resolveSrc(src, resolve)
+  const resolved = resolveChatMediaSrc(src, resolve)
 
   return (
     <button
@@ -80,7 +77,7 @@ function MarkdownLink({
 }
 
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
-  const resolved = resolveSrc(src, resolve)
+  const resolved = resolveChatMediaSrc(src, resolve)
   const [poster, setPoster] = useState<string | null>(null)
 
   useEffect(() => {
