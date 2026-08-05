@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef, 
 import type { AttachmentTransport, DraftAttachment, ImageAttachment, UploadedAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { acceptedAttachmentFiles } from "../lib/attachment-selection"
+import { useUiEnvironment } from "@redbamboo/ui"
 
 interface ComposerProps {
   /**
@@ -123,6 +124,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   attachmentTransport,
   draftStorageKey,
 }, ref) {
+  const environment = useUiEnvironment()
   const [value, setValue] = useState("")
   const [images, setImages] = useState<ImageAttachment[]>([])
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
@@ -190,17 +192,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     const onKeyDown = (e: KeyboardEvent) => { if (e.ctrlKey) setCtrlHeld(true) }
     const onKeyUp = (e: KeyboardEvent) => { if (!e.ctrlKey) setCtrlHeld(false) }
     const reset = () => setCtrlHeld(false)
-    window.addEventListener("keydown", onKeyDown)
-    window.addEventListener("keyup", onKeyUp)
-    window.addEventListener("blur", reset)
-    document.addEventListener("visibilitychange", reset)
+    environment.window.addEventListener("keydown", onKeyDown)
+    environment.window.addEventListener("keyup", onKeyUp)
+    environment.window.addEventListener("blur", reset)
+    environment.document.addEventListener("visibilitychange", reset)
     return () => {
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("keyup", onKeyUp)
-      window.removeEventListener("blur", reset)
-      document.removeEventListener("visibilitychange", reset)
+      environment.window.removeEventListener("keydown", onKeyDown)
+      environment.window.removeEventListener("keyup", onKeyUp)
+      environment.window.removeEventListener("blur", reset)
+      environment.document.removeEventListener("visibilitychange", reset)
     }
-  }, [])
+  }, [environment.document, environment.window])
 
   useImperativeHandle(ref, () => ({
     loadDraft: (text, imgs, atts) => {
@@ -383,9 +385,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         onResume()
       }
     }
-    document.addEventListener("keydown", handler)
-    return () => document.removeEventListener("keydown", handler)
-  }, [disabled, isStreaming, onResume])
+    environment.document.addEventListener("keydown", handler)
+    return () => environment.document.removeEventListener("keydown", handler)
+  }, [disabled, environment.document, isStreaming, onResume])
 
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
     if (!enableImageAttachments) return

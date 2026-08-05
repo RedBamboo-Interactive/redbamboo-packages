@@ -1,6 +1,7 @@
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 
 import { cn } from "../utils"
+import { useUiEnvironment } from "../ui-environment"
 
 function TooltipProvider({
   delay = 0,
@@ -36,8 +37,9 @@ function TooltipContent({
     TooltipPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const environment = useUiEnvironment()
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={environment.portalContainer}>
       <TooltipPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}

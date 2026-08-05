@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  useUiEnvironment,
 } from "@redbamboo/ui"
 import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef } from "../types"
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
@@ -249,6 +250,7 @@ export const ChatMessage = memo(function ChatMessage({
   compactAfter = false,
   showActions = true,
 }: ChatMessageProps) {
+  const environment = useUiEnvironment()
   const extraNode = showActions ? (extra ?? renderExtra?.(block, blockIndex)) : null
   const sideActionsNode = showActions ? (sideActions ?? renderSideActions?.(block, blockIndex)) : null
   const [actionsOpen, setActionsOpen] = useState(false)
@@ -287,11 +289,11 @@ export const ChatMessage = memo(function ChatMessage({
     // Not `once`, or the first tap anywhere (including inside the row) would
     // consume the listener and leave the row stuck open afterwards.
     const id = setTimeout(() => {
-      document.addEventListener("touchstart", dismiss)
-      document.addEventListener("mousedown", dismiss)
+      environment.document.addEventListener("touchstart", dismiss)
+      environment.document.addEventListener("mousedown", dismiss)
     }, 0)
-    return () => { clearTimeout(id); document.removeEventListener("touchstart", dismiss); document.removeEventListener("mousedown", dismiss) }
-  }, [actionsOpen])
+    return () => { clearTimeout(id); environment.document.removeEventListener("touchstart", dismiss); environment.document.removeEventListener("mousedown", dismiss) }
+  }, [actionsOpen, environment.document])
 
   const touchProps = { onTouchStart, onTouchEnd: cancelLongPress, onTouchMove: cancelLongPress, onContextMenu }
 

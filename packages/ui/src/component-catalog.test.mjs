@@ -14,3 +14,10 @@ test("the entity card catalog documents its stable machine selectors", () => {
   assert.ok(card.selectors.includes('[data-slot="entity-card"]'))
   assert.ok(card.exports.includes("queryEntityCards"))
 })
+
+test("floating surfaces are discoverable with stable activation selectors", () => {
+  const surface = findUiComponents("always-on-top")[0]
+  assert.equal(surface?.id, "floating-surface")
+  assert.ok(surface?.selectors.includes('[data-slot="floating-surface-trigger"]'))
+  assert.ok(surface?.exports.includes("runUiSurfaceAction"))
+})

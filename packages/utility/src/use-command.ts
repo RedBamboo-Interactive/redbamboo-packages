@@ -26,6 +26,8 @@ export function useCommand(id: string, options: CommandOptions) {
       icon: options.icon,
       shortcut: options.shortcut,
       keywords: options.keywords,
+      requiresUserActivation: options.requiresUserActivation,
+      targetSurfaceId: options.targetSurfaceId,
       action: () => ref.current.action(),
     })
     return () => store.unregister(id)
@@ -38,6 +40,8 @@ export function useCommand(id: string, options: CommandOptions) {
     options.group,
     options.icon,
     options.shortcut,
+    options.requiresUserActivation,
+    options.targetSurfaceId,
     source?.id,
     source?.label,
     source?.icon,

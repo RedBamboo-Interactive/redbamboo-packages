@@ -39,6 +39,8 @@ function syncWindowMirror(snapshot: Command[]) {
     group: c.group,
     shortcut: c.shortcut,
     keywords: c.keywords,
+    requiresUserActivation: c.requiresUserActivation,
+    targetSurfaceId: c.targetSurfaceId,
   }))
 }
 
@@ -170,6 +172,8 @@ function scanDOM(store: CommandStore, defaultSource?: CommandSource) {
       group: el.getAttribute("data-command-group") ?? undefined,
       shortcut: el.getAttribute("data-command-shortcut") ?? undefined,
       keywords: keywords ? keywords.split(",").map((k) => k.trim()) : undefined,
+      requiresUserActivation: el.getAttribute("data-command-requires-user-activation") === "true",
+      targetSurfaceId: el.getAttribute("data-command-target-surface") ?? undefined,
       action: () => el.click(),
     })
   }
@@ -280,6 +284,8 @@ export function CommandProvider({ children, discover = true, source }: CommandPr
         "data-command-group",
         "data-command-shortcut",
         "data-command-keywords",
+        "data-command-requires-user-activation",
+        "data-command-target-surface",
         "data-command-source",
         "data-command-source-id",
         "data-command-source-icon",

@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useRef, useEffect, useCallback, useSyncExternalStore } from "react"
 import type { ImageAttachment, UploadedAttachment } from "../types"
-import { enqueue, cancel as cancelEntry, drainStep, shouldDrain, type QueuedMessage } from "../lib/message-queue"
+import { enqueue, cancel as cancelEntry, shouldDrain, type QueuedMessage } from "../lib/message-queue"
 import { loadQueue, saveQueue, pruneStaleQueues } from "../lib/message-queue-storage"
+import { createMessageQueueStore, type MessageQueueStore } from "../lib/message-queue-store"
 
 // Long enough to ride out a backend's isStreaming flicker around a turn
 // ending. Only paid when a turn actually ran — see the idle fast path below,
@@ -10,6 +11,23 @@ const DRAIN_SETTLE_MS = 200
 
 function getStorage(): Storage | null {
   try { return typeof localStorage !== "undefined" ? localStorage : null } catch { return null }
+}
+
+const sessionStores = new Map<string, MessageQueueStore>()
+
+function getSessionStore(sessionId: string): MessageQueueStore {
+  const existing = sessionStores.get(sessionId)
+  if (existing) return existing
+  const storage = getStorage()
+  const store = createMessageQueueStore(
+    storage ? loadQueue(storage, sessionId) : [],
+    queue => {
+      const currentStorage = getStorage()
+      if (currentStorage) saveQueue(currentStorage, sessionId, queue, Date.now())
+    },
+  )
+  sessionStores.set(sessionId, store)
+  return store
 }
 
 export interface UseMessageQueueOptions {
@@ -34,25 +52,14 @@ export interface UseMessageQueueOptions {
 }
 
 export function useMessageQueue({ sessionId, isStreaming, disabled, resumePending = false, questionPending = false, onDrain, onDiscardAttachments }: UseMessageQueueOptions) {
-  const [queue, setQueue] = useState<QueuedMessage[]>(() => {
-    const storage = getStorage()
-    return sessionId && storage ? loadQueue(storage, sessionId) : []
-  })
-
-  // A session switch must swap the queue synchronously during render (not in
-  // an effect): otherwise the drain effect below can run first in the same
-  // commit, see the outgoing session's leftover queue paired with the
-  // incoming session's isStreaming/disabled, and hand its messages to the
-  // wrong backend.
-  const prevSessionRef = useRef(sessionId)
-  if (prevSessionRef.current !== sessionId) {
-    prevSessionRef.current = sessionId
-    const storage = getStorage()
-    setQueue(sessionId && storage ? loadQueue(storage, sessionId) : [])
-  }
-
-  const queueRef = useRef(queue)
-  queueRef.current = queue
+  // Sessionless ChatPanels keep their old per-instance queue semantics. Named
+  // sessions deliberately converge on the shared store so portals and other
+  // simultaneous views cannot race the same persisted delivery.
+  const localStoreRef = useRef<MessageQueueStore | null>(null)
+  if (!localStoreRef.current) localStoreRef.current = createMessageQueueStore()
+  const store = sessionId ? getSessionStore(sessionId) : localStoreRef.current
+  const storeSnapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+  const queue = storeSnapshot.queue
   const isStreamingRef = useRef(isStreaming)
   isStreamingRef.current = isStreaming
   const disabledRef = useRef(disabled)
@@ -79,6 +86,11 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
   // status yet, so a queue rehydrated from localStorage takes the settle
   // instead of firing blind into what might be a turn already in progress.
   const sawStreamingRef = useRef(queue.length > 0)
+  const sawStreamingSessionRef = useRef(sessionId)
+  if (sawStreamingSessionRef.current !== sessionId) {
+    sawStreamingSessionRef.current = sessionId
+    sawStreamingRef.current = queue.length > 0
+  }
   useEffect(() => {
     if (isStreaming) sawStreamingRef.current = true
   }, [isStreaming])
@@ -88,37 +100,35 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     if (storage) pruneStaleQueues(storage, Date.now())
   }, [])
 
-  useEffect(() => {
-    const storage = getStorage()
-    if (!storage || !sessionId) return
-    saveQueue(storage, sessionId, queue, Date.now())
-  }, [queue, sessionId])
-
   const drain = useCallback(() => {
     // Re-check against the latest refs, not the values this closure was
     // scheduled with — the settle delay exists precisely so a flickered
     // isStreaming (or a resumePending that hasn't cleared yet) can still
     // block this from firing.
     if (!shouldDrain({
-      queueLength: queueRef.current.some(message => message.deliveryError) ? 0 : queueRef.current.length,
+      queueLength: store.getSnapshot().queue.some(message => message.deliveryError) ? 0 : store.getSnapshot().queue.length,
       isStreaming: isStreamingRef.current,
       disabled: disabledRef.current,
       resumePending: resumePendingRef.current,
       questionPending: questionPendingRef.current,
     })) return
-    const result = drainStep(queueRef.current)
-    if (!result) return
-    setQueue(result.remaining)
-    Promise.resolve(onDrainRef.current(result.sent.text, result.sent.images, result.sent.attachments)).catch(error => {
+    const claim = store.claimDrain()
+    if (!claim) return
+    let delivery: void | Promise<void>
+    try {
+      delivery = onDrainRef.current(claim.sent.text, claim.sent.images, claim.sent.attachments)
+    } catch (error) {
       const message = error instanceof Error ? error.message : "Message delivery failed"
-      const recovered: QueuedMessage = {
-        id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        ...result.sent,
-        deliveryError: message,
-      }
-      setQueue(previous => [recovered, ...previous])
+      claim.fail(message)
+      return
+    }
+    Promise.resolve(delivery).then(() => {
+      claim.complete()
+    }).catch(error => {
+      const message = error instanceof Error ? error.message : "Message delivery failed"
+      claim.fail(message)
     })
-  }, [])
+  }, [store])
 
   const hasDeliveryError = queue.some(message => message.deliveryError)
   useEffect(() => {
@@ -129,38 +139,38 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     // flickered, disabled/resumePending/questionPending toggled) cancels it —
     // the next run of this effect decides fresh whether a new timer is warranted.
     return () => clearTimeout(timer)
-  }, [queue.length, hasDeliveryError, isStreaming, disabled, resumePending, questionPending, drain])
+  }, [queue.length, hasDeliveryError, isStreaming, disabled, resumePending, questionPending, drain, storeSnapshot.revision])
 
   const add = useCallback((text: string, images?: ImageAttachment[]) => {
     // Queued into a quiet session: this drain isn't waiting on anything, so it
     // skips the settle. Re-armed by the effect above if a turn starts first.
     if (!isStreamingRef.current) sawStreamingRef.current = false
     const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, text, images }
-    setQueue(prev => enqueue(prev, entry))
-  }, [])
+    store.update(previous => enqueue(previous, entry))
+  }, [store])
 
   const addInput = useCallback((text: string, attachments: UploadedAttachment[]) => {
     if (!isStreamingRef.current) sawStreamingRef.current = false
     const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, text, attachments }
-    setQueue(previous => enqueue(previous, entry))
-  }, [])
+    store.update(previous => enqueue(previous, entry))
+  }, [store])
 
   const cancel = useCallback((id: string) => {
-    const item = queueRef.current.find(message => message.id === id)
+    const item = store.getSnapshot().queue.find(message => message.id === id)
     if (item?.attachments?.length) onDiscardAttachmentsRef.current?.(item.attachments)
-    setQueue(prev => cancelEntry(prev, id))
-  }, [])
+    store.update(previous => cancelEntry(previous, id))
+  }, [store])
 
   /** Removes an entry and hands it back, for pulling its text into the composer to edit. */
   const pullback = useCallback((id: string): QueuedMessage | undefined => {
-    const item = queueRef.current.find(m => m.id === id)
-    if (item) setQueue(prev => cancelEntry(prev, id))
+    const item = store.getSnapshot().queue.find(message => message.id === id)
+    if (item) store.update(previous => cancelEntry(previous, id))
     return item
-  }, [])
+  }, [store])
 
   const retry = useCallback((id: string) => {
-    setQueue(previous => previous.map(message => message.id === id ? { ...message, deliveryError: undefined } : message))
-  }, [])
+    store.update(previous => previous.map(message => message.id === id ? { ...message, deliveryError: undefined } : message))
+  }, [store])
 
   return { queue, add, addInput, cancel, pullback, retry }
 }

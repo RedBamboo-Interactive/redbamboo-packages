@@ -262,141 +262,148 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xs">
-        <DialogHeader>
+      <DialogContent style={{ maxWidth: "min(640px, calc(100% - 2rem))" }}>
+        <DialogHeader className="shrink-0">
           <DialogTitle>Session Info</DialogTitle>
         </DialogHeader>
 
-        {agent && (
-          <EntityCard
-            entity={{ id: agent.id, typeSlug: "agent", name: agent.name }}
-            visual={{
-              src: agent.avatarUrl,
-              fallbackText: agent.name,
-              shape: "circle",
-            }}
-            subtitle="Agent"
-            size="md"
-            variant="outlined"
-            current
-            action={agent.href ? {
-              kind: "link",
-              href: agent.href,
-              ariaLabel: `Open ${agent.name} agent entity`,
-            } : undefined}
-            actions={agent.href ? (
-              <a
-                href={agent.href}
-                className={buttonVariants({ variant: "ghost", size: "icon-xs", className: "text-text-muted" })}
-                aria-label={`Open ${agent.name} agent entity`}
-                title={`Open ${agent.name} agent entity`}
-              >
-                <Icon name="ph-bold ph-arrow-square-out" aria-hidden="true" className="size-4" />
-              </a>
-            ) : undefined}
-          />
-        )}
-
-        {children}
-
-        <div className="divide-y divide-overlay-6 min-w-0">
-          {(s.name || s.jobHash || s.sessionId || s.discussionId) && (
-            <div className="pb-2">
-              {s.name && <StatRow label="Name" value={s.name} />}
-              {s.jobHash && <IdentifierRow label="Job hash" value={s.jobHash} kind="job" />}
-              {s.sessionId && <IdentifierRow label="Session ID" value={s.sessionId} kind="session" />}
-              {s.discussionId && <IdentifierRow label="Discussion ID" value={s.discussionId} kind="discussion" />}
-            </div>
-          )}
-
-          {hasConfig && (
-            <div className="pb-2">
-              {providerValue && (
-                <EntityStatRow label="Provider" value={providerValue} option={providerOption} />
-              )}
-              {modelOptions && (
-                <ConfigSelect
-                  label="Model"
-                  value={currentModelAlias(s.model)}
-                  options={modelOptions}
-                  onChange={v => handleConfigChange({ model: v })}
-                  disabled={updating}
-                />
-              )}
-              {qualityTierOptions && (
-                <ConfigSelect
-                  label="Quality"
-                  value={s.qualityTier || ""}
-                  options={qualityTierOptions}
-                  onChange={v => handleConfigChange({ qualityTier: v })}
-                  disabled={updating}
-                />
-              )}
-              {effortOptions && !qualityTierOptions && (
-                <ConfigSelect
-                  label="Quality"
-                  value={s.effort || "high"}
-                  options={effortOptions}
-                  onChange={v => handleConfigChange({ effort: v })}
-                  disabled={updating}
-                />
-              )}
-              {updating && (
-                <div className="flex items-center gap-1.5 text-[10px] text-text-muted mt-1">
-                  <MorphSpinner color="var(--muted-foreground)" />
-                  <span>Restarting session...</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="py-2">
-            {!hasConfig && providerValue && (
-              <EntityStatRow label="Provider" value={providerValue} option={providerOption} />
-            )}
-            {s.qualityTier && !(onConfigChange && qualityTierOptions) && (
-              <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
-            )}
-            <StatRow label="Model" value={shortModel(s.model)} />
-            <StatRow label={s.costEstimated ? "Est. standard API cost" : "Cost"} value={formatCost(s.costUsd)} />
-            {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}
-            {s.status && <StatRow label="Status" value={s.status} />}
-          </div>
-
-          <div className="py-2">
-            <StatRow label="Messages" value={String(s.messageCount || messages.length)} />
-            <StatRow label="User messages" value={String(userMessages)} />
-            <StatRow label="Tool calls" value={String(toolCalls)} />
-          </div>
-
-          <div className="pt-2">
-            <StatRow
-              label="Context tokens"
-              value={formatTokens(getContextTokens(s) || null)}
-              sub={getContextTokens(s) ? `/ ${formatTokens(maxContext)}` : undefined}
-            />
-            <StatRow label="Output tokens" value={formatTokens(s.outputTokens)} />
-            {s.cachedInputTokens != null && (
-              <StatRow label="Cached input" value={formatTokens(s.cachedInputTokens)} />
+        <div
+          data-slot="session-stats-scroll"
+          className="min-h-0 overflow-y-auto overscroll-contain -mr-2 pr-2"
+        >
+          <div className="flex flex-col gap-4">
+            {agent && (
+              <EntityCard
+                entity={{ id: agent.id, typeSlug: "agent", name: agent.name }}
+                visual={{
+                  src: agent.avatarUrl,
+                  fallbackText: agent.name,
+                  shape: "circle",
+                }}
+                subtitle="Agent"
+                size="md"
+                variant="outlined"
+                current
+                action={agent.href ? {
+                  kind: "link",
+                  href: agent.href,
+                  ariaLabel: `Open ${agent.name} agent entity`,
+                } : undefined}
+                actions={agent.href ? (
+                  <a
+                    href={agent.href}
+                    className={buttonVariants({ variant: "ghost", size: "icon-xs", className: "text-text-muted" })}
+                    aria-label={`Open ${agent.name} agent entity`}
+                    title={`Open ${agent.name} agent entity`}
+                  >
+                    <Icon name="ph-bold ph-arrow-square-out" aria-hidden="true" className="size-4" />
+                  </a>
+                ) : undefined}
+              />
             )}
 
-            {pct != null && (
-              <div className="mt-2">
-                <div className="flex items-center justify-between text-[10px] text-text-muted mb-1">
-                  <span>Context usage</span>
-                  <span>{pct}%</span>
+            {children}
+
+            <div className="divide-y divide-overlay-6 min-w-0">
+              {(s.name || s.jobHash || s.sessionId || s.discussionId) && (
+                <div className="pb-2">
+                  {s.name && <StatRow label="Name" value={s.name} />}
+                  {s.jobHash && <IdentifierRow label="Job hash" value={s.jobHash} kind="job" />}
+                  {s.sessionId && <IdentifierRow label="Session ID" value={s.sessionId} kind="session" />}
+                  {s.discussionId && <IdentifierRow label="Discussion ID" value={s.discussionId} kind="discussion" />}
                 </div>
-                <div className="h-1.5 rounded-full bg-overlay-6 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${pct}%`,
-                      backgroundColor: pct < 60 ? "var(--color-accent-teal)" : pct < 80 ? "var(--color-accent-gold)" : "var(--color-accent-red)",
-                    }}
-                  />
+              )}
+
+              {hasConfig && (
+                <div className="pb-2">
+                  {providerValue && (
+                    <EntityStatRow label="Provider" value={providerValue} option={providerOption} />
+                  )}
+                  {modelOptions && (
+                    <ConfigSelect
+                      label="Model"
+                      value={currentModelAlias(s.model)}
+                      options={modelOptions}
+                      onChange={v => handleConfigChange({ model: v })}
+                      disabled={updating}
+                    />
+                  )}
+                  {qualityTierOptions && (
+                    <ConfigSelect
+                      label="Quality"
+                      value={s.qualityTier || ""}
+                      options={qualityTierOptions}
+                      onChange={v => handleConfigChange({ qualityTier: v })}
+                      disabled={updating}
+                    />
+                  )}
+                  {effortOptions && !qualityTierOptions && (
+                    <ConfigSelect
+                      label="Quality"
+                      value={s.effort || "high"}
+                      options={effortOptions}
+                      onChange={v => handleConfigChange({ effort: v })}
+                      disabled={updating}
+                    />
+                  )}
+                  {updating && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-text-muted mt-1">
+                      <MorphSpinner color="var(--muted-foreground)" />
+                      <span>Restarting session...</span>
+                    </div>
+                  )}
                 </div>
+              )}
+
+              <div className="py-2">
+                {!hasConfig && providerValue && (
+                  <EntityStatRow label="Provider" value={providerValue} option={providerOption} />
+                )}
+                {s.qualityTier && !(onConfigChange && qualityTierOptions) && (
+                  <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
+                )}
+                <StatRow label="Model" value={shortModel(s.model)} />
+                <StatRow label={s.costEstimated ? "Est. standard API cost" : "Cost"} value={formatCost(s.costUsd)} />
+                {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}
+                {s.status && <StatRow label="Status" value={s.status} />}
               </div>
-            )}
+
+              <div className="py-2">
+                <StatRow label="Messages" value={String(s.messageCount || messages.length)} />
+                <StatRow label="User messages" value={String(userMessages)} />
+                <StatRow label="Tool calls" value={String(toolCalls)} />
+              </div>
+
+              <div className="pt-2">
+                <StatRow
+                  label="Context tokens"
+                  value={formatTokens(getContextTokens(s) || null)}
+                  sub={getContextTokens(s) ? `/ ${formatTokens(maxContext)}` : undefined}
+                />
+                <StatRow label="Output tokens" value={formatTokens(s.outputTokens)} />
+                {s.cachedInputTokens != null && (
+                  <StatRow label="Cached input" value={formatTokens(s.cachedInputTokens)} />
+                )}
+
+                {pct != null && (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between text-[10px] text-text-muted mb-1">
+                      <span>Context usage</span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-overlay-6 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: pct < 60 ? "var(--color-accent-teal)" : pct < 80 ? "var(--color-accent-gold)" : "var(--color-accent-red)",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>

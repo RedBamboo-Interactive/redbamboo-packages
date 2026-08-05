@@ -10,7 +10,25 @@ export type { ShareDialogProps } from "./share-dialog"
 
 export { CommandProvider, CommandScope, useCommandStore, useCommandList } from "./command-provider"
 export { useCommand } from "./use-command"
+export {
+  getUiSurface,
+  listUiSurfaces,
+  notifyUiSurfaceChanged,
+  registerUiSurface,
+  runUiSurfaceAction,
+  useUiSurface,
+  useUiSurfaces,
+} from "./ui-surface"
+export type {
+  UiSurfaceActionError,
+  UiSurfaceActionResult,
+  UiSurfaceRegistration,
+  UiSurfaceSnapshot,
+  UiSurfaceState,
+} from "./ui-surface"
 export { CommandPalette, openCommandPalette } from "./command-palette"
+export { ShellLayerOutlet, ShellLayerProvider, useShellLayerTargetApp } from "./shell-layer"
+export type { ShellLayerRenderer } from "./shell-layer"
 export { AppShell } from "./app-shell"
 export { AppSwitcher } from "./app-switcher"
 export type { AppSwitcherProps, SwitcherApp, SwitcherAppStatus } from "./app-switcher"

@@ -16,6 +16,8 @@ interface MasterDetailLayoutProps {
   onMobileTabChange?: (tab: number) => void
   header?: ReactNode
   className?: string
+  /** Force compact tabbed presentation for constrained secondary windows. */
+  presentation?: "responsive" | "compact"
 }
 
 function MasterDetailLayout({
@@ -31,23 +33,28 @@ function MasterDetailLayout({
   onMobileTabChange,
   header,
   className,
+  presentation = "responsive",
 }: MasterDetailLayoutProps) {
   const [internalTab, setInternalTab] = useState(0)
   const tab = controlledTab ?? internalTab
   const setTab = onMobileTabChange ?? setInternalTab
 
   const [isDesktop, setIsDesktop] = useState(() =>
-    typeof window !== "undefined"
+    presentation === "compact" ? false : typeof window !== "undefined"
       ? window.matchMedia("(min-width: 768px)").matches
       : true,
   )
 
   useEffect(() => {
+    if (presentation === "compact") {
+      setIsDesktop(false)
+      return
+    }
     const mql = window.matchMedia("(min-width: 768px)")
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
     mql.addEventListener("change", handler)
     return () => mql.removeEventListener("change", handler)
-  }, [])
+  }, [presentation])
 
   const savedSidebarSize = useMemo(() => {
     if (!layoutKey) return undefined

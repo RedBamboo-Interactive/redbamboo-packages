@@ -3,6 +3,7 @@ import type { MessageBlock, SpeechBackend, ExchangeState, HandsFreeContextValue 
 import { AudioPlayer } from "../lib/audio-player"
 import { AudioRecorder } from "../lib/audio-recorder"
 import { filterConversation } from "../lib/conversation-filter"
+import { useUiEnvironment } from "@redbamboo/ui"
 
 const DEFAULT_SPEAK_INSTRUCTIONS = "Speak in a warm, calm, and confident tone. You are a helpful assistant providing a brief status update."
 
@@ -65,6 +66,7 @@ export function useGlobalHandsFree({
   speakInstructions = DEFAULT_SPEAK_INSTRUCTIONS,
   mediaSessionTitle,
 }: HandsFreeParams): HandsFreeContextValue {
+  const environment = useUiEnvironment()
   const [enabled, setEnabled] = useState(false)
   const [exchangeState, setExchangeState] = useState<ExchangeState>("idle")
   const [currentExchange, setCurrentExchange] = useState<Exchange | null>(null)
@@ -148,7 +150,7 @@ export function useGlobalHandsFree({
       if (abort.signal.aborted) return
       setLastSummary(summary)
 
-      if (notifRef.current && document.visibilityState === "hidden" && "Notification" in window && Notification.permission === "granted") {
+      if (notifRef.current && environment.document.visibilityState === "hidden" && "Notification" in environment.window && Notification.permission === "granted") {
         new Notification(notificationTitle, { body: summary, icon: notificationIcon })
       }
 
@@ -432,13 +434,13 @@ export function useGlobalHandsFree({
       if (exchangeStateRef.current === "listening") stopListening()
     }
 
-    window.addEventListener("keydown", onKeyDown)
-    window.addEventListener("keyup", onKeyUp)
+    environment.window.addEventListener("keydown", onKeyDown)
+    environment.window.addEventListener("keyup", onKeyUp)
     return () => {
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("keyup", onKeyUp)
+      environment.window.removeEventListener("keydown", onKeyDown)
+      environment.window.removeEventListener("keyup", onKeyUp)
     }
-  }, [enabled, exchangeState, startListening, stopListening, pushToTalkKey])
+  }, [enabled, exchangeState, startListening, stopListening, pushToTalkKey, environment.window])
 
   useEffect(() => {
     if (!enabled || exchangeState !== "waiting" || !("mediaSession" in navigator)) return

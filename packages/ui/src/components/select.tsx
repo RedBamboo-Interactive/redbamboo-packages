@@ -1,5 +1,6 @@
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "../utils"
+import { useUiEnvironment } from "../ui-environment"
 
 function Select({
   ...props
@@ -47,8 +48,9 @@ function SelectContent({
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<SelectPrimitive.Positioner.Props, "align" | "side">) {
+  const environment = useUiEnvironment()
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={environment.portalContainer}>
       <SelectPrimitive.Positioner
         align={align}
         side={side}

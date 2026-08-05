@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import type { MessageBlock, SpeechBackend, VoiceInputState, VoiceInputHandle, SendOptions } from "../types"
 import { AudioRecorder } from "../lib/audio-recorder"
 import { filterConversation } from "../lib/conversation-filter"
+import { useUiEnvironment } from "@redbamboo/ui"
 
 export interface VoiceInputParams {
   speech: SpeechBackend
@@ -25,6 +26,7 @@ const NOOP_HANDLE: VoiceInputHandle = {
 }
 
 export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle {
+  const environment = useUiEnvironment()
   const speech = params?.speech
   const messages = params?.messages ?? []
   const onSend = params?.onSend ?? (() => {})
@@ -168,13 +170,13 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
       if (stateRef.current === "recording") stopRecording()
     }
 
-    window.addEventListener("keydown", onKeyDown)
-    window.addEventListener("keyup", onKeyUp)
+    environment.window.addEventListener("keydown", onKeyDown)
+    environment.window.addEventListener("keyup", onKeyUp)
     return () => {
-      window.removeEventListener("keydown", onKeyDown)
-      window.removeEventListener("keyup", onKeyUp)
+      environment.window.removeEventListener("keydown", onKeyDown)
+      environment.window.removeEventListener("keyup", onKeyUp)
     }
-  }, [handsFreeEnabled, disabled, startRecording, stopRecording, pushToTalkKey])
+  }, [handsFreeEnabled, disabled, startRecording, stopRecording, pushToTalkKey, environment.window])
 
   useEffect(() => {
     return () => {

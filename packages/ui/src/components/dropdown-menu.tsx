@@ -1,6 +1,7 @@
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { cn } from "../utils"
+import { useUiEnvironment } from "../ui-environment"
 
 function DropdownMenu({
   ...props
@@ -21,8 +22,9 @@ function DropdownMenuContent({
   align,
   ...props
 }: MenuPrimitive.Popup.Props & Pick<MenuPrimitive.Positioner.Props, "sideOffset" | "side" | "align">) {
+  const environment = useUiEnvironment()
   return (
-    <MenuPrimitive.Portal>
+    <MenuPrimitive.Portal container={environment.portalContainer}>
       <MenuPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} className="z-50">
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
@@ -206,8 +208,9 @@ function DropdownMenuSubContent({
   className,
   ...props
 }: MenuPrimitive.Popup.Props) {
+  const environment = useUiEnvironment()
   return (
-    <MenuPrimitive.Portal>
+    <MenuPrimitive.Portal container={environment.portalContainer}>
       <MenuPrimitive.Positioner className="z-50">
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-sub-content"

@@ -11,6 +11,10 @@ export interface Command {
   icon?: ComponentType<{ className?: string }>
   shortcut?: string
   keywords?: string[]
+  /** True when the action must run synchronously from a trusted click/key event. */
+  requiresUserActivation?: boolean
+  /** Stable UI-surface id affected by this command, for machine discovery. */
+  targetSurfaceId?: string
   action: () => void | Promise<void>
 }
 

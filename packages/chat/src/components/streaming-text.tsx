@@ -1,5 +1,6 @@
 import { memo, useState, useRef, useEffect, useMemo, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
+import { useUiEnvironment } from "@redbamboo/ui"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
@@ -18,13 +19,14 @@ function getLightbox() { return lightboxState }
 
 export function MediaLightbox() {
   const state = useSyncExternalStore(subscribeLightbox, getLightbox)
+  const environment = useUiEnvironment()
 
   useEffect(() => {
     if (!state) return
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setLightbox(null) }
-    document.addEventListener("keydown", handler)
-    return () => document.removeEventListener("keydown", handler)
-  }, [state])
+    environment.document.addEventListener("keydown", handler)
+    return () => environment.document.removeEventListener("keydown", handler)
+  }, [environment.document, state])
 
   if (!state) return null
 
@@ -45,7 +47,7 @@ export function MediaLightbox() {
         {state.alt && <p className="text-sm text-text-muted text-center px-4 py-2">{state.alt}</p>}
       </div>
     </div>,
-    document.body,
+    environment.portalContainer,
   )
 }
 
@@ -79,10 +81,11 @@ function MarkdownLink({
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
   const resolved = resolveChatMediaSrc(src, resolve)
   const [poster, setPoster] = useState<string | null>(null)
+  const environment = useUiEnvironment()
 
   useEffect(() => {
     if (!resolved) return
-    const video = document.createElement("video")
+    const video = environment.document.createElement("video")
     video.muted = true
     video.preload = "auto"
     let disposed = false
@@ -90,7 +93,7 @@ const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src
     const capture = () => {
       if (disposed) return
       try {
-        const canvas = document.createElement("canvas")
+        const canvas = environment.document.createElement("canvas")
         canvas.width = 160
         canvas.height = 160
         const ctx = canvas.getContext("2d")
@@ -119,7 +122,7 @@ const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src
       video.removeAttribute("src")
       video.load()
     }
-  }, [resolved])
+  }, [environment.document, resolved])
 
   return (
     <button
@@ -151,6 +154,7 @@ export function StreamingText({
   isLive: boolean
   resolveImageSrc?: (src: string) => string | undefined
 }) {
+  const environment = useUiEnvironment()
   const revealedRef = useRef(isLive ? 0 : content.length)
   const targetRef = useRef(content.length)
   const rafRef = useRef<number>(0)
@@ -169,11 +173,11 @@ export function StreamingText({
         revealedRef.current = Math.min(revealedRef.current + CHARS_PER_FRAME, targetRef.current)
         setRevealed(revealedRef.current)
       }
-      rafRef.current = requestAnimationFrame(tick)
+      rafRef.current = environment.window.requestAnimationFrame(tick)
     }
-    rafRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [isLive, content.length])
+    rafRef.current = environment.window.requestAnimationFrame(tick)
+    return () => environment.window.cancelAnimationFrame(rafRef.current)
+  }, [environment.window, isLive, content.length])
 
   const resolveRef = useRef(resolveImageSrc)
   resolveRef.current = resolveImageSrc

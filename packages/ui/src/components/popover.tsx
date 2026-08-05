@@ -2,6 +2,7 @@ import * as React from "react"
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover"
 
 import { cn } from "../utils"
+import { useUiEnvironment } from "../ui-environment"
 
 function Popover({
   ...props
@@ -24,8 +25,9 @@ function PopoverContent({
   ...props
 }: PopoverPrimitive.Popup.Props &
   Pick<PopoverPrimitive.Positioner.Props, "align" | "side" | "sideOffset">) {
+  const environment = useUiEnvironment()
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={environment.portalContainer}>
       <PopoverPrimitive.Positioner
         align={align}
         side={side}

@@ -4,6 +4,8 @@ export { normalizeIcon } from "./icons"
 export { ICON_MAP } from "./data/icon-map"
 export { DOMAIN_COLORS } from "./domain-colors"
 export type { DomainColor } from "./domain-colors"
+export { UiEnvironmentProvider, useUiEnvironment } from "./ui-environment"
+export type { UiEnvironment } from "./ui-environment"
 
 // Components
 export { Icon } from "./components/icon"
