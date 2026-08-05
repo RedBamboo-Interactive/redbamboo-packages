@@ -46,7 +46,7 @@ export function ChatPanel(props: ChatPanelProps) {
     resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl,
     permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
-    speechBackend, handsFreeEnabled, pushToTalkKey,
+    speechBackend, handsFreeEnabled, pushToTalkKey, globalPushToTalk,
     renderStatusLine, renderComposerInlineAction, renderMessageExtra, renderSideActions,
   } = props
 
@@ -59,6 +59,7 @@ export function ChatPanel(props: ChatPanelProps) {
     disabled,
     handsFreeEnabled,
     pushToTalkKey,
+    globalPushToTalk,
   } : null)
 
   const composerRef = useRef<ComposerHandle>(null)

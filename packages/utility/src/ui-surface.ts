@@ -16,6 +16,16 @@ export interface UiSurfaceActionResult {
   error?: UiSurfaceActionError
 }
 
+export interface UiSurfaceInputCapability {
+  id: string
+  kind: string
+  scope: "local" | "global"
+  key?: string
+  state: string
+  leaseEndpoint?: string
+  eventType?: string
+}
+
 export interface UiSurfaceSnapshot {
   id: string
   owner: string
@@ -31,6 +41,7 @@ export interface UiSurfaceSnapshot {
   selector?: string
   actions: readonly string[]
   selectedResource?: { type: string; id: string } | null
+  inputCapabilities?: readonly UiSurfaceInputCapability[]
 }
 
 export interface UiSurfaceRegistration {

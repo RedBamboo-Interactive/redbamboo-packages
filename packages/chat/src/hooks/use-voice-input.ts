@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import type { MessageBlock, SpeechBackend, VoiceInputState, VoiceInputHandle, SendOptions } from "../types"
 import { AudioRecorder } from "../lib/audio-recorder"
 import { filterConversation } from "../lib/conversation-filter"
+import { GLOBAL_PUSH_TO_TALK_EVENT, parseGlobalPushToTalkDetail } from "../lib/global-push-to-talk"
 import { useUiEnvironment } from "@redbamboo/ui"
 
 export interface VoiceInputParams {
@@ -13,6 +14,7 @@ export interface VoiceInputParams {
   disabled?: boolean
   handsFreeEnabled?: boolean
   pushToTalkKey?: string
+  globalPushToTalk?: boolean
 }
 
 const NOOP_HANDLE: VoiceInputHandle = {
@@ -35,6 +37,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
   const disabled = params?.disabled ?? !params
   const handsFreeEnabled = params?.handsFreeEnabled
   const pushToTalkKey = params?.pushToTalkKey ?? "F13"
+  const globalPushToTalk = params?.globalPushToTalk ?? false
   const [state, setState] = useState<VoiceInputState>("idle")
   const [error, setError] = useState<string | null>(null)
   const [transcript, setTranscript] = useState<string | null>(null)
@@ -43,6 +46,7 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
   const recorderRef = useRef<AudioRecorder | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const stateRef = useRef<VoiceInputState>("idle")
+  const pushToTalkPressedRef = useRef(false)
 
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -150,6 +154,21 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
     syncState("idle")
   }, [syncState])
 
+  const pressPushToTalk = useCallback(() => {
+    if (pushToTalkPressedRef.current) return
+    pushToTalkPressedRef.current = true
+    if (stateRef.current !== "idle") return
+    void startRecording().then(() => {
+      if (!pushToTalkPressedRef.current && stateRef.current === "recording")
+        void stopRecording()
+    })
+  }, [startRecording, stopRecording])
+
+  const releasePushToTalk = useCallback(() => {
+    pushToTalkPressedRef.current = false
+    if (stateRef.current === "recording") void stopRecording()
+  }, [stopRecording])
+
   useEffect(() => {
     if (disabled && (stateRef.current === "recording" || stateRef.current === "processing")) {
       cancelRecording()
@@ -162,12 +181,12 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== pushToTalkKey || e.repeat || e.shiftKey) return
       e.preventDefault()
-      if (stateRef.current === "idle") startRecording()
+      pressPushToTalk()
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key !== pushToTalkKey || e.shiftKey) return
       e.preventDefault()
-      if (stateRef.current === "recording") stopRecording()
+      releasePushToTalk()
     }
 
     environment.window.addEventListener("keydown", onKeyDown)
@@ -176,11 +195,27 @@ export function useVoiceInput(params: VoiceInputParams | null): VoiceInputHandle
       environment.window.removeEventListener("keydown", onKeyDown)
       environment.window.removeEventListener("keyup", onKeyUp)
     }
-  }, [handsFreeEnabled, disabled, startRecording, stopRecording, pushToTalkKey, environment.window])
+  }, [handsFreeEnabled, disabled, pressPushToTalk, releasePushToTalk, pushToTalkKey, environment.window])
+
+  useEffect(() => {
+    if (!globalPushToTalk || handsFreeEnabled || disabled) return
+    const onGlobalPushToTalk = (event: Event) => {
+      const detail = parseGlobalPushToTalkDetail((event as CustomEvent<unknown>).detail)
+      if (!detail || detail.key !== pushToTalkKey) return
+      if (detail.pressed) pressPushToTalk()
+      else releasePushToTalk()
+    }
+    environment.document.addEventListener(GLOBAL_PUSH_TO_TALK_EVENT, onGlobalPushToTalk)
+    return () => {
+      environment.document.removeEventListener(GLOBAL_PUSH_TO_TALK_EVENT, onGlobalPushToTalk)
+      releasePushToTalk()
+    }
+  }, [disabled, environment.document, globalPushToTalk, handsFreeEnabled, pressPushToTalk, pushToTalkKey, releasePushToTalk])
 
   useEffect(() => {
     return () => {
       abortRef.current?.abort()
+      pushToTalkPressedRef.current = false
       recorderRef.current?.dispose()
       recorderRef.current = null
     }

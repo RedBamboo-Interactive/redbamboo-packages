@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react"
 
+const LOCAL_STORE_CHANGED_EVENT = "redbamboo:local-store-changed"
+
 export interface LocalStore<T extends Record<string, unknown>> {
   get(): T
   set(partial: Partial<T>): void
@@ -13,6 +15,7 @@ export function createLocalStore<T extends Record<string, unknown>>(
 ): LocalStore<T> {
   let cached: T | undefined
   const listeners = new Set<() => void>()
+  const source = {}
 
   function notify() {
     for (const fn of listeners) fn()
@@ -38,6 +41,7 @@ export function createLocalStore<T extends Record<string, unknown>>(
     localStorage.setItem(key, JSON.stringify(next))
     cached = next
     notify()
+    window.dispatchEvent(new CustomEvent(LOCAL_STORE_CHANGED_EVENT, { detail: { key, source } }))
   }
 
   function subscribe(callback: () => void): () => void {
@@ -49,11 +53,20 @@ export function createLocalStore<T extends Record<string, unknown>>(
         notify()
       }
     }
+    const onLocalChange = (e: Event) => {
+      const detail = (e as CustomEvent<{ key?: string; source?: object }>).detail
+      if (detail?.key === key && detail.source !== source) {
+        cached = undefined
+        notify()
+      }
+    }
     window.addEventListener("storage", onStorage)
+    window.addEventListener(LOCAL_STORE_CHANGED_EVENT, onLocalChange)
 
     return () => {
       listeners.delete(callback)
       window.removeEventListener("storage", onStorage)
+      window.removeEventListener(LOCAL_STORE_CHANGED_EVENT, onLocalChange)
     }
   }
 

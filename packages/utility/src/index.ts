@@ -22,6 +22,7 @@ export {
 export type {
   UiSurfaceActionError,
   UiSurfaceActionResult,
+  UiSurfaceInputCapability,
   UiSurfaceRegistration,
   UiSurfaceSnapshot,
   UiSurfaceState,

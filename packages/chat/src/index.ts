@@ -63,6 +63,20 @@ export type { HandsFreeParams } from "./hooks/use-hands-free"
 export { HandsFreeContext, useHandsFree } from "./contexts/hands-free"
 export { AudioRecorder } from "./lib/audio-recorder"
 export { AudioPlayer } from "./lib/audio-player"
+export {
+  dispatchGlobalPushToTalk,
+  GLOBAL_PUSH_TO_TALK_EVENT,
+  parseGlobalPushToTalkDetail,
+} from "./lib/global-push-to-talk"
+export type { GlobalPushToTalkDetail } from "./lib/global-push-to-talk"
+export {
+  DEFAULT_PUSH_TO_TALK_KEY,
+  PUSH_TO_TALK_SETTINGS_STORAGE_KEY,
+  normalizePushToTalkKey,
+  pushToTalkSettingsStore,
+  usePushToTalkSettings,
+} from "./lib/push-to-talk-settings"
+export type { PushToTalkSettings } from "./lib/push-to-talk-settings"
 export { filterConversation } from "./lib/conversation-filter"
 export { createSpeechBackend, createProxySpeechTransport, DEFAULT_REFORMULATE_PROMPT, DEFAULT_SUMMARIZE_PROMPT } from "./lib/speech-backend"
 export type { SpeechTransport, PromptRequest, CreateSpeechBackendOptions } from "./lib/speech-backend"

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 
 /**
  * One labeled row in a settings section: label left, control right, optional
@@ -36,5 +36,59 @@ export function SectionHeader({ children }: { children: ReactNode }) {
     >
       {children}
     </div>
+  )
+}
+
+export function KeyCaptureInput({
+  value,
+  onChange,
+  normalizeKey = (key) => key,
+}: {
+  value: string
+  onChange: (key: string) => void
+  normalizeKey?: (key: string) => string | null
+}) {
+  const [listening, setListening] = useState(false)
+  const [invalid, setInvalid] = useState(false)
+
+  useEffect(() => {
+    if (!listening) return
+    const handler = (event: KeyboardEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.key === "Escape") {
+        setListening(false)
+        setInvalid(false)
+        return
+      }
+      const normalized = normalizeKey(event.key)
+      if (!normalized) {
+        setInvalid(true)
+        return
+      }
+      onChange(normalized)
+      setListening(false)
+      setInvalid(false)
+    }
+    window.addEventListener("keydown", handler, true)
+    return () => window.removeEventListener("keydown", handler, true)
+  }, [listening, normalizeKey, onChange])
+
+  return (
+    <button
+      type="button"
+      onClick={() => { setListening(true); setInvalid(false) }}
+      onBlur={() => { setListening(false); setInvalid(false) }}
+      className={`bg-overlay-6 border rounded px-2 py-0.5 text-xs outline-none transition-colors min-w-[80px] text-center ${
+        invalid
+          ? "border-red-500/60 text-red-400"
+          : listening
+            ? "border-accent-teal-a50 text-accent-teal animate-pulse"
+            : "border-overlay-10 hover:border-overlay-20 text-contrast"
+      }`}
+      aria-label="Push-to-talk key"
+    >
+      {invalid ? "Unsupported" : listening ? "Press a key…" : value}
+    </button>
   )
 }

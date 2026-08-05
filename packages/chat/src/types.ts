@@ -432,6 +432,8 @@ export interface ChatPanelProps {
   speechBackend?: SpeechBackend
   handsFreeEnabled?: boolean
   pushToTalkKey?: string
+  /** Accept leased native press/release signals dispatched into this UI document. */
+  globalPushToTalk?: boolean
 
   // Avatar
   assistantAvatar?: string

@@ -198,7 +198,7 @@ export {
 export { PanelHeader, panelHeaderVariants } from "./components/panel-header"
 export type { PanelHeaderProps } from "./components/panel-header"
 
-export { SettingRow, SectionHeader } from "./components/settings"
+export { KeyCaptureInput, SettingRow, SectionHeader } from "./components/settings"
 
 export { Breadcrumb } from "./components/breadcrumb"
 export type { BreadcrumbItem, BreadcrumbProps } from "./components/breadcrumb"
