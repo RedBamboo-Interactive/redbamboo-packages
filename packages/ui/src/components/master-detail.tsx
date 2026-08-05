@@ -49,30 +49,47 @@ function MasterDetailLayout({
     return () => mql.removeEventListener("change", handler)
   }, [])
 
-  const savedLayout = useMemo(() => {
+  const savedSidebarSize = useMemo(() => {
     if (!layoutKey) return undefined
     try {
       const raw = localStorage.getItem(layoutKey)
-      return raw ? JSON.parse(raw) : undefined
+      if (!raw) return undefined
+      const saved = JSON.parse(raw) as { version?: number; sidebarPixels?: number }
+      return saved.version === 2 && Number.isFinite(saved.sidebarPixels)
+        ? saved.sidebarPixels
+        : undefined
     } catch {
       return undefined
     }
   }, [layoutKey])
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSidebarSize = useRef<number | null>(null)
 
-  const handleLayoutChanged = useCallback(
-    (layout: Record<string, number>) => {
+  const persistSidebarSize = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    if (!layoutKey || pendingSidebarSize.current === null) return
+    try {
+      localStorage.setItem(
+        layoutKey,
+        JSON.stringify({ version: 2, sidebarPixels: Math.round(pendingSidebarSize.current) }),
+      )
+    } catch { /* ignore */ }
+    pendingSidebarSize.current = null
+  }, [layoutKey])
+
+  const handleSidebarResize = useCallback(
+    (size: { inPixels: number }) => {
       if (!layoutKey) return
+      pendingSidebarSize.current = size.inPixels
       if (saveTimer.current) clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout(() => {
-        try {
-          localStorage.setItem(layoutKey, JSON.stringify(layout))
-        } catch { /* ignore */ }
-      }, 300)
+      saveTimer.current = setTimeout(persistSidebarSize, 300)
     },
-    [layoutKey],
+    [layoutKey, persistSidebarSize],
   )
+
+  useEffect(() => () => persistSidebarSize(), [persistSidebarSize])
 
   const resizable = !!layoutKey
 
@@ -88,14 +105,14 @@ function MasterDetailLayout({
           <ResizablePanelGroup
             orientation="horizontal"
             className="flex-1 min-h-0"
-            defaultLayout={savedLayout}
-            onLayoutChanged={handleLayoutChanged}
           >
             <ResizablePanel
               id="sidebar"
-              defaultSize={sidebarDefault}
+              defaultSize={savedSidebarSize ?? sidebarDefault}
               minSize={sidebarMin}
               maxSize={sidebarMax}
+              groupResizeBehavior="preserve-pixel-size"
+              onResize={handleSidebarResize}
             >
               <div
                 data-slot="master-detail-sidebar"
@@ -104,8 +121,8 @@ function MasterDetailLayout({
                 {sidebar}
               </div>
             </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel id="content">
+            <ResizableHandle withHandle aria-label="Resize sidebar" />
+            <ResizablePanel id="content" groupResizeBehavior="preserve-relative-size">
               <div
                 data-slot="master-detail-content"
                 className="h-full overflow-hidden flex flex-col min-h-0"

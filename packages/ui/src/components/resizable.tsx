@@ -35,13 +35,13 @@ function ResizableHandle({
     <Separator
       data-slot="resizable-handle"
       className={cn(
-        "group/handle relative flex w-px items-center justify-center bg-overlay-6 after:absolute after:inset-y-0 after:-left-1 after:-right-1 [&[data-resize-handle-active]]:bg-accent-teal-a50",
+        "group/handle relative flex w-px items-center justify-center bg-overlay-6 after:absolute after:inset-y-0 after:-left-1 after:-right-1 [&[data-separator=hover]]:bg-overlay-12 [&[data-separator=focus]]:bg-accent-teal-a50 [&[data-separator=active]]:bg-accent-teal-a50",
         className,
       )}
       {...props}
     >
       {withHandle && (
-        <div className="z-10 flex h-5 w-3 items-center justify-center rounded-sm bg-surface-elevated opacity-0 transition-opacity duration-200 group-hover/handle:opacity-100 group-data-[resize-handle-active]/handle:opacity-100">
+        <div className="z-10 flex h-5 w-3 items-center justify-center rounded-sm bg-surface-elevated opacity-0 transition-opacity duration-200 group-data-[separator=hover]/handle:opacity-100 group-data-[separator=focus]/handle:opacity-100 group-data-[separator=active]/handle:opacity-100">
           <i className="ph-bold ph-dots-six-vertical text-[8px] text-muted-a50" />
         </div>
       )}
