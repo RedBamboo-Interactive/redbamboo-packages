@@ -1,5 +1,11 @@
 # @redbamboo/ui
 
+## 0.6.1
+
+### Patch Changes
+
+- 47669c6: Keep outlined entity-card hover and inspector states on a neutral border instead of applying the primary accent color.
+
 ## 0.6.0
 
 ### Minor Changes

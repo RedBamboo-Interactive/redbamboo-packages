@@ -1,6 +1,6 @@
 {
   "name": "@redbamboo/github",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "GitHub project management — commits, PRs, issues, tackles, reviews, and tests",
   "type": "module",
   "exports": {

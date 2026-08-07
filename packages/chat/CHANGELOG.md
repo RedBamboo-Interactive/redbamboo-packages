@@ -1,5 +1,13 @@
 # @redbamboo/chat
 
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [47669c6]
+  - @redbamboo/ui@0.6.1
+  - @redbamboo/utility@0.4.2
+
 ## 0.4.1
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @redbamboo/github
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [47669c6]
+  - @redbamboo/ui@0.6.1
+
 ## 0.1.3
 
 ### Patch Changes
