@@ -5,7 +5,8 @@ export function buildParams(
   extra?: Record<string, string | undefined>,
 ): string {
   const params = new URLSearchParams()
-  params.set("root", config.rootPath)
+  if (config.repositoryId) params.set("repository", config.repositoryId)
+  else params.set("root", config.rootPath)
   if (config.repo) params.set("repo", config.repo)
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {

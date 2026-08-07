@@ -337,7 +337,10 @@ export interface Fetcher {
 }
 
 export interface GitHubClientConfig {
+  /** Physical checkout path retained for hosts that have not adopted repository entities. */
   rootPath: string
+  /** Stable repository entity identity. When present, APIs resolve the checkout server-side. */
+  repositoryId?: string
   repo?: string
   /**
    * Base path for endpoints reached outside the Fetcher (EventSource streams).
