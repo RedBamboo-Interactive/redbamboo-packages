@@ -3,6 +3,11 @@ import {
   parseEntityEmbedHref,
   parseEntityHref,
 } from "@redbamboo/utility/entity-links"
+import type {
+  EntityCardEntity,
+  EntityCardPresentation,
+  EntityCardVisual,
+} from "@redbamboo/ui"
 
 interface MarkdownNode {
   type?: string
@@ -17,6 +22,35 @@ export interface EntityEmbedReference {
   typeSlug: string
   name: string
   href: string
+}
+
+export interface EntityEmbedCardView {
+  entity: EntityCardEntity
+  subtitle: string
+  visual: EntityCardVisual
+}
+
+/** Merge an authorized host projection over the identity-only Markdown fallback. */
+export function resolveEntityEmbedCardView(
+  reference: EntityEmbedReference,
+  presentation: EntityCardPresentation | null,
+): EntityEmbedCardView {
+  const fallbackEntity: EntityCardEntity = {
+    id: reference.id,
+    typeSlug: reference.typeSlug,
+    name: reference.name,
+  }
+  const matchesReference = presentation?.entity.id === reference.id
+    && presentation.entity.typeSlug === reference.typeSlug
+  const resolved = matchesReference ? presentation : null
+  return {
+    entity: resolved?.entity ?? fallbackEntity,
+    subtitle: resolved?.subtitle ?? humanize(reference.typeSlug),
+    visual: resolved?.visual ?? {
+      icon: "ph-bold ph-cube",
+      color: "var(--color-accent-teal)",
+    },
+  }
 }
 
 /** Upgrade only a standalone entity card reference. Inline links stay links. */
@@ -60,4 +94,10 @@ function asNode(value: unknown): MarkdownNode | null {
 function textContent(node: MarkdownNode): string {
   if (node.type === "text") return node.value ?? ""
   return (node.children ?? []).map(textContent).join("")
+}
+
+function humanize(slug: string): string {
+  return slug
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }

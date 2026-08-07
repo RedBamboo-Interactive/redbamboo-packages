@@ -555,7 +555,10 @@ body {
 .markdown-body li { margin: 0.2em 0; }
 .markdown-body li::marker { color: var(--muted-foreground); }
 .markdown-body strong { color: var(--strong); }
-.markdown-body a { color: var(--color-accent-teal); text-decoration: underline; }
+.markdown-body a:not([data-slot="entity-card-primary"]):not([data-slot="entity-card-open"]) {
+  color: var(--color-accent-teal);
+  text-decoration: underline;
+}
 .markdown-body blockquote {
   border-left: 3px solid var(--border);
   padding-left: 0.75em;
@@ -584,7 +587,7 @@ body {
   overflow-wrap: break-word;
   word-break: break-word;
 }
-.markdown-body a {
+.markdown-body a:not([data-slot="entity-card-primary"]):not([data-slot="entity-card-open"]) {
   word-break: break-all;
 }
 .markdown-body table {

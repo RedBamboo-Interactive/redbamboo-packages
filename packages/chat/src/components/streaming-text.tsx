@@ -1,10 +1,21 @@
 import { memo, useState, useRef, useEffect, useMemo, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
-import { EntityCard, useEntityInteraction, useUiEnvironment } from "@redbamboo/ui"
+import {
+  buttonVariants,
+  EntityCard,
+  Icon,
+  useEntityCardPresentation,
+  useEntityInteraction,
+  useUiEnvironment,
+} from "@redbamboo/ui"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
-import { parseEntityEmbedParagraph, type EntityEmbedReference } from "../lib/entity-embed"
+import {
+  parseEntityEmbedParagraph,
+  resolveEntityEmbedCardView,
+  type EntityEmbedReference,
+} from "../lib/entity-embed"
 import { isImageUrl } from "../lib/event-image"
 import { resolveChatMediaSrc } from "../lib/media-url"
 
@@ -145,31 +156,47 @@ const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src
 }, (prev, next) => prev.src === next.src && prev.alt === next.alt)
 
 function EntityMarkdownCard({ reference }: { reference: EntityEmbedReference }) {
-  const typeName = reference.typeSlug
-    .replace(/[-_]+/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+  const requestedEntity = {
+    id: reference.id,
+    typeSlug: reference.typeSlug,
+    name: reference.name,
+  }
+  const presentation = useEntityCardPresentation(requestedEntity)
+  const view = resolveEntityEmbedCardView(reference, presentation)
 
   return (
-    <div data-slot="entity-embed" className="my-2 max-w-lg font-sans">
+    <div
+      data-slot="entity-embed"
+      data-entity-presentation={presentation ? "resolved" : "fallback"}
+      className="my-2 w-full font-sans"
+    >
       <EntityCard
-        entity={{
-          id: reference.id,
-          typeSlug: reference.typeSlug,
-          name: reference.name,
-        }}
-        visual={{ icon: "ph-bold ph-cube" }}
-        subtitle={typeName}
-        trailing={(
-          <span className="font-mono text-[10px] text-text-disabled">
-            {reference.id.slice(0, 8)}
-          </span>
-        )}
+        entity={view.entity}
+        visual={view.visual}
+        subtitle={view.subtitle}
+        size="md"
         variant="outlined"
+        width="half"
         action={{
           kind: "inspect",
           href: reference.href,
           ariaLabel: `Inspect ${reference.name}`,
         }}
+        actions={(
+          <a
+            data-slot="entity-card-open"
+            href={reference.href}
+            className={buttonVariants({
+              variant: "ghost",
+              size: "icon-xs",
+              className: "text-text-muted",
+            })}
+            aria-label={`Open ${view.entity.name} in Database`}
+            title={`Open ${view.entity.name} in Database`}
+          >
+            <Icon name="ph-bold ph-arrow-square-out" aria-hidden="true" className="size-4" />
+          </a>
+        )}
       />
     </div>
   )

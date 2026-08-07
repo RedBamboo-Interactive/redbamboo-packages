@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { parseEntityEmbedParagraph } from "./entity-embed.ts"
+import { parseEntityEmbedParagraph, resolveEntityEmbedCardView } from "./entity-embed.ts"
 
 const href = "/database/entities/quality-mode/2795e49f-4087-e052-be15-7973309836f2"
 const embedHref = "redleaf://quality-mode/2795e49f-4087-e052-be15-7973309836f2"
@@ -73,4 +73,34 @@ test("accepts same-origin absolute entity links", () => {
     paragraph([link("https://leaf.example/database/entities/quality-mode/id")]),
     "https://leaf.example",
   )?.id, "id")
+})
+
+test("uses an authorized canonical presentation for the same entity", () => {
+  const reference = parseEntityEmbedParagraph(paragraph([link(embedHref)]))!
+  const view = resolveEntityEmbedCardView(reference, {
+    entity: {
+      id: reference.id,
+      typeSlug: reference.typeSlug,
+      name: "Deep",
+    },
+    subtitle: "Quality Mode",
+    visual: { src: "/api/assets/deep.png", shape: "circle" },
+  })
+
+  assert.equal(view.entity.name, "Deep")
+  assert.equal(view.subtitle, "Quality Mode")
+  assert.deepEqual(view.visual, { src: "/api/assets/deep.png", shape: "circle" })
+})
+
+test("ignores a presentation for a different entity", () => {
+  const reference = parseEntityEmbedParagraph(paragraph([link(embedHref)]))!
+  const view = resolveEntityEmbedCardView(reference, {
+    entity: { id: "other", typeSlug: reference.typeSlug, name: "Wrong" },
+    subtitle: "Wrong",
+    visual: { src: "/api/assets/wrong.png" },
+  })
+
+  assert.equal(view.entity.name, "Deep (Codex)")
+  assert.equal(view.subtitle, "Quality Mode")
+  assert.equal(view.visual.icon, "ph-bold ph-cube")
 })

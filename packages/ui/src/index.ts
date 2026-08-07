@@ -34,6 +34,7 @@ export type {
   EntityCardEntity,
   EntityCardProps,
   EntityCardVisual,
+  EntityCardWidth,
   EntityIdentityProps,
 } from "./components/entity-card"
 export {
@@ -47,6 +48,15 @@ export type {
   EntityInteractionProviderProps,
   EntityInteractionValue,
 } from "./components/entity-interaction"
+export {
+  EntityPresentationProvider,
+  useEntityCardPresentation,
+} from "./components/entity-presentation"
+export type {
+  EntityCardPresentation,
+  EntityPresentationProviderProps,
+  EntityPresentationResolver,
+} from "./components/entity-presentation"
 
 export { findUiComponents, UI_COMPONENT_CATALOG } from "./component-catalog"
 export type { UiComponentDescriptor } from "./component-catalog"

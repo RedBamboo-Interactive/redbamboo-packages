@@ -26,6 +26,8 @@ export interface EntityCardDetail {
   value: ReactNode
 }
 
+export type EntityCardWidth = "quarter" | "half" | "full"
+
 export type EntityCardAction =
   | {
       kind: "inspect"
@@ -60,6 +62,8 @@ export interface EntityIdentityProps {
 
 export interface EntityCardProps extends Omit<EntityIdentityProps, "className"> {
   variant?: "row" | "outlined"
+  /** Deliberate layout tier. Block cards become full-width below the sm breakpoint. */
+  width?: EntityCardWidth
   action?: EntityCardAction
   selected?: boolean
   current?: boolean
@@ -75,6 +79,7 @@ export interface EntityCardDescriptor {
   name: string
   href?: string
   actionKind?: EntityCardAction["kind"]
+  width: EntityCardWidth
   selected: boolean
   inspected: boolean
   current: boolean
@@ -204,6 +209,7 @@ export function EntityCard({
   badge,
   size = "sm",
   variant = "row",
+  width = "full",
   action,
   selected = false,
   current = false,
@@ -297,13 +303,17 @@ export function EntityCard({
       data-entity-name={entity.name}
       data-entity-href={href}
       data-entity-action={action?.kind}
+      data-entity-width={width}
       data-selected={selected || undefined}
       data-inspected={inspected || undefined}
       data-current={current || undefined}
       data-disabled={disabled || undefined}
       aria-disabled={disabled || undefined}
       className={cn(
-        "group/entity-card flex w-full items-start gap-3 px-3 py-2.5 transition-colors",
+        "group/entity-card flex items-start gap-3 px-3 py-2.5 transition-colors",
+        width === "quarter" && "w-full sm:w-1/4",
+        width === "half" && "w-full sm:w-1/2",
+        width === "full" && "w-full",
         variant === "outlined"
           ? "overflow-hidden rounded-md border border-overlay-6 bg-overlay-4/50"
           : "border-overlay-6",
@@ -346,6 +356,9 @@ export function queryEntityCards(root?: ParentNode): EntityCardDescriptor[] {
     name: element.dataset.entityName ?? "",
     href: element.dataset.entityHref || undefined,
     actionKind: element.dataset.entityAction as EntityCardAction["kind"] | undefined,
+    width: element.dataset.entityWidth === "quarter" || element.dataset.entityWidth === "half"
+      ? element.dataset.entityWidth
+      : "full",
     selected: element.hasAttribute("data-selected"),
     inspected: element.hasAttribute("data-inspected"),
     current: element.hasAttribute("data-current"),

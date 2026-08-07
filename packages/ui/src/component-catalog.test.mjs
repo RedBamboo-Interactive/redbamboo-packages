@@ -12,10 +12,17 @@ test("the entity card catalog documents its stable machine selectors", () => {
   const card = UI_COMPONENT_CATALOG.find((component) => component.id === "entity-card")
   assert.ok(card)
   assert.ok(card.selectors.includes('[data-slot="entity-card"]'))
+  assert.ok(card.selectors.includes('[data-slot="entity-card-open"]'))
   assert.ok(card.exports.includes("queryEntityCards"))
   assert.ok(card.exports.includes("EntityInteractionProvider"))
+  assert.ok(card.exports.includes("EntityPresentationProvider"))
+  assert.ok(card.exports.includes("useEntityCardPresentation"))
   assert.ok(card.selectors.includes('[data-entity-action="inspect"]'))
+  assert.ok(card.selectors.includes('[data-entity-width]'))
   assert.ok(card.selectors.includes('[data-inspected]'))
+  assert.ok(card.variants.includes("width:quarter"))
+  assert.ok(card.variants.includes("width:half"))
+  assert.ok(card.variants.includes("width:full"))
 })
 
 test("floating surfaces are discoverable with stable activation selectors", () => {

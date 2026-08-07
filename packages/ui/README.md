@@ -60,6 +60,7 @@ import { getEntityHref } from '@redbamboo/utility'
   entity={{ id: agent.id, typeSlug: 'agent', name: agent.name }}
   visual={{ src: agent.avatarUrl, shape: 'circle' }}
   subtitle="Agent"
+  width="half"
   action={{ kind: 'inspect', href: getEntityHref('agent', agent.id) }}
 />
 ```
@@ -68,6 +69,17 @@ An `inspect` action is still a real anchor. A host can wrap its UI in
 `EntityInteractionProvider` to open an in-place inspector for an ordinary click;
 modified clicks and hosts without a provider follow the href normally. Use a
 `button` action for explicit selection contexts such as an entity picker.
+
+Identity-only references such as Markdown embeds can be hydrated without putting
+entity properties into the document. Wrap the host in `EntityPresentationProvider`
+with a permission-scoped resolver, then call `useEntityCardPresentation()` from the
+embed adapter. The host owns authorization and data; the design system only manages
+the asynchronous presentation lifecycle and preserves the caller's fallback on errors.
+
+Use the explicit `quarter`, `half`, and `full` width tiers for block layouts;
+all three become full-width below the `sm` breakpoint. Compact embedded cards
+normally use `half`, while rich previews use `full`. The default remains `full`
+for list rows and existing call sites.
 
 Use `EntityIdentity` when a richer surface needs the canonical avatar, name, and
 metadata anatomy but has its own outer layout. `UI_COMPONENT_CATALOG`,
