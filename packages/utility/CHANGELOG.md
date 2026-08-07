@@ -1,5 +1,12 @@
 # @redbamboo/utility
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [ddc8fba]
+  - @redbamboo/ui@0.6.0
+
 ## 0.4.0
 
 ### Minor Changes

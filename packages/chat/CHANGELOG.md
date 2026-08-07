@@ -1,5 +1,19 @@
 # @redbamboo/chat
 
+## 0.4.1
+
+### Patch Changes
+
+- ddc8fba: Add explicit quarter, half, and full EntityCard width tiers with responsive
+  full-width behavior on narrow layouts. Render normal Chat entity embeds at the
+  half-width tier and isolate their semantic card anchors from generic Markdown
+  link decoration and word-breaking. Add a host-owned presentation bridge so
+  identity-only embeds can hydrate canonical images, icons, colors, and type labels
+  without serializing entity properties into Markdown.
+- Updated dependencies [ddc8fba]
+  - @redbamboo/ui@0.6.0
+  - @redbamboo/utility@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes

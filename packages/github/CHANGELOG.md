@@ -1,5 +1,12 @@
 # @redbamboo/github
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [ddc8fba]
+  - @redbamboo/ui@0.6.0
+
 ## 0.1.2
 
 ### Patch Changes
