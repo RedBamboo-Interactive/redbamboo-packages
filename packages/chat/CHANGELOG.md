@@ -1,5 +1,29 @@
 # @redbamboo/chat
 
+## 0.4.0
+
+### Minor Changes
+
+- 3dc2155: Render standalone RedLeaf Page entity embeds and canonical Database entity
+  links as inspectable EntityCards when the host provides Entity Inspector
+  interaction. Inline links and non-card Page embed modes retain their existing
+  Markdown behavior.
+
+  Add shared formatting and parsing support for the established `redleaf://`
+  embed targets and canonical entity routes.
+
+### Patch Changes
+
+- 3dc2155: Add a host-bridged inspect action to the canonical EntityCard while preserving
+  native link behavior for modified clicks and hosts without an inspector.
+
+  Use the inspect action for the Session Info agent reference.
+
+- Updated dependencies [3dc2155]
+- Updated dependencies [3dc2155]
+  - @redbamboo/ui@0.5.0
+  - @redbamboo/utility@0.4.0
+
 ## 0.3.2
 
 ### Patch Changes

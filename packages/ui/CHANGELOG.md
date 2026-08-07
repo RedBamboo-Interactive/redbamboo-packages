@@ -1,5 +1,14 @@
 # @redbamboo/ui
 
+## 0.5.0
+
+### Minor Changes
+
+- 3dc2155: Add a host-bridged inspect action to the canonical EntityCard while preserving
+  native link behavior for modified clicks and hosts without an inspector.
+
+  Use the inspect action for the Session Info agent reference.
+
 ## 0.4.0
 
 ### Minor Changes
