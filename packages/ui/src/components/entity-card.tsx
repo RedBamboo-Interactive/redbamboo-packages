@@ -227,11 +227,14 @@ export function EntityCard({
     action && !disabled && "hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     disabled && "cursor-default",
   )
+  const cardVisual = visual && (visual.src || visual.fallbackText)
+    ? { ...visual, shape: "rounded" as const }
+    : visual
 
   const identity = (
     <EntityIdentity
       entity={entity}
-      visual={visual}
+      visual={cardVisual}
       subtitle={subtitle}
       details={details}
       badge={badge}
