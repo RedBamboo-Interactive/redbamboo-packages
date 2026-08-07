@@ -317,9 +317,9 @@ export function EntityCard({
         variant === "outlined"
           ? "overflow-hidden rounded-md border border-overlay-6 bg-overlay-4/50"
           : "border-overlay-6",
-        active && variant === "outlined" && "border-primary/40 bg-overlay-6",
+        active && variant === "outlined" && "bg-overlay-6",
         active && variant === "row" && "border-l-2 border-primary bg-overlay-6 pl-[calc(0.75rem_-_2px)]",
-        action && !disabled && variant === "outlined" && "hover:border-primary/30 hover:bg-overlay-4",
+        action && !disabled && variant === "outlined" && "hover:border-overlay-10 hover:bg-overlay-4",
         action && !disabled && variant === "row" && !active && "hover:bg-overlay-4",
         disabled && "pointer-events-none opacity-60",
         className,
