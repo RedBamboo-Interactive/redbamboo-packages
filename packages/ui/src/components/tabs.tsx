@@ -28,6 +28,7 @@ const tabsListVariants = cva(
       variant: {
         default: "bg-muted",
         line: "gap-1 bg-transparent",
+        settings: "w-full justify-start gap-1 overflow-x-auto overflow-y-hidden rounded-none border-b border-border-subtle bg-transparent p-0 group-data-horizontal/tabs:h-auto",
       },
     },
     defaultVariants: {
@@ -60,6 +61,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
         "data-active:bg-background data-active:text-foreground dark:data-active:border-input dark:data-active:bg-input-a30 dark:data-active:text-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",
+        "group-data-[variant=settings]/tabs-list:h-auto group-data-[variant=settings]/tabs-list:flex-none group-data-[variant=settings]/tabs-list:rounded-none group-data-[variant=settings]/tabs-list:border-0 group-data-[variant=settings]/tabs-list:border-b-2 group-data-[variant=settings]/tabs-list:border-transparent group-data-[variant=settings]/tabs-list:px-2.5 group-data-[variant=settings]/tabs-list:py-2 group-data-[variant=settings]/tabs-list:text-xs group-data-[variant=settings]/tabs-list:font-normal group-data-[variant=settings]/tabs-list:after:hidden group-data-[variant=settings]/tabs-list:data-active:border-accent-teal group-data-[variant=settings]/tabs-list:data-active:bg-transparent group-data-[variant=settings]/tabs-list:data-active:text-text-default group-data-[variant=settings]/tabs-list:data-active:shadow-none group-data-[variant=settings]/tabs-list:dark:data-active:border-accent-teal group-data-[variant=settings]/tabs-list:dark:data-active:bg-transparent group-data-[variant=settings]/tabs-list:dark:data-active:text-text-default",
         className
       )}
       {...props}

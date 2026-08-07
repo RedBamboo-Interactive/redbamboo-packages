@@ -116,13 +116,13 @@ export function EntityIdentity({
       data-entity-id={entity.id}
       data-entity-type={entity.typeSlug}
       data-entity-name={entity.name}
-      className={cn("flex min-w-0 flex-1 items-start gap-3", className)}
+      className={cn("flex min-w-0 flex-1 items-center gap-3", className)}
     >
       {visual && (
         <div
           data-slot="entity-media"
           className={cn(
-            "mt-0.5 shrink-0",
+            "shrink-0",
             hasImageFrame ? mediaSize : cn(iconWidth, "text-center"),
           )}
         >
@@ -310,7 +310,7 @@ export function EntityCard({
       data-disabled={disabled || undefined}
       aria-disabled={disabled || undefined}
       className={cn(
-        "group/entity-card flex items-start gap-3 px-3 py-2.5 transition-colors",
+        "group/entity-card flex items-center gap-3 px-3 py-2.5 transition-colors",
         width === "quarter" && "w-full sm:w-1/4",
         width === "half" && "w-full sm:w-1/2",
         width === "full" && "w-full",
@@ -327,7 +327,7 @@ export function EntityCard({
     >
       {primary}
       {trailing && (
-        <div data-slot="entity-trailing" className="mt-0.5 flex shrink-0 items-center gap-2">
+        <div data-slot="entity-trailing" className="flex shrink-0 items-center gap-2">
           {trailing}
         </div>
       )}
