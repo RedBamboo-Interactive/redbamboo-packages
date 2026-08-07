@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
+    },
+    "./entity-links": {
+      "types": "./src/entity-links.ts",
+      "default": "./src/entity-links.ts"
     }
   },
   "files": [

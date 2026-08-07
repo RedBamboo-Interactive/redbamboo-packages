@@ -36,6 +36,17 @@ export type {
   EntityCardVisual,
   EntityIdentityProps,
 } from "./components/entity-card"
+export {
+  EntityInteractionProvider,
+  isPlainEntityActivation,
+  useEntityInteraction,
+} from "./components/entity-interaction"
+export type {
+  EntityActivationEvent,
+  EntityInspectRequest,
+  EntityInteractionProviderProps,
+  EntityInteractionValue,
+} from "./components/entity-interaction"
 
 export { findUiComponents, UI_COMPONENT_CATALOG } from "./component-catalog"
 export type { UiComponentDescriptor } from "./component-catalog"

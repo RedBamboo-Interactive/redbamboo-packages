@@ -6,7 +6,8 @@ namespace RedBamboo.AppHost.RemoteAccess;
 
 public static class TokenPersistence
 {
-    private static readonly SecretAddress TokenAddress = SecretAddress.Bootstrap("remote-access", "access-token");
+    private static readonly SecretAddress AccessTokenAddress = SecretAddress.Bootstrap("remote-access", "access-token");
+    private static readonly SecretAddress TunnelTokenAddress = SecretAddress.Bootstrap("remote-access", "tunnel-token");
 
     public static string GenerateAccessToken()
     {
@@ -16,13 +17,13 @@ public static class TokenPersistence
 
     public static void SaveToken(string configDir, string token)
     {
-        PortableSecretStores.ForDirectory(configDir).Write(TokenAddress, token);
+        PortableSecretStores.ForDirectory(configDir).Write(AccessTokenAddress, token);
     }
 
     public static string? LoadToken(string configDir)
     {
         var store = PortableSecretStores.ForDirectory(configDir);
-        var protectedValue = store.Read(TokenAddress);
+        var protectedValue = store.Read(AccessTokenAddress);
         if (protectedValue is not null) return protectedValue;
 
         var path = Path.Combine(configDir, "remote-access.json");
@@ -33,7 +34,7 @@ public static class TokenPersistence
             using var doc = JsonDocument.Parse(json);
             var legacy = doc.RootElement.GetProperty("access_token").GetString();
             if (string.IsNullOrEmpty(legacy)) return null;
-            store.Write(TokenAddress, legacy);
+            store.Write(AccessTokenAddress, legacy);
             File.Delete(path);
             return legacy;
         }
@@ -42,4 +43,13 @@ public static class TokenPersistence
             return null;
         }
     }
+
+    public static void SaveTunnelToken(string configDir, string token)
+        => PortableSecretStores.ForDirectory(configDir).Write(TunnelTokenAddress, token);
+
+    public static string? LoadTunnelToken(string configDir)
+        => PortableSecretStores.ForDirectory(configDir).Read(TunnelTokenAddress);
+
+    public static void DeleteTunnelToken(string configDir)
+        => PortableSecretStores.ForDirectory(configDir).Delete(TunnelTokenAddress);
 }

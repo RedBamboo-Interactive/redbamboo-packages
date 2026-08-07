@@ -285,9 +285,10 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                 variant="outlined"
                 current
                 action={agent.href ? {
-                  kind: "link",
+                  kind: "inspect",
                   href: agent.href,
-                  ariaLabel: `Open ${agent.name} agent entity`,
+                  ariaLabel: `Inspect ${agent.name} agent entity`,
+                  onInspect: () => onOpenChange(false),
                 } : undefined}
                 actions={agent.href ? (
                   <a

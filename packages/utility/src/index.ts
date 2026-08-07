@@ -78,7 +78,18 @@ export { JsonHighlight } from "./json-highlight"
 export { createLocalStore, useLocalStore } from "./local-store"
 export type { LocalStore } from "./local-store"
 
-export { getEntityHref } from "./entity-links"
+export {
+  getEntityEmbedHref,
+  getEntityHref,
+  parseEntityEmbedHref,
+  parseEntityHref,
+} from "./entity-links"
+export type {
+  EntityEmbedDisplay,
+  EntityEmbedHrefOptions,
+  EntityEmbedHrefParts,
+  EntityHrefParts,
+} from "./entity-links"
 
 export { createRemoteConnection, applyConnectionParams, autoConnect } from "./remote-connection"
 export type { ConnectionConfig, RemoteConnectionStore } from "./remote-connection"

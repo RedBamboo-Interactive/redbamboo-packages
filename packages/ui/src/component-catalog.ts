@@ -14,9 +14,9 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
   {
     id: "entity-card",
     packageName: "@redbamboo/ui",
-    exports: ["EntityCard", "EntityIdentity", "queryEntityCards"],
+    exports: ["EntityCard", "EntityIdentity", "EntityInteractionProvider", "queryEntityCards"],
     description: "Canonical compact presentation and interaction surface for a RedBamboo entity identity.",
-    tags: ["entity", "reference", "identity", "avatar", "link", "selection", "ai-native"],
+    tags: ["entity", "reference", "identity", "avatar", "link", "inspection", "selection", "ai-native"],
     useWhen: [
       "Showing an entity reference in a list, form, picker, modal, or provenance surface.",
       "A browser agent needs stable entity identity and navigation metadata in the DOM.",
@@ -37,6 +37,8 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
       '[data-slot="entity-details"]',
       '[data-slot="entity-trailing"]',
       '[data-slot="entity-actions"]',
+      '[data-entity-action="inspect"]',
+      '[data-inspected]',
     ],
   },
   {

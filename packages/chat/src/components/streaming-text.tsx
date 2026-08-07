@@ -1,9 +1,10 @@
 import { memo, useState, useRef, useEffect, useMemo, useSyncExternalStore } from "react"
 import { createPortal } from "react-dom"
-import { useUiEnvironment } from "@redbamboo/ui"
+import { EntityCard, useEntityInteraction, useUiEnvironment } from "@redbamboo/ui"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
+import { parseEntityEmbedParagraph, type EntityEmbedReference } from "../lib/entity-embed"
 import { isImageUrl } from "../lib/event-image"
 import { resolveChatMediaSrc } from "../lib/media-url"
 
@@ -143,6 +144,65 @@ const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src
   )
 }, (prev, next) => prev.src === next.src && prev.alt === next.alt)
 
+function EntityMarkdownCard({ reference }: { reference: EntityEmbedReference }) {
+  const typeName = reference.typeSlug
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+
+  return (
+    <div data-slot="entity-embed" className="my-2 max-w-lg font-sans">
+      <EntityCard
+        entity={{
+          id: reference.id,
+          typeSlug: reference.typeSlug,
+          name: reference.name,
+        }}
+        visual={{ icon: "ph-bold ph-cube" }}
+        subtitle={typeName}
+        trailing={(
+          <span className="font-mono text-[10px] text-text-disabled">
+            {reference.id.slice(0, 8)}
+          </span>
+        )}
+        variant="outlined"
+        action={{
+          kind: "inspect",
+          href: reference.href,
+          ariaLabel: `Inspect ${reference.name}`,
+        }}
+      />
+    </div>
+  )
+}
+
+function useMarkdownComponents(
+  resolveImageSrc: ((src: string) => string | undefined) | undefined,
+  currentOrigin: string,
+) {
+  const entityEmbedsEnabled = useEntityInteraction() !== null
+  const resolveRef = useRef(resolveImageSrc)
+  resolveRef.current = resolveImageSrc
+
+  return useMemo(() => ({
+    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
+      const s = src?.toString()
+      if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
+      return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
+    },
+    a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
+      <MarkdownLink href={href} resolve={resolveRef.current} {...props}>{children}</MarkdownLink>
+    ),
+    p: ({ node, children, ...props }: React.HTMLAttributes<HTMLParagraphElement> & { node?: unknown }) => {
+      const reference = entityEmbedsEnabled
+        ? parseEntityEmbedParagraph(node, currentOrigin)
+        : null
+      return reference
+        ? <EntityMarkdownCard reference={reference} />
+        : <p {...props}>{children}</p>
+    },
+  }), [currentOrigin, entityEmbedsEnabled])
+}
+
 const CHARS_PER_FRAME = 3
 
 export function StreamingText({
@@ -179,18 +239,7 @@ export function StreamingText({
     return () => environment.window.cancelAnimationFrame(rafRef.current)
   }, [environment.window, isLive, content.length])
 
-  const resolveRef = useRef(resolveImageSrc)
-  resolveRef.current = resolveImageSrc
-  const mdComponents = useMemo(() => ({
-    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
-      const s = src?.toString()
-      if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
-      return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
-    },
-    a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
-      <MarkdownLink href={href} resolve={resolveRef.current} {...props}>{children}</MarkdownLink>
-    ),
-  }), [])
+  const mdComponents = useMarkdownComponents(resolveImageSrc, environment.window.location.origin)
 
   return (
     <Markdown
@@ -211,18 +260,8 @@ export function MarkdownRenderer({
   content: string
   resolveImageSrc?: (src: string) => string | undefined
 }) {
-  const resolveRef = useRef(resolveImageSrc)
-  resolveRef.current = resolveImageSrc
-  const mdComponents = useMemo(() => ({
-    img: ({ src, alt }: React.ImgHTMLAttributes<HTMLImageElement>) => {
-      const s = src?.toString()
-      if (isVideoSrc(s)) return <VideoThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
-      return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
-    },
-    a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
-      <MarkdownLink href={href} resolve={resolveRef.current} {...props}>{children}</MarkdownLink>
-    ),
-  }), [])
+  const environment = useUiEnvironment()
+  const mdComponents = useMarkdownComponents(resolveImageSrc, environment.window.location.origin)
 
   return (
     <Markdown

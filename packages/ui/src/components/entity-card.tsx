@@ -1,5 +1,6 @@
 import { useState, type MouseEventHandler, type ReactNode } from "react"
 import { Icon } from "./icon"
+import { isPlainEntityActivation, useEntityInteraction } from "./entity-interaction"
 import { cn } from "../utils"
 
 export interface EntityCardEntity {
@@ -26,6 +27,13 @@ export interface EntityCardDetail {
 }
 
 export type EntityCardAction =
+  | {
+      kind: "inspect"
+      href: string
+      ariaLabel?: string
+      /** Lets a containing modal release its focus trap after emitting the intent. */
+      onInspect?: () => void
+    }
   | {
       kind: "link"
       href: string
@@ -66,7 +74,9 @@ export interface EntityCardDescriptor {
   typeSlug: string
   name: string
   href?: string
+  actionKind?: EntityCardAction["kind"]
   selected: boolean
+  inspected: boolean
   current: boolean
   disabled: boolean
   focused: boolean
@@ -202,7 +212,10 @@ export function EntityCard({
   actions,
   className,
 }: EntityCardProps) {
-  const href = action?.kind === "link" ? action.href : undefined
+  const interaction = useEntityInteraction()
+  const href = action?.kind === "link" || action?.kind === "inspect" ? action.href : undefined
+  const inspected = action?.kind === "inspect" && interaction?.inspectedEntityId === entity.id
+  const active = selected || inspected
   const primaryClassName = cn(
     "min-w-0 flex-1 text-left outline-none transition-opacity",
     action && !disabled && "hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
@@ -221,7 +234,26 @@ export function EntityCard({
   )
 
   let primary: ReactNode
-  if (action?.kind === "link" && !disabled) {
+  if (action?.kind === "inspect" && !disabled) {
+    const handleInspect: MouseEventHandler<HTMLAnchorElement> = (event) => {
+      if (!interaction || !isPlainEntityActivation(event)) return
+      event.preventDefault()
+      interaction.inspect({ entity, href: action.href, trigger: event.currentTarget })
+      action.onInspect?.()
+    }
+    primary = (
+      <a
+        data-slot="entity-card-primary"
+        href={action.href}
+        onClick={handleInspect}
+        aria-label={action.ariaLabel}
+        aria-expanded={inspected || undefined}
+        className={primaryClassName}
+      >
+        {identity}
+      </a>
+    )
+  } else if (action?.kind === "link" && !disabled) {
     primary = (
       <a
         data-slot="entity-card-primary"
@@ -264,7 +296,9 @@ export function EntityCard({
       data-entity-type={entity.typeSlug}
       data-entity-name={entity.name}
       data-entity-href={href}
+      data-entity-action={action?.kind}
       data-selected={selected || undefined}
+      data-inspected={inspected || undefined}
       data-current={current || undefined}
       data-disabled={disabled || undefined}
       aria-disabled={disabled || undefined}
@@ -273,10 +307,10 @@ export function EntityCard({
         variant === "outlined"
           ? "overflow-hidden rounded-md border border-overlay-6 bg-overlay-4/50"
           : "border-overlay-6",
-        selected && variant === "outlined" && "border-primary/40 bg-overlay-6",
-        selected && variant === "row" && "border-l-2 border-primary bg-overlay-6 pl-[calc(0.75rem_-_2px)]",
+        active && variant === "outlined" && "border-primary/40 bg-overlay-6",
+        active && variant === "row" && "border-l-2 border-primary bg-overlay-6 pl-[calc(0.75rem_-_2px)]",
         action && !disabled && variant === "outlined" && "hover:border-primary/30 hover:bg-overlay-4",
-        action && !disabled && variant === "row" && !selected && "hover:bg-overlay-4",
+        action && !disabled && variant === "row" && !active && "hover:bg-overlay-4",
         disabled && "pointer-events-none opacity-60",
         className,
       )}
@@ -311,7 +345,9 @@ export function queryEntityCards(root?: ParentNode): EntityCardDescriptor[] {
     typeSlug: element.dataset.entityType ?? "",
     name: element.dataset.entityName ?? "",
     href: element.dataset.entityHref || undefined,
+    actionKind: element.dataset.entityAction as EntityCardAction["kind"] | undefined,
     selected: element.hasAttribute("data-selected"),
+    inspected: element.hasAttribute("data-inspected"),
     current: element.hasAttribute("data-current"),
     disabled: element.hasAttribute("data-disabled"),
     focused: element.matches(":focus-within"),

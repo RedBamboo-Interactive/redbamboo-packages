@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { Switch } from "@redbamboo/ui"
+import { ProtectedValueField, Switch, type ProtectedValueStatus } from "@redbamboo/ui"
 import type { RemoteConnectionStore } from "./remote-connection"
 
 export interface TunnelStatus {
@@ -8,6 +8,7 @@ export interface TunnelStatus {
   is_external: boolean
   hostname: string | null
   auth_enabled: boolean
+  tunnel_token?: ProtectedValueStatus
   error: string | null
 }
 
@@ -66,6 +67,28 @@ export function TunnelSettingsPanel({
     setLoading(false)
   }, [base, fetchStatus])
 
+  const replaceTunnelToken = useCallback(async (value: string) => {
+    const response = await fetch(`${base}/api/remote/secrets/tunnel-token`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...headers },
+      body: JSON.stringify({ value }),
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { error?: string } | null
+      throw new Error(payload?.error ?? "Could not save the tunnel token")
+    }
+    await fetchStatus()
+  }, [base, fetchStatus])
+
+  const clearTunnelToken = useCallback(async () => {
+    const response = await fetch(`${base}/api/remote/secrets/tunnel-token`, {
+      method: "DELETE",
+      headers,
+    })
+    if (!response.ok) throw new Error("Could not clear the tunnel token")
+    await fetchStatus()
+  }, [base, fetchStatus])
+
   if (!status) {
     return (
       <div data-slot="tunnel-settings-panel" className="space-y-2">
@@ -100,6 +123,22 @@ export function TunnelSettingsPanel({
         <p className="text-xs text-destructive">{status.error}</p>
       )}
 
+      <ProtectedValueField
+        id="remote-tunnel-token"
+        label="Tunnel token"
+        kind="token"
+        status={status.tunnel_token ?? {
+          configured: false,
+          protection: "unknown",
+          verification: "unverified",
+        }}
+        placeholder="Paste the Cloudflare tunnel token"
+        description="Encrypted on this machine. Replacing it takes effect the next time the tunnel starts. Clearing it stops the tunnel."
+        disabled={loading}
+        onReplace={replaceTunnelToken}
+        onClear={clearTunnelToken}
+      />
+
       {status.tunnel_status === "running" && status.hostname && (
         <div className="flex items-center justify-between">
           <span className="text-xs text-text-muted">Hostname</span>
@@ -114,16 +153,21 @@ export function TunnelSettingsPanel({
       )}
 
       {status.auth_enabled && (
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-text-muted">Access token</span>
-          <button
-            className="text-xs text-text-muted hover:text-foreground transition-colors"
-            onClick={regenerateToken}
-            disabled={loading}
-          >
-            Regenerate
-          </button>
-        </div>
+        <ProtectedValueField
+          id="remote-access-token"
+          label="Access token"
+          kind="token"
+          status={{
+            configured: true,
+            protection: "encrypted",
+            verification: "unverified",
+          }}
+          description="Generated locally and encrypted on this machine. Rotating it invalidates existing remote connections."
+          disabled={loading}
+          replaceable={false}
+          allowClear={false}
+          onRotate={regenerateToken}
+        />
       )}
     </div>
   )

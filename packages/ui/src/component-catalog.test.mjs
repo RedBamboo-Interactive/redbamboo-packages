@@ -13,6 +13,9 @@ test("the entity card catalog documents its stable machine selectors", () => {
   assert.ok(card)
   assert.ok(card.selectors.includes('[data-slot="entity-card"]'))
   assert.ok(card.exports.includes("queryEntityCards"))
+  assert.ok(card.exports.includes("EntityInteractionProvider"))
+  assert.ok(card.selectors.includes('[data-entity-action="inspect"]'))
+  assert.ok(card.selectors.includes('[data-inspected]'))
 })
 
 test("floating surfaces are discoverable with stable activation selectors", () => {

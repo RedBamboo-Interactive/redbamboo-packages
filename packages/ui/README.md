@@ -60,9 +60,14 @@ import { getEntityHref } from '@redbamboo/utility'
   entity={{ id: agent.id, typeSlug: 'agent', name: agent.name }}
   visual={{ src: agent.avatarUrl, shape: 'circle' }}
   subtitle="Agent"
-  action={{ kind: 'link', href: getEntityHref('agent', agent.id) }}
+  action={{ kind: 'inspect', href: getEntityHref('agent', agent.id) }}
 />
 ```
+
+An `inspect` action is still a real anchor. A host can wrap its UI in
+`EntityInteractionProvider` to open an in-place inspector for an ordinary click;
+modified clicks and hosts without a provider follow the href normally. Use a
+`button` action for explicit selection contexts such as an entity picker.
 
 Use `EntityIdentity` when a richer surface needs the canonical avatar, name, and
 metadata anatomy but has its own outer layout. `UI_COMPONENT_CATALOG`,
@@ -70,7 +75,7 @@ metadata anatomy but has its own outer layout. `UI_COMPONENT_CATALOG`,
 
 ## Components
 
-- **EntityCard** — canonical compact entity reference with link, selection, and AI-readable semantics
+- **EntityCard** — canonical compact entity reference with inspection, link, selection, and AI-readable semantics
 - **EntityIdentity** — reusable identity anatomy for richer entity surfaces
 
 - **Button** — multi-variant, multi-size with CVA
