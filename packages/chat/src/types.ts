@@ -105,6 +105,12 @@ export interface ChatEvent {
   payloadRef?: TranscriptPayloadRef | null
   messageId?: string | null
   /**
+   * Server observation time for this stream event. Hosts that merge the model
+   * stream with ambient events should provide it so both sources share one
+   * chronological axis. Falls back to client receipt time for older backends.
+   */
+  timestamp?: string | null
+  /**
    * Provider-neutral message identity minted server-side. All events of one
    * assistant turn share it, and the persisted records carry the same value —
    * so a block built from the stream and the same block rebuilt from history

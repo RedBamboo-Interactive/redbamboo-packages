@@ -20,10 +20,26 @@ export interface PersistedMessage {
 export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
   const blocks: MessageBlock[] = []
   let currentBlock: MessageBlock | null = null
+  let currentTurnUid: string | null = null
+  const segmentCounts = new Map<string, number>()
 
-  for (const rec of records) {
+  // Stream payload persistence and ordinary record persistence can complete in
+  // a different order. The record timestamp is the chronology; storage ids and
+  // response order are not.
+  const ordered = records
+    .map((record, index) => ({ record, index }))
+    .sort((a, b) => {
+      const aTime = Date.parse(a.record.timestamp)
+      const bTime = Date.parse(b.record.timestamp)
+      const delta = (Number.isNaN(aTime) ? 0 : aTime) - (Number.isNaN(bTime) ? 0 : bTime)
+      return delta || a.index - b.index
+    })
+    .map(({ record }) => record)
+
+  for (const rec of ordered) {
     if (rec.role === "user") {
       currentBlock = null
+      currentTurnUid = null
       const part: MessagePart = { type: "text", content: rec.content || "" }
       if (rec.attachmentsJson) {
         try {
@@ -56,19 +72,28 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       continue
     }
 
-    if (!currentBlock || currentBlock.role !== "assistant") {
+    if (rec.eventType === "status") continue
+
+    const turnUid = rec.messageUid || null
+    if (!currentBlock || currentBlock.role !== "assistant" || (!!turnUid && currentTurnUid !== turnUid)) {
       // Block identity = uid of the run's first record, matching the id the
-      // streaming path assigned when this block was first rendered live.
+      // streaming path assigned when this block was first rendered live. One
+      // turn may have several chronological segments around ambient events;
+      // keep their React identities unique while retaining the canonical uid.
+      const segment: number = turnUid ? (segmentCounts.get(turnUid) ?? 0) : 0
+      if (turnUid) segmentCounts.set(turnUid, segment + 1)
       currentBlock = {
-        id: rec.messageUid || `db-${rec.id}`,
+        id: turnUid
+          ? (segment === 0 ? turnUid : `${turnUid}:segment:${segment}`)
+          : `db-${rec.id}`,
         role: "assistant",
         parts: [],
         timestamp: rec.timestamp,
+        metadata: turnUid ? { messageUid: turnUid } : undefined,
       }
+      currentTurnUid = turnUid
       blocks.push(currentBlock)
     }
-
-    if (rec.eventType === "status") continue
 
     const part: MessagePart = {
       type: rec.eventType as MessagePart["type"],

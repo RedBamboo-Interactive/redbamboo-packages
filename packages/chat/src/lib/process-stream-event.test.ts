@@ -63,11 +63,11 @@ const toolResult = (content: string): ChatEvent => ({
   toolResult: content, messageId: "toolu_1", messageUid: null,
 })
 
-test("streamTargetIndex finds the answer behind a trailing event group", () => {
+test("streamTargetIndex treats a trailing event group as a chronological boundary", () => {
   const answer: MessageBlock = { id: "a1", role: "assistant", parts: [{ type: "text", content: "hi" }], timestamp: ts }
   assert.equal(streamTargetIndex([user("q"), answer]), 1)
-  assert.equal(streamTargetIndex([user("q"), answer, events("weather")]), 1)
-  assert.equal(streamTargetIndex([user("q"), answer, events("weather"), events("spotify")]), 1)
+  assert.equal(streamTargetIndex([user("q"), answer, events("weather")]), -1)
+  assert.equal(streamTargetIndex([user("q"), answer, events("weather"), events("spotify")]), -1)
 })
 
 test("streamTargetIndex reports -1 when a new block is needed", () => {
@@ -78,15 +78,17 @@ test("streamTargetIndex reports -1 when a new block is needed", () => {
   assert.equal(streamTargetIndex([user("q"), events("weather")]), -1)
 })
 
-test("tokens land in the answer, not in a trailing event group", () => {
+test("model output after an ambient event opens a chronological continuation", () => {
   let messages: MessageBlock[] = [user("q")]
   messages = processStreamEvent(messages, true, token("Hel")).messages
   messages = [...messages, events("weather")]
   messages = processStreamEvent(messages, true, token("lo")).messages
 
-  assert.equal(messages.length, 3, "no extra block was opened")
-  assert.equal(text(messages[1]), "Hello")
-  assert.equal(messages[2].parts.length, 1, "the event group was left alone")
+  assert.equal(messages.length, 4, "the event splits the streamed turn visually")
+  assert.equal(text(messages[1]), "Hel")
+  assert.equal(messages[2].parts[0].toolName, "event:weather")
+  assert.equal(text(messages[3]), "lo")
+  assert.ok(!messages[1].parts.some((part) => part.isPartial), "the earlier segment was finalized")
 })
 
 test("a new turn opens a block after the trailing events", () => {

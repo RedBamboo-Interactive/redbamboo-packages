@@ -26,15 +26,14 @@ export function isEventBlock(block: MessageBlock): boolean {
 }
 
 /**
- * Index of the assistant block a stream event should extend: the last one that
- * isn't an ambient event group. Returns -1 when the run has to open a new block
- * (empty list, or a user message is the most recent conversation block).
+ * Index of the assistant block a stream event should extend. An ambient event
+ * is a chronological boundary: once one has been appended, later model output
+ * opens a continuation block after it instead of reaching backward and making
+ * new activity appear before an event that was already on screen.
  */
 export function streamTargetIndex(messages: MessageBlock[]): number {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const block = messages[i]
-    if (isEventBlock(block)) continue
-    return block.role === "assistant" ? i : -1
-  }
-  return -1
+  const index = messages.length - 1
+  if (index < 0) return -1
+  const block = messages[index]
+  return block.role === "assistant" && !isEventBlock(block) ? index : -1
 }

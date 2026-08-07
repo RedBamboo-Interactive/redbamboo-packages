@@ -26,6 +26,16 @@ test("events and tool activity share one row across message boundaries", () => {
   ]), "A(camera+automation+silent turn+weather)")
 })
 
+test("activity keeps chronological order across an ambient event boundary", () => {
+  const event = part("tool_use", "weather")
+  event.toolName = "event:weather"
+  assert.equal(shape([
+    block("assistant", [part("tool_use", "before")]),
+    block("assistant", [event]),
+    block("assistant", [part("tool_use", "after")]),
+  ]), "A(before+weather+after)")
+})
+
 test("visible conversation content flushes the activity row", () => {
   assert.equal(shape([
     block("assistant", [part("tool_use", "before")]),

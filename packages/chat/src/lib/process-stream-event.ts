@@ -1,7 +1,7 @@
 import type { ChatEvent, MessageBlock, MessagePart, PendingQuestion, ProcessEventResult, QuestionOutcome, QuestionState, StructuredQuestion } from "../types"
 // Explicit extension: this module is exercised by node:test, and bare Node ESM
 // does not resolve extensionless relative specifiers.
-import { streamTargetIndex } from "./event-parts.ts"
+import { isEventBlock, streamTargetIndex } from "./event-parts.ts"
 
 let partIdCounter = 0
 
@@ -11,15 +11,16 @@ function finalizePartials(block: MessageBlock): MessageBlock {
   return { ...block, parts: block.parts.map(p => p.isPartial ? { ...p, isPartial: false } : p) }
 }
 
-/** Close out the in-flight block's partial parts, wherever it sits in the list. */
+/** Close every partial segment of the in-flight turn. Ambient events can split
+ * one turn into chronological continuation blocks. */
 export function finalizeStreamBlock(messages: MessageBlock[]): MessageBlock[] {
-  const idx = streamTargetIndex(messages)
-  if (idx === -1) return messages
-  const finalized = finalizePartials(messages[idx])
-  if (finalized === messages[idx]) return messages
-  const updated = [...messages]
-  updated[idx] = finalized
-  return updated
+  let changed = false
+  const finalized = messages.map((block) => {
+    const next = block.role === "assistant" && !isEventBlock(block) ? finalizePartials(block) : block
+    changed ||= next !== block
+    return next
+  })
+  return changed ? finalized : messages
 }
 
 export function parseStructuredQuestions(raw: Record<string, unknown>): StructuredQuestion[] | undefined {
@@ -207,20 +208,37 @@ function closeQuestion(question: QuestionState): QuestionState {
 }
 
 function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] {
-  const msgs = [...messages]
+  let msgs = [...messages]
   const idx = streamTargetIndex(msgs)
   let lastBlock: MessageBlock
 
   if (idx === -1) {
+    // A trailing ambient event closes the previous visual segment. Finalize it
+    // before opening the continuation so no old dot keeps animating forever.
+    msgs = finalizeStreamBlock(msgs)
+    const timestamp = event.timestamp || new Date().toISOString()
+    const turnUid = event.messageUid || null
+    const priorSegments = turnUid
+      ? msgs.filter((block) => block.role === "assistant" && (
+          block.id === turnUid
+          || block.metadata?.messageUid === turnUid
+          || block.id.startsWith(`${turnUid}:segment:`)
+        )).length
+      : 0
     // Prefer the server-minted message uid: the persisted records of this
-    // turn carry the same value, so the block keeps its id across a reload.
+    // turn carry the same value. Continuations need a unique React identity
+    // while retaining the canonical uid in metadata.
     lastBlock = {
-      id: event.messageUid || `assistant-${Date.now()}-${partIdCounter++}`,
+      id: turnUid
+        ? (priorSegments === 0 ? turnUid : `${turnUid}:segment:${priorSegments}`)
+        : `assistant-${Date.now()}-${partIdCounter++}`,
       role: "assistant",
       parts: [],
-      timestamp: new Date().toISOString(),
+      timestamp,
+      metadata: turnUid ? { messageUid: turnUid } : undefined,
     }
-    // Appended after any trailing event group: this turn genuinely starts now.
+    // Appended after any trailing event group. This may begin a new turn or
+    // continue the same turn after an ambient chronological boundary.
     msgs.push(lastBlock)
   } else {
     lastBlock = { ...msgs[idx], parts: [...msgs[idx].parts] }
