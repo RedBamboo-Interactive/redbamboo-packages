@@ -1,5 +1,11 @@
 # @redbamboo/chat
 
+## 0.4.4
+
+### Patch Changes
+
+- 82f34cd: Normalize Windows filesystem paths after Markdown URL encoding so host media resolvers receive the original drive path for backslash, forward-slash, and file-URI inputs.
+
 ## 0.4.3
 
 ### Patch Changes
