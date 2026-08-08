@@ -1,5 +1,11 @@
 # @redbamboo/chat
 
+## 0.4.3
+
+### Patch Changes
+
+- 97fd08a: Replace the context percentage trigger with a semantic session Info action while retaining context usage inside the Session Info dialog.
+
 ## 0.4.2
 
 ### Patch Changes
