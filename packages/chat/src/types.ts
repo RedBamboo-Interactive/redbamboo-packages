@@ -355,6 +355,12 @@ export interface ProcessEventResult {
 
 // --- ChatPanel types ---
 
+export interface OutgoingMessageDraft {
+  content: string
+  images?: ImageAttachment[]
+  attachments?: UploadedAttachment[]
+}
+
 export interface ChatPanelProps {
   // Uncontrolled mode: ChatPanel manages state via useChatStream
   backend?: ChatBackend
@@ -436,6 +442,12 @@ export interface ChatPanelProps {
   enableFileAttachments?: boolean
   attachmentTransport?: AttachmentTransport
   draftStorageKey?: string
+  /**
+   * Synchronously enrich one submitted turn before it enters the durable
+   * message queue. Runs once for typed, attached, and voice turns so callers
+   * can bind contextual data to the exact turn the user submitted.
+   */
+  prepareOutgoingMessage?: (message: OutgoingMessageDraft) => OutgoingMessageDraft
 
   // Voice integration
   speechBackend?: SpeechBackend
@@ -458,6 +470,13 @@ export interface ChatPanelProps {
     value: string
     isStreaming: boolean
     disabled: boolean
+    hasImages: boolean
+    hasAttachments: boolean
+  }) => React.ReactNode
+  /** Additional attachment controls rendered beside the built-in image/file buttons. */
+  renderAttachmentActions?: (state: {
+    disabled: boolean
+    isStreaming: boolean
     hasImages: boolean
     hasAttachments: boolean
   }) => React.ReactNode

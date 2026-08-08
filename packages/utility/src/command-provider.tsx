@@ -62,7 +62,7 @@ function createCommandStore(): CommandStore {
     if (commands.has(command.id)) {
       warnOnce(`id:${command.id}`,
         `Command id "${command.id}" registered twice — the previous registration is silently replaced. ` +
-        "Check for duplicate useCommand calls (e.g. AppShell + useAskNovaCommand both registering ask-nova).")
+        "Check for duplicate useCommand calls or repeated plugin command contributions.")
     }
 
     if (command.shortcut) {

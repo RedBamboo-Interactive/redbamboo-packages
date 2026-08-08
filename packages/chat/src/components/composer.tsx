@@ -28,6 +28,7 @@ interface ComposerProps {
   onResume?: () => void | Promise<void>
   sessionId?: string | null
   renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
+  renderAttachmentActions?: (state: { disabled: boolean; isStreaming: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
   enableImageAttachments?: boolean
   enableFileAttachments?: boolean
   attachmentTransport?: AttachmentTransport
@@ -119,6 +120,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   onResume,
   sessionId,
   renderInlineAction,
+  renderAttachmentActions,
   enableImageAttachments = true,
   enableFileAttachments,
   attachmentTransport,
@@ -439,6 +441,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const hasContent = !!value.trim() || images.length > 0 || attachments.some(attachment => attachment.state === "ready")
   const attachmentBusy = attachments.some(attachment => attachment.state !== "ready")
   const willInterrupt = isStreaming && (!hasContent || ctrlHeld)
+  const attachmentActions = renderAttachmentActions?.({
+    disabled: inputDisabled,
+    isStreaming,
+    hasImages: images.length > 0,
+    hasAttachments: attachments.length > 0,
+  })
 
   const defaultPlaceholder = inputDisabled
     ? "Session not active"
@@ -536,7 +544,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           />
           {renderInlineAction?.({ value, isStreaming, disabled: inputDisabled, hasImages: images.length > 0, hasAttachments: attachments.length > 0 })}
         </div>
-        <div className="flex flex-col justify-end gap-1.5 shrink-0 w-16">
+        <div className="flex flex-col justify-end gap-1.5 shrink-0 min-w-16">
           <div className="flex justify-center gap-1">
             {enableImageAttachments && (
               <button
@@ -558,6 +566,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 <i className="ph-bold ph-paperclip text-xs" />
               </button>
             )}
+            {attachmentActions}
           </div>
           {onTogglePlanMode && (
             <button

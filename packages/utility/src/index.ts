@@ -161,22 +161,16 @@ export { useNavigateUp } from "./use-navigate-up"
 export type { NavigateUpOptions } from "./use-navigate-up"
 
 export {
-  askNova,
+  captureVisibleAppContext,
   formatContextMessage,
-  parseContextHash,
+  resolveActiveAppIdentity,
   scrapeDOMContext,
-  useAskNova,
-  useAskNovaCommand,
-  useAskNovaReceiver,
-  usePendingNovaContext,
-} from "./ask-nova"
+  VisibleAppContextCaptureError,
+} from "./nova-context"
 export type {
-  AskNovaImageAttachment,
-  AskNovaContext,
-  AskNovaOptions,
-  PendingNovaContext,
-  UseAskNovaOptions,
-  UseAskNovaReturn,
-  UseAskNovaCommandOptions,
-  UseAskNovaReceiverOptions,
-} from "./ask-nova"
+  ActiveAppIdentity,
+  CaptureVisibleAppContextOptions,
+  ContextImageAttachment,
+  VisibleAppContext,
+  VisibleAppContextCaptureResult,
+} from "./nova-context"

@@ -16,6 +16,7 @@ export type {
   ChatEvent,
   ChatBackend,
   ChatPanelProps,
+  OutgoingMessageDraft,
   QuestionOption,
   StructuredQuestion,
   PendingQuestion,

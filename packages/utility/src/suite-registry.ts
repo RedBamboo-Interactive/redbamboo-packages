@@ -4,7 +4,7 @@ import { DOMAIN_COLORS } from "@redbamboo/ui"
  * Single source of truth for the Red Suite roster.
  *
  * Ports, icons, colors, and descriptions were previously hardcoded independently in
- * app-switcher, chat's context-card, and ask-nova — and had already drifted. Anything
+ * app-switcher and chat's context-card, and had already drifted. Anything
  * that needs the suite topology should import from here.
  *
  * Colors follow the visible app-switcher branding. Each app's /discover manifest also

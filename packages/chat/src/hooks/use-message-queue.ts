@@ -149,9 +149,9 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     store.update(previous => enqueue(previous, entry))
   }, [store])
 
-  const addInput = useCallback((text: string, attachments: UploadedAttachment[]) => {
+  const addInput = useCallback((text: string, attachments: UploadedAttachment[], images?: ImageAttachment[]) => {
     if (!isStreamingRef.current) sawStreamingRef.current = false
-    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, text, attachments }
+    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, text, images, attachments }
     store.update(previous => enqueue(previous, entry))
   }, [store])
 

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react"
-import type { ChatInputPart, ChatPanelProps, ImageAttachment, MessageBlock as MessageBlockType, UploadedAttachment } from "../types"
+import type { ChatInputPart, ChatPanelProps, ImageAttachment, MessageBlock as MessageBlockType, OutgoingMessageDraft, SendOptions, UploadedAttachment } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
 import { useMessageQueue } from "../hooks/use-message-queue"
@@ -46,14 +46,29 @@ export function ChatPanel(props: ChatPanelProps) {
     resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl,
     permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
+    prepareOutgoingMessage,
     speechBackend, handsFreeEnabled, pushToTalkKey, globalPushToTalk,
-    renderStatusLine, renderComposerInlineAction, renderMessageExtra, renderSideActions,
+    renderStatusLine, renderComposerInlineAction, renderAttachmentActions, renderMessageExtra, renderSideActions,
   } = props
+
+  const prepareMessage = useCallback((message: OutgoingMessageDraft): OutgoingMessageDraft => (
+    prepareOutgoingMessage ? prepareOutgoingMessage(message) : message
+  ), [prepareOutgoingMessage])
+
+  const deliverMessage = useCallback((message: OutgoingMessageDraft, options?: SendOptions) => {
+    if (message.attachments?.length) {
+      const input: ChatInputPart[] = []
+      if (message.content) input.push({ type: "text", text: message.content })
+      input.push(...message.attachments.map(attachment => ({ type: "attachment" as const, attachmentId: attachment.id })))
+      return Promise.resolve(sendInput(input, message.attachments, options))
+    }
+    return Promise.resolve(sendMessage(message.content, message.images, options))
+  }, [sendInput, sendMessage])
 
   const voice = useVoiceInput(speechBackend ? {
     speech: speechBackend,
     messages,
-    onSend: (content, opts) => sendMessage(content, undefined, opts),
+    onSend: (content, opts) => deliverMessage(prepareMessage({ content }), opts),
     onAnswerQuestion,
     pendingQuestion: !!pendingQuestion,
     disabled,
@@ -63,15 +78,9 @@ export function ChatPanel(props: ChatPanelProps) {
   } : null)
 
   const composerRef = useRef<ComposerHandle>(null)
-  const drainMessage = useCallback((text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[]) => {
-    if (attachments?.length) {
-      const input: ChatInputPart[] = []
-      if (text) input.push({ type: "text", text })
-      input.push(...attachments.map(attachment => ({ type: "attachment" as const, attachmentId: attachment.id })))
-      return Promise.resolve(sendInput(input, attachments))
-    }
-    return Promise.resolve(sendMessage(text, images))
-  }, [sendInput, sendMessage])
+  const drainMessage = useCallback((text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[]) => (
+    deliverMessage({ content: text, images, attachments })
+  ), [deliverMessage])
   const messageQueue = useMessageQueue({
     sessionId,
     isStreaming,
@@ -84,6 +93,18 @@ export function ChatPanel(props: ChatPanelProps) {
       for (const attachment of attachments) void attachmentTransport.delete(attachment.id).catch(() => {})
     },
   })
+
+  const enqueueMessage = useCallback((content: string, images?: ImageAttachment[]) => {
+    const prepared = prepareMessage({ content, images })
+    if (prepared.attachments?.length) messageQueue.addInput(prepared.content, prepared.attachments, prepared.images)
+    else messageQueue.add(prepared.content, prepared.images)
+  }, [messageQueue, prepareMessage])
+
+  const enqueueInput = useCallback((content: string, attachments: UploadedAttachment[]) => {
+    const prepared = prepareMessage({ content, attachments })
+    if (prepared.attachments?.length) messageQueue.addInput(prepared.content, prepared.attachments, prepared.images)
+    else messageQueue.add(prepared.content, prepared.images)
+  }, [messageQueue, prepareMessage])
 
   const handleEditQueued = useCallback((id: string) => {
     const item = messageQueue.pullback(id)
@@ -309,8 +330,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const composerEl = hideComposer ? null : (
     <Composer
       ref={composerRef}
-      onSend={messageQueue.add}
-      onSendInput={messageQueue.addInput}
+      onSend={enqueueMessage}
+      onSendInput={enqueueInput}
       onInterrupt={interrupt}
       disabled={disabled}
       isStreaming={isStreaming}
@@ -328,6 +349,7 @@ export function ChatPanel(props: ChatPanelProps) {
       attachmentTransport={attachmentTransport}
       draftStorageKey={draftStorageKey}
       renderInlineAction={inlineAction}
+      renderAttachmentActions={renderAttachmentActions}
     />
   )
 
