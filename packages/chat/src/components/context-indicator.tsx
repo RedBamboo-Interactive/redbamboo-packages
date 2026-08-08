@@ -1,61 +1,24 @@
 import { useState } from "react"
-import type { ContextIndicatorProps } from "../types"
-import { SessionStatsModal, getContextPercent } from "./session-stats-modal"
+import type { SessionInfoButtonProps } from "../types"
+import { SessionStatsModal } from "./session-stats-modal"
 
-const SIZE = 28
-const STROKE = 3
-const RADIUS = (SIZE - STROKE) / 2
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS
-
-function ringColor(pct: number): string {
-  if (pct < 60) return "var(--color-accent-teal)"
-  if (pct < 80) return "var(--color-accent-gold)"
-  return "var(--color-accent-red)"
-}
-
-export function ContextIndicator({ stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, onConfigChange, children }: ContextIndicatorProps) {
+export function SessionInfoButton({ stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, onConfigChange, children }: SessionInfoButtonProps) {
   const [open, setOpen] = useState(false)
-  const pct = stats ? getContextPercent(stats) : null
-  const offset = pct != null ? CIRCUMFERENCE * (1 - pct / 100) : CIRCUMFERENCE
 
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="relative flex items-center justify-center rounded-full hover:bg-overlay-6 transition-colors"
-        title={pct != null ? `Context: ${pct}%` : "Session info"}
-        style={{ width: SIZE + 4, height: SIZE + 4 }}
+        className="inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-text-muted transition-colors hover:bg-overlay-10 hover:text-contrast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-a50"
+        title="Session info"
+        aria-label="Open session info"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        data-slot="session-info-trigger"
       >
-        <svg width={SIZE} height={SIZE} className="-rotate-90">
-          <circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={RADIUS}
-            fill="none"
-            stroke="var(--contrast)"
-            strokeOpacity={0.08}
-            strokeWidth={STROKE}
-          />
-          <circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={RADIUS}
-            fill="none"
-            stroke={pct != null ? ringColor(pct) : "var(--contrast)"}
-            strokeOpacity={pct != null ? 1 : 0.15}
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={offset}
-            className="transition-all duration-500"
-          />
-        </svg>
-        <span
-          className="absolute text-[7px] font-medium"
-          style={{ color: pct != null ? ringColor(pct) : "var(--muted-foreground)" }}
-        >
-          {pct != null ? pct : "--"}
-        </span>
+        <i aria-hidden="true" className="ph-bold ph-info text-sm" />
+        <span>Info</span>
       </button>
 
       <SessionStatsModal
@@ -75,3 +38,6 @@ export function ContextIndicator({ stats, messages, agent, modelOptions, effortO
     </>
   )
 }
+
+/** @deprecated Use SessionInfoButton. */
+export const ContextIndicator = SessionInfoButton

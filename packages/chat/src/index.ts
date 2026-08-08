@@ -34,6 +34,7 @@ export type {
   SessionConfigOption,
   SessionAgentInfo,
   ContextIndicatorProps,
+  SessionInfoButtonProps,
 } from "./types"
 
 export { ChatPanel } from "./components/chat-panel"
@@ -49,7 +50,7 @@ export { ToolOutputView } from "./components/tool-output"
 export { EventView, parseEventPart } from "./components/event-view"
 export type { ParsedEvent, EventViewProps } from "./components/event-view"
 export { ToolCallCard } from "./components/tool-call-card"
-export { ContextIndicator } from "./components/context-indicator"
+export { ContextIndicator, SessionInfoButton } from "./components/context-indicator"
 export { SessionStatsModal, getContextPercent, getMaxContext } from "./components/session-stats-modal"
 export { StreamingStatusLine } from "./components/streaming-status-line"
 export { PendingQuestionLine } from "./components/pending-question-line"

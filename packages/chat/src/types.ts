@@ -240,7 +240,7 @@ export interface SessionAgentInfo {
   href?: string | null
 }
 
-export interface ContextIndicatorProps {
+export interface SessionInfoButtonProps {
   stats: SessionStats | null
   messages: MessageBlock[]
   agent?: SessionAgentInfo | null
@@ -251,6 +251,9 @@ export interface ContextIndicatorProps {
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
   children?: React.ReactNode
 }
+
+/** @deprecated Use SessionInfoButtonProps. */
+export type ContextIndicatorProps = SessionInfoButtonProps
 
 // --- Stream event processing ---
 

@@ -124,7 +124,7 @@ async function main() {
       await pipPage.screenshot({ path: path.join(outputDir, "00a-float-chat.png"), fullPage: true })
 
       report.desktop.sessionInfo = {}
-      const sessionInfoTrigger = pipPage.locator('button[title^="Context:"], button[title="Session info"]').first()
+      const sessionInfoTrigger = pipPage.locator('[data-slot="session-info-trigger"]').first()
       report.desktop.sessionInfo.triggerFound = await sessionInfoTrigger.count() === 1
       if (report.desktop.sessionInfo.triggerFound) {
         for (const target of [
