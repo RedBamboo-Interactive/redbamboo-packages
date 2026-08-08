@@ -1,5 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import Markdown from "react-markdown"
 import { canonicalizeChatMediaSrc, resolveChatMediaSrc } from "./media-url.ts"
 
 test("canonicalizes loopback RedLeaf assets to same-origin URLs", () => {
@@ -47,4 +50,49 @@ test("applies a host resolver before canonicalizing its result", () => {
     "/api/assets/image.png",
   )
   assert.equal(resolveChatMediaSrc(undefined), undefined)
+})
+
+test("normalizes Windows paths before calling the host resolver", () => {
+  const seen: string[] = []
+  const resolve = (src: string) => {
+    seen.push(src)
+    return `/api/apps/nova/file?path=${encodeURIComponent(src)}`
+  }
+
+  assert.equal(
+    resolveChatMediaSrc("S:%5CNova%5Cproof.png", resolve),
+    "/api/apps/nova/file?path=S%3A%5CNova%5Cproof.png",
+  )
+  assert.equal(
+    resolveChatMediaSrc("S:/Nova/proof.png", resolve),
+    "/api/apps/nova/file?path=S%3A%2FNova%2Fproof.png",
+  )
+  assert.equal(
+    resolveChatMediaSrc("file:///S:/Nova/proof.png", resolve),
+    "/api/apps/nova/file?path=S%3A%2FNova%2Fproof.png",
+  )
+  assert.deepEqual(seen, ["S:\\Nova\\proof.png", "S:/Nova/proof.png", "S:/Nova/proof.png"])
+})
+
+test("recovers a backslash path after the real Markdown parser encodes it", () => {
+  const resolved: string[] = []
+  const resolve = (src: string) => /^[A-Za-z]:[\\/]/.test(src)
+    ? `/api/apps/nova/file?path=${encodeURIComponent(src)}`
+    : src
+
+  renderToStaticMarkup(createElement(
+    Markdown,
+    {
+      urlTransform: (url: string) => url,
+      components: {
+        img: ({ src }: { src?: string }) => {
+          resolved.push(resolveChatMediaSrc(src, resolve) ?? "")
+          return null
+        },
+      },
+    },
+    String.raw`![proof](S:\Nova\proof.png)`,
+  ))
+
+  assert.deepEqual(resolved, ["/api/apps/nova/file?path=S%3A%5CNova%5Cproof.png"])
 })

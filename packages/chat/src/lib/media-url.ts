@@ -1,6 +1,30 @@
 export type MediaSrcResolver = (src: string) => string | undefined
 
 const REDLEAF_ASSET_PATH = /^\/api\/(?:assets|redleaf-asset)(?:\/|$)/i
+const WINDOWS_DRIVE_PATH = /^[A-Za-z]:(?:[\\/]|%(?:2f|5c))/i
+const WINDOWS_FILE_URI = /^file:\/{2,3}([A-Za-z]:(?:[\\/]|%(?:2f|5c)).*)$/i
+
+/**
+ * Recover the filesystem path that Markdown handed to its image component.
+ *
+ * react-markdown percent-encodes backslashes before rendering, so a path authored
+ * as `C:\images\proof.png` arrives here as `C:%5Cimages%5Cproof.png`. Hosts own
+ * the decision to serve local media; this only gives their resolver a consistent
+ * drive-letter path regardless of how it was written in Markdown.
+ */
+function normalizeLocalMediaSrc(src: string): string {
+  const fileUriPath = src.match(WINDOWS_FILE_URI)?.[1]
+  const candidate = fileUriPath ?? src
+  if (!WINDOWS_DRIVE_PATH.test(candidate)) return src
+
+  try {
+    return decodeURIComponent(candidate)
+  } catch {
+    // Preserve unusual literal-percent paths while still recovering the drive
+    // separator that Markdown encoded.
+    return candidate.replace(/%5c/gi, "\\").replace(/%2f/gi, "/")
+  }
+}
 
 function isLoopbackHost(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "").toLowerCase()
@@ -36,5 +60,6 @@ export function resolveChatMediaSrc(
   resolve?: MediaSrcResolver,
 ): string | undefined {
   if (!src) return src
-  return canonicalizeChatMediaSrc(resolve?.(src) ?? src)
+  const normalized = normalizeLocalMediaSrc(src)
+  return canonicalizeChatMediaSrc(resolve?.(normalized) ?? normalized)
 }
