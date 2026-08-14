@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from "react"
-import type { AttachmentTransport, DraftAttachment, ImageAttachment, UploadedAttachment } from "../types"
+import type { AttachmentTransport, DraftAttachment, ImageAttachment, SendOptions, UploadedAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { acceptedAttachmentFiles } from "../lib/attachment-selection"
 import { useUiEnvironment } from "@redbamboo/ui"
@@ -11,9 +11,11 @@ interface ComposerProps {
    * this" and, when the modifier is held, follows it with `onInterrupt`. The
    * caller (ChatPanel) decides what "send" means — enqueue-and-drain-later.
    */
-  onSend: (content: string, images?: ImageAttachment[]) => void
-  onSendInput?: (content: string, attachments: UploadedAttachment[]) => void
+  onSend: (content: string, images?: ImageAttachment[], options?: SendOptions) => void
+  onSendInput?: (content: string, attachments: UploadedAttachment[], options?: SendOptions) => void
   onInterrupt: () => void
+  /** True when submission durably records interrupt-current before stopping the provider. */
+  submitHandlesInterrupt?: boolean
   disabled: boolean
   isStreaming: boolean
   /** The transitional window after an interrupt is requested but before the turn has unwound — isStreaming is still true here. */
@@ -108,6 +110,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   onSend,
   onSendInput,
   onInterrupt,
+  submitHandlesInterrupt = false,
   disabled,
   isStreaming,
   interrupting,
@@ -333,15 +336,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       if (textareaRef.current) textareaRef.current.style.height = "auto"
     }
     const deliver = (trimmed: string) => {
-      if (ready.length > 0 && onSendInput) onSendInput(trimmed, ready)
-      else onSend(trimmed, images.length > 0 ? images : undefined)
+      const options: SendOptions = { delivery: opts?.interruptToo ? "interrupt-current" : "after-current" }
+      if (ready.length > 0 && onSendInput) onSendInput(trimmed, ready, options)
+      else onSend(trimmed, images.length > 0 ? images : undefined, options)
       clearComposer()
     }
     if (isStreaming) {
       const trimmed = value.trim()
       if (trimmed || images.length > 0 || ready.length > 0) {
         deliver(trimmed)
-        if (opts?.interruptToo) doInterrupt()
+        if (opts?.interruptToo && !submitHandlesInterrupt) doInterrupt()
       } else {
         // Nothing to queue — Enter/click on an empty box while streaming just stops the turn, like Escape.
         doInterrupt()
@@ -360,7 +364,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     }
     if ((!trimmed && images.length === 0 && ready.length === 0) || disabled) return
     deliver(trimmed)
-  }, [value, images, attachments, disabled, isStreaming, onSend, onSendInput, doInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
+  }, [value, images, attachments, disabled, isStreaming, onSend, onSendInput, doInterrupt, submitHandlesInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape" && isStreaming) {

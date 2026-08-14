@@ -2,10 +2,19 @@ import type { ImageAttachment, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
   id: string
+  /** Server-returned idempotency key used to replace an uncertain local outbox ghost. */
+  clientId?: string
+  sessionId?: string
   text: string
   images?: ImageAttachment[]
   attachments?: UploadedAttachment[]
   deliveryError?: string
+  remoteState?: "pending" | "delivering" | "failed"
+  delivery?: "after-current" | "interrupt-current"
+  messageUid?: string
+  optimistic?: boolean
+  /** A transport failure means the server may have admitted this turn despite no acknowledgement. */
+  admissionUncertain?: boolean
 }
 
 export function enqueue(queue: QueuedMessage[], entry: QueuedMessage): QueuedMessage[] {

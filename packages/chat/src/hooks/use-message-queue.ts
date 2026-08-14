@@ -1,8 +1,15 @@
 import { useRef, useEffect, useCallback, useSyncExternalStore } from "react"
-import type { ImageAttachment, UploadedAttachment } from "../types"
+import type { ChatQueueTransport, ImageAttachment, SendOptions, UploadedAttachment } from "../types"
 import { enqueue, cancel as cancelEntry, shouldDrain, type QueuedMessage } from "../lib/message-queue"
 import { loadQueue, saveQueue, pruneStaleQueues } from "../lib/message-queue-storage"
 import { createMessageQueueStore, type MessageQueueStore } from "../lib/message-queue-store"
+import {
+  connectRemoteMessageQueue,
+  getRemoteMessageQueueStore,
+  getRemoteMessageQueueTransport,
+  refreshRemoteMessageQueue,
+} from "../lib/remote-message-queue-store"
+import { admitWithOutbox, migrateLegacyOutbox } from "../lib/remote-message-outbox"
 
 // Long enough to ride out a backend's isStreaming flicker around a turn
 // ending. Only paid when a turn actually ran — see the idle fast path below,
@@ -14,7 +21,6 @@ function getStorage(): Storage | null {
 }
 
 const sessionStores = new Map<string, MessageQueueStore>()
-
 function getSessionStore(sessionId: string): MessageQueueStore {
   const existing = sessionStores.get(sessionId)
   if (existing) return existing
@@ -47,17 +53,19 @@ export interface UseMessageQueueOptions {
    * rather than the queue — so the drain has to hold.
    */
   questionPending?: boolean
-  onDrain: (text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[]) => void | Promise<void>
+  queueTransport?: ChatQueueTransport
+  onDrain: (text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[], options?: SendOptions) => void | Promise<unknown>
   onDiscardAttachments?: (attachments: UploadedAttachment[]) => void
 }
 
-export function useMessageQueue({ sessionId, isStreaming, disabled, resumePending = false, questionPending = false, onDrain, onDiscardAttachments }: UseMessageQueueOptions) {
+export function useMessageQueue({ sessionId, isStreaming, disabled, resumePending = false, questionPending = false, queueTransport, onDrain, onDiscardAttachments }: UseMessageQueueOptions) {
   // Sessionless ChatPanels keep their old per-instance queue semantics. Named
   // sessions deliberately converge on the shared store so portals and other
   // simultaneous views cannot race the same persisted delivery.
   const localStoreRef = useRef<MessageQueueStore | null>(null)
   if (!localStoreRef.current) localStoreRef.current = createMessageQueueStore()
-  const store = sessionId ? getSessionStore(sessionId) : localStoreRef.current
+  const remote = Boolean(sessionId && queueTransport)
+  const store = remote && sessionId ? getRemoteMessageQueueStore(sessionId) : sessionId ? getSessionStore(sessionId) : localStoreRef.current
   const storeSnapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const queue = storeSnapshot.queue
   const isStreamingRef = useRef(isStreaming)
@@ -72,6 +80,11 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
   onDrainRef.current = onDrain
   const onDiscardAttachmentsRef = useRef(onDiscardAttachments)
   onDiscardAttachmentsRef.current = onDiscardAttachments
+
+  useEffect(() => {
+    if (!sessionId || !queueTransport) return
+    return connectRemoteMessageQueue(sessionId, queueTransport)
+  }, [sessionId, queueTransport])
 
   // The settle delay only earns its keep when the drain is waiting on a turn
   // to end, because that is the only moment isStreaming can flicker. Queueing
@@ -100,7 +113,24 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     if (storage) pruneStaleQueues(storage, Date.now())
   }, [])
 
+  // One-release migration: localStorage is an unacknowledged outbox only.
+  // Remove each item after RedCompute has accepted the same idempotency key.
+  useEffect(() => {
+    if (!remote || !sessionId) return
+    const storage = getStorage()
+    if (!storage) return
+    void migrateLegacyOutbox(storage, sessionId, item =>
+      onDrainRef.current(item.text, item.images, item.attachments, {
+        delivery: "after-current",
+        idempotencyKey: item.id,
+        displayContent: item.text,
+      }),
+      () => refreshRemoteMessageQueue(sessionId),
+    ).catch(() => {})
+  }, [remote, sessionId])
+
   const drain = useCallback(() => {
+    if (remote) return
     // Re-check against the latest refs, not the values this closure was
     // scheduled with — the settle delay exists precisely so a flickered
     // isStreaming (or a resumePending that hasn't cleared yet) can still
@@ -114,7 +144,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     })) return
     const claim = store.claimDrain()
     if (!claim) return
-    let delivery: void | Promise<void>
+    let delivery: void | Promise<unknown>
     try {
       delivery = onDrainRef.current(claim.sent.text, claim.sent.images, claim.sent.attachments)
     } catch (error) {
@@ -128,10 +158,11 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
       const message = error instanceof Error ? error.message : "Message delivery failed"
       claim.fail(message)
     })
-  }, [store])
+  }, [store, remote])
 
   const hasDeliveryError = queue.some(message => message.deliveryError)
   useEffect(() => {
+    if (remote) return
     const queueLength = hasDeliveryError ? 0 : queue.length
     if (!shouldDrain({ queueLength, isStreaming, disabled, resumePending, questionPending })) return
     const timer = setTimeout(drain, sawStreamingRef.current ? DRAIN_SETTLE_MS : 0)
@@ -139,38 +170,105 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     // flickered, disabled/resumePending/questionPending toggled) cancels it —
     // the next run of this effect decides fresh whether a new timer is warranted.
     return () => clearTimeout(timer)
-  }, [queue.length, hasDeliveryError, isStreaming, disabled, resumePending, questionPending, drain, storeSnapshot.revision])
+  }, [queue.length, hasDeliveryError, isStreaming, disabled, resumePending, questionPending, drain, storeSnapshot.revision, remote])
 
-  const add = useCallback((text: string, images?: ImageAttachment[]) => {
+  const submitRemote = useCallback((entry: QueuedMessage, options?: SendOptions) => {
+    if (!sessionId) return
+    store.update(previous => enqueue(previous.filter(item => item.id !== entry.id), { ...entry, optimistic: true }))
+    const storage = getStorage()
+    void admitWithOutbox(storage, sessionId, entry, () =>
+      onDrainRef.current(entry.text, entry.images, entry.attachments, {
+        ...options,
+        delivery: options?.delivery ?? "after-current",
+        idempotencyKey: entry.id,
+        displayContent: entry.text,
+      }),
+    ).then(async () => {
+      store.update(previous => previous.filter(item => item.id !== entry.id))
+      await refreshRemoteMessageQueue(sessionId)
+    }).catch(async error => {
+      try {
+        await refreshRemoteMessageQueue(sessionId)
+        if (!store.getSnapshot().queue.some(item => item.id === entry.id && item.optimistic)) return
+      } catch { /* keep the outbox ghost until admission can be verified */ }
+      const message = error instanceof Error ? error.message : "Message admission failed"
+      const definitive = typeof (error as { status?: unknown } | null)?.status === "number"
+      const failed = {
+        ...entry,
+        optimistic: true,
+        admissionUncertain: !definitive,
+        deliveryError: definitive ? message : `Admission unconfirmed: ${message}`,
+      }
+      store.update(previous => [...previous.filter(item => item.id !== entry.id), failed])
+      const storage = getStorage()
+      if (storage) saveQueue(storage, sessionId, [...loadQueue(storage, sessionId).filter(item => item.id !== entry.id), failed], Date.now())
+    })
+  }, [sessionId, store])
+
+  const add = useCallback((text: string, images?: ImageAttachment[], options?: SendOptions) => {
     // Queued into a quiet session: this drain isn't waiting on anything, so it
     // skips the settle. Re-armed by the effect above if a turn starts first.
     if (!isStreamingRef.current) sawStreamingRef.current = false
-    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, text, images }
+    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, sessionId: sessionId ?? undefined, text, images }
+    if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))
-  }, [store])
+  }, [store, remote, submitRemote, sessionId])
 
-  const addInput = useCallback((text: string, attachments: UploadedAttachment[], images?: ImageAttachment[]) => {
+  const addInput = useCallback((text: string, attachments: UploadedAttachment[], images?: ImageAttachment[], options?: SendOptions) => {
     if (!isStreamingRef.current) sawStreamingRef.current = false
-    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, text, images, attachments }
+    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, sessionId: sessionId ?? undefined, text, images, attachments }
+    if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))
-  }, [store])
+  }, [store, remote, submitRemote, sessionId])
 
   const cancel = useCallback((id: string) => {
     const item = store.getSnapshot().queue.find(message => message.id === id)
+    if (remote && sessionId) {
+      if (!item?.optimistic) {
+        const transport = getRemoteMessageQueueTransport(sessionId)
+        if (transport) void transport.cancel(id).then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
+      }
+      const storage = getStorage()
+      if (storage) saveQueue(storage, sessionId, loadQueue(storage, sessionId).filter(message => message.id !== id), Date.now())
+    }
     if (item?.attachments?.length) onDiscardAttachmentsRef.current?.(item.attachments)
     store.update(previous => cancelEntry(previous, id))
-  }, [store])
+  }, [store, remote, sessionId])
 
   /** Removes an entry and hands it back, for pulling its text into the composer to edit. */
   const pullback = useCallback((id: string): QueuedMessage | undefined => {
     const item = store.getSnapshot().queue.find(message => message.id === id)
-    if (item) store.update(previous => cancelEntry(previous, id))
+    if (item) {
+      if (remote && sessionId && !item.optimistic) {
+        const transport = getRemoteMessageQueueTransport(sessionId)
+        if (transport) void transport.cancel(id).catch(() => refreshRemoteMessageQueue(sessionId))
+      }
+      store.update(previous => cancelEntry(previous, id))
+    }
     return item
-  }, [store])
+  }, [store, remote, sessionId])
 
   const retry = useCallback((id: string) => {
+    if (remote && sessionId) {
+      const item = store.getSnapshot().queue.find(message => message.id === id)
+      if (item?.optimistic) {
+        submitRemote({ ...item, deliveryError: undefined }, { delivery: item.delivery ?? "after-current" })
+        return
+      }
+      const transport = getRemoteMessageQueueTransport(sessionId)
+      if (transport) void transport.retry(id).then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
+      return
+    }
     store.update(previous => previous.map(message => message.id === id ? { ...message, deliveryError: undefined } : message))
-  }, [store])
+  }, [store, remote, sessionId, submitRemote])
 
-  return { queue, add, addInput, cancel, pullback, retry }
+  const sendNow = useCallback(() => {
+    if (!remote || !sessionId) return false
+    const transport = getRemoteMessageQueueTransport(sessionId)
+    if (!transport) return false
+    void transport.sendNow().then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
+    return true
+  }, [remote, sessionId])
+
+  return { queue, add, addInput, cancel, pullback, retry, sendNow, remote }
 }

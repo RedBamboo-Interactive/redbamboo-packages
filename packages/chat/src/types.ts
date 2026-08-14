@@ -88,6 +88,61 @@ export interface AttachmentTransport {
 
 export interface SendOptions {
   inputMethod?: "typed" | "voice"
+  /** Durable session-input policy. Defaults to after-current. */
+  delivery?: "after-current" | "interrupt-current"
+  /** Retry-safe client identity forwarded as X-Idempotency-Key. */
+  idempotencyKey?: string
+  /** Human draft shown by queue UIs when content contains an enriched model envelope. */
+  displayContent?: string
+}
+
+export interface ChatQueueError {
+  code: string
+  message: string
+  retryable: boolean
+}
+
+export interface ChatQueuedItem {
+  id: string
+  clientId?: string | null
+  sessionId: string
+  sequence: number
+  state: "pending" | "delivering" | "failed" | "delivered" | "cancelled"
+  delivery: "after-current" | "interrupt-current"
+  displayContent: string
+  messageUid: string
+  attachments?: UploadedAttachment[]
+  attachmentIds?: string[]
+  createdAt: string
+  updatedAt: string
+  attemptCount: number
+  nextAttemptAt?: string | null
+  error?: ChatQueueError | null
+  deliveredMessageUid?: string | null
+  completedAt?: string | null
+}
+
+export interface ChatQueueSummary {
+  depth: number
+  state: "empty" | "ready" | "delivering" | "waiting_for_session" | "failed"
+  blockedReason?: string | null
+  headItemId?: string | null
+  errorCode?: string | null
+}
+
+export interface ChatQueueSnapshot {
+  items: ChatQueuedItem[]
+  queue: ChatQueueSummary
+}
+
+/** Remote control plane for a RedCompute-owned durable session input queue. */
+export interface ChatQueueTransport {
+  list(): Promise<ChatQueueSnapshot>
+  cancel(itemId: string): Promise<ChatQueuedItem>
+  retry(itemId: string): Promise<ChatQueuedItem>
+  sendNow(): Promise<void>
+  /** Subscribe to queue invalidations, normally sourced from session.input-queue.updated. */
+  subscribe?(listener: () => void): () => void
 }
 
 export interface ChatEvent {
@@ -368,8 +423,8 @@ export interface ChatPanelProps {
   // Controlled mode: consumer provides state + callbacks
   messages?: MessageBlock[]
   isStreaming?: boolean
-  onSend?: (content: string, images?: ImageAttachment[], options?: SendOptions) => void
-  onSendInput?: (input: ChatInputPart[], attachments: UploadedAttachment[], options?: SendOptions) => void | Promise<void>
+  onSend?: (content: string, images?: ImageAttachment[], options?: SendOptions) => void | Promise<unknown>
+  onSendInput?: (input: ChatInputPart[], attachments: UploadedAttachment[], options?: SendOptions) => void | Promise<unknown>
   onInterrupt?: () => void
   /**
    * True during the transitional window after an interrupt is requested but
@@ -389,6 +444,8 @@ export interface ChatPanelProps {
 
   // Shared props
   sessionId?: string | null
+  /** Enables RedCompute-owned durable queue state. Omit for the legacy in-browser fallback. */
+  queueTransport?: ChatQueueTransport
   disabled?: boolean
   /** Read-only surfaces (e.g. Nova's heartbeat discussion): render the message
    * list without mounting the composer at all. */
