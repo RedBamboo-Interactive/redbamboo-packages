@@ -65,8 +65,8 @@ test("a terminal receipt reconciles an optimistic outbox entry by client id", as
         delivery: "after-current",
         displayContent: "hello",
         messageUid: "m1",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: "2026-08-14T20:00:00Z",
+        updatedAt: "2026-08-14T20:00:01Z",
         attemptCount: 1,
       }],
       queue: { depth: 0, state: "empty" },
@@ -92,6 +92,8 @@ test("a terminal receipt reconciles an optimistic outbox entry by client id", as
     delivery: "after-current",
     messageUid: "m1",
     deliveredMessageUid: undefined,
+    createdAt: "2026-08-14T20:00:00Z",
+    deliveredAt: "2026-08-14T20:00:01Z",
   }])
 
   settleRemoteMessageQueue("session-a", ["m1"])
@@ -171,4 +173,44 @@ test("an identical authoritative refresh does not publish another visual revisio
   await refreshRemoteMessageQueue("session-a")
 
   assert.equal(getRemoteMessageQueueStore("session-a").getSnapshot().revision, revision)
+})
+
+test("a delivered receipt carries the canonical time needed for timeline ordering", async () => {
+  resetRemoteMessageQueueStores()
+  const store = getRemoteMessageQueueStore("session-a")
+  store.update(() => [{
+    id: "client-1",
+    sessionId: "session-a",
+    text: "follow-up",
+    appearance: "queue",
+    optimistic: true,
+    createdAt: "2026-08-14T20:00:00Z",
+  }])
+  const item = {
+    id: "q_server",
+    clientId: "client-1",
+    sessionId: "session-a",
+    sequence: 1,
+    state: "delivered" as const,
+    delivery: "after-current" as const,
+    displayContent: "follow-up",
+    messageUid: "m1",
+    deliveredMessageUid: "m1",
+    createdAt: "2026-08-14T20:00:00Z",
+    updatedAt: "2026-08-14T20:01:00Z",
+    completedAt: "2026-08-14T20:00:59Z",
+    attemptCount: 1,
+  }
+  const transport: ChatQueueTransport = {
+    list: async () => ({ items: [item], queue: { depth: 0, state: "empty" } }),
+    cancel: async () => item,
+    retry: async () => item,
+    sendNow: async () => {},
+  }
+
+  connectRemoteMessageQueue("session-a", transport)
+  await refreshRemoteMessageQueue("session-a")
+
+  assert.equal(store.getSnapshot().queue[0]?.appearance, "message")
+  assert.equal(store.getSnapshot().queue[0]?.deliveredAt, item.completedAt)
 })

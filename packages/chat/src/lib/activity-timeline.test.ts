@@ -76,3 +76,25 @@ test("projection never mutates canonical blocks", () => {
   projectActivityTimeline(canonical)
   assert.deepEqual(canonical, snapshot)
 })
+
+test("inserting an earlier row preserves every existing message key", () => {
+  const existing = [
+    block("user", [part("text", "first")]),
+    block("assistant", [part("text", "answer")]),
+    block("user", [part("text", "second")]),
+  ]
+  const before = projectActivityTimeline(existing).map(row => row.key)
+  const inserted = block("user", [part("text", "inserted earlier")])
+  const after = projectActivityTimeline([inserted, ...existing]).map(row => row.key)
+
+  assert.deepEqual(after.slice(1), before)
+})
+
+test("extending an activity run preserves its mounted row identity", () => {
+  const first = block("assistant", [part("tool_use", "first")])
+  const before = projectActivityTimeline([first])[0].key
+  const continuation = block("assistant", [part("thinking", "continuation")])
+  const after = projectActivityTimeline([first, continuation])[0].key
+
+  assert.equal(after, before)
+})

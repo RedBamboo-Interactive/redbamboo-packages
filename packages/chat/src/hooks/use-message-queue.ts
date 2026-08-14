@@ -231,6 +231,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
       text,
       images,
       appearance: isStreamingRef.current ? "queue" : "message",
+      createdAt: new Date().toISOString(),
     }
     if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))
@@ -245,6 +246,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
       images,
       attachments,
       appearance: isStreamingRef.current ? "queue" : "message",
+      createdAt: new Date().toISOString(),
     }
     if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))

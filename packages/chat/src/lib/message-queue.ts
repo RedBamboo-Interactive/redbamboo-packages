@@ -18,6 +18,10 @@ export interface QueuedMessage {
   delivery?: "after-current" | "interrupt-current"
   messageUid?: string
   deliveredMessageUid?: string
+  /** Submission time used to place an optimistic idle bubble in the timeline. */
+  createdAt?: string
+  /** Canonical delivery time used when a waiting queue item becomes a message. */
+  deliveredAt?: string
   optimistic?: boolean
   /** A transport failure means the server may have admitted this turn despite no acknowledgement. */
   admissionUncertain?: boolean

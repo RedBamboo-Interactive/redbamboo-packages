@@ -128,20 +128,18 @@ export function ChatPanel(props: ChatPanelProps) {
     if (item) composerRef.current?.loadDraft(item.text, item.images, item.attachments)
   }, [messageQueue])
 
-  const renderQueuedGhosts = useCallback((items: QueuedMessage[]) => (
-    items.map(item => (
-      <QueuedMessageGhost
-        key={item.id}
-        item={item}
-        onCancel={messageQueue.cancel}
-        onEdit={handleEditQueued}
-        onSendNow={id => {
-          const item = messageQueue.queue.find(message => message.id === id)
-          if (item?.deliveryError) messageQueue.retry(id)
-          else if (!messageQueue.sendNow()) interrupt()
-        }}
-      />
-    ))
+  const renderQueuedGhost = useCallback((item: QueuedMessage) => (
+    <QueuedMessageGhost
+      key={`outgoing:${item.id}`}
+      item={item}
+      onCancel={messageQueue.cancel}
+      onEdit={handleEditQueued}
+      onSendNow={id => {
+        const current = messageQueue.queue.find(message => message.id === id)
+        if (current?.deliveryError) messageQueue.retry(id)
+        else if (!messageQueue.sendNow()) interrupt()
+      }}
+    />
   ), [messageQueue.cancel, messageQueue.queue, messageQueue.retry, messageQueue.sendNow, handleEditQueued, interrupt])
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -245,7 +243,18 @@ export function ChatPanel(props: ChatPanelProps) {
     })
   }, [])
 
-  useEffect(() => { scrollToEnd() }, [messages, isStreaming, scrollToEnd])
+  const outgoingLayoutKey = visibleOutgoing.map(item => (
+    `${item.id}:${item.appearance ?? "queue"}:${item.remoteState ?? "local"}`
+  )).join("\u0000")
+
+  // New transcript rows, status lines and outgoing queue bubbles are known
+  // during React's layout phase. Keep a pinned viewport at the real tail
+  // before the browser can emit a scroll event for the increased content
+  // height and incorrectly reinterpret that layout shift as user intent.
+  useLayoutEffect(() => {
+    if (!shouldAutoScroll.current || !scrollRef.current) return
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  }, [messages, isStreaming, outgoingLayoutKey])
 
   useEffect(() => {
     const content = contentRef.current
@@ -388,6 +397,33 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
   const timelineRows = projectActivityTimeline(visibleMessages, startIndex)
+  const inlineOutgoing = visibleOutgoing.filter(item => item.appearance === "message" || item.remoteState === "delivered")
+  const waitingOutgoing = visibleOutgoing.filter(item => item.appearance !== "message" && item.remoteState !== "delivered")
+  const inlineTimeline = [
+    ...timelineRows.map((row, sequence) => ({
+      kind: "message" as const,
+      key: `timeline:${row.key}`,
+      timestamp: Date.parse(row.block.timestamp),
+      sequence,
+      row,
+    })),
+    ...inlineOutgoing.map((item, index) => ({
+      kind: "outgoing" as const,
+      key: `outgoing:${item.id}`,
+      timestamp: Date.parse(item.deliveredAt ?? item.createdAt ?? ""),
+      sequence: timelineRows.length + index,
+      item,
+    })),
+  ].sort((left, right) => {
+    const leftTime = Number.isFinite(left.timestamp) ? left.timestamp : Number.MAX_SAFE_INTEGER
+    const rightTime = Number.isFinite(right.timestamp) ? right.timestamp : Number.MAX_SAFE_INTEGER
+    return leftTime - rightTime || left.sequence - right.sequence
+  })
+  const visualTimeline = [
+    ...inlineTimeline,
+    { kind: "status" as const, key: "streaming-status" },
+    ...waitingOutgoing.map(item => ({ kind: "outgoing" as const, key: `outgoing:${item.id}`, item })),
+  ]
 
   return (
     <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
@@ -412,7 +448,10 @@ export function ChatPanel(props: ChatPanelProps) {
                 <span className="h-px flex-1 bg-overlay-6" />
               </button>
             )}
-            {timelineRows.map((row) => {
+            {visualTimeline.map((visual) => {
+              if (visual.kind === "status") return <div key={visual.key}>{statusLine}</div>
+              if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
+              const row = visual.row
               const block = row.block
               const index = row.sourceIndices[row.sourceIndices.length - 1] ?? 0
               const isLastAssistant = row.sourceIndices.includes(lastAssistantIndex)
@@ -421,7 +460,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 : undefined
               return (
                 <ChatMessage
-                  key={row.key}
+                  key={visual.key}
                   block={block}
                   // Remote sends already animated once through their stable outgoing bubble.
                   // Canonical transcript reconciliation must never replay that entrance.
@@ -450,13 +489,6 @@ export function ChatPanel(props: ChatPanelProps) {
                 />
               )
             })}
-            {/* Keep every outgoing bridge in one React child list. CSS order
-                moves a genuine queue item above the status line when it becomes
-                a message without remounting it or replaying its animation. */}
-            <div className="flex flex-col">
-              {renderQueuedGhosts(visibleOutgoing)}
-              <div className="order-1">{statusLine}</div>
-            </div>
           </div>
         </div>
 

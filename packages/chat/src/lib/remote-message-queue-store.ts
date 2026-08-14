@@ -30,6 +30,8 @@ function queuedMessage(item: ChatQueuedItem, previous?: QueuedMessage): QueuedMe
     delivery: item.delivery,
     messageUid: item.messageUid,
     deliveredMessageUid: item.deliveredMessageUid ?? undefined,
+    createdAt: item.createdAt,
+    deliveredAt: item.completedAt ?? (item.state === "delivered" ? item.updatedAt : undefined),
   }
 }
 

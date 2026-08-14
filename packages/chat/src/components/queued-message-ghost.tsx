@@ -20,10 +20,11 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
   const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
   // An idle submission animates once as a normal message. A genuine queue item
   // becoming delivered keeps the same node and simply loses its queue styling.
-  const animateMessage = useRef(messageAppearance).current
+  const initialMessageAppearance = useRef(messageAppearance).current
+  const entranceClass = initialMessageAppearance ? "msg-enter-user" : "msg-enter-queue"
   return (
     <div
-      className={`mb-3 ${messageAppearance ? "order-0" : "order-2"} ${animateMessage ? "msg-enter-user" : ""}`}
+      className={`mb-3 ${entranceClass}`}
       data-slot={messageAppearance ? "outgoing-message" : "queued-message"}
       data-session-id={item.sessionId}
       data-queue-item-id={item.remoteId ?? item.id}

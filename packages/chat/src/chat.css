@@ -22,6 +22,15 @@
   animation: msg-in-ai 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
 }
 
+@keyframes msg-in-queue {
+  0% { opacity: 0; transform: translateY(4px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.msg-enter-queue {
+  animation: msg-in-queue 0.18s ease-out both;
+}
+
 .morph-spinner-wrap {
   display: inline-flex;
   align-items: center;

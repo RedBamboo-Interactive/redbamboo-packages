@@ -42,16 +42,19 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
   let activitySources: number[] = []
   let activityFirstBlock: MessageBlock | null = null
   let activityLastBlock: MessageBlock | null = null
-  let rowSequence = 0
+  let activityAnchor: string | null = null
 
   const flushActivity = () => {
-    if (!activityParts.length || !activityFirstBlock || !activityLastBlock) return
+    if (!activityParts.length || !activityFirstBlock || !activityLastBlock || !activityAnchor) return
     const sourceIndices = uniqueIndexes(activitySources)
     rows.push({
-      key: `activity:${activityFirstBlock.id}:${activityLastBlock.id}:${rowSequence++}`,
+      // Anchor the React identity to the first canonical part in this activity
+      // run. Appending activity or inserting an unrelated earlier row must not
+      // remount the frieze and replay its entrance animation.
+      key: `activity:${activityAnchor}`,
       kind: "activity",
       block: {
-        id: `activity:${activityFirstBlock.id}:${activityLastBlock.id}:${rowSequence}`,
+        id: `activity:${activityAnchor}`,
         role: "assistant",
         parts: activityParts,
         timestamp: activityFirstBlock.timestamp,
@@ -66,6 +69,7 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
     activitySources = []
     activityFirstBlock = null
     activityLastBlock = null
+    activityAnchor = null
   }
 
   for (let localIndex = 0; localIndex < blocks.length; localIndex++) {
@@ -77,7 +81,7 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
     if (block.role === "user") {
       flushActivity()
       rows.push({
-        key: `message:${block.id}:${rowSequence++}`,
+        key: `message:${block.id}`,
         kind: "message",
         block,
         sourceIndices: [sourceIndex],
@@ -94,7 +98,7 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
     const flushContent = () => {
       if (!contentParts.length) return
       rows.push({
-        key: `message:${block.id}:${contentSegment++}:${rowSequence++}`,
+        key: `message:${block.id}:${contentSegment++}`,
         kind: "message",
         block: { ...block, parts: contentParts },
         sourceIndices: [sourceIndex],
@@ -105,7 +109,8 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
       contentParts = []
     }
 
-    for (const part of block.parts) {
+    for (let partIndex = 0; partIndex < block.parts.length; partIndex++) {
+      const part = block.parts[partIndex]
       if (isVisibleContent(part)) {
         flushActivity()
         contentParts.push(part)
@@ -118,6 +123,7 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
 
       flushContent()
       activityFirstBlock ??= block
+      activityAnchor ??= `${block.id}:${partIndex}`
       activityLastBlock = block
       activityParts.push(part)
       activitySources.push(sourceIndex)
