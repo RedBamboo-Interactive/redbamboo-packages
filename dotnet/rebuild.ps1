@@ -33,7 +33,20 @@ if ($procs) {
 }
 
 foreach ($extra in $ExtraKill) {
-    Invoke-Expression $extra 2>$null
+    # Extra cleanup is intentionally best-effort. Native tools can write harmless
+    # diagnostics to stderr even when the cleanup itself succeeds (WSL does this for
+    # stale Windows PATH entries). Under the script-wide Stop preference PowerShell
+    # promotes those diagnostics to terminating NativeCommandError records and used to
+    # abort the real build before it started.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        Invoke-Expression $extra 2>$null
+    } catch {
+        Write-Host "  WARNING: Optional cleanup failed: $($_.Exception.Message)" -ForegroundColor DarkYellow
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
 }
 
 # Wait for port to free up
