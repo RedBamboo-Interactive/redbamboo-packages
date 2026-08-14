@@ -6,6 +6,7 @@ import {
   getRemoteMessageQueueStore,
   refreshRemoteMessageQueue,
   resetRemoteMessageQueueStores,
+  settleRemoteMessageQueue,
 } from "./remote-message-queue-store.ts"
 
 const empty: ChatQueueSnapshot = {
@@ -78,5 +79,96 @@ test("a terminal receipt reconciles an optimistic outbox entry by client id", as
   connectRemoteMessageQueue("session-a", transport)
   await refreshRemoteMessageQueue("session-a")
 
+  assert.deepEqual(store.getSnapshot().queue, [{
+    id: "client-1",
+    remoteId: "q_server",
+    clientId: "client-1",
+    sessionId: "session-a",
+    text: "hello",
+    attachments: undefined,
+    deliveryError: undefined,
+    remoteState: "delivered",
+    appearance: "message",
+    delivery: "after-current",
+    messageUid: "m1",
+    deliveredMessageUid: undefined,
+  }])
+
+  settleRemoteMessageQueue("session-a", ["m1"])
   assert.deepEqual(store.getSnapshot().queue, [])
+})
+
+test("server acknowledgement preserves the optimistic visual identity and idle appearance", async () => {
+  resetRemoteMessageQueueStores()
+  const store = getRemoteMessageQueueStore("session-a")
+  store.update(() => [{
+    id: "client-1",
+    sessionId: "session-a",
+    text: "hello",
+    optimistic: true,
+    appearance: "message",
+  }])
+  let state: "pending" | "delivering" = "pending"
+  const transport: ChatQueueTransport = {
+    list: async () => ({
+      items: [{
+        id: "q_server",
+        clientId: "client-1",
+        sessionId: "session-a",
+        sequence: 1,
+        state,
+        delivery: "after-current",
+        displayContent: "hello",
+        messageUid: "m1",
+        createdAt: "2026-08-14T20:00:00Z",
+        updatedAt: "2026-08-14T20:00:00Z",
+        attemptCount: state === "pending" ? 0 : 1,
+      }],
+      queue: { depth: 1, state: state === "pending" ? "ready" : "delivering" },
+    }),
+    cancel: async () => { throw new Error("unused") },
+    retry: async () => { throw new Error("unused") },
+    sendNow: async () => {},
+  }
+
+  connectRemoteMessageQueue("session-a", transport)
+  await refreshRemoteMessageQueue("session-a")
+  assert.equal(store.getSnapshot().queue[0]?.id, "client-1")
+  assert.equal(store.getSnapshot().queue[0]?.remoteId, "q_server")
+  assert.equal(store.getSnapshot().queue[0]?.appearance, "message")
+
+  state = "delivering"
+  await refreshRemoteMessageQueue("session-a")
+  assert.equal(store.getSnapshot().queue[0]?.id, "client-1")
+  assert.equal(store.getSnapshot().queue[0]?.remoteState, "delivering")
+  assert.equal(store.getSnapshot().queue[0]?.appearance, "message")
+})
+
+test("an identical authoritative refresh does not publish another visual revision", async () => {
+  resetRemoteMessageQueueStores()
+  const item = {
+    id: "q_server",
+    sessionId: "session-a",
+    sequence: 1,
+    state: "pending" as const,
+    delivery: "after-current" as const,
+    displayContent: "stable",
+    messageUid: "m1",
+    createdAt: "2026-08-14T20:00:00Z",
+    updatedAt: "2026-08-14T20:00:00Z",
+    attemptCount: 0,
+  }
+  const transport: ChatQueueTransport = {
+    list: async () => ({ items: [item], queue: { depth: 1, state: "ready" } }),
+    cancel: async () => item,
+    retry: async () => item,
+    sendNow: async () => {},
+  }
+  connectRemoteMessageQueue("session-a", transport)
+  await refreshRemoteMessageQueue("session-a")
+  const revision = getRemoteMessageQueueStore("session-a").getSnapshot().revision
+
+  await refreshRemoteMessageQueue("session-a")
+
+  assert.equal(getRemoteMessageQueueStore("session-a").getSnapshot().revision, revision)
 })

@@ -7,23 +7,24 @@ const migratingSessions = new Set<string>()
  * Keep an input recoverable until the server acknowledges durable admission.
  * The write intentionally happens before the submit promise is created.
  */
-export async function admitWithOutbox(
+export async function admitWithOutbox<T>(
   storage: StorageLike | null,
   sessionId: string,
   entry: QueuedMessage,
-  submit: () => void | Promise<unknown>,
+  submit: () => T | Promise<T>,
   now = Date.now(),
-): Promise<void> {
+): Promise<T> {
   if (storage) {
     saveQueue(storage, sessionId, [
       ...loadQueue(storage, sessionId).filter(item => item.id !== entry.id),
       entry,
     ], now)
   }
-  await submit()
+  const result = await submit()
   if (storage) {
     saveQueue(storage, sessionId, loadQueue(storage, sessionId).filter(item => item.id !== entry.id), Date.now())
   }
+  return result
 }
 
 /** Migrate a legacy browser queue once per session, always releasing the migration lease. */

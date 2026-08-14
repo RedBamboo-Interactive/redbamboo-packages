@@ -95,6 +95,22 @@ export function ChatPanel(props: ChatPanelProps) {
     },
   })
 
+  const canonicalUserUids = useMemo(() => new Set(
+    messages.filter(message => message.role === "user").map(message => String(message.id)),
+  ), [messages])
+  const settledUids = useMemo(() => messageQueue.queue.flatMap(item => {
+    const uid = item.deliveredMessageUid ?? item.messageUid
+    return item.remoteState === "delivered" && uid && canonicalUserUids.has(uid) ? [uid] : []
+  }), [canonicalUserUids, messageQueue.queue])
+  const settledKey = settledUids.join("\u0000")
+  useLayoutEffect(() => {
+    if (settledUids.length > 0) messageQueue.settleDelivered(settledUids)
+  }, [messageQueue.settleDelivered, settledKey])
+  const visibleOutgoing = useMemo(() => messageQueue.queue.filter(item => {
+    const uid = item.deliveredMessageUid ?? item.messageUid
+    return !uid || !canonicalUserUids.has(uid)
+  }), [canonicalUserUids, messageQueue.queue])
+
   const enqueueMessage = useCallback((content: string, images?: ImageAttachment[], options?: SendOptions) => {
     const prepared = prepareMessage({ content, images })
     if (prepared.attachments?.length) messageQueue.addInput(prepared.content, prepared.attachments, prepared.images, options)
@@ -126,7 +142,7 @@ export function ChatPanel(props: ChatPanelProps) {
         }}
       />
     ))
-  ), [messageQueue.cancel, handleEditQueued, interrupt])
+  ), [messageQueue.cancel, messageQueue.queue, messageQueue.retry, messageQueue.sendNow, handleEditQueued, interrupt])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -355,7 +371,7 @@ export function ChatPanel(props: ChatPanelProps) {
     />
   )
 
-  if (messages.length === 0 && !header) {
+  if (messages.length === 0 && !header && visibleOutgoing.length === 0 && !isStreaming) {
     return (
       <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 ${className || ""}`}>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-text-muted">
@@ -363,11 +379,6 @@ export function ChatPanel(props: ChatPanelProps) {
             <i className="ph ph-terminal-window text-3xl mx-auto mb-3 opacity-30" />
             <p className="text-sm">Send a message to get started</p>
           </div>
-          {messageQueue.queue.length > 0 && (
-            <div className="w-full max-w-md px-4">
-              {renderQueuedGhosts(messageQueue.queue)}
-            </div>
-          )}
         </div>
         {footer}
         {composerEl}
@@ -412,6 +423,9 @@ export function ChatPanel(props: ChatPanelProps) {
                 <ChatMessage
                   key={row.key}
                   block={block}
+                  // Remote sends already animated once through their stable outgoing bubble.
+                  // Canonical transcript reconciliation must never replay that entrance.
+                  animateEntrance={block.role !== "user" || !messageQueue.remote}
                   blockIndex={index}
                   isStreaming={isStreaming && isLastAssistant}
                   isLastAssistantBlock={isLastAssistant}
@@ -436,8 +450,13 @@ export function ChatPanel(props: ChatPanelProps) {
                 />
               )
             })}
-            {statusLine}
-            {renderQueuedGhosts(messageQueue.queue)}
+            {/* Keep every outgoing bridge in one React child list. CSS order
+                moves a genuine queue item above the status line when it becomes
+                a message without remounting it or replaying its animation. */}
+            <div className="flex flex-col">
+              {renderQueuedGhosts(visibleOutgoing)}
+              <div className="order-1">{statusLine}</div>
+            </div>
           </div>
         </div>
 

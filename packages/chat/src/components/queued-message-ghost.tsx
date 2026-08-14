@@ -1,3 +1,4 @@
+import { useRef } from "react"
 import type { QueuedMessage } from "../lib/message-queue"
 import type { ImageAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
@@ -16,21 +17,27 @@ interface QueuedMessageGhostProps {
  * The whole point of the queue is that this is never invisible.
  */
 export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: QueuedMessageGhostProps) {
+  const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
+  // An idle submission animates once as a normal message. A genuine queue item
+  // becoming delivered keeps the same node and simply loses its queue styling.
+  const animateMessage = useRef(messageAppearance).current
   return (
     <div
-      className="mb-3"
-      data-slot="queued-message"
+      className={`mb-3 ${messageAppearance ? "order-0" : "order-2"} ${animateMessage ? "msg-enter-user" : ""}`}
+      data-slot={messageAppearance ? "outgoing-message" : "queued-message"}
       data-session-id={item.sessionId}
-      data-queue-item-id={item.id}
+      data-queue-item-id={item.remoteId ?? item.id}
       data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
     >
       <div className="flex justify-end">
         <div
-          onClick={() => { if (!item.admissionUncertain) onEdit(item.id) }}
+          onClick={() => { if (!messageAppearance && !item.admissionUncertain) onEdit(item.id) }}
           data-chat-user-bubble
-          className={`max-w-[80%] border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90 ${item.admissionUncertain ? "cursor-default" : "cursor-pointer"}`}
+          className={messageAppearance
+            ? "relative max-w-[80%] bg-overlay-10 px-4 py-2.5"
+            : `max-w-[80%] border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90 ${item.admissionUncertain ? "cursor-default" : "cursor-pointer"}`}
           style={USER_BUBBLE_SHAPE_STYLE}
-          title={item.admissionUncertain ? "Retry to verify whether the server admitted this message" : "Click to edit"}
+          title={messageAppearance ? undefined : item.admissionUncertain ? "Retry to verify whether the server admitted this message" : "Click to edit"}
         >
           {item.images && item.images.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
@@ -56,10 +63,10 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
           {item.text && <p className="text-sm whitespace-pre-wrap break-words font-serif">{item.text}</p>}
         </div>
       </div>
-      <div className="flex items-center justify-end gap-1 mt-1">
+      {!messageAppearance && <div className="flex items-center justify-end gap-1 mt-1">
         <span className={`text-[10px] italic mr-1 ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
           {item.deliveryError
-            || (item.remoteState === "delivering" ? "Delivering..." : item.delivery === "interrupt-current" ? "Queued, interruption requested" : "Queued, sends after this turn")}
+            || (item.delivery === "interrupt-current" ? "Queued, interruption requested" : "Queued, sends after this turn")}
         </span>
         <button
           onClick={(e) => { e.stopPropagation(); onSendNow(item.id) }}
@@ -79,7 +86,7 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
             <i className="ph-bold ph-x text-[10px]" />
           </button>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

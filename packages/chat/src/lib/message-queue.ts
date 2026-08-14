@@ -1,7 +1,10 @@
 import type { ImageAttachment, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
+  /** Stable presentation identity. For remote items this remains the client id across acknowledgement. */
   id: string
+  /** Canonical server queue id used by queue mutation APIs. */
+  remoteId?: string
   /** Server-returned idempotency key used to replace an uncertain local outbox ghost. */
   clientId?: string
   sessionId?: string
@@ -9,9 +12,12 @@ export interface QueuedMessage {
   images?: ImageAttachment[]
   attachments?: UploadedAttachment[]
   deliveryError?: string
-  remoteState?: "pending" | "delivering" | "failed"
+  remoteState?: "pending" | "delivering" | "failed" | "delivered"
+  /** Human presentation. Idle submissions look like messages; genuinely waiting work looks queued. */
+  appearance?: "message" | "queue"
   delivery?: "after-current" | "interrupt-current"
   messageUid?: string
+  deliveredMessageUid?: string
   optimistic?: boolean
   /** A transport failure means the server may have admitted this turn despite no acknowledgement. */
   admissionUncertain?: boolean

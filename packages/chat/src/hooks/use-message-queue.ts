@@ -8,6 +8,7 @@ import {
   getRemoteMessageQueueStore,
   getRemoteMessageQueueTransport,
   refreshRemoteMessageQueue,
+  settleRemoteMessageQueue,
 } from "../lib/remote-message-queue-store"
 import { admitWithOutbox, migrateLegacyOutbox } from "../lib/remote-message-outbox"
 
@@ -183,8 +184,22 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
         idempotencyKey: entry.id,
         displayContent: entry.text,
       }),
-    ).then(async () => {
-      store.update(previous => previous.filter(item => item.id !== entry.id))
+    ).then(async admission => {
+      const result = admission as {
+        disposition?: "queued" | "delivered"
+        queueItemId?: string | null
+        messageUid?: string | null
+        item?: { id?: string; messageUid?: string; deliveredMessageUid?: string | null; state?: QueuedMessage["remoteState"] } | null
+      } | null
+      store.update(previous => previous.map(item => item.id !== entry.id ? item : {
+        ...item,
+        remoteId: result?.item?.id ?? result?.queueItemId ?? item.remoteId,
+        messageUid: result?.item?.messageUid ?? result?.messageUid ?? item.messageUid,
+        deliveredMessageUid: result?.item?.deliveredMessageUid ?? undefined,
+        remoteState: result?.disposition === "delivered" ? "delivered" : result?.item?.state ?? item.remoteState,
+        appearance: result?.disposition === "delivered" ? "message" : item.appearance,
+        optimistic: false,
+      }))
       await refreshRemoteMessageQueue(sessionId)
     }).catch(async error => {
       try {
@@ -195,6 +210,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
       const definitive = typeof (error as { status?: unknown } | null)?.status === "number"
       const failed = {
         ...entry,
+        appearance: "queue" as const,
         optimistic: true,
         admissionUncertain: !definitive,
         deliveryError: definitive ? message : `Admission unconfirmed: ${message}`,
@@ -209,14 +225,27 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     // Queued into a quiet session: this drain isn't waiting on anything, so it
     // skips the settle. Re-armed by the effect above if a turn starts first.
     if (!isStreamingRef.current) sawStreamingRef.current = false
-    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, sessionId: sessionId ?? undefined, text, images }
+    const entry: QueuedMessage = {
+      id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      sessionId: sessionId ?? undefined,
+      text,
+      images,
+      appearance: isStreamingRef.current ? "queue" : "message",
+    }
     if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))
   }, [store, remote, submitRemote, sessionId])
 
   const addInput = useCallback((text: string, attachments: UploadedAttachment[], images?: ImageAttachment[], options?: SendOptions) => {
     if (!isStreamingRef.current) sawStreamingRef.current = false
-    const entry: QueuedMessage = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`, sessionId: sessionId ?? undefined, text, images, attachments }
+    const entry: QueuedMessage = {
+      id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      sessionId: sessionId ?? undefined,
+      text,
+      images,
+      attachments,
+      appearance: isStreamingRef.current ? "queue" : "message",
+    }
     if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))
   }, [store, remote, submitRemote, sessionId])
@@ -226,7 +255,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     if (remote && sessionId) {
       if (!item?.optimistic) {
         const transport = getRemoteMessageQueueTransport(sessionId)
-        if (transport) void transport.cancel(id).then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
+        if (transport) void transport.cancel(item?.remoteId ?? id).then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
       }
       const storage = getStorage()
       if (storage) saveQueue(storage, sessionId, loadQueue(storage, sessionId).filter(message => message.id !== id), Date.now())
@@ -241,7 +270,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     if (item) {
       if (remote && sessionId && !item.optimistic) {
         const transport = getRemoteMessageQueueTransport(sessionId)
-        if (transport) void transport.cancel(id).catch(() => refreshRemoteMessageQueue(sessionId))
+        if (transport) void transport.cancel(item.remoteId ?? id).catch(() => refreshRemoteMessageQueue(sessionId))
       }
       store.update(previous => cancelEntry(previous, id))
     }
@@ -256,7 +285,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
         return
       }
       const transport = getRemoteMessageQueueTransport(sessionId)
-      if (transport) void transport.retry(id).then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
+      if (transport) void transport.retry(item?.remoteId ?? id).then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
       return
     }
     store.update(previous => previous.map(message => message.id === id ? { ...message, deliveryError: undefined } : message))
@@ -270,5 +299,9 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     return true
   }, [remote, sessionId])
 
-  return { queue, add, addInput, cancel, pullback, retry, sendNow, remote }
+  const settleDelivered = useCallback((messageUids: Iterable<string>) => {
+    if (remote && sessionId) settleRemoteMessageQueue(sessionId, messageUids)
+  }, [remote, sessionId])
+
+  return { queue, add, addInput, cancel, pullback, retry, sendNow, settleDelivered, remote }
 }

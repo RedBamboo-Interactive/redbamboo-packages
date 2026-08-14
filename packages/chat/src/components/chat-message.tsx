@@ -185,6 +185,7 @@ export function extractPlanFileContent(messages: MessageBlock[]): string | null 
 
 interface ChatMessageProps {
   block: MessageBlock
+  animateEntrance?: boolean
   isStreaming?: boolean
   isLastAssistantBlock?: boolean
   permissionMode?: string
@@ -226,6 +227,7 @@ interface ChatMessageProps {
 
 export const ChatMessage = memo(function ChatMessage({
   block,
+  animateEntrance = true,
   isStreaming,
   isLastAssistantBlock,
   permissionMode,
@@ -323,7 +325,7 @@ export const ChatMessage = memo(function ChatMessage({
     }
 
     return (
-      <div className="mb-3 msg-enter-user group/msg relative" data-actions={actionsOpen || undefined} {...touchProps}>
+      <div className={`mb-3 ${animateEntrance ? "msg-enter-user" : ""} group/msg relative`} data-actions={actionsOpen || undefined} {...touchProps}>
         {contextData && (
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
