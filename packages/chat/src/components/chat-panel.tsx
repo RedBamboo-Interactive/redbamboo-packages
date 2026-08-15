@@ -19,7 +19,7 @@ import { MediaLightbox } from "./streaming-text"
 // pill) reveals CHUNK more; re-pinning to the bottom releases them again.
 const WINDOW = 40
 const CHUNK = 80
-const CONVERSATION_ENTRANCE_STAGGER_MS = 80
+const CONVERSATION_ENTRANCE_STAGGER_MS = 180
 
 function hasExitPlanPart(block: MessageBlockType): boolean {
   return block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
@@ -358,6 +358,34 @@ export function ChatPanel(props: ChatPanelProps) {
     )
   }
 
+  // Conversation history is already snapped to the tail by the earlier
+  // layout effect. Measure the rows that actually occupy this viewport once,
+  // before paint, so the entrance wave follows their physical position rather
+  // than spending nearly all of its timing budget on off-screen history.
+  useLayoutEffect(() => {
+    if (!isConversationEntrance) return
+    const scroller = scrollRef.current
+    const content = contentRef.current
+    if (!scroller || !content) return
+
+    const rows = Array.from(content.querySelectorAll<HTMLElement>("[data-chat-entrance-row]"))
+    const viewport = scroller.getBoundingClientRect()
+    const measured = rows.map(row => ({ row, rect: row.getBoundingClientRect() }))
+    const visible = measured.filter(({ rect }) => rect.bottom > viewport.top && rect.top < viewport.bottom)
+    if (visible.length === 0) return
+
+    const centers = visible.map(({ rect }) => (rect.top + rect.bottom) / 2)
+    const topCenter = Math.min(...centers)
+    const bottomCenter = Math.max(...centers)
+    const span = Math.max(1, bottomCenter - topCenter)
+
+    for (const { row, rect } of measured) {
+      const center = (rect.top + rect.bottom) / 2
+      const progress = Math.max(0, Math.min(1, (bottomCenter - center) / span))
+      row.style.setProperty("--msg-enter-delay", `${Math.round(progress * CONVERSATION_ENTRANCE_STAGGER_MS)}ms`)
+    }
+  }, [entranceSessionKey, isConversationEntrance])
+
   const inlineAction = renderComposerInlineAction ?? defaultVoiceAction ?? undefined
 
   const statusLine = renderStatusLine
@@ -439,14 +467,6 @@ export function ChatPanel(props: ChatPanelProps) {
     { kind: "status" as const, key: "streaming-status" },
     ...waitingOutgoing.map(item => ({ kind: "outgoing" as const, key: `outgoing:${item.id}`, item })),
   ]
-  const entranceKeys = visualTimeline.flatMap(visual => visual.kind === "message" ? [visual.key] : [])
-  const entranceDelayByKey = new Map(entranceKeys.map((key, index) => [
-    key,
-    entranceKeys.length <= 1
-      ? 0
-      : Math.round((entranceKeys.length - 1 - index) * CONVERSATION_ENTRANCE_STAGGER_MS / (entranceKeys.length - 1)),
-  ]))
-
   return (
     <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
       {header && <div className="shrink-0">{header}</div>}
@@ -489,7 +509,6 @@ export function ChatPanel(props: ChatPanelProps) {
                   // already animated. Historical user rows should enter beside
                   // assistant content whenever a conversation is revealed.
                   animateEntrance={isConversationEntrance || !reconcilesAnimatedOutgoing}
-                  entranceDelayMs={isConversationEntrance ? entranceDelayByKey.get(visual.key) ?? 0 : 0}
                   blockIndex={index}
                   isStreaming={isStreaming && isLastAssistant}
                   isLastAssistantBlock={isLastAssistant}

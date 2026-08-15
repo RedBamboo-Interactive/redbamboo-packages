@@ -161,8 +161,6 @@ export function extractPlanFileContent(messages: MessageBlock[]): string | null 
 interface ChatMessageProps {
   block: MessageBlock
   animateEntrance?: boolean
-  /** Mount-time delay for a reconstructed conversation entrance. */
-  entranceDelayMs?: number
   isStreaming?: boolean
   isLastAssistantBlock?: boolean
   permissionMode?: string
@@ -205,7 +203,6 @@ interface ChatMessageProps {
 export const ChatMessage = memo(function ChatMessage({
   block,
   animateEntrance = true,
-  entranceDelayMs = 0,
   isStreaming,
   isLastAssistantBlock,
   permissionMode,
@@ -234,8 +231,11 @@ export const ChatMessage = memo(function ChatMessage({
   // outgoing bridge immediately after this row mounts; changing the prop then
   // must not start (or cancel) an animation on an already-present message.
   const animateOnMount = useRef(animateEntrance).current
-  const entranceDelayOnMount = useRef(entranceDelayMs).current
-  const entranceStyle = { "--msg-enter-delay": `${entranceDelayOnMount}ms` } as React.CSSProperties
+  const entranceStyle = useRef({ "--msg-enter-delay": "0ms" } as React.CSSProperties).current
+  const entranceRowProps = {
+    "data-chat-entrance-row": animateOnMount ? "" : undefined,
+    style: entranceStyle,
+  }
   const environment = useUiEnvironment()
   const extraNode = showActions ? (extra ?? renderExtra?.(block, blockIndex)) : null
   const sideActionsNode = showActions ? (sideActions ?? renderSideActions?.(block, blockIndex)) : null
@@ -290,12 +290,12 @@ export const ChatMessage = memo(function ChatMessage({
       .replace(/<nova-prior-messages?[\s\S]*?<\/nova-prior-messages?>\s*/g, "")
     const notification = parseTaskNotification(rawContent)
     if (notification) {
-      return <TaskNotificationSquare notification={notification} />
+      return <div {...entranceRowProps}><TaskNotificationSquare notification={notification} /></div>
     }
 
     const novaEvent = parseNovaEvent(rawContent)
     if (novaEvent) {
-      return <NovaEventSquare event={novaEvent} />
+      return <div {...entranceRowProps}><NovaEventSquare event={novaEvent} /></div>
     }
 
     const contextData = parseContextFromMessage(rawContent)
@@ -305,11 +305,11 @@ export const ChatMessage = memo(function ChatMessage({
     const attachments = block.parts.flatMap(part => part.attachments ?? [])
 
     if (contextData && !content && (!nonContextImages || nonContextImages.length === 0) && attachments.length === 0) {
-      return <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
+      return <div {...entranceRowProps}><ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} /></div>
     }
 
     return (
-      <div className={`mb-3 ${animateOnMount ? "msg-enter-user" : ""} group/msg relative`} style={entranceStyle} data-actions={actionsOpen || undefined} {...touchProps}>
+      <div className={`mb-3 ${animateOnMount ? "msg-enter-user" : ""} group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
         {contextData && (
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
@@ -391,7 +391,7 @@ export const ChatMessage = memo(function ChatMessage({
   }
 
   return (
-    <div className={`${compactAfter ? "mb-0" : "mb-4"} min-w-0 group/msg relative`} style={entranceStyle} data-actions={actionsOpen || undefined} {...touchProps}>
+    <div className={`${compactAfter ? "mb-0" : "mb-4"} min-w-0 group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
       <div className="relative max-w-full min-w-0 overflow-hidden">
         {senderName && (
           <div className="flex items-center gap-1.5 mb-1.5">
