@@ -94,6 +94,7 @@ test("a terminal receipt reconciles an optimistic outbox entry by client id", as
     deliveredMessageUid: undefined,
     createdAt: "2026-08-14T20:00:00Z",
     deliveredAt: "2026-08-14T20:00:01Z",
+    timelineAt: "2026-08-14T20:00:01Z",
   }])
 
   settleRemoteMessageQueue("session-a", ["m1"])
@@ -109,6 +110,7 @@ test("server acknowledgement preserves the optimistic visual identity and idle a
     text: "hello",
     optimistic: true,
     appearance: "message",
+    timelineAt: "2026-08-14T19:59:59Z",
   }])
   let state: "pending" | "delivering" = "pending"
   const transport: ChatQueueTransport = {
@@ -138,6 +140,7 @@ test("server acknowledgement preserves the optimistic visual identity and idle a
   assert.equal(store.getSnapshot().queue[0]?.id, "client-1")
   assert.equal(store.getSnapshot().queue[0]?.remoteId, "q_server")
   assert.equal(store.getSnapshot().queue[0]?.appearance, "message")
+  assert.equal(store.getSnapshot().queue[0]?.timelineAt, "2026-08-14T19:59:59Z")
 
   state = "delivering"
   await refreshRemoteMessageQueue("session-a")
@@ -213,4 +216,5 @@ test("a delivered receipt carries the canonical time needed for timeline orderin
 
   assert.equal(store.getSnapshot().queue[0]?.appearance, "message")
   assert.equal(store.getSnapshot().queue[0]?.deliveredAt, item.completedAt)
+  assert.equal(store.getSnapshot().queue[0]?.timelineAt, item.completedAt)
 })

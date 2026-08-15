@@ -24,6 +24,9 @@ const events = (...keys: string[]): MessageBlock => ({
 const token = (content: string): ChatEvent =>
   ({ type: "text", content, toolName: null, toolInput: null, toolResult: null, messageId: null, messageUid: null })
 
+const turnToken = (content: string, messageUid: string): ChatEvent =>
+  ({ ...token(content), messageUid })
+
 const status = (content: string | null): ChatEvent =>
   ({ type: "status", content, toolName: null, toolInput: null, toolResult: null, messageId: null, messageUid: null })
 
@@ -134,6 +137,35 @@ test("consecutive text tokens concatenate into one part", () => {
   messages = processStreamEvent(messages, true, token("c")).messages
   assert.equal(messages[1].parts.filter((p) => p.type === "text").length, 1)
   assert.equal(text(messages[1]), "abc")
+})
+
+test("a new turn uid opens after settled assistant history even before its user record arrives", () => {
+  const previous: MessageBlock = {
+    id: "turn-1",
+    role: "assistant",
+    parts: [{ type: "text", content: "Previous answer", isPartial: false }],
+    timestamp: "2026-08-15T10:00:00Z",
+    metadata: { messageUid: "turn-1" },
+  }
+
+  const messages = processStreamEvent(
+    [user("previous question"), previous],
+    true,
+    turnToken("New answer", "turn-2"),
+  ).messages
+
+  assert.equal(messages.length, 3)
+  assert.equal(text(messages[1]), "Previous answer")
+  assert.equal(text(messages[2]), "New answer")
+  assert.equal(messages[2].metadata?.messageUid, "turn-2")
+})
+
+test("events with the same turn uid continue the open assistant block", () => {
+  let messages = processStreamEvent([user("question")], true, turnToken("New ", "turn-2")).messages
+  messages = processStreamEvent(messages, true, turnToken("answer", "turn-2")).messages
+
+  assert.equal(messages.length, 2)
+  assert.equal(text(messages[1]), "New answer")
 })
 
 // Regression coverage for the interrupt/kill/resume sequence: an SSE ack that

@@ -198,6 +198,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
         deliveredMessageUid: result?.item?.deliveredMessageUid ?? undefined,
         remoteState: result?.disposition === "delivered" ? "delivered" : result?.item?.state ?? item.remoteState,
         appearance: result?.disposition === "delivered" ? "message" : item.appearance,
+        timelineAt: item.timelineAt ?? (result?.disposition === "delivered" ? new Date().toISOString() : undefined),
         optimistic: false,
       }))
       await refreshRemoteMessageQueue(sessionId)
@@ -225,13 +226,16 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
     // Queued into a quiet session: this drain isn't waiting on anything, so it
     // skips the settle. Re-armed by the effect above if a turn starts first.
     if (!isStreamingRef.current) sawStreamingRef.current = false
+    const createdAt = new Date().toISOString()
+    const immediate = !isStreamingRef.current
     const entry: QueuedMessage = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       sessionId: sessionId ?? undefined,
       text,
       images,
-      appearance: isStreamingRef.current ? "queue" : "message",
-      createdAt: new Date().toISOString(),
+      appearance: immediate ? "message" : "queue",
+      createdAt,
+      timelineAt: immediate ? createdAt : undefined,
     }
     if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))
@@ -239,14 +243,17 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
 
   const addInput = useCallback((text: string, attachments: UploadedAttachment[], images?: ImageAttachment[], options?: SendOptions) => {
     if (!isStreamingRef.current) sawStreamingRef.current = false
+    const createdAt = new Date().toISOString()
+    const immediate = !isStreamingRef.current
     const entry: QueuedMessage = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       sessionId: sessionId ?? undefined,
       text,
       images,
       attachments,
-      appearance: isStreamingRef.current ? "queue" : "message",
-      createdAt: new Date().toISOString(),
+      appearance: immediate ? "message" : "queue",
+      createdAt,
+      timelineAt: immediate ? createdAt : undefined,
     }
     if (remote) { submitRemote(entry, options); return }
     store.update(previous => enqueue(previous, entry))

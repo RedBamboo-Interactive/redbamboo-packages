@@ -209,7 +209,25 @@ function closeQuestion(question: QuestionState): QuestionState {
 
 function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] {
   let msgs = [...messages]
-  const idx = streamTargetIndex(msgs)
+  let idx = streamTargetIndex(msgs)
+  const incomingTurnUid = event.messageUid || null
+
+  if (idx !== -1 && incomingTurnUid) {
+    const target = msgs[idx]
+    const targetTurnUid = typeof target.metadata?.messageUid === "string"
+      ? target.metadata.messageUid
+      : null
+    const targetIsOpen = target.parts.some(part => part.isPartial)
+
+    // Transcript refresh can lag the live stream: the first event for a new
+    // turn may arrive while the previous assistant block is still the tail.
+    // A provider-neutral uid is the authoritative turn boundary. For legacy
+    // uid-less blocks, a finalized tail is likewise previous-turn history;
+    // only an actually open partial is safe to extend.
+    if ((targetTurnUid && targetTurnUid !== incomingTurnUid) || (!targetTurnUid && !targetIsOpen)) {
+      idx = -1
+    }
+  }
   let lastBlock: MessageBlock
 
   if (idx === -1) {

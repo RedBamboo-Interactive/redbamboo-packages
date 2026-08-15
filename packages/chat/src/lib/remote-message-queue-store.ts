@@ -17,6 +17,7 @@ function sameMessage(left: QueuedMessage, right: QueuedMessage): boolean {
 }
 
 function queuedMessage(item: ChatQueuedItem, previous?: QueuedMessage): QueuedMessage {
+  const deliveredAt = item.completedAt ?? (item.state === "delivered" ? item.updatedAt : undefined)
   return {
     id: item.clientId ?? previous?.id ?? item.id,
     remoteId: item.id,
@@ -31,7 +32,8 @@ function queuedMessage(item: ChatQueuedItem, previous?: QueuedMessage): QueuedMe
     messageUid: item.messageUid,
     deliveredMessageUid: item.deliveredMessageUid ?? undefined,
     createdAt: item.createdAt,
-    deliveredAt: item.completedAt ?? (item.state === "delivered" ? item.updatedAt : undefined),
+    deliveredAt,
+    timelineAt: previous?.timelineAt ?? (item.state === "delivered" ? deliveredAt : undefined),
   }
 }
 

@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { enqueue, cancel, coalesce, shouldDrain, drainStep, type QueuedMessage } from "./message-queue.ts"
+import { enqueue, cancel, coalesce, queuedMessageTimelineTimestamp, shouldDrain, drainStep, type QueuedMessage } from "./message-queue.ts"
 
 const msg = (id: string, text: string, images?: QueuedMessage["images"]): QueuedMessage => ({ id, text, images })
 
@@ -15,6 +15,26 @@ test("cancel removes only the matching entry", () => {
   const queue = [msg("a", "one"), msg("b", "two"), msg("c", "three")]
   assert.deepEqual(cancel(queue, "b").map(m => m.id), ["a", "c"])
   assert.deepEqual(cancel(queue, "missing").map(m => m.id), ["a", "b", "c"], "unknown id is a no-op")
+})
+
+test("timeline ordering keeps immediate sends at submission and queued sends at delivery", () => {
+  const immediate = {
+    id: "immediate",
+    text: "now",
+    createdAt: "2026-08-15T10:00:00Z",
+    deliveredAt: "2026-08-15T10:00:02Z",
+    timelineAt: "2026-08-15T10:00:00Z",
+  }
+  const queued = {
+    id: "queued",
+    text: "later",
+    createdAt: "2026-08-15T10:00:01Z",
+    deliveredAt: "2026-08-15T10:01:00Z",
+    timelineAt: "2026-08-15T10:01:00Z",
+  }
+
+  assert.equal(queuedMessageTimelineTimestamp(immediate), Date.parse(immediate.createdAt))
+  assert.equal(queuedMessageTimelineTimestamp(queued), Date.parse(queued.deliveredAt))
 })
 
 test("coalesce joins multiple queued entries into one turn", () => {

@@ -22,9 +22,22 @@ export interface QueuedMessage {
   createdAt?: string
   /** Canonical delivery time used when a waiting queue item becomes a message. */
   deliveredAt?: string
+  /**
+   * Stable visual position for the outgoing bridge. Immediate sends keep their
+   * submission time; follow-ups authored during another turn acquire this only
+   * when they are delivered. This prevents a fast assistant event from sorting
+   * above the user input that caused it without moving queued work into the
+   * middle of the turn it was waiting behind.
+   */
+  timelineAt?: string
   optimistic?: boolean
   /** A transport failure means the server may have admitted this turn despite no acknowledgement. */
   admissionUncertain?: boolean
+}
+
+/** Timestamp used when an outgoing bridge is merged with transcript rows. */
+export function queuedMessageTimelineTimestamp(message: QueuedMessage): number {
+  return Date.parse(message.timelineAt ?? message.deliveredAt ?? message.createdAt ?? "")
 }
 
 export function enqueue(queue: QueuedMessage[], entry: QueuedMessage): QueuedMessage[] {

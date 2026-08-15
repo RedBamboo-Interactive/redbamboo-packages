@@ -8,7 +8,7 @@ import { isEventBlock } from "../lib/event-parts"
 import { projectActivityTimeline } from "../lib/activity-timeline"
 import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
-import type { QueuedMessage } from "../lib/message-queue"
+import { queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
 import { StreamingStatusLine } from "./streaming-status-line"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
@@ -453,7 +453,7 @@ export function ChatPanel(props: ChatPanelProps) {
     ...inlineOutgoing.map((item, index) => ({
       kind: "outgoing" as const,
       key: `outgoing:${item.id}`,
-      timestamp: Date.parse(item.deliveredAt ?? item.createdAt ?? ""),
+      timestamp: queuedMessageTimelineTimestamp(item),
       sequence: timelineRows.length + index,
       item,
     })),
