@@ -530,6 +530,13 @@ export interface ChatPanelProps {
     hasImages: boolean
     hasAttachments: boolean
   }) => React.ReactNode
+  /** Additional pending items rendered in the composer's attachment preview strip. */
+  renderComposerAttachments?: (state: {
+    disabled: boolean
+    isStreaming: boolean
+    hasImages: boolean
+    hasAttachments: boolean
+  }) => React.ReactNode
   /** Additional attachment controls rendered beside the built-in image/file buttons. */
   renderAttachmentActions?: (state: {
     disabled: boolean

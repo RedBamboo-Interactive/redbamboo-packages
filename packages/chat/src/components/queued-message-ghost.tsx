@@ -4,6 +4,8 @@ import { AttachmentCard } from "./attachment-card"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 import { parseNovaEvent } from "../lib/nova-event"
 import { NovaEventSquare } from "./nova-event-square"
+import { ContextSquare, extractRawContextXml, parseContextFromMessage } from "./context-card"
+import { stripHiddenMessageEnvelopes } from "../lib/message-content"
 
 interface QueuedMessageGhostProps {
   item: QueuedMessage
@@ -65,6 +67,13 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
     )
   }
 
+  const contextData = parseContextFromMessage(item.text)
+  const contextXml = contextData ? extractRawContextXml(item.text) : undefined
+  const contextScreenshot = item.images?.[0]
+  const visibleImages = item.images?.slice(contextData ? 1 : 0)
+  const visibleText = stripHiddenMessageEnvelopes(item.text)
+  const hasBubbleContent = !!visibleText || !!visibleImages?.length || !!item.attachments?.length
+
   return (
     <div
       className={`mb-3 ${entranceClass}`}
@@ -73,7 +82,10 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
       data-queue-item-id={item.remoteId ?? item.id}
       data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
     >
-      <div className="flex justify-end">
+      {contextData && (
+        <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
+      )}
+      {hasBubbleContent && <div className="flex justify-end">
         <div
           onClick={() => { if (!messageAppearance && !item.admissionUncertain) onEdit(item.id) }}
           data-chat-user-bubble
@@ -83,9 +95,9 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
           style={USER_BUBBLE_SHAPE_STYLE}
           title={messageAppearance ? undefined : item.admissionUncertain ? "Retry to verify whether the server admitted this message" : "Click to edit"}
         >
-          {item.images && item.images.length > 0 && (
+          {visibleImages && visibleImages.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
-              {item.images.map((img: ImageAttachment, i: number) => (
+              {visibleImages.map((img: ImageAttachment, i: number) => (
                 <img
                   key={i}
                   src={`data:${img.mediaType};base64,${img.base64}`}
@@ -104,9 +116,9 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
               ))}
             </div>
           )}
-          {item.text && <p className="text-sm whitespace-pre-wrap break-words font-serif">{item.text}</p>}
+          {visibleText && <p className="text-sm whitespace-pre-wrap break-words font-serif">{visibleText}</p>}
         </div>
-      </div>
+      </div>}
       {!messageAppearance && <div className="flex items-center justify-end gap-1 mt-1">
         <span className={`text-[10px] italic mr-1 ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
           {item.deliveryError

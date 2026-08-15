@@ -30,6 +30,7 @@ interface ComposerProps {
   onResume?: () => void | Promise<void>
   sessionId?: string | null
   renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
+  renderComposerAttachments?: (state: { disabled: boolean; isStreaming: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
   renderAttachmentActions?: (state: { disabled: boolean; isStreaming: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
   enableImageAttachments?: boolean
   enableFileAttachments?: boolean
@@ -123,6 +124,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   onResume,
   sessionId,
   renderInlineAction,
+  renderComposerAttachments,
   renderAttachmentActions,
   enableImageAttachments = true,
   enableFileAttachments,
@@ -451,6 +453,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     hasImages: images.length > 0,
     hasAttachments: attachments.length > 0,
   })
+  const composerAttachments = renderComposerAttachments?.({
+    disabled: inputDisabled,
+    isStreaming,
+    hasImages: images.length > 0,
+    hasAttachments: attachments.length > 0,
+  })
 
   const defaultPlaceholder = inputDisabled
     ? "Session not active"
@@ -492,8 +500,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
         >
-          {images.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-2.5">
+          {(images.length > 0 || attachments.length > 0 || composerAttachments) && (
+            <div data-slot="composer-attachments" className="flex flex-wrap gap-2 px-3 pt-2.5">
               {images.map((img, i) => (
                 <div key={i} className="relative group">
                   <img
@@ -509,10 +517,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   </button>
                 </div>
               ))}
-            </div>
-          )}
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-2.5">
               {attachments.map(attachment => attachment.kind === "image" ? (
                 <div key={attachment.clientId} className="relative group">
                   <img
@@ -533,6 +537,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               ) : (
                 <AttachmentCard key={attachment.clientId} attachment={attachment} onRemove={() => removeAttachment(attachment.clientId)} onRetry={() => retryAttachment(attachment.clientId)} />
               ))}
+              {composerAttachments}
             </div>
           )}
           <textarea

@@ -49,7 +49,7 @@ export function ChatPanel(props: ChatPanelProps) {
     enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
     prepareOutgoingMessage,
     speechBackend, handsFreeEnabled, pushToTalkKey, globalPushToTalk,
-    renderStatusLine, renderComposerInlineAction, renderAttachmentActions, renderMessageExtra, renderSideActions,
+    renderStatusLine, renderComposerInlineAction, renderComposerAttachments, renderAttachmentActions, renderMessageExtra, renderSideActions,
   } = props
 
   const prepareMessage = useCallback((message: OutgoingMessageDraft): OutgoingMessageDraft => (
@@ -419,6 +419,7 @@ export function ChatPanel(props: ChatPanelProps) {
       attachmentTransport={attachmentTransport}
       draftStorageKey={draftStorageKey}
       renderInlineAction={inlineAction}
+      renderComposerAttachments={renderComposerAttachments}
       renderAttachmentActions={renderAttachmentActions}
     />
   )

@@ -13,6 +13,7 @@ import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload,
 import { StreamingText, MarkdownRenderer } from "./streaming-text"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
+import { stripHiddenMessageEnvelopes } from "../lib/message-content"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { LazyToolOutput } from "./lazy-tool-output"
@@ -285,9 +286,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
-    const content = rawContent
-      .replace(/<nova-context[\s\S]*?<\/nova-context>\s*/g, "")
-      .replace(/<nova-prior-messages?[\s\S]*?<\/nova-prior-messages?>\s*/g, "")
+    const content = stripHiddenMessageEnvelopes(rawContent)
     const notification = parseTaskNotification(rawContent)
     if (notification) {
       return <div {...entranceRowProps}><TaskNotificationSquare notification={notification} /></div>

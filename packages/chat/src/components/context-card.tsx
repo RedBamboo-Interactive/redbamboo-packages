@@ -42,10 +42,13 @@ export interface ContextSquareProps {
   rawXml?: string
 }
 
-export interface PendingContextBannerProps {
+export interface PendingContextAttachmentProps {
   context: ContextCardData
   onDismiss: () => void
 }
+
+/** @deprecated Use PendingContextAttachment. */
+export type PendingContextBannerProps = PendingContextAttachmentProps
 
 // ── ContextSquare (small indicator in message, opens modal) ──────────
 
@@ -90,56 +93,64 @@ export function ContextSquare({ context, rawXml }: ContextSquareProps) {
   )
 }
 
-// ── PendingContextBanner (renders above composer before send) ────────
+// ── PendingContextAttachment (renders in the composer attachment strip) ──
 
-export function PendingContextBanner({ context, onDismiss }: PendingContextBannerProps) {
+export function PendingContextAttachment({ context, onDismiss }: PendingContextAttachmentProps) {
   const app = resolveApp(context.app)
   const displayUrl = context.route || tryPathname(context.url) || context.url
   const breadcrumbs = context.extra?.breadcrumbs as string | undefined
 
   return (
     <div
-      data-slot="pending-context-banner"
-      className="mx-3 mb-1 rounded-lg border px-3 py-2 flex items-center gap-3"
-      style={{
-        borderColor: `color-mix(in oklch, ${app.color}, transparent 70%)`,
-        backgroundColor: `color-mix(in oklch, ${app.color}, transparent 92%)`,
-      }}
+      data-slot="pending-context-attachment"
+      className="flex min-w-0 max-w-72 items-center gap-2 rounded-md border border-overlay-10 bg-overlay-4 px-2 py-1.5"
+      title={`What I see · ${app.label} · ${displayUrl}`}
     >
       {context.screenshot && (
         <img
           src={`data:${context.screenshot.mediaType};base64,${context.screenshot.base64}`}
-          alt=""
-          className="w-12 h-12 object-cover object-top rounded border border-overlay-10 shrink-0"
+          alt={`Current ${app.label} view`}
+          className="h-10 w-10 shrink-0 rounded border border-overlay-10 object-cover object-top"
         />
+      )}
+      {!context.screenshot && (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-overlay-10 bg-overlay-6">
+          <i className="ph-bold ph-eye text-sm text-text-muted" aria-hidden="true" />
+        </div>
       )}
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
-          <i className={`${app.icon} text-[10px]`} style={{ color: app.color }} />
-          <span className="text-xs font-medium" style={{ color: app.color }}>{app.label}</span>
-          <span className="text-[10px] text-text-muted font-mono truncate">{displayUrl}</span>
+          <i className="ph-bold ph-eye text-[11px]" style={{ color: app.color }} aria-hidden="true" />
+          <span className="truncate text-xs font-medium text-text-secondary">What I see</span>
         </div>
-        {breadcrumbs && (
-          <p className="text-[10px] text-text-muted truncate mt-0.5">{breadcrumbs}</p>
-        )}
-        {!breadcrumbs && context.title && (
-          <p className="text-xs text-text-secondary truncate mt-0.5">{context.title}</p>
-        )}
+        <p className="mt-0.5 truncate text-[10px] text-text-muted">
+          <span style={{ color: app.color }}>{app.label}</span>
+          <span aria-hidden="true"> · </span>
+          <span className="font-mono">{displayUrl}</span>
+        </p>
+        {breadcrumbs && <p className="mt-0.5 truncate text-[10px] text-text-muted">{breadcrumbs}</p>}
         {context.selection && (
-          <p className="text-[10px] text-text-muted truncate mt-0.5 italic">"{context.selection}"</p>
+          <p className="mt-0.5 truncate text-[10px] italic text-text-muted">"{context.selection}"</p>
         )}
       </div>
 
       <button
+        type="button"
         onClick={onDismiss}
-        className="w-6 h-6 flex items-center justify-center rounded hover:bg-overlay-10 text-text-muted hover:text-text-primary transition-colors shrink-0"
-        title="Dismiss context"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-text-muted transition-colors hover:bg-overlay-8 hover:text-red-400"
+        title="Remove What I see attachment"
+        aria-label="Remove What I see attachment"
       >
         <i className="ph-bold ph-x text-xs" />
       </button>
     </div>
   )
+}
+
+/** @deprecated Pending context now belongs in the composer attachment strip. */
+export function PendingContextBanner(props: PendingContextBannerProps) {
+  return <PendingContextAttachment {...props} />
 }
 
 // ── Parsing: extract ContextCardData from a user message ─────────────
