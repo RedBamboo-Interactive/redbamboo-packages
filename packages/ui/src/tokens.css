@@ -630,10 +630,12 @@ body {
 
 .msg-enter-user {
   animation: msg-in-user 0.45s cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: var(--msg-enter-delay, 0ms);
 }
 
 .msg-enter-ai {
   animation: msg-in-ai 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: var(--msg-enter-delay, 0ms);
 }
 
 @keyframes square-spawn {
@@ -647,6 +649,7 @@ body {
 
 .square-spawn {
   animation: square-spawn 0.45s ease-out both;
+  animation-delay: var(--msg-enter-delay, 0ms);
 }
 
 @keyframes square-jiggle {
@@ -657,8 +660,8 @@ body {
 }
 
 .square-jiggle {
-  animation: square-spawn 0.45s ease-out both,
-             square-jiggle 0.6s ease-in-out 0.45s infinite;
+  animation: square-spawn 0.45s ease-out var(--msg-enter-delay, 0ms) both,
+             square-jiggle 0.6s ease-in-out calc(0.45s + var(--msg-enter-delay, 0ms)) infinite;
 }
 
 @keyframes audio-wave {

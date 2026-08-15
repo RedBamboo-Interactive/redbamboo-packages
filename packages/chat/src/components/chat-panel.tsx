@@ -19,6 +19,7 @@ import { MediaLightbox } from "./streaming-text"
 // pill) reveals CHUNK more; re-pinning to the bottom releases them again.
 const WINDOW = 40
 const CHUNK = 80
+const CONVERSATION_ENTRANCE_STAGGER_MS = 80
 
 function hasExitPlanPart(block: MessageBlockType): boolean {
   return block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
@@ -103,6 +104,20 @@ export function ChatPanel(props: ChatPanelProps) {
     return item.remoteState === "delivered" && uid && canonicalUserUids.has(uid) ? [uid] : []
   }), [canonicalUserUids, messageQueue.queue])
   const settledKey = settledUids.join("\u0000")
+  const entranceActivationRef = useRef<{ sessionKey: string | null; shown: boolean }>({
+    sessionKey: sessionId ?? null,
+    shown: false,
+  })
+  const entranceSessionKey = sessionId ?? null
+  if (entranceActivationRef.current.sessionKey !== entranceSessionKey) {
+    entranceActivationRef.current = { sessionKey: entranceSessionKey, shown: false }
+  }
+  const isConversationEntrance = messages.length > 0 && !entranceActivationRef.current.shown
+  useEffect(() => {
+    if (messages.length > 0 && entranceActivationRef.current.sessionKey === entranceSessionKey) {
+      entranceActivationRef.current.shown = true
+    }
+  }, [entranceSessionKey, messages.length])
   useLayoutEffect(() => {
     if (settledUids.length > 0) messageQueue.settleDelivered(settledUids)
   }, [messageQueue.settleDelivered, settledKey])
@@ -424,6 +439,13 @@ export function ChatPanel(props: ChatPanelProps) {
     { kind: "status" as const, key: "streaming-status" },
     ...waitingOutgoing.map(item => ({ kind: "outgoing" as const, key: `outgoing:${item.id}`, item })),
   ]
+  const entranceKeys = visualTimeline.flatMap(visual => visual.kind === "message" ? [visual.key] : [])
+  const entranceDelayByKey = new Map(entranceKeys.map((key, index) => [
+    key,
+    entranceKeys.length <= 1
+      ? 0
+      : Math.round((entranceKeys.length - 1 - index) * CONVERSATION_ENTRANCE_STAGGER_MS / (entranceKeys.length - 1)),
+  ]))
 
   return (
     <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
@@ -455,6 +477,7 @@ export function ChatPanel(props: ChatPanelProps) {
               const block = row.block
               const index = row.sourceIndices[row.sourceIndices.length - 1] ?? 0
               const isLastAssistant = row.sourceIndices.includes(lastAssistantIndex)
+              const reconcilesAnimatedOutgoing = block.role === "user" && settledUids.includes(String(block.id))
               const senderAgent = block.senderAgentId && props.resolveAgentInfo
                 ? props.resolveAgentInfo(block.senderAgentId)
                 : undefined
@@ -462,9 +485,11 @@ export function ChatPanel(props: ChatPanelProps) {
                 <ChatMessage
                   key={visual.key}
                   block={block}
-                  // Remote sends already animated once through their stable outgoing bubble.
-                  // Canonical transcript reconciliation must never replay that entrance.
-                  animateEntrance={block.role !== "user" || !messageQueue.remote}
+                  // Only the canonical replacement for an outgoing bridge has
+                  // already animated. Historical user rows should enter beside
+                  // assistant content whenever a conversation is revealed.
+                  animateEntrance={isConversationEntrance || !reconcilesAnimatedOutgoing}
+                  entranceDelayMs={isConversationEntrance ? entranceDelayByKey.get(visual.key) ?? 0 : 0}
                   blockIndex={index}
                   isStreaming={isStreaming && isLastAssistant}
                   isLastAssistantBlock={isLastAssistant}

@@ -1,8 +1,9 @@
-import { useRef } from "react"
 import type { QueuedMessage } from "../lib/message-queue"
 import type { ImageAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
+import { parseNovaEvent } from "../lib/nova-event"
+import { NovaEventSquare } from "./nova-event-square"
 
 interface QueuedMessageGhostProps {
   item: QueuedMessage
@@ -18,10 +19,52 @@ interface QueuedMessageGhostProps {
  */
 export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: QueuedMessageGhostProps) {
   const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
-  // An idle submission animates once as a normal message. A genuine queue item
-  // becoming delivered keeps the same node and simply loses its queue styling.
-  const initialMessageAppearance = useRef(messageAppearance).current
-  const entranceClass = initialMessageAppearance ? "msg-enter-user" : "msg-enter-queue"
+  // Queued and immediately delivered submissions are the same outgoing message
+  // entering the same timeline. The dashed styling communicates queue state;
+  // both should get the established user-message spawn exactly once at mount.
+  const entranceClass = "msg-enter-user"
+  const novaEvent = parseNovaEvent(item.text)
+
+  if (novaEvent) {
+    return (
+      <div
+        className={`mb-3 ${entranceClass}`}
+        data-slot={messageAppearance ? "nova-event" : "queued-nova-event"}
+        data-session-id={item.sessionId}
+        data-queue-item-id={item.remoteId ?? item.id}
+        data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
+      >
+        <div className="flex items-center gap-1">
+          <NovaEventSquare event={novaEvent} />
+          {!messageAppearance && <>
+            <span className={`text-[10px] italic ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
+              {item.deliveryError
+                || (item.delivery === "interrupt-current" ? "Queued, interruption requested" : "Queued, sends after this turn")}
+            </span>
+            <button
+              onClick={() => onSendNow(item.id)}
+              className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-amber-400 hover:bg-overlay-6 transition-colors"
+              title={item.deliveryError ? "Retry" : "Send now (interrupts the current turn)"}
+              aria-label={item.deliveryError ? "Retry queued event" : "Send queued event now"}
+            >
+              <i className={`ph-bold ${item.deliveryError ? "ph-arrow-clockwise" : "ph-paper-plane-tilt"} text-[10px]`} />
+            </button>
+            {!item.admissionUncertain && (
+              <button
+                onClick={() => onCancel(item.id)}
+                className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-red-400 hover:bg-overlay-6 transition-colors"
+                title="Cancel"
+                aria-label="Cancel queued event"
+              >
+                <i className="ph-bold ph-x text-[10px]" />
+              </button>
+            )}
+          </>}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={`mb-3 ${entranceClass}`}
