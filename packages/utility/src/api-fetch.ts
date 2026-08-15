@@ -1,4 +1,5 @@
 import type { RemoteConnectionStore } from "./remote-connection"
+import type { ExecutionTokenClient } from "./execution-token"
 
 /**
  * Standard Red Suite error envelope: { ok: false, error: { code, message, details? } }.
@@ -55,6 +56,8 @@ export interface ApiFetchOptions extends Omit<RequestInit, "body"> {
   body?: BodyInit
   /** Connection store providing base URL + auth headers. Same-origin without one. */
   store?: RemoteConnectionStore
+  /** App-bound execution token client. Kept explicit so co-located apps cannot overwrite global actor state. */
+  execution?: ExecutionTokenClient
 }
 
 /**
@@ -66,7 +69,7 @@ export async function apiFetch<T = unknown>(
   path: string,
   opts: ApiFetchOptions = {},
 ): Promise<T> {
-  const { json, body, store, headers, ...init } = opts
+  const { json, body, store, execution, headers, ...init } = opts
   const base = store?.getBaseUrl() ?? ""
 
   const mergedHeaders: Record<string, string> = {
@@ -80,11 +83,17 @@ export async function apiFetch<T = unknown>(
     requestBody = JSON.stringify(json)
   }
 
-  const res = await fetch(`${base}${path}`, {
+  if (store && execution)
+    throw new Error("apiFetch cannot combine remote connection auth with an app execution token")
+
+  const request = {
     ...init,
     headers: mergedHeaders,
     body: requestBody,
-  })
+  }
+  const res = execution
+    ? await execution.fetch(`${base}${path}`, request)
+    : await fetch(`${base}${path}`, request)
 
   const contentType = res.headers.get("content-type") ?? ""
   const isJson = contentType.includes("application/json")

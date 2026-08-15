@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using RedBamboo.AppHost.Auth;
 
 namespace RedBamboo.AppHost.Telemetry;
 
@@ -53,6 +54,10 @@ public sealed class TelemetryMiddleware
                 var routePattern = (endpoint as RouteEndpoint)?.RoutePattern?.RawText;
 
                 var kind = context.Items.TryGetValue("Telemetry.Kind", out var k) ? k as string : null;
+                var execution = context.Items.TryGetValue(
+                    ExecutionIdentityClaims.HttpContextItemKey, out var identity)
+                    ? identity as ExecutionIdentity
+                    : null;
 
                 _telemetry.Record(new TelemetryEntry
                 {
@@ -66,6 +71,12 @@ public sealed class TelemetryMiddleware
                     CorrelationId = context.Request.Headers["X-Correlation-Id"].FirstOrDefault(),
                     Error = error ?? (context.Response.StatusCode >= 400 ? $"HTTP {context.Response.StatusCode}" : null),
                     Kind = kind,
+                    ExecutionId = execution?.ExecutionId,
+                    AppId = execution?.App.Id,
+                    ActorKind = execution?.Actor.Kind,
+                    ActorId = execution?.Actor.Id,
+                    BeneficiaryKind = execution?.Beneficiary.Kind,
+                    BeneficiaryId = execution?.Beneficiary.Id,
                 });
             }
         }

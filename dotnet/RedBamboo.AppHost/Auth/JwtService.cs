@@ -75,6 +75,43 @@ public sealed class JwtService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
+    public string GenerateExecutionToken(
+        ExecutionIdentity identity,
+        ExecutionPrincipal principal,
+        DateTimeOffset expiresAt)
+    {
+        identity.Validate(principal.SubjectId);
+        if (expiresAt <= DateTimeOffset.UtcNow)
+            throw new ExecutionIdentityValidationException("execution token expiry must be in the future");
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, principal.SubjectId),
+            new(JwtRegisteredClaimNames.Email, principal.Email),
+            new("roles", JsonSerializer.Serialize(principal.Roles), JsonClaimValueTypes.JsonArray),
+            new(JwtRegisteredClaimNames.Jti, identity.ExecutionId),
+            new(ExecutionIdentityClaims.TokenUseClaim, ExecutionIdentityClaims.TokenUse),
+            new(ExecutionIdentityClaims.IdentityClaim,
+                ExecutionIdentityClaims.Serialize(identity), JsonClaimValueTypes.Json),
+            new("client_id", identity.App.Id),
+        };
+
+        if (principal.Name is not null)
+            claims.Add(new Claim(JwtRegisteredClaimNames.Name, principal.Name));
+        if (principal.Avatar is not null)
+            claims.Add(new Claim("picture", principal.Avatar));
+
+        var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(
+            issuer: _options.Issuer,
+            audience: _options.Audience,
+            claims: claims,
+            notBefore: DateTime.UtcNow,
+            expires: expiresAt.UtcDateTime,
+            signingCredentials: credentials);
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
     public string GenerateRefreshToken()
     {
         var bytes = RandomNumberGenerator.GetBytes(32);
@@ -94,7 +131,7 @@ public sealed class JwtService
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = _signingKey,
-            ClockSkew = TimeSpan.FromSeconds(30)
+            ClockSkew = _options.ClockSkew
         };
 
         try

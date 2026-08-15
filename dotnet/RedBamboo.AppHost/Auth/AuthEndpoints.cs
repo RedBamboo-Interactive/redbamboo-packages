@@ -228,6 +228,28 @@ public static class AuthEndpoints
                 return Results.Ok(new { id = sub, email, name, roles, avatarUrl });
             });
 
+        registry.MapGet("/auth/execution-context",
+            "Inspect the current request's verified suite execution identity. Returns identity: null for an ordinary user or service token; signed app, actor, beneficiary, context, parent, and expiry for an execution token.",
+            (HttpContext context) =>
+            {
+                var expiresAt = long.TryParse(
+                    context.User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Exp),
+                    out var exp)
+                    ? DateTimeOffset.FromUnixTimeSeconds(exp)
+                    : (DateTimeOffset?)null;
+                return Results.Ok(new
+                {
+                    authenticated = context.User.Identity?.IsAuthenticated == true,
+                    subjectId = context.User.FindFirstValue(
+                        System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub),
+                    tokenUse = context.User.FindFirstValue(ExecutionIdentityClaims.TokenUseClaim)
+                        ?? "user",
+                    expiresAt,
+                    identity = ExecutionContextScope.Current,
+                });
+            })
+            .WithAuth("jwt");
+
         registry.MapGet("/auth/google/calendar", "Get Google Calendar events for the current user",
             async (HttpContext context, IServiceProvider sp) =>
             {

@@ -13,6 +13,12 @@ public record TelemetryEntry
     public string? CorrelationId { get; init; }
     public string? Error { get; init; }
     public string? Kind { get; init; }
+    public string? ExecutionId { get; init; }
+    public string? AppId { get; init; }
+    public string? ActorKind { get; init; }
+    public string? ActorId { get; init; }
+    public string? BeneficiaryKind { get; init; }
+    public string? BeneficiaryId { get; init; }
 
     public object ToWireFormat() => new
     {
@@ -27,6 +33,12 @@ public record TelemetryEntry
         correlation_id = CorrelationId,
         error = Error,
         kind = Kind,
+        execution_id = ExecutionId,
+        app_id = AppId,
+        actor_kind = ActorKind,
+        actor_id = ActorId,
+        beneficiary_kind = BeneficiaryKind,
+        beneficiary_id = BeneficiaryId,
     };
 }
 
@@ -41,6 +53,10 @@ public record TelemetryQueryParams
     public DateTimeOffset? Until { get; init; }
     public int Limit { get; init; } = 100;
     public int Offset { get; init; }
+    public string? ExecutionId { get; init; }
+    public string? AppId { get; init; }
+    public string? ActorId { get; init; }
+    public string? BeneficiaryId { get; init; }
 }
 
 public record RouteStats

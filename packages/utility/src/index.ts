@@ -112,6 +112,18 @@ export type { SuiteApp } from "./suite-registry"
 
 export { apiFetch, ApiFetchError } from "./api-fetch"
 export type { ApiFetchOptions, ApiErrorBody } from "./api-fetch"
+export { createExecutionTokenClient } from "./execution-token"
+export type {
+  ExecutionActorIdentity,
+  ExecutionAppIdentity,
+  ExecutionBeneficiaryIdentity,
+  ExecutionContextReference,
+  ExecutionContextResponse,
+  ExecutionIdentity,
+  ExecutionTokenClient,
+  ExecutionTokenResponse,
+  ExecutionTrace,
+} from "./execution-token"
 
 export { TunnelSettingsPanel } from "./tunnel-settings-panel"
 export type { TunnelSettingsPanelProps, TunnelStatus } from "./tunnel-settings-panel"

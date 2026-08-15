@@ -135,6 +135,7 @@ public static class AppHostExtensions
         }
 
         services.AddSingleton<AuthenticatedHttpClientFactory>();
+        services.AddSingleton<IExecutionTokenIssuer, ExecutionTokenIssuer>();
 
         services.AddSingleton<IUserStore, RedLeafUserStore>();
         services.AddSingleton<IRefreshTokenStore, RedLeafRefreshTokenStore>();

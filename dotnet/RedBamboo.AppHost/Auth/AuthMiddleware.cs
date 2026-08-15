@@ -38,7 +38,7 @@ public sealed class AuthMiddleware
 
         if (context.User.Identity?.IsAuthenticated == true)
         {
-            await _next(context);
+            await ContinueAsync(context);
             return;
         }
 
@@ -56,7 +56,7 @@ public sealed class AuthMiddleware
             if (principal is not null)
             {
                 context.User = principal;
-                await _next(context);
+                await ContinueAsync(context);
                 return;
             }
         }
@@ -75,7 +75,7 @@ public sealed class AuthMiddleware
             };
             var identity = new ClaimsIdentity(claims, "LocalDefault");
             context.User = new ClaimsPrincipal(identity);
-            await _next(context);
+            await ContinueAsync(context);
             return;
         }
 
@@ -102,6 +102,33 @@ public sealed class AuthMiddleware
             return;
         }
 
+        await ContinueAsync(context);
+    }
+
+    private async Task ContinueAsync(HttpContext context)
+    {
+        if (!string.Equals(context.User.FindFirstValue(ExecutionIdentityClaims.TokenUseClaim),
+                ExecutionIdentityClaims.TokenUse, StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
+        if (!ExecutionIdentityClaims.TryRead(context.User, out var identity, out var error)
+            || identity is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "invalid_execution_identity",
+                message = error ?? "The execution identity is invalid.",
+            });
+            return;
+        }
+
+        context.Items[ExecutionIdentityClaims.HttpContextItemKey] = identity;
+        using var scope = ExecutionContextScope.Push(identity);
         await _next(context);
     }
 

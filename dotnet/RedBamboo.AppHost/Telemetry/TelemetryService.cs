@@ -118,7 +118,13 @@ public class TelemetryService : IAsyncDisposable
                 response_size INTEGER,
                 correlation_id TEXT,
                 error TEXT,
-                kind TEXT
+                kind TEXT,
+                execution_id TEXT,
+                app_id TEXT,
+                actor_kind TEXT,
+                actor_id TEXT,
+                beneficiary_kind TEXT,
+                beneficiary_id TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_requests_timestamp ON requests(timestamp);
             CREATE INDEX IF NOT EXISTS idx_requests_route ON requests(route_pattern);
@@ -143,6 +149,22 @@ public class TelemetryService : IAsyncDisposable
             alter.CommandText = "ALTER TABLE requests ADD COLUMN kind TEXT";
             alter.ExecuteNonQuery();
         }
+
+        foreach (var column in new[]
+        {
+            "execution_id", "app_id", "actor_kind", "actor_id",
+            "beneficiary_kind", "beneficiary_id",
+        })
+        {
+            if (columns.Contains(column)) continue;
+            using var alter = conn.CreateCommand();
+            alter.CommandText = $"ALTER TABLE requests ADD COLUMN {column} TEXT";
+            alter.ExecuteNonQuery();
+        }
+
+        using var index = conn.CreateCommand();
+        index.CommandText = "CREATE INDEX IF NOT EXISTS idx_requests_execution ON requests(execution_id)";
+        index.ExecuteNonQuery();
     }
 
     private async Task ConsumeAsync(CancellationToken ct)
@@ -180,10 +202,12 @@ public class TelemetryService : IAsyncDisposable
             cmd.CommandText = """
                 INSERT INTO requests
                     (timestamp, method, path, route_pattern, status_code,
-                     duration_ms, response_size, correlation_id, error, kind)
+                     duration_ms, response_size, correlation_id, error, kind,
+                     execution_id, app_id, actor_kind, actor_id, beneficiary_kind, beneficiary_id)
                 VALUES
                     (@ts, @method, @path, @route, @status,
-                     @duration, @size, @corr, @err, @kind)
+                     @duration, @size, @corr, @err, @kind,
+                     @execution, @app, @actorKind, @actor, @beneficiaryKind, @beneficiary)
                 """;
             cmd.Parameters.AddWithValue("@ts", e.Timestamp.ToString("O"));
             cmd.Parameters.AddWithValue("@method", e.Method);
@@ -195,6 +219,12 @@ public class TelemetryService : IAsyncDisposable
             cmd.Parameters.AddWithValue("@corr", (object?)e.CorrelationId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@err", (object?)e.Error ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@kind", (object?)e.Kind ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@execution", (object?)e.ExecutionId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@app", (object?)e.AppId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@actorKind", (object?)e.ActorKind ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@actor", (object?)e.ActorId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@beneficiaryKind", (object?)e.BeneficiaryKind ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@beneficiary", (object?)e.BeneficiaryId ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
 

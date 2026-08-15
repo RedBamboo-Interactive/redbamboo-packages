@@ -65,11 +65,16 @@ public class TelemetryReader
             clauses.Add("timestamp <= @until");
             cmd.Parameters.AddWithValue("@until", until.ToString("O"));
         }
+        AddExactFilter(clauses, cmd, "execution_id", "execution", q.ExecutionId);
+        AddExactFilter(clauses, cmd, "app_id", "app", q.AppId);
+        AddExactFilter(clauses, cmd, "actor_id", "actor", q.ActorId);
+        AddExactFilter(clauses, cmd, "beneficiary_id", "beneficiary", q.BeneficiaryId);
 
         var where = clauses.Count > 0 ? "WHERE " + string.Join(" AND ", clauses) : "";
         cmd.CommandText = $"""
             SELECT id, timestamp, method, path, route_pattern, status_code,
-                   duration_ms, response_size, correlation_id, error, kind
+                   duration_ms, response_size, correlation_id, error, kind,
+                   execution_id, app_id, actor_kind, actor_id, beneficiary_kind, beneficiary_id
             FROM requests {where}
             ORDER BY timestamp DESC
             LIMIT @limit OFFSET @offset
@@ -95,10 +100,24 @@ public class TelemetryReader
                 CorrelationId = reader.IsDBNull(8) ? null : reader.GetString(8),
                 Error = reader.IsDBNull(9) ? null : reader.GetString(9),
                 Kind = reader.IsDBNull(10) ? null : reader.GetString(10),
+                ExecutionId = reader.IsDBNull(11) ? null : reader.GetString(11),
+                AppId = reader.IsDBNull(12) ? null : reader.GetString(12),
+                ActorKind = reader.IsDBNull(13) ? null : reader.GetString(13),
+                ActorId = reader.IsDBNull(14) ? null : reader.GetString(14),
+                BeneficiaryKind = reader.IsDBNull(15) ? null : reader.GetString(15),
+                BeneficiaryId = reader.IsDBNull(16) ? null : reader.GetString(16),
             });
         }
 
         return entries;
+    }
+
+    private static void AddExactFilter(List<string> clauses, SqliteCommand command,
+        string column, string parameter, string? value)
+    {
+        if (value is null) return;
+        clauses.Add($"{column} = @{parameter}");
+        command.Parameters.AddWithValue($"@{parameter}", value);
     }
 
     public List<RouteStats> GetStats(DateTimeOffset? since = null, string? routePattern = null)
