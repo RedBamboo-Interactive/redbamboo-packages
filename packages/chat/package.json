@@ -15,6 +15,10 @@
     "./event-parts": {
       "types": "./src/lib/event-parts.ts",
       "default": "./src/lib/event-parts.ts"
+    },
+    "./conversation-read-state": {
+      "types": "./src/lib/conversation-read-state.ts",
+      "default": "./src/lib/conversation-read-state.ts"
     }
   },
   "files": [
