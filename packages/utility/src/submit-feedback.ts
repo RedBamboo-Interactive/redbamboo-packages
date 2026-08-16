@@ -89,7 +89,6 @@ async function compileFeedback(
       credentials: "same-origin",
       headers: {
         "Content-Type": "application/json",
-        "X-Caller-Info": `${submission.systemInfo.appName} Feedback`,
         "X-Job-Name": `Compile ${destination.productName} feedback`,
         "X-Idempotency-Key": `feedback-compile-${submission.clientSubmissionId}`,
       },

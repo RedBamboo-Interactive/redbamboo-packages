@@ -233,7 +233,7 @@ public static class AppHostExtensions
                 UpstreamBaseUrl = kv.Value,
                 ProxyWebSocket = seenWsUpstreams.Add(kv.Value),
             }).ToList();
-            ProxyEndpoints.MapProxyEndpoints(app, routes, appName);
+            ProxyEndpoints.MapProxyEndpoints(app, routes);
             wsProxyRoutes.AddRange(routes.Where(r => r.ProxyWebSocket));
         }
 

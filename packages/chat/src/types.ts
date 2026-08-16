@@ -446,6 +446,8 @@ export interface ChatPanelProps {
   sessionId?: string | null
   /** Enables RedCompute-owned durable queue state. Omit for the legacy in-browser fallback. */
   queueTransport?: ChatQueueTransport
+  /** Disable browser outbox persistence and cleanup for isolated controlled previews. */
+  persistQueue?: boolean
   disabled?: boolean
   /** Read-only surfaces (e.g. Nova's heartbeat discussion): render the message
    * list without mounting the composer at all. */

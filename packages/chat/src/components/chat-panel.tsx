@@ -41,7 +41,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const onAnswerQuestion = props.onAnswerQuestion ?? (props.backend ? internal.answerQuestion : undefined)
 
   const {
-    sessionId, queueTransport, disabled = false, hideComposer = false, onResume,
+    sessionId, queueTransport, persistQueue = true, disabled = false, hideComposer = false, onResume,
     hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl,
@@ -84,6 +84,7 @@ export function ChatPanel(props: ChatPanelProps) {
   ), [deliverMessage])
   const messageQueue = useMessageQueue({
     sessionId,
+    persistQueue,
     isStreaming,
     disabled,
     resumePending,

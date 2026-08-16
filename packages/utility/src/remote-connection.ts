@@ -87,7 +87,7 @@ export function applyConnectionParams(store: RemoteConnectionStore): void {
 
   // Clear stale serverUrl that points to a different localhost port.
   // Requests should go through same-origin so backend proxies can
-  // inject headers like X-Caller-Info.
+  // attach the authenticated execution identity.
   const conn = store.get()
   if (conn && conn.serverUrl) {
     try {

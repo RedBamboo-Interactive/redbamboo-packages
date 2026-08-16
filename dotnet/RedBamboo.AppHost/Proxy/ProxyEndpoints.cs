@@ -9,8 +9,7 @@ public static class ProxyEndpoints
 {
     public static void MapProxyEndpoints(
         this WebApplication app,
-        IReadOnlyList<ProxyRouteConfig> routes,
-        string? callerInfo = null)
+        IReadOnlyList<ProxyRouteConfig> routes)
     {
         var clients = new Dictionary<string, HttpClient>();
         foreach (var route in routes)
@@ -30,8 +29,6 @@ public static class ProxyEndpoints
                 var targetPath = ctx.Request.Path.Value ?? "";
                 var query = ctx.Request.QueryString.Value ?? "";
                 using var req = new HttpRequestMessage(new HttpMethod(ctx.Request.Method), $"{targetPath}{query}");
-                if (callerInfo != null)
-                    req.Headers.TryAddWithoutValidation("X-Caller-Info", callerInfo);
                 var userId = ctx.User?.FindFirstValue("sub");
                 if (userId != null)
                     req.Headers.TryAddWithoutValidation("X-User-Id", userId);

@@ -39,6 +39,7 @@ function getSessionStore(sessionId: string): MessageQueueStore {
 
 export interface UseMessageQueueOptions {
   sessionId?: string | null
+  persistQueue?: boolean
   isStreaming: boolean
   disabled: boolean
   /**
@@ -59,14 +60,18 @@ export interface UseMessageQueueOptions {
   onDiscardAttachments?: (attachments: UploadedAttachment[]) => void
 }
 
-export function useMessageQueue({ sessionId, isStreaming, disabled, resumePending = false, questionPending = false, queueTransport, onDrain, onDiscardAttachments }: UseMessageQueueOptions) {
+export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, disabled, resumePending = false, questionPending = false, queueTransport, onDrain, onDiscardAttachments }: UseMessageQueueOptions) {
   // Sessionless ChatPanels keep their old per-instance queue semantics. Named
   // sessions deliberately converge on the shared store so portals and other
   // simultaneous views cannot race the same persisted delivery.
   const localStoreRef = useRef<MessageQueueStore | null>(null)
   if (!localStoreRef.current) localStoreRef.current = createMessageQueueStore()
   const remote = Boolean(sessionId && queueTransport)
-  const store = remote && sessionId ? getRemoteMessageQueueStore(sessionId) : sessionId ? getSessionStore(sessionId) : localStoreRef.current
+  const store = remote && sessionId
+    ? getRemoteMessageQueueStore(sessionId)
+    : sessionId && persistQueue
+      ? getSessionStore(sessionId)
+      : localStoreRef.current
   const storeSnapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const queue = storeSnapshot.queue
   const isStreamingRef = useRef(isStreaming)
@@ -110,14 +115,15 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
   }, [isStreaming])
 
   useEffect(() => {
+    if (!persistQueue) return
     const storage = getStorage()
     if (storage) pruneStaleQueues(storage, Date.now())
-  }, [])
+  }, [persistQueue])
 
   // One-release migration: localStorage is an unacknowledged outbox only.
   // Remove each item after RedCompute has accepted the same idempotency key.
   useEffect(() => {
-    if (!remote || !sessionId) return
+    if (!persistQueue || !remote || !sessionId) return
     const storage = getStorage()
     if (!storage) return
     void migrateLegacyOutbox(storage, sessionId, item =>
@@ -128,7 +134,7 @@ export function useMessageQueue({ sessionId, isStreaming, disabled, resumePendin
       }),
       () => refreshRemoteMessageQueue(sessionId),
     ).catch(() => {})
-  }, [remote, sessionId])
+  }, [persistQueue, remote, sessionId])
 
   const drain = useCallback(() => {
     if (remote) return
