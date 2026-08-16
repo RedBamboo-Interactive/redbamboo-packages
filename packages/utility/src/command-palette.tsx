@@ -281,7 +281,7 @@ export function CommandPalette({
                     {Icon && <Icon className="h-4 w-4 shrink-0 opacity-70" />}
                     <span className="flex-1 text-left">{cmd.label}</span>
                     {cmd.shortcut && (
-                      <kbd className="ml-auto text-xs tracking-widest text-muted-a60">
+                      <kbd className="ml-auto text-xs tracking-widest text-muted-a60 [@media(hover:none)_and_(pointer:coarse)]:hidden">
                         {cmd.shortcut}
                       </kbd>
                     )}
@@ -322,7 +322,7 @@ export function CommandPalette({
                   </span>
                 )}
                 {selectedCommand.shortcut && (
-                  <kbd className="ml-auto shrink-0 text-xs tracking-widest text-muted-a60">
+                  <kbd className="ml-auto shrink-0 text-xs tracking-widest text-muted-a60 [@media(hover:none)_and_(pointer:coarse)]:hidden">
                     {selectedCommand.shortcut}
                   </kbd>
                 )}
@@ -332,7 +332,7 @@ export function CommandPalette({
               </p>
             </div>
           ) : (
-            <p className="mr-auto text-xs text-muted-foreground">
+            <p className="mr-auto text-xs text-muted-foreground [@media(hover:none)_and_(pointer:coarse)]:hidden">
               {isMac ? "⌘K" : "Ctrl+K"} to toggle · ↑↓ navigate · Enter to run
             </p>
           )}
