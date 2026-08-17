@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -236,6 +237,24 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
             throw new InvalidOperationException($"RedLeaf upsert of '{slug}' returned no entity id");
         _entityIds[slug] = id;
         return id;
+    }
+
+    /// <summary>Shallow-merge runtime data into an existing mirrored entity.</summary>
+    public async Task PatchEntityDataAsync(string slug, object dataPatch,
+        CancellationToken ct = default)
+    {
+        var entityId = await ResolveEntityIdAsync(slug, ct)
+            ?? throw new KeyNotFoundException($"Entity '{slug}' was not found in RedLeaf");
+        using var content = JsonContent.Create(dataPatch);
+        using var response = await _http.PatchAsync(
+            $"api/entities/{entityId:D}/data", content, ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            throw new HttpRequestException(
+                $"RedLeaf rejected patch of '{slug}': {(int)response.StatusCode} {body}",
+                null, response.StatusCode);
+        }
     }
 
     /// <summary>
