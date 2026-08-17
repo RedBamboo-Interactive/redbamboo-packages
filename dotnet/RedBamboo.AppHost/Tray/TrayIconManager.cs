@@ -87,24 +87,47 @@ public class TrayIconManager : IDisposable
             };
             autoStartItem.Click += (_, _) =>
             {
-                StartupManager.SetEnabled(_config.AppName, autoStartItem.IsChecked);
+                StartupManager.SetEnabled(
+                    _config.AppName,
+                    autoStartItem.IsChecked,
+                    _config.AutoStartCommand);
             };
             menu.Items.Add(autoStartItem);
         }
 
-        if (_config.RebuildScript != null)
+        if (_config.RestartAsync != null || _config.RebuildScript != null)
         {
             menu.Items.Add(new System.Windows.Controls.Separator());
 
             var restartItem = new System.Windows.Controls.MenuItem { Header = "Restart" };
-            restartItem.Click += (_, _) =>
+            restartItem.Click += async (_, _) =>
             {
-                Process.Start(new ProcessStartInfo
+                restartItem.IsEnabled = false;
+                try
                 {
-                    FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{_config.RebuildScript}\"",
-                    UseShellExecute = true,
-                });
+                    if (_config.RestartAsync != null)
+                    {
+                        await _config.RestartAsync();
+                    }
+                    else
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "powershell.exe",
+                            Arguments = $"-NoProfile -ExecutionPolicy Bypass -File \"{_config.RebuildScript}\"",
+                            UseShellExecute = true,
+                        });
+                    }
+                }
+                catch (Exception error)
+                {
+                    MessageBox.Show(error.Message, $"{_config.AppName} restart failed",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally
+                {
+                    restartItem.IsEnabled = true;
+                }
             };
             menu.Items.Add(restartItem);
         }

@@ -10,6 +10,7 @@ using RedBamboo.AppHost.Discovery;
 using RedBamboo.AppHost.Logging;
 using RedBamboo.AppHost.Proxy;
 using RedBamboo.AppHost.RemoteAccess;
+using RedBamboo.AppHost.Startup;
 using RedBamboo.AppHost.Telemetry;
 using RedBamboo.AppHost.Tunnel;
 using RedBamboo.AppHost.WebSockets;
@@ -193,7 +194,8 @@ public static class AppHostExtensions
         Dictionary<string, string>? proxyRoutes = null,
         IReadOnlyList<string>? wsProxyUpstreams = null,
         bool mapRemoteAccess = true,
-        bool mapAutoStart = true)
+        bool mapAutoStart = true,
+        StartupLaunchCommand? autoStartCommand = null)
     {
         var broadcaster = app.Services.GetService<WebSocketBroadcaster>();
         var telemetry = app.Services.GetService<TelemetryService>();
@@ -208,7 +210,7 @@ public static class AppHostExtensions
             RemoteAccessEndpoints.MapRemoteAccessEndpoints(app, tunnelService, appName, getTunnelConfig);
 #if WINDOWS
         if (mapAutoStart)
-            Startup.AutoStartEndpoints.MapAutoStartEndpoints(app, appName);
+            Startup.AutoStartEndpoints.MapAutoStartEndpoints(app, appName, autoStartCommand);
 #endif
 
         if (logService is not null)

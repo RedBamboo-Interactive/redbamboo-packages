@@ -6,7 +6,10 @@ namespace RedBamboo.AppHost.Startup;
 
 public static class AutoStartEndpoints
 {
-    public static void MapAutoStartEndpoints(this WebApplication app, string appName)
+    public static void MapAutoStartEndpoints(
+        this WebApplication app,
+        string appName,
+        StartupLaunchCommand? launchCommand = null)
     {
         app.MapGet("/api/autostart", () =>
             Results.Ok(new { enabled = StartupManager.IsEnabled(appName) }));
@@ -17,7 +20,7 @@ public static class AutoStartEndpoints
             if (body is null)
                 return Results.BadRequest(new { error = "invalid_body" });
 
-            StartupManager.SetEnabled(appName, body.Enabled);
+            StartupManager.SetEnabled(appName, body.Enabled, launchCommand);
             return Results.Ok(new { enabled = StartupManager.IsEnabled(appName) });
         });
     }

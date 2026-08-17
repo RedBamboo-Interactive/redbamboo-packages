@@ -13,16 +13,21 @@ public static class StartupManager
         return key?.GetValue(appName) != null;
     }
 
-    public static void SetEnabled(string appName, bool enabled)
+    public static void SetEnabled(
+        string appName,
+        bool enabled,
+        StartupLaunchCommand? launchCommand = null)
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
         if (key == null) return;
 
         if (enabled)
         {
-            var exePath = Environment.ProcessPath;
-            if (exePath != null)
-                key.SetValue(appName, exePath);
+            launchCommand ??= Environment.ProcessPath is { } processPath
+                ? new StartupLaunchCommand(processPath, [])
+                : null;
+            if (launchCommand != null)
+                key.SetValue(appName, launchCommand.ToRegistryValue());
         }
         else
         {

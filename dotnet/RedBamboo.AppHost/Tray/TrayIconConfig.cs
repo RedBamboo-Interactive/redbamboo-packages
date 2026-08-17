@@ -1,5 +1,6 @@
 #if WINDOWS
 using System.Drawing;
+using RedBamboo.AppHost.Startup;
 
 namespace RedBamboo.AppHost.Tray;
 
@@ -9,6 +10,8 @@ public class TrayIconConfig
     public required int Port { get; init; }
     public required Func<Icon> LoadIcon { get; init; }
     public bool EnableAutoStartToggle { get; init; }
+    public StartupLaunchCommand? AutoStartCommand { get; init; }
+    public Func<Task>? RestartAsync { get; init; }
     public string? RebuildScript { get; init; }
     public Func<Task<IReadOnlyList<string>>>? GetStatusLines { get; init; }
 
