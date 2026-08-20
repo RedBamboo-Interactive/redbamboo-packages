@@ -283,9 +283,9 @@ function AppShellInner({
             ) : undefined
           }
           breadcrumb={breadcrumb}
+          navigation={headerContent}
           onBrandClick={dropdownSwitcher ? undefined : openSwitcher}
         >
-          {headerContent}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={

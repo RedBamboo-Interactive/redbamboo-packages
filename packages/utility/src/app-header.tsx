@@ -16,6 +16,8 @@ export interface AppHeaderProps {
   brand: AppHeaderBrandProps
   /** Replaces the default brand rendering (e.g. a brand wrapped in an AppMenu trigger). */
   brandSlot?: React.ReactNode
+  /** Primary navigation for the active app, rendered immediately after its brand. */
+  navigation?: React.ReactNode
   children?: React.ReactNode
   breadcrumb?: React.ReactNode
   className?: string
@@ -28,6 +30,7 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary", color, 
 
   return (
     <div
+      data-slot="app-header-brand"
       className={cn(
         "app-header-brand flex items-center gap-2 select-none shrink-0",
         color ? undefined : accentClass,
@@ -64,20 +67,25 @@ function AppHeaderBrand({ icon, nameParts, accentClass = "text-primary", color, 
   )
 }
 
-function AppHeader({ brand, brandSlot, children, breadcrumb, className, onBrandClick }: AppHeaderProps) {
+function AppHeader({ brand, brandSlot, navigation, children, breadcrumb, className, onBrandClick }: AppHeaderProps) {
   return (
     <header data-slot="app-header" className={cn(
       "shrink-0 flex items-center gap-3 px-4 py-2 border-b border-border-a60",
       className,
     )}>
       {brandSlot ?? <AppHeaderBrand {...brand} onClick={onBrandClick} />}
+      {navigation && (
+        <div data-slot="app-header-navigation" className="app-header-navigation flex items-center min-w-0 shrink-0">
+          {navigation}
+        </div>
+      )}
+      <span className="flex-1 min-w-0" />
       {breadcrumb && (
-        <div className="app-header-crumbs flex items-center gap-3 min-w-0 overflow-hidden">
+        <div data-slot="app-header-breadcrumbs" className="app-header-crumbs flex items-center justify-end gap-3 min-w-0 max-w-[45%] overflow-hidden">
           <span className="h-4 w-px bg-border-a60 shrink-0" />
           {breadcrumb}
         </div>
       )}
-      <span className="flex-1" />
       {children}
     </header>
   )
