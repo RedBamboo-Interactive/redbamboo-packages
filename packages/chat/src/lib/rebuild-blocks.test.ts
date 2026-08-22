@@ -34,3 +34,15 @@ test("an ambient user event splits one assistant turn into unique chronological 
   ])
   assert.deepEqual(blocks.map((block) => block.id), ["turn", "event", "turn:segment:1"])
 })
+
+test("history preserves message phases and does not merge commentary into the final answer", () => {
+  const blocks = rebuildBlocks([
+    { id: 1, role: "assistant", eventType: "text", content: "Working", phase: "commentary", timestamp: "2026-08-01T00:00:01Z", messageUid: "turn" },
+    { id: 2, role: "assistant", eventType: "text", content: "Done", phase: "final_answer", timestamp: "2026-08-01T00:00:02Z", messageUid: "turn" },
+  ])
+
+  assert.deepEqual(blocks[0]?.parts.map(({ content, phase }) => ({ content, phase })), [
+    { content: "Working", phase: "commentary" },
+    { content: "Done", phase: "final_answer" },
+  ])
+})

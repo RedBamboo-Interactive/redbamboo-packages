@@ -98,3 +98,37 @@ test("extending an activity run preserves its mounted row identity", () => {
 
   assert.equal(after, before)
 })
+
+test("working commentary stays visible until a final answer exists", () => {
+  const commentary = part("text", "I am checking that now")
+  commentary.phase = "commentary"
+  assert.equal(shape([block("assistant", [commentary])]), "N(I am checking that now)")
+})
+
+test("a settled turn renders its final answer instead of duplicate commentary", () => {
+  const commentary = part("text", "I found the issue and I am patching it")
+  commentary.phase = "commentary"
+  const answer = part("text", "Fixed. The issue was phase loss.")
+  answer.phase = "final_answer"
+
+  assert.equal(shape([block("assistant", [commentary, answer])]), "N(Fixed. The issue was phase loss.)")
+})
+
+test("settled commentary is hidden across chronological segments of one turn", () => {
+  const commentaryBlock = block("assistant", [
+    { type: "text", content: "Still working", phase: "commentary" },
+    part("tool_use", "compile"),
+  ])
+  commentaryBlock.metadata = { messageUid: "turn-1" }
+  const finalBlock = block("assistant", [{ type: "text", content: "Done", phase: "final_answer" }])
+  finalBlock.metadata = { messageUid: "turn-1" }
+
+  assert.equal(shape([commentaryBlock, finalBlock]), "A(compile) N(Done)")
+})
+
+test("legacy unphased text remains visible beside a final answer", () => {
+  const legacy = part("text", "legacy text")
+  const answer = part("text", "final text")
+  answer.phase = "final_answer"
+  assert.equal(shape([block("assistant", [legacy, answer])]), "N(legacy text+final text)")
+})

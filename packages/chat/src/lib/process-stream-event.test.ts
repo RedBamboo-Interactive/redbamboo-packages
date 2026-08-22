@@ -27,6 +27,9 @@ const token = (content: string): ChatEvent =>
 const turnToken = (content: string, messageUid: string): ChatEvent =>
   ({ ...token(content), messageUid })
 
+const phasedToken = (content: string, phase: "commentary" | "final_answer"): ChatEvent =>
+  ({ ...token(content), messageUid: "turn-phased", phase })
+
 const status = (content: string | null): ChatEvent =>
   ({ type: "status", content, toolName: null, toolInput: null, toolResult: null, messageId: null, messageUid: null })
 
@@ -137,6 +140,16 @@ test("consecutive text tokens concatenate into one part", () => {
   messages = processStreamEvent(messages, true, token("c")).messages
   assert.equal(messages[1].parts.filter((p) => p.type === "text").length, 1)
   assert.equal(text(messages[1]), "abc")
+})
+
+test("streaming preserves phases and keeps commentary separate from the final answer", () => {
+  let messages = processStreamEvent([user("q")], true, phasedToken("Working", "commentary")).messages
+  messages = processStreamEvent(messages, true, phasedToken("Done", "final_answer")).messages
+
+  assert.deepEqual(messages[1]?.parts.map(({ content, phase }) => ({ content, phase })), [
+    { content: "Working", phase: "commentary" },
+    { content: "Done", phase: "final_answer" },
+  ])
 })
 
 test("a new turn uid opens after settled assistant history even before its user record arrives", () => {

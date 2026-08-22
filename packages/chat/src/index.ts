@@ -3,6 +3,7 @@ import "./chat.css"
 export type {
   MessageBlock,
   MessagePart,
+  MessagePhase,
   TranscriptPayloadRef,
   TranscriptPayloadRange,
   TranscriptPayloadChunk,

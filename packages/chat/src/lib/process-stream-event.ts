@@ -269,11 +269,12 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
     toolName: event.toolName || undefined,
     toolInput: event.toolInput || undefined,
     payloadRef: event.payloadRef || undefined,
+    phase: event.phase || undefined,
   }
 
   if (event.type === "text" && lastBlock.parts.length > 0) {
     const lastPart = lastBlock.parts[lastBlock.parts.length - 1]
-    if (lastPart.type === "text") {
+    if (lastPart.type === "text" && lastPart.phase === part.phase) {
       lastBlock.parts[lastBlock.parts.length - 1] = {
         ...lastPart,
         content: lastPart.content + (event.content || ""),

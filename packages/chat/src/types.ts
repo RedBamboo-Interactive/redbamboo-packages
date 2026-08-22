@@ -7,6 +7,8 @@ export interface MessageBlock {
   senderAgentId?: string
 }
 
+export type MessagePhase = "commentary" | "final_answer"
+
 export interface MessagePart {
   type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image"
   content: string
@@ -19,6 +21,8 @@ export interface MessagePart {
   mediaType?: string
   base64?: string
   payloadRef?: TranscriptPayloadRef
+  /** Codex distinguishes transient working commentary from the settled reply. */
+  phase?: MessagePhase
 }
 
 export interface TranscriptPayloadRef {
@@ -172,6 +176,8 @@ export interface ChatEvent {
    * get the same id. Absent on events from older backends.
    */
   messageUid?: string | null
+  /** Optional provider message phase. Older providers and records omit it. */
+  phase?: MessagePhase | null
   /**
    * Correlation id for the tool call the backend is parked on, carried by
    * `question` and echoed by `question_resolved`. Clients send it back when
