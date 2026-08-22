@@ -51,7 +51,8 @@ export interface AppShellProps {
   /**
    * Host-supplied app list for the switcher (and its "Open …" commands).
    * Replaces Red Suite port discovery — used by Leaf, where apps are
-   * plugin routes on the same origin.
+   * plugin routes on the same origin. An explicitly empty list disables
+   * app switching for single-purpose surfaces.
    */
   switcherApps?: SwitcherApp[]
   /**

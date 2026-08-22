@@ -41,6 +41,7 @@ function ShellCommands({
   feedbackEnabled,
   canInstall,
   install,
+  switchAppEnabled,
 }: {
   onAbout: () => void
   onFeedback: () => void
@@ -50,6 +51,7 @@ function ShellCommands({
   feedbackEnabled: boolean
   canInstall: boolean
   install: () => void
+  switchAppEnabled: boolean
 }) {
   const { user, logout } = useAuth()
 
@@ -117,6 +119,7 @@ function ShellCommands({
     group: "Apps",
     keywords: ["apps", "suite", "switcher"],
     action: onSwitchApp,
+    enabled: switchAppEnabled,
   })
 
   return null
@@ -216,6 +219,7 @@ function AppShellInner({
 
   const shareUrl = config.share?.url()
   const dropdownSwitcher = appSwitcherStyle === "dropdown"
+  const appSwitcherEnabled = switcherApps === undefined || switcherApps.length > 0
 
   const brand = activeApp
     ? {
@@ -276,7 +280,7 @@ function AppShellInner({
         <AppHeader
           brand={brand}
           brandSlot={
-            dropdownSwitcher ? (
+            appSwitcherEnabled && dropdownSwitcher ? (
               <AppMenu apps={switcherApps ?? []} open={appMenuOpen} onOpenChange={setAppMenuOpen} onReorder={onReorder}>
                 <AppHeaderBrand {...brand} caret />
               </AppMenu>
@@ -284,7 +288,7 @@ function AppShellInner({
           }
           breadcrumb={breadcrumb}
           navigation={headerContent}
-          onBrandClick={dropdownSwitcher ? undefined : openSwitcher}
+          onBrandClick={appSwitcherEnabled && !dropdownSwitcher ? openSwitcher : undefined}
         >
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -372,7 +376,9 @@ function AppShellInner({
         {children}
       </div>
 
-      <AppSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} apps={switcherApps} />
+      {appSwitcherEnabled && (
+        <AppSwitcher open={switcherOpen} onOpenChange={setSwitcherOpen} apps={switcherApps} />
+      )}
 
       <ShellCommands
         onAbout={openAbout}
@@ -383,6 +389,7 @@ function AppShellInner({
         feedbackEnabled={true}
         canInstall={canInstall}
         install={install}
+        switchAppEnabled={appSwitcherEnabled}
       />
       {switcherApps ? <ProvidedAppCommands apps={switcherApps} /> : <SuiteAppCommands />}
       <CommandPalette />
