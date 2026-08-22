@@ -28,11 +28,6 @@ function uniqueIndexes(indexes: number[]): number[] {
   return [...new Set(indexes)]
 }
 
-function canonicalTurnKey(block: MessageBlock): string {
-  const messageUid = block.metadata?.messageUid
-  return typeof messageUid === "string" && messageUid ? messageUid : block.id
-}
-
 /**
  * Project canonical conversation blocks into visual timeline rows.
  *
@@ -43,11 +38,6 @@ function canonicalTurnKey(block: MessageBlock): string {
  */
 export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0): ActivityTimelineRow[] {
   const rows: ActivityTimelineRow[] = []
-  const settledTurns = new Set(
-    blocks
-      .filter(block => block.role === "assistant" && block.parts.some(part => part.type === "text" && part.phase === "final_answer"))
-      .map(canonicalTurnKey),
-  )
   let activityParts: MessagePart[] = []
   let activitySources: number[] = []
   let activityFirstBlock: MessageBlock | null = null
@@ -121,9 +111,6 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
 
     for (let partIndex = 0; partIndex < block.parts.length; partIndex++) {
       const part = block.parts[partIndex]
-      if (part.type === "text" && part.phase === "commentary" && settledTurns.has(canonicalTurnKey(block))) {
-        continue
-      }
       if (isVisibleContent(part)) {
         flushActivity()
         contentParts.push(part)

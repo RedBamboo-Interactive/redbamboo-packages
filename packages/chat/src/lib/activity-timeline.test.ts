@@ -105,16 +105,19 @@ test("working commentary stays visible until a final answer exists", () => {
   assert.equal(shape([block("assistant", [commentary])]), "N(I am checking that now)")
 })
 
-test("a settled turn renders its final answer instead of duplicate commentary", () => {
+test("a settled turn preserves its commentary before the final answer", () => {
   const commentary = part("text", "I found the issue and I am patching it")
   commentary.phase = "commentary"
   const answer = part("text", "Fixed. The issue was phase loss.")
   answer.phase = "final_answer"
 
-  assert.equal(shape([block("assistant", [commentary, answer])]), "N(Fixed. The issue was phase loss.)")
+  assert.equal(
+    shape([block("assistant", [commentary, answer])]),
+    "N(I found the issue and I am patching it+Fixed. The issue was phase loss.)",
+  )
 })
 
-test("settled commentary is hidden across chronological segments of one turn", () => {
+test("settled commentary remains visible across chronological segments of one turn", () => {
   const commentaryBlock = block("assistant", [
     { type: "text", content: "Still working", phase: "commentary" },
     part("tool_use", "compile"),
@@ -123,7 +126,7 @@ test("settled commentary is hidden across chronological segments of one turn", (
   const finalBlock = block("assistant", [{ type: "text", content: "Done", phase: "final_answer" }])
   finalBlock.metadata = { messageUid: "turn-1" }
 
-  assert.equal(shape([commentaryBlock, finalBlock]), "A(compile) N(Done)")
+  assert.equal(shape([commentaryBlock, finalBlock]), "N(Still working) A(compile) N(Done)")
 })
 
 test("legacy unphased text remains visible beside a final answer", () => {
