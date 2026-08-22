@@ -429,6 +429,8 @@ export interface ChatPanelProps {
   // Controlled mode: consumer provides state + callbacks
   messages?: MessageBlock[]
   isStreaming?: boolean
+  /** The upstream AI event connection is temporarily unavailable and retrying. */
+  isReconnecting?: boolean
   onSend?: (content: string, images?: ImageAttachment[], options?: SendOptions) => void | Promise<unknown>
   onSendInput?: (input: ChatInputPart[], attachments: UploadedAttachment[], options?: SendOptions) => void | Promise<unknown>
   onInterrupt?: () => void
@@ -528,6 +530,7 @@ export interface ChatPanelProps {
   // Render props
   renderStatusLine?: (state: {
     isStreaming: boolean
+    isReconnecting: boolean
     messages: MessageBlock[]
     pendingQuestion: PendingQuestion | null
   }) => React.ReactNode

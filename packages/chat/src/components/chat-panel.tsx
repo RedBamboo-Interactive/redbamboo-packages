@@ -42,6 +42,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const {
     sessionId, queueTransport, persistQueue = true, disabled = false, hideComposer = false, onResume,
+    isReconnecting = false,
     hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl,
@@ -390,9 +391,9 @@ export function ChatPanel(props: ChatPanelProps) {
   const inlineAction = renderComposerInlineAction ?? defaultVoiceAction ?? undefined
 
   const statusLine = renderStatusLine
-    ? renderStatusLine({ isStreaming, messages, pendingQuestion: pendingQuestion ?? null })
-    : isStreaming
-      ? <StreamingStatusLine isStreaming={isStreaming} messages={messages} />
+    ? renderStatusLine({ isStreaming, isReconnecting, messages, pendingQuestion: pendingQuestion ?? null })
+    : isStreaming || isReconnecting
+      ? <StreamingStatusLine isStreaming={isStreaming} isReconnecting={isReconnecting} messages={messages} />
       : pendingQuestion
         ? <PendingQuestionLine />
         : null
