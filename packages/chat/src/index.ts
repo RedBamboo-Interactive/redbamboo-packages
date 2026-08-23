@@ -93,6 +93,12 @@ export { EVENT_TOOL_PREFIX, isEventPart, isEventBlock, streamTargetIndex } from 
 export { getEffectiveToolName } from "./lib/tool-semantics"
 export { rebuildBlocks } from "./lib/rebuild-blocks"
 export type { PersistedMessage } from "./lib/rebuild-blocks"
+export { TranscriptAccumulator } from "./lib/transcript-accumulator"
+export type {
+  TranscriptAccumulatorResult,
+  TranscriptCursor,
+  TranscriptEventProjector,
+} from "./lib/transcript-accumulator"
 export { buildSharePayload } from "./lib/share-payload"
 export type { SharePayload, ShareMessage, ShareMetadata } from "./lib/share-payload"
 export { canonicalizeChatMediaSrc, resolveChatMediaSrc } from "./lib/media-url"

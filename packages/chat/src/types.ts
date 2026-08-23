@@ -185,6 +185,10 @@ export interface ChatEvent {
    * is why those events are deliberately not persisted.
    */
   requestId?: string | null
+  /** Stable transcript lineage assigned by RedCompute. */
+  epoch?: string | null
+  /** Strictly increasing inside one session epoch. */
+  sequence?: number | null
 }
 
 export interface ChatBackend {

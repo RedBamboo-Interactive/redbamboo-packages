@@ -16,6 +16,8 @@ export interface PersistedMessage {
   phase?: MessagePhase | null
   timestamp: string
   attachmentsJson?: string | null
+  epoch?: string | null
+  sequence?: number | null
 }
 
 export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
@@ -24,17 +26,24 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
   let currentTurnUid: string | null = null
   const segmentCounts = new Map<string, number>()
 
-  // Stream payload persistence and ordinary record persistence can complete in
-  // a different order. The record timestamp is the chronology; storage ids and
-  // response order are not.
-  const ordered = records
-    .map((record, index) => ({ record, index }))
-    .sort((a, b) => {
+  // Ordered transcript records use RedCompute's sequence. Legacy records keep
+  // their timestamp chronology during the additive protocol rollout.
+  const indexed = records.map((record, index) => ({ record, index }))
+  const byLegacyTime = (a: typeof indexed[number], b: typeof indexed[number]) => {
       const aTime = Date.parse(a.record.timestamp)
       const bTime = Date.parse(b.record.timestamp)
       const delta = (Number.isNaN(aTime) ? 0 : aTime) - (Number.isNaN(bTime) ? 0 : bTime)
       return delta || a.index - b.index
+  }
+  const legacy = indexed.filter(({ record }) => record.sequence == null).sort(byLegacyTime)
+  const sequenced = indexed
+    .filter(({ record }) => record.sequence != null)
+    .sort((a, b) => {
+      if (a.record.epoch !== b.record.epoch)
+        return byLegacyTime(a, b)
+      return a.record.sequence! - b.record.sequence! || a.index - b.index
     })
+  const ordered = [...legacy, ...sequenced]
     .map(({ record }) => record)
 
   for (const rec of ordered) {
