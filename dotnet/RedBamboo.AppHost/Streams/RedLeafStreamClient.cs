@@ -80,11 +80,15 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
     private readonly ConcurrentDictionary<string, Guid> _entityIds = new();
     private DateTimeOffset _lastWarn = DateTimeOffset.MinValue;
 
-    private sealed class RefreshingJwtHandler(JwtService jwtService) : DelegatingHandler(new HttpClientHandler())
+    private sealed class RefreshingJwtHandler(JwtService jwtService, string serviceId) : DelegatingHandler(new HttpClientHandler())
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            var token = jwtService.GenerateAccessToken("system", "system@redsuite", "System", ["admin"]);
+            // Preserve this projection client's existing administrative API capability while
+            // identifying the actual signed suite service. Confidential RedLeaf entities admit
+            // RedCompute's projection owner, never the generic human-like "system" subject.
+            var token = jwtService.GenerateServiceAccessToken(
+                serviceId, roles: ["service", "admin"]);
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             return base.SendAsync(request, ct);
         }
@@ -95,7 +99,7 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
         _appName = appName;
         _log = log;
 
-        _http = new HttpClient(new RefreshingJwtHandler(jwtService))
+        _http = new HttpClient(new RefreshingJwtHandler(jwtService, appName))
         {
             BaseAddress = new Uri(redLeafBaseUrl.TrimEnd('/') + "/"),
             Timeout = TimeSpan.FromSeconds(15),

@@ -51,14 +51,14 @@ public sealed class JwtService
     /// explicit claims so loopback location alone never grants either trust boundary.
     /// </summary>
     public string GenerateServiceAccessToken(string serviceId, bool computeProvenance = false,
-        bool computeDelegateUser = false)
+        bool computeDelegateUser = false, string[]? roles = null)
     {
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, $"service:{serviceId}"),
             new(JwtRegisteredClaimNames.Email, $"{serviceId}@redsuite"),
             new(JwtRegisteredClaimNames.Name, serviceId),
-            new("roles", JsonSerializer.Serialize(new[] { "service" }), JsonClaimValueTypes.JsonArray),
+            new("roles", JsonSerializer.Serialize(roles ?? ["service"]), JsonClaimValueTypes.JsonArray),
             new("client_id", serviceId),
             new("compute_provenance", computeProvenance ? "true" : "false"),
             new("compute_delegate_user", computeDelegateUser ? "true" : "false"),
