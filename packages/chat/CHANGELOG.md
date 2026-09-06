@@ -1,5 +1,11 @@
 # @redbamboo/chat
 
+## 0.4.5
+
+### Patch Changes
+
+- 5f8effc: Add provider-neutral subscription usage to Session Info, including deduplicated 90% warnings and 100% limit toasts.
+
 ## 0.4.4
 
 ### Patch Changes
