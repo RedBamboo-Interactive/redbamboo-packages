@@ -288,6 +288,41 @@ export interface SessionStats {
   providerEntity?: string | null
 }
 
+export interface ProviderUsageWindow {
+  id: string
+  usedPercent: number
+  windowDurationMinutes: number
+  resetsAt?: string | null
+}
+
+export interface ProviderUsageCredits {
+  hasCredits?: boolean | null
+  unlimited?: boolean | null
+  balance?: string | null
+}
+
+export interface ProviderUsageBucket {
+  id: string
+  name: string
+  windows: ProviderUsageWindow[]
+  credits?: ProviderUsageCredits | null
+  limitReachedType?: string | null
+}
+
+export interface ProviderUsageSnapshot {
+  provider: string
+  displayName: string
+  planType?: string | null
+  fetchedAt: string
+  buckets: ProviderUsageBucket[]
+  resetCreditsAvailable?: number | null
+}
+
+export type ProviderUsageLoader = (
+  provider: string,
+  forceRefresh?: boolean,
+) => Promise<ProviderUsageSnapshot | null>
+
 export interface SessionConfigOption {
   value: string
   label: string
@@ -313,6 +348,7 @@ export interface SessionInfoButtonProps {
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]
   providerOptions?: SessionConfigOption[]
+  loadProviderUsage?: ProviderUsageLoader
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
   children?: React.ReactNode
 }

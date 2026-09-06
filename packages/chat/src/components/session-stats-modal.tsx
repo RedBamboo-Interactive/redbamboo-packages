@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { MessageBlock, SessionStats, SessionConfigOption, SessionAgentInfo } from "../types"
+import type { MessageBlock, SessionStats, SessionConfigOption, SessionAgentInfo, ProviderUsageSnapshot } from "../types"
 import {
   Button,
   Dialog,
@@ -12,6 +12,7 @@ import {
 } from "@redbamboo/ui"
 import { MorphSpinner } from "./morph-spinner"
 import { getSessionResourceHref, type SessionResourceKind } from "../lib/session-resource-links"
+import { formatProviderUsageWindow, remainingProviderUsage } from "../lib/provider-usage"
 
 interface Props {
   open: boolean
@@ -23,6 +24,8 @@ interface Props {
   effortOptions?: SessionConfigOption[]
   qualityTierOptions?: SessionConfigOption[]
   providerOptions?: SessionConfigOption[]
+  providerUsage?: ProviderUsageSnapshot | null
+  providerUsageLoading?: boolean
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
   children?: React.ReactNode
 }
@@ -70,6 +73,79 @@ function formatCost(cost?: number | null): string {
 function shortModel(model?: string | null): string {
   if (!model) return "--"
   return model.replace(/-\d{8}$/, "")
+}
+
+function formatPlan(plan?: string | null): string {
+  if (!plan) return "--"
+  return plan.charAt(0).toUpperCase() + plan.slice(1)
+}
+
+function formatReset(value?: string | null): string | null {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date)
+}
+
+function ProviderUsageBlock({ usage, loading }: { usage?: ProviderUsageSnapshot | null; loading?: boolean }) {
+  if (!usage && !loading) return null
+
+  return (
+    <div className="py-2" data-slot="provider-usage">
+      <div className="flex items-center justify-between py-1.5 gap-3">
+        <span className="text-xs text-text-muted">Subscription usage</span>
+        {loading && !usage ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+            <MorphSpinner color="var(--muted-foreground)" />
+            Loading
+          </span>
+        ) : (
+          <span className="text-sm font-medium text-contrast">{formatPlan(usage?.planType)}</span>
+        )}
+      </div>
+
+      {usage?.buckets.flatMap(bucket => bucket.windows.map(window => {
+        const used = Math.max(0, Math.min(100, window.usedPercent))
+        const remaining = remainingProviderUsage(window)
+        const windowLabel = formatProviderUsageWindow(window.windowDurationMinutes)
+        const label = usage.buckets.length === 1 || bucket.name === usage.displayName
+          ? windowLabel
+          : `${bucket.name} · ${windowLabel}`
+        const reset = formatReset(window.resetsAt)
+        return (
+          <div key={`${bucket.id}:${window.id}`} className="py-1.5" data-provider-usage-window={`${bucket.id}:${window.id}`}>
+            <div className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="min-w-0 truncate text-text-muted" title={label}>{label}</span>
+              <span className="shrink-0 font-medium text-contrast">{remaining}% left</span>
+            </div>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-overlay-6">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${used}%`,
+                  backgroundColor: used < 90 ? "var(--color-accent-teal)" : used < 100 ? "var(--color-accent-gold)" : "var(--color-accent-red)",
+                }}
+              />
+            </div>
+            <div className="mt-1 flex justify-between text-[10px] text-text-muted">
+              <span>{Math.round(used * 10) / 10}% used</span>
+              {reset && <span>Resets {reset}</span>}
+            </div>
+          </div>
+        )
+      }))}
+
+      {usage?.resetCreditsAvailable != null && usage.resetCreditsAvailable > 0 && (
+        <StatRow label="Full resets available" value={String(usage.resetCreditsAvailable)} />
+      )}
+    </div>
+  )
 }
 
 function currentModelAlias(model?: string | null): string {
@@ -237,7 +313,7 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   )
 }
 
-export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, onConfigChange, children }: Props) {
+export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, providerUsage, providerUsageLoading, onConfigChange, children }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
   const pct = getContextPercent(s)
@@ -368,6 +444,8 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                 {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}
                 {s.status && <StatRow label="Status" value={s.status} />}
               </div>
+
+              <ProviderUsageBlock usage={providerUsage} loading={providerUsageLoading} />
 
               <div className="py-2">
                 <StatRow label="Messages" value={String(s.messageCount || messages.length)} />

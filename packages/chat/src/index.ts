@@ -40,6 +40,11 @@ export type {
   SessionStats,
   SessionConfigOption,
   SessionAgentInfo,
+  ProviderUsageWindow,
+  ProviderUsageCredits,
+  ProviderUsageBucket,
+  ProviderUsageSnapshot,
+  ProviderUsageLoader,
   ContextIndicatorProps,
   SessionInfoButtonProps,
 } from "./types"
@@ -59,6 +64,12 @@ export type { ParsedEvent, EventViewProps } from "./components/event-view"
 export { ToolCallCard } from "./components/tool-call-card"
 export { ContextIndicator, SessionInfoButton } from "./components/context-indicator"
 export { SessionStatsModal, getContextPercent, getMaxContext } from "./components/session-stats-modal"
+export {
+  claimProviderUsageAlerts,
+  formatProviderUsageWindow,
+  remainingProviderUsage,
+} from "./lib/provider-usage"
+export type { ProviderUsageThresholdAlert } from "./lib/provider-usage"
 export { ChatStatusLine, StreamingStatusLine } from "./components/streaming-status-line"
 export { PendingQuestionLine } from "./components/pending-question-line"
 export { HandsFreeStatusLine } from "./components/hands-free-status-line"
