@@ -445,8 +445,6 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                 {s.status && <StatRow label="Status" value={s.status} />}
               </div>
 
-              <ProviderUsageBlock usage={providerUsage} loading={providerUsageLoading} />
-
               <div className="py-2">
                 <StatRow label="Messages" value={String(s.messageCount || messages.length)} />
                 <StatRow label="User messages" value={String(userMessages)} />
@@ -482,6 +480,8 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                   </div>
                 )}
               </div>
+
+              <ProviderUsageBlock usage={providerUsage} loading={providerUsageLoading} />
             </div>
           </div>
         </div>
