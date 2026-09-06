@@ -1,5 +1,11 @@
 # @redbamboo/chat
 
+## 0.4.6
+
+### Patch Changes
+
+- 481eb42: Place provider subscription usage at the bottom of the shared Session Info dialog.
+
 ## 0.4.5
 
 ### Patch Changes
