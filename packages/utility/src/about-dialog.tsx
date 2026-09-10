@@ -29,6 +29,8 @@ export interface AboutDialogProps {
 }
 
 function fmtVersion(v: string) {
+  const development = v.match(/^\d+\.\d+\.\d+-dev(?:\+(.+))?$/i)
+  if (development) return development[1] ? `dev+${development[1]}` : "dev"
   return v.startsWith("v") ? v : `v${v}`
 }
 
