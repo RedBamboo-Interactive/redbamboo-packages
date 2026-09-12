@@ -18,6 +18,12 @@ import {
 } from "../lib/entity-embed"
 import { isImageUrl } from "../lib/event-image"
 import { resolveChatMediaSrc } from "../lib/media-url"
+import { parseLocalFileLink } from "../lib/local-file-link"
+
+type FileLinkResolver = (
+  filePath: string,
+  opts?: { line?: number; column?: number },
+) => (() => void) | undefined
 
 // Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
 const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
@@ -80,14 +86,53 @@ function MarkdownLink({
   href,
   children,
   resolve,
+  resolveFileLink,
   ...props
-}: React.AnchorHTMLAttributes<HTMLAnchorElement> & { resolve?: (s: string) => string | undefined }) {
+}: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+  resolve?: (s: string) => string | undefined
+  resolveFileLink?: FileLinkResolver
+}) {
   if (isImageUrl(href)) {
     const alt = typeof children === "string" ? children : ""
     return <ImageThumbnail src={href} alt={alt} resolve={resolve} />
   }
 
-  return <a href={href} {...props}>{children}</a>
+  const localFile = parseLocalFileLink(href)
+  if (localFile) {
+    const action = resolveFileLink?.(localFile.filePath, {
+      line: localFile.line,
+      column: localFile.column,
+    })
+    const fallbackLabel = localFile.filePath.replace(/\\/g, "/").split("/").pop() ?? localFile.filePath
+    const location = localFile.line
+      ? `, line ${localFile.line}${localFile.column ? `, column ${localFile.column}` : ""}`
+      : ""
+    const className = "inline-flex max-w-full items-center gap-1 rounded-md border border-overlay-10 bg-overlay-4 px-1.5 py-0.5 font-sans text-[0.85em] text-text-secondary align-baseline transition-colors hover:border-overlay-30 hover:bg-overlay-6 disabled:cursor-default disabled:opacity-60"
+    const content = (
+      <>
+        <Icon name="ph-bold ph-file" aria-hidden="true" className="size-3 shrink-0" />
+        <span className="truncate">{children || fallbackLabel}</span>
+        {localFile.line && <span className="shrink-0 text-text-muted">:{localFile.line}</span>}
+      </>
+    )
+    return action ? (
+      <button
+        type="button"
+        data-slot="local-file-link"
+        className={className}
+        title={`Open ${localFile.filePath}${location}`}
+        aria-label={`Open ${localFile.filePath}${location}`}
+        onClick={action}
+      >
+        {content}
+      </button>
+    ) : (
+      <span data-slot="local-file-link" className={className} title={localFile.filePath}>{content}</span>
+    )
+  }
+
+  const opensNewTab = /^https?:\/\//i.test(href ?? "")
+  return <a {...props} href={href} target={opensNewTab ? "_blank" : undefined} rel={opensNewTab ? "noopener noreferrer" : undefined}>{children}</a>
 }
 
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
@@ -204,6 +249,7 @@ function EntityMarkdownCard({ reference }: { reference: EntityEmbedReference }) 
 
 function useMarkdownComponents(
   resolveImageSrc: ((src: string) => string | undefined) | undefined,
+  resolveFileLink: FileLinkResolver | undefined,
   currentOrigin: string,
 ) {
   const entityEmbedsEnabled = useEntityInteraction() !== null
@@ -217,7 +263,7 @@ function useMarkdownComponents(
       return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
     },
     a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
-      <MarkdownLink href={href} resolve={resolveRef.current} {...props}>{children}</MarkdownLink>
+      <MarkdownLink href={href} resolve={resolveRef.current} resolveFileLink={resolveFileLink} {...props}>{children}</MarkdownLink>
     ),
     p: ({ node, children, ...props }: React.HTMLAttributes<HTMLParagraphElement> & { node?: unknown }) => {
       const reference = entityEmbedsEnabled
@@ -227,7 +273,7 @@ function useMarkdownComponents(
         ? <EntityMarkdownCard reference={reference} />
         : <p {...props}>{children}</p>
     },
-  }), [currentOrigin, entityEmbedsEnabled])
+  }), [currentOrigin, entityEmbedsEnabled, resolveFileLink])
 }
 
 const CHARS_PER_FRAME = 3
@@ -236,10 +282,12 @@ export function StreamingText({
   content,
   isLive,
   resolveImageSrc,
+  resolveFileLink,
 }: {
   content: string
   isLive: boolean
   resolveImageSrc?: (src: string) => string | undefined
+  resolveFileLink?: FileLinkResolver
 }) {
   const environment = useUiEnvironment()
   const revealedRef = useRef(isLive ? 0 : content.length)
@@ -266,7 +314,7 @@ export function StreamingText({
     return () => environment.window.cancelAnimationFrame(rafRef.current)
   }, [environment.window, isLive, content.length])
 
-  const mdComponents = useMarkdownComponents(resolveImageSrc, environment.window.location.origin)
+  const mdComponents = useMarkdownComponents(resolveImageSrc, resolveFileLink, environment.window.location.origin)
 
   return (
     <Markdown
@@ -283,12 +331,14 @@ export function StreamingText({
 export function MarkdownRenderer({
   content,
   resolveImageSrc,
+  resolveFileLink,
 }: {
   content: string
   resolveImageSrc?: (src: string) => string | undefined
+  resolveFileLink?: FileLinkResolver
 }) {
   const environment = useUiEnvironment()
-  const mdComponents = useMarkdownComponents(resolveImageSrc, environment.window.location.origin)
+  const mdComponents = useMarkdownComponents(resolveImageSrc, resolveFileLink, environment.window.location.origin)
 
   return (
     <Markdown

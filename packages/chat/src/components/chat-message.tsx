@@ -402,9 +402,9 @@ export const ChatMessage = memo(function ChatMessage({
           group.kind === "text" ? (
             <div key={i} className="text-sm leading-relaxed font-serif markdown-body msg-enter-ai">
               {group.parts[0].isPartial ? (
-                <StreamingText content={group.parts[0].content} isLive resolveImageSrc={resolveImageSrc} />
+                <StreamingText content={group.parts[0].content} isLive resolveImageSrc={resolveImageSrc} resolveFileLink={resolveFileLink} />
               ) : (
-                <MarkdownRenderer content={group.parts[0].content} resolveImageSrc={resolveImageSrc} />
+                <MarkdownRenderer content={group.parts[0].content} resolveImageSrc={resolveImageSrc} resolveFileLink={resolveFileLink} />
               )}
             </div>
           ) : group.kind === "audio" ? (
