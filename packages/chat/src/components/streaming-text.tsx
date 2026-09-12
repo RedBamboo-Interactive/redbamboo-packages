@@ -143,6 +143,7 @@ function MarkdownLink({
         target="_blank"
         rel="noopener noreferrer"
         className={`${AUTHORED_LINK_CLASS_NAME} ${props.className ?? ""}`}
+        style={{ ...props.style, textDecoration: "none" }}
         title={props.title ?? `Open ${href} in a new tab`}
       >
         <Icon name="ph-bold ph-globe" aria-hidden="true" className="size-3 shrink-0" />
