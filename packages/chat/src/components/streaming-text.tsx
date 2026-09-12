@@ -17,6 +17,7 @@ import {
   type EntityEmbedReference,
 } from "../lib/entity-embed"
 import { isImageUrl } from "../lib/event-image"
+import { isExternalWebLink } from "../lib/external-web-link"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseLocalFileLink } from "../lib/local-file-link"
 
@@ -24,6 +25,8 @@ type FileLinkResolver = (
   filePath: string,
   opts?: { line?: number; column?: number },
 ) => (() => void) | undefined
+
+const AUTHORED_LINK_CLASS_NAME = "inline-flex max-w-full items-center gap-1 rounded-md border border-overlay-10 bg-overlay-4 px-1.5 py-0.5 font-sans text-[0.85em] text-text-secondary no-underline align-baseline transition-colors hover:border-overlay-30 hover:bg-overlay-6"
 
 // Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
 const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
@@ -107,7 +110,7 @@ function MarkdownLink({
     const location = localFile.line
       ? `, line ${localFile.line}${localFile.column ? `, column ${localFile.column}` : ""}`
       : ""
-    const className = "inline-flex max-w-full items-center gap-1 rounded-md border border-overlay-10 bg-overlay-4 px-1.5 py-0.5 font-sans text-[0.85em] text-text-secondary align-baseline transition-colors hover:border-overlay-30 hover:bg-overlay-6 disabled:cursor-default disabled:opacity-60"
+    const className = `${AUTHORED_LINK_CLASS_NAME} disabled:cursor-default disabled:opacity-60`
     const content = (
       <>
         <Icon name="ph-bold ph-file" aria-hidden="true" className="size-3 shrink-0" />
@@ -131,8 +134,24 @@ function MarkdownLink({
     )
   }
 
-  const opensNewTab = /^https?:\/\//i.test(href ?? "")
-  return <a {...props} href={href} target={opensNewTab ? "_blank" : undefined} rel={opensNewTab ? "noopener noreferrer" : undefined}>{children}</a>
+  if (isExternalWebLink(href)) {
+    return (
+      <a
+        {...props}
+        data-slot="external-web-link"
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${AUTHORED_LINK_CLASS_NAME} ${props.className ?? ""}`}
+        title={props.title ?? `Open ${href} in a new tab`}
+      >
+        <Icon name="ph-bold ph-globe" aria-hidden="true" className="size-3 shrink-0" />
+        <span className="truncate">{children || href}</span>
+      </a>
+    )
+  }
+
+  return <a {...props} href={href}>{children}</a>
 }
 
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
