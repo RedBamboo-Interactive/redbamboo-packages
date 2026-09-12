@@ -17,7 +17,7 @@ import {
   type EntityEmbedReference,
 } from "../lib/entity-embed"
 import { isImageUrl } from "../lib/event-image"
-import { isExternalWebLink } from "../lib/external-web-link"
+import { isExternalWebLink, isInternalLeafLink } from "../lib/external-web-link"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseLocalFileLink } from "../lib/local-file-link"
 
@@ -90,10 +90,12 @@ function MarkdownLink({
   children,
   resolve,
   resolveFileLink,
+  currentOrigin,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
   resolve?: (s: string) => string | undefined
   resolveFileLink?: FileLinkResolver
+  currentOrigin: string
 }) {
   if (isImageUrl(href)) {
     const alt = typeof children === "string" ? children : ""
@@ -131,6 +133,21 @@ function MarkdownLink({
       </button>
     ) : (
       <span data-slot="local-file-link" className={className} title={localFile.filePath}>{content}</span>
+    )
+  }
+
+  if (isInternalLeafLink(href, currentOrigin)) {
+    return (
+      <a
+        {...props}
+        data-slot="internal-leaf-link"
+        href={href}
+        className={`${AUTHORED_LINK_CLASS_NAME} ${props.className ?? ""}`}
+        style={{ ...props.style, textDecoration: "none" }}
+      >
+        <Icon name="ph-bold ph-leaf" aria-hidden="true" className="size-3 shrink-0" />
+        <span className="truncate">{children || href}</span>
+      </a>
     )
   }
 
@@ -283,7 +300,7 @@ function useMarkdownComponents(
       return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
     },
     a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
-      <MarkdownLink href={href} resolve={resolveRef.current} resolveFileLink={resolveFileLink} {...props}>{children}</MarkdownLink>
+      <MarkdownLink href={href} resolve={resolveRef.current} resolveFileLink={resolveFileLink} currentOrigin={currentOrigin} {...props}>{children}</MarkdownLink>
     ),
     p: ({ node, children, ...props }: React.HTMLAttributes<HTMLParagraphElement> & { node?: unknown }) => {
       const reference = entityEmbedsEnabled
