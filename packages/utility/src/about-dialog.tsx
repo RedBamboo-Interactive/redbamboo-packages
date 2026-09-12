@@ -22,6 +22,7 @@ export interface AboutDialogProps {
   app: AboutApp
   appGitHub?: string
   companyGitHub?: string
+  discordInvite?: string
   latestVersion?: string
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -38,6 +39,7 @@ function AboutDialog({
   app,
   appGitHub,
   companyGitHub,
+  discordInvite,
   latestVersion,
   open,
   onOpenChange,
@@ -103,6 +105,18 @@ function AboutDialog({
                 Open-source tools for creators and developers
               </p>
             </div>
+
+            {discordInvite && (
+              <a
+                href={discordInvite}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-fit items-center gap-2 rounded-full border border-[#5865f2]/30 bg-[#5865f2]/10 px-3 py-1.5 text-sm font-medium text-[#7782f3] transition-colors hover:border-[#5865f2]/50 hover:bg-[#5865f2]/15 hover:text-[#8993f5]"
+              >
+                <i className="ph-bold ph-discord-logo" />
+                Join our Discord
+              </a>
+            )}
 
             {(appGitHub || companyGitHub) && (
               <div className="flex flex-col gap-1.5">

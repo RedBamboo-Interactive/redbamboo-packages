@@ -31,6 +31,9 @@ export interface AppShellConfig {
     company?: string
   }
 
+  /** Optional community invite shown as a pill in the About dialog. */
+  discordInvite?: string
+
   latestVersion?: string
 
   share?: AppShellShare

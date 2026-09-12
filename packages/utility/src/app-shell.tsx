@@ -403,6 +403,7 @@ function AppShellInner({
         }}
         appGitHub={config.github?.app}
         companyGitHub={config.github?.company}
+        discordInvite={config.discordInvite}
         latestVersion={config.latestVersion}
         open={aboutOpen}
         onOpenChange={setAboutOpen}
