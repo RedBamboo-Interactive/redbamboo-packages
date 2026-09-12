@@ -26,7 +26,7 @@ pnpm test        # run all tests
 
 ## Publishing
 
-This repo uses [Changesets](https://github.com/changesets/changesets) for versioning and publishing.
+This repo uses [Changesets](https://github.com/changesets/changesets) for versioning and publishing. The GitHub `Publish packages (manual)` workflow is intentionally dispatched only for releases; ordinary pushes run CI without attempting npm publication. `@redbamboo/testing` is internal workspace tooling and is never published.
 
 ```bash
 pnpm changeset        # create a changeset for your changes

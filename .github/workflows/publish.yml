@@ -1,8 +1,7 @@
-name: Publish
+name: Publish packages (manual)
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
