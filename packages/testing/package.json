@@ -1,6 +1,7 @@
 {
   "name": "@redbamboo/testing",
   "version": "0.1.0",
+  "private": true,
   "description": "Shared Playwright utilities for the Red Suite (Nova, CodeRed, RedMatter, RedLeaf)",
   "type": "module",
   "license": "MIT",
