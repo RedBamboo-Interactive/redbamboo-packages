@@ -3,8 +3,10 @@ import type { PersistedMessage } from "./rebuild-blocks"
 export type DurableTranscriptRequestId = string | number
 
 /**
- * One server-authored, chronological page of immutable persisted transcript
+ * One server-authored storage-keyset page of immutable persisted transcript
  * records. Cursor values are opaque to this package and its consumers.
+ * Sequence ranges describe canonical coverage; storage order may contain
+ * inversions when concurrent writers persist already-sequenced events.
  */
 export interface PersistedTranscriptPage {
   epoch: string | null
@@ -50,8 +52,8 @@ interface ValidatedPage {
 }
 
 /**
- * Accumulates keyset-paged durable transcript records without applying any
- * product projection. Newest refreshes retain an already loaded prefix;
+ * Accumulates storage-keyset-paged durable transcript records without applying
+ * product projection or canonical ordering. Newest refreshes retain an already loaded prefix;
  * older/newer pages are accepted only against the anchor that requested them.
  *
  * This deliberately lives beside TranscriptAccumulator. Complete snapshots
@@ -104,12 +106,6 @@ export class DurableTranscriptPager {
       this.installPage(page, validated)
       return this.accept()
     }
-
-    if (
-      this.throughSequence !== null
-      && validated.throughSequence !== null
-      && validated.throughSequence < this.throughSequence
-    ) return this.reject("invalid-page")
 
     this.records = mergeRecords(this.records, validated.records, page.epoch)
     if (!this.oldestEdgeEstablished && (validated.records.length > 0 || page.oldestCursor !== null)) {
@@ -191,11 +187,6 @@ export class DurableTranscriptPager {
     if (typeof validated === "string") return this.reject(validated)
 
     if (direction === "older") {
-      if (
-        this.fromSequence !== null
-        && validated.fromSequence !== null
-        && validated.fromSequence > this.fromSequence
-      ) return this.reject("invalid-page")
       if (page.oldestCursor === expectedCursor)
         return this.reject("invalid-page")
       this.records = mergeRecords(validated.records, this.records, page.epoch)
@@ -204,11 +195,6 @@ export class DurableTranscriptPager {
       this.hasEarlier = page.hasEarlier
     }
     else {
-      if (
-        this.throughSequence !== null
-        && validated.throughSequence !== null
-        && validated.throughSequence < this.throughSequence
-      ) return this.reject("invalid-page")
       const isTerminalNoOp = validated.records.length === 0
         && page.hasLater === false
         && page.newestCursor === expectedCursor
@@ -272,15 +258,9 @@ function validatePage(
 
   const seen = new Set<string>()
   const records: PersistedMessage[] = []
-  let previousSequence: number | null = null
   for (const record of page.records) {
     const identity = persistedRecordIdentity(record, page.epoch)
     if (!identity) return "invalid-page"
-    if (record.sequence != null) {
-      if (previousSequence !== null && record.sequence < previousSequence)
-        return "invalid-page"
-      previousSequence = record.sequence
-    }
     if (seen.has(identity)) continue
     seen.add(identity)
     records.push(record)

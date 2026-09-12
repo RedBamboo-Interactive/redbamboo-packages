@@ -111,6 +111,7 @@ export type {
   TranscriptEventProjector,
 } from "./lib/transcript-accumulator"
 export { DurableTranscriptPager } from "./lib/durable-transcript-pager"
+export { refreshRemoteMessageQueue } from "./lib/remote-message-queue-store"
 export type {
   DurableTranscriptPageRejection,
   DurableTranscriptPagerResult,

@@ -24,6 +24,10 @@ function record(
   }
 }
 
+function storedRecord(id: number, sequence: number): PersistedMessage {
+  return { ...record(sequence), id }
+}
+
 function page(
   records: PersistedMessage[],
   options: Partial<Omit<PersistedTranscriptPage, "records" | "fromSequence" | "throughSequence">> = {},
@@ -410,6 +414,67 @@ test("requires the server's complete-messageUid boundary guarantee", () => {
   assert.equal(blocks[0].parts[0].content, "record-1record-2")
 })
 
+test("accepts storage-order sequence inversions and reconstructs canonical sequence order", () => {
+  const pager = new DurableTranscriptPager()
+  const stored = [
+    storedRecord(1000, 109),
+    storedRecord(1001, 111),
+    storedRecord(1002, 110),
+    storedRecord(1003, 112),
+  ]
+
+  pager.startNewestPage("inverted")
+  const result = pager.commitNewestPage("inverted", page(stored))
+
+  assert.equal(result.accepted, true)
+  assert.deepEqual(result.records.map(item => item.id), [1000, 1001, 1002, 1003])
+  assert.deepEqual(
+    rebuildBlocks(result.records).map(block => block.parts[0]?.content),
+    ["record-109", "record-110", "record-111", "record-112"],
+  )
+})
+
+test("accepts overlapping sequence ranges across storage-anchored older and newer pages", () => {
+  const pager = new DurableTranscriptPager()
+  pager.startNewestPage("initial")
+  pager.commitNewestPage(
+    "initial",
+    page([storedRecord(200, 20), storedRecord(201, 22)], {
+      hasEarlier: true,
+      hasLater: true,
+    }),
+  )
+
+  const olderAnchor = pager.startOlderPage("older")
+  const older = pager.prependOlderPage(
+    "older",
+    olderAnchor,
+    page([storedRecord(198, 21), storedRecord(199, 23)], {
+      hasEarlier: false,
+      hasLater: true,
+    }),
+  )
+  assert.equal(older.accepted, true)
+
+  const newerAnchor = pager.startNewerPage("newer")
+  const newer = pager.appendNewerPage(
+    "newer",
+    newerAnchor,
+    page([storedRecord(202, 18), storedRecord(203, 19)], {
+      hasEarlier: true,
+      hasLater: false,
+    }),
+  )
+
+  assert.equal(newer.accepted, true)
+  assert.equal(new Set(newer.records.map(item => `${item.epoch}:${item.sequence}`)).size, 6)
+  assert.deepEqual(newer.records.map(item => item.id), [198, 199, 200, 201, 202, 203])
+  assert.deepEqual(
+    rebuildBlocks(newer.records).map(block => block.parts[0]?.content),
+    ["record-18", "record-19", "record-20", "record-21", "record-22", "record-23"],
+  )
+})
+
 test("uses typed legacy record ids without content or timestamp deduplication", () => {
   const base = {
     role: "assistant",
@@ -448,29 +513,6 @@ test("rejects malformed sequence metadata without changing accepted state", () =
   )
   assert.equal(badRange.rejection, "invalid-page")
   assert.deepEqual(badRange.records.map(item => item.sequence), [1])
-})
-
-test("rejects a sequenced page that would move its requested edge backwards", () => {
-  const pager = new DurableTranscriptPager()
-  pager.startNewestPage("initial")
-  pager.commitNewestPage("initial", page([record(10), record(11)]))
-
-  pager.startNewestPage("stale-newest")
-  const staleNewest = pager.commitNewestPage(
-    "stale-newest",
-    page([record(8), record(9)], { oldestCursor: "cursor-8", newestCursor: "cursor-9" }),
-  )
-  assert.equal(staleNewest.rejection, "invalid-page")
-  assert.deepEqual(staleNewest.records.map(item => item.sequence), [10, 11])
-
-  const olderAnchor = pager.startOlderPage("not-older")
-  const notOlder = pager.prependOlderPage(
-    "not-older",
-    olderAnchor,
-    page([record(12)], { oldestCursor: "cursor-12", newestCursor: "cursor-12" }),
-  )
-  assert.equal(notOlder.rejection, "invalid-page")
-  assert.deepEqual(notOlder.records.map(item => item.sequence), [10, 11])
 })
 
 test("reset clears records, cursors, page facts, and pending request generations", () => {
