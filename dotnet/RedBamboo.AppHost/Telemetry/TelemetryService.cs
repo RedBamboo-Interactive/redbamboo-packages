@@ -9,6 +9,7 @@ public class TelemetryService : IAsyncDisposable
     private readonly string _connectionString;
     private readonly Channel<TelemetryEntry> _channel;
     private readonly Task _consumerTask;
+    private readonly Task _cleanupTask;
     private readonly CancellationTokenSource _cts = new();
 
     private readonly Dictionary<string, string> _descriptions = new(StringComparer.OrdinalIgnoreCase);
@@ -39,7 +40,7 @@ public class TelemetryService : IAsyncDisposable
 
         InitializeDatabase();
         _consumerTask = Task.Run(() => ConsumeAsync(_cts.Token));
-        _ = Task.Run(() => CleanupLoopAsync(_cts.Token));
+        _cleanupTask = Task.Run(() => CleanupLoopAsync(_cts.Token));
     }
 
     public void Record(TelemetryEntry entry)
@@ -97,6 +98,7 @@ public class TelemetryService : IAsyncDisposable
         await _cts.CancelAsync();
         _channel.Writer.Complete();
         try { await _consumerTask; } catch (OperationCanceledException) { }
+        try { await _cleanupTask; } catch (OperationCanceledException) { }
         _cts.Dispose();
     }
 
