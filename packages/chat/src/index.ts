@@ -110,6 +110,14 @@ export type {
   TranscriptCursor,
   TranscriptEventProjector,
 } from "./lib/transcript-accumulator"
+export { DurableTranscriptPager } from "./lib/durable-transcript-pager"
+export type {
+  DurableTranscriptPageRejection,
+  DurableTranscriptPagerResult,
+  DurableTranscriptPagerState,
+  DurableTranscriptRequestId,
+  PersistedTranscriptPage,
+} from "./lib/durable-transcript-pager"
 export { buildSharePayload } from "./lib/share-payload"
 export type { SharePayload, ShareMessage, ShareMetadata } from "./lib/share-payload"
 export { canonicalizeChatMediaSrc, resolveChatMediaSrc } from "./lib/media-url"
