@@ -103,9 +103,15 @@ export function useLogStream(opts?: UseLogStreamOptions): UseLogStreamReturn {
 
   useEffect(() => {
     activeRef.current = true
-    refresh()
+    if (!autoConnect) {
+      setConnected(false)
+      setLoading(false)
+      return () => {
+        activeRef.current = false
+      }
+    }
 
-    if (!autoConnect) return
+    refresh()
 
     const handle = createWebSocket({
       url: wsUrl,

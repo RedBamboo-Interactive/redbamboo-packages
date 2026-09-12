@@ -193,7 +193,10 @@ function LogEntryRow({ entry }: { entry: LogEntry }) {
   const source = entrySource(entry)
 
   return (
-    <div data-slot="log-entry">
+    <div
+      data-slot="log-entry"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "29px" }}
+    >
       <div
         className={cn(
           "grid items-center gap-x-3 px-3 py-1 hover:bg-overlay-4 transition-colors border-b border-overlay-6 cursor-pointer",
