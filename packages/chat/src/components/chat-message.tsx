@@ -18,7 +18,7 @@ import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { LazyToolOutput } from "./lazy-tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
-import { isEventPart, isEventBlock } from "../lib/event-parts"
+import { isEventPart, isEventBlock, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName } from "../lib/tool-semantics"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
@@ -533,11 +533,12 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
         {parts.filter(p => p.type !== "tool_result").map((part, i) => {
           const inFlight = isLive && !!part.isPartial
           const event = isEventPart(part)
+          const squareEvent = usesSquareEventMarker(part)
           return (
             <button
               key={i}
               onClick={() => handleClick(part)}
-              className={`w-2.5 h-2.5 ${event ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
+              className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
               style={{ backgroundColor: getPartColor(part) }}
               title={partLabel(part)}
             />

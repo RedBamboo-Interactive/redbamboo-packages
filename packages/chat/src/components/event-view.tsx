@@ -76,6 +76,8 @@ function EventBody({ event, resolveImageSrc, resolveEventLink, onNavigate }: Eve
         return <WeatherEventView event={event} />
       case "discussion":
         return <DiscussionEventView event={event} resolveEventLink={resolveEventLink} onNavigate={onNavigate} />
+      case "delegation":
+        return <DelegationEventView event={event} resolveEventLink={resolveEventLink} onNavigate={onNavigate} />
       case "outfit":
         return <OutfitEventView event={event} resolveImageSrc={resolveImageSrc} />
       case "hue":
@@ -380,6 +382,58 @@ function DiscussionEventView({ event, resolveEventLink, onNavigate }: {
             {kind === "archived" && <Tag>archived</Tag>}
           </div>
           {preview && <p className="text-xs font-serif text-text-muted">{preview}</p>}
+        </div>
+      </EventCard>
+    </div>
+  )
+}
+
+function DelegationEventView({ event, resolveEventLink, onNavigate }: {
+  event: ParsedEvent
+  resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  onNavigate?: () => void
+}) {
+  const data = event.data!
+  const sessionId = str(data, "sessionId")
+  const repository = str(data, "repository")
+  const agent = str(data, "agent")
+  const status = str(data, "status")
+  const continued = data.continued === true
+  const openDelegation = resolveEventLink?.(event)
+
+  if (!sessionId) return <GenericEventView event={event} />
+
+  return (
+    <div data-slot="delegation-event-view">
+      <EventCard>
+        <div className="p-3 space-y-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <i className="ph-bold ph-code text-sm shrink-0" style={{ color: event.color ?? undefined }} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-text-primary truncate">
+                {continued ? "Continued Code session" : "Delegated to Code"}
+              </p>
+              <p className="text-xs font-mono text-text-disabled truncate">{sessionId}</p>
+            </div>
+            {status && <Tag>{status}</Tag>}
+          </div>
+          {(repository || agent) && (
+            <div className="flex gap-2 flex-wrap">
+              {repository && <Tag>{repository}</Tag>}
+              {agent && <Tag>{agent}</Tag>}
+            </div>
+          )}
+          {openDelegation && (
+            <button
+              type="button"
+              onClick={() => { onNavigate?.(); openDelegation() }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-overlay-10 hover:text-contrast"
+              title="Open Code session"
+            >
+              <i className="ph-bold ph-arrow-square-out text-[11px]" />
+              Open in Code
+            </button>
+          )}
         </div>
       </EventCard>
     </div>

@@ -7,7 +7,7 @@ import type { MessageBlock, MessagePart } from "../types"
  *
  * Frieze events are ambient world facts a host interleaves into a conversation
  * (Nova's weather/music/discussion timeline). They ride on `tool_use` parts
- * named `event:<key>` so they render as frieze dots and open a detail modal,
+ * named `event:<key>` so they render in the frieze and open a detail modal,
  * but they are not something the model wrote.
  *
  * The distinction matters wherever code asks "which block is the model's
@@ -18,6 +18,11 @@ export const EVENT_TOOL_PREFIX = "event:"
 
 export function isEventPart(part: MessagePart): boolean {
   return part.type === "tool_use" && !!part.toolName?.startsWith(EVENT_TOOL_PREFIX)
+}
+
+/** Action-like events keep the square tool affordance instead of an ambient dot. */
+export function usesSquareEventMarker(part: MessagePart): boolean {
+  return isEventPart(part) && part.toolName === "event:delegation"
 }
 
 /** True for a block carrying only frieze events, i.e. ambient, not a model turn. */
