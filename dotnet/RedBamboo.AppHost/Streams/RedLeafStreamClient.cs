@@ -273,6 +273,7 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
         if (!await EnsureStreamAsync(stream, ct))
             throw new InvalidOperationException($"Stream '{stream}' is unavailable in RedLeaf");
 
+        await FlushUpsertsAsync(ct);
         var entityId = await ResolveEntityIdAsync(entitySlug, ct)
             ?? throw new InvalidOperationException($"Entity '{entitySlug}' is unavailable in RedLeaf");
         var body = JsonSerializer.Serialize(new
