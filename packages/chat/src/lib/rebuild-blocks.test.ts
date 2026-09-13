@@ -55,3 +55,24 @@ test("history preserves message phases and does not merge commentary into the fi
     { content: "Done", phase: "final_answer" },
   ])
 })
+
+test("batch identities survive reconstruction beside images, files and captured context", () => {
+  const blocks = rebuildBlocks([{
+    id: 7, role: "user", eventType: "text", messageUid: "first", epoch: "e", sequence: 12,
+    content: '<nova-context input="typed">context</nova-context>one\ntwo', timestamp: "2026-09-12T22:00:00Z",
+    attachmentsJson: JSON.stringify({ inputMessageUids: ["first", "second"],
+      attachments: [{ id: "att_file", kind: "file", name: "notes.txt" }],
+      images: [{ mediaType: "image/png", base64: "cG5n" }] }),
+  }])
+  assert.deepEqual(blocks[0].inputMessageUids, ["first", "second"])
+  assert.equal(blocks[0].metadata?.input, "typed")
+  assert.equal(blocks[0].parts[0].attachments?.[0].id, "att_file")
+  assert.equal(blocks[0].parts[0].images?.[0].base64, "cG5n")
+})
+test("malformed batch metadata cannot invent input identities", () => {
+  for (const inputMessageUids of [null, "first", [null, 4, "", "second"]]) {
+    const blocks = rebuildBlocks([{ id: 1, role: "user", eventType: "text", messageUid: "first",
+      timestamp: "2026-09-12T22:00:00Z", attachmentsJson: JSON.stringify({ inputMessageUids }) }])
+    assert.deepEqual(blocks[0].inputMessageUids, Array.isArray(inputMessageUids) ? ["second"] : undefined)
+  }
+})

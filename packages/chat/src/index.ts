@@ -103,6 +103,8 @@ export { processStreamEvent, parseStructuredQuestions } from "./lib/process-stre
 export { EVENT_TOOL_PREFIX, isEventPart, isEventBlock, streamTargetIndex } from "./lib/event-parts"
 export { getEffectiveToolName } from "./lib/tool-semantics"
 export { rebuildBlocks } from "./lib/rebuild-blocks"
+export { canonicalUserMessageUids } from "./lib/message-queue"
+export { DeferredInvalidationCoordinator } from "./lib/deferred-invalidation-coordinator"
 export type { PersistedMessage } from "./lib/rebuild-blocks"
 export { TranscriptAccumulator } from "./lib/transcript-accumulator"
 export type {
@@ -111,7 +113,6 @@ export type {
   TranscriptEventProjector,
 } from "./lib/transcript-accumulator"
 export { DurableTranscriptPager } from "./lib/durable-transcript-pager"
-export { refreshRemoteMessageQueue } from "./lib/remote-message-queue-store"
 export type {
   DurableTranscriptPageRejection,
   DurableTranscriptPagerResult,

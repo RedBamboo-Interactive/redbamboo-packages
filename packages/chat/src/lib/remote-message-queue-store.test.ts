@@ -218,3 +218,29 @@ test("a delivered receipt carries the canonical time needed for timeline orderin
   assert.equal(store.getSnapshot().queue[0]?.deliveredAt, item.completedAt)
   assert.equal(store.getSnapshot().queue[0]?.timelineAt, item.completedAt)
 })
+
+test("an invalidated pending read cannot overwrite newer delivered state", async () => {
+  resetRemoteMessageQueueStores()
+  const store = getRemoteMessageQueueStore("session-a")
+  store.update(() => [{ id: "client", text: "two", messageUid: "second", optimistic: true }])
+  let release!: (snapshot: ChatQueueSnapshot) => void
+  let invalidate!: () => void
+  let reads = 0
+  const disconnect = connectRemoteMessageQueue("session-a", {
+    list: () => ++reads === 1 ? new Promise(resolve => { release = resolve }) : new Promise(() => {}),
+    cancel: async () => { throw new Error("unused") }, retry: async () => { throw new Error("unused") },
+    sendNow: async () => {}, subscribe: callback => { invalidate = callback; return () => {} },
+  })
+  store.update(previous => previous.map(message => ({ ...message, remoteState: "delivered", deliveredMessageUid: "first" })))
+  invalidate()
+  release({ items: [{ id: "server", clientId: "client", sessionId: "session-a", sequence: 2,
+    state: "pending", delivery: "after-current", displayContent: "two", messageUid: "second",
+    createdAt: "2026-09-12T22:00:00Z", updatedAt: "2026-09-12T22:00:00Z", attemptCount: 0 }],
+    queue: { depth: 1, state: "pending" } })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(reads, 2)
+  assert.equal(store.getSnapshot().queue[0].remoteState, "delivered")
+  assert.equal(store.getSnapshot().queue[0].deliveredMessageUid, "first")
+  disconnect()
+  resetRemoteMessageQueueStores()
+})

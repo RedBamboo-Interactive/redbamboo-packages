@@ -51,9 +51,15 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       currentBlock = null
       currentTurnUid = null
       const part: MessagePart = { type: "text", content: rec.content || "" }
+      let inputMessageUids: string[] | undefined
       if (rec.attachmentsJson) {
         try {
           const attachments = JSON.parse(rec.attachmentsJson)
+          if (Array.isArray(attachments.inputMessageUids)) {
+            inputMessageUids = attachments.inputMessageUids.filter(
+              (uid: unknown): uid is string => typeof uid === "string" && uid.length > 0,
+            )
+          }
           if (Array.isArray(attachments.images) && attachments.images.length > 0) {
             part.images = attachments.images
           }
@@ -68,6 +74,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
         parts: [part],
         timestamp: rec.timestamp,
       }
+      if (inputMessageUids?.length) userBlock.inputMessageUids = inputMessageUids
       if (rec.content) {
         const ctxMatch = rec.content.match(/<nova-context\s+([^>]*)>/)
         if (ctxMatch) {

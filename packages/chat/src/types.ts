@@ -4,6 +4,8 @@ export interface MessageBlock {
   parts: MessagePart[]
   timestamp: string
   metadata?: Record<string, unknown>
+  /** Original queued inputs represented by this canonical user turn. */
+  inputMessageUids?: string[]
   senderAgentId?: string
 }
 
@@ -96,6 +98,8 @@ export interface SendOptions {
   delivery?: "after-current" | "interrupt-current"
   /** Retry-safe client identity forwarded as X-Idempotency-Key. */
   idempotencyKey?: string
+  /** Canonical logical-message identity chosen before optimistic rendering. */
+  messageUid?: string
   /** Human draft shown by queue UIs when content contains an enriched model envelope. */
   displayContent?: string
 }

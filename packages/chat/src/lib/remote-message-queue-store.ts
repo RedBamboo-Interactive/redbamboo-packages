@@ -56,9 +56,11 @@ export function connectRemoteMessageQueue(sessionId: string, transport: ChatQueu
   const entry = remoteQueues.get(sessionId) ?? { store: createMessageQueueStore(), subscriptions: new Set<() => void>() }
   remoteQueues.set(sessionId, entry)
   entry.transport = transport
-  const unsubscribe = transport.subscribe?.(() => { void refreshRemoteMessageQueue(sessionId) })
+  const unsubscribe = transport.subscribe?.(() => {
+    void refreshRemoteMessageQueue(sessionId).catch(() => {})
+  })
   if (unsubscribe) entry.subscriptions.add(unsubscribe)
-  void refreshRemoteMessageQueue(sessionId)
+  void refreshRemoteMessageQueue(sessionId).catch(() => {})
   return () => {
     unsubscribe?.()
     if (unsubscribe) entry.subscriptions.delete(unsubscribe)
@@ -76,6 +78,9 @@ export async function refreshRemoteMessageQueue(sessionId: string): Promise<void
     do {
       entry.invalidated = false
       const snapshot = await entry.transport!.list()
+      // A newer admission/delivery invalidated this read. Do not briefly install
+      // its older state (or resurrect a settled bridge) while the next read runs.
+      if (entry.invalidated) continue
       const authoritative = snapshot.items
       const server = authoritative
         .map(item => ({ item, previous: entry.store.getSnapshot().queue.find(message => matches(item, message)) }))
@@ -103,9 +108,12 @@ export function settleRemoteMessageQueue(sessionId: string, deliveredMessageUids
   if (!entry) return
   const settled = new Set(deliveredMessageUids)
   if (settled.size === 0) return
-  entry.store.update(previous => previous.filter(message =>
-    message.remoteState !== "delivered"
-    || !settled.has(message.deliveredMessageUid ?? message.messageUid ?? "")))
+  entry.store.update(previous => {
+    const next = previous.filter(message => message.remoteState !== "delivered"
+      || !settled.has(message.deliveredMessageUid ?? message.messageUid ?? ""))
+    if (entry.refresh && next.length !== previous.length) entry.invalidated = true
+    return next
+  })
 }
 
 /** Test-only isolation for module-scoped cross-view state. */

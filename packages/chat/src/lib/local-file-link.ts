@@ -19,8 +19,9 @@ export function parseLocalFileLink(href?: string): LocalFileLink | null {
   let value = decodeHref(href.trim())
   if (/^file:\/\//i.test(value)) {
     value = value.replace(/^file:\/\/\/?/i, "")
-    if (/^\/[A-Za-z]:[\\/]/.test(value)) value = value.slice(1)
   }
+  // Coding agents also emit absolute Markdown paths such as /L:/Workspaces/...
+  if (/^\/[A-Za-z]:[\\/]/.test(value)) value = value.slice(1)
 
   let line: number | undefined
   let column: number | undefined

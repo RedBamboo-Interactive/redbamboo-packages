@@ -1,4 +1,4 @@
-import type { ImageAttachment, UploadedAttachment } from "../types"
+import type { ChatQueuedItem, ImageAttachment, MessageBlock, SendOptions, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
   /** Stable presentation identity. For remote items this remains the client id across acknowledgement. */
@@ -33,6 +33,66 @@ export interface QueuedMessage {
   optimistic?: boolean
   /** A transport failure means the server may have admitted this turn despite no acknowledgement. */
   admissionUncertain?: boolean
+}
+
+/** One identity shared by the optimistic bubble, durable queue, and transcript. */
+export function createRemoteMessageIdentity(
+  uuid = globalThis.crypto.randomUUID(),
+): Pick<QueuedMessage, "id" | "messageUid"> {
+  const messageUid = uuid.replaceAll("-", "")
+  return { id: `q-${messageUid}`, messageUid }
+}
+
+/** Preserve one remote submission identity across first admission and outbox recovery. */
+export function remoteSubmissionOptions(
+  entry: QueuedMessage,
+  options?: SendOptions,
+): SendOptions {
+  return {
+    ...options,
+    delivery: options?.delivery ?? entry.delivery ?? "after-current",
+    idempotencyKey: entry.id,
+    messageUid: entry.messageUid,
+    displayContent: entry.text,
+  }
+}
+
+/** Every original input represented by the mounted canonical user transcript. */
+export function canonicalUserMessageUids(messages: readonly MessageBlock[]): Set<string> {
+  return new Set(messages.filter(message => message.role === "user").flatMap(message =>
+    [message.id, ...(message.inputMessageUids ?? [])]))
+}
+
+export interface RemoteMessageAdmission {
+  disposition?: "queued" | "delivered"
+  queueItemId?: string | null
+  messageUid?: string | null
+  deliveredMessageUid?: string | null
+  item?: Partial<ChatQueuedItem> | null
+}
+
+/** An admission acknowledgement can arrive after delivery has already been observed. */
+export function acknowledgeRemoteMessage(message: QueuedMessage, admission: RemoteMessageAdmission | null): QueuedMessage {
+  const delivered = message.remoteState === "delivered" || admission?.disposition === "delivered"
+  return {
+    ...message,
+    remoteId: admission?.item?.id ?? admission?.queueItemId ?? message.remoteId,
+    messageUid: admission?.item?.messageUid ?? admission?.messageUid ?? message.messageUid,
+    deliveredMessageUid: message.deliveredMessageUid ?? admission?.item?.deliveredMessageUid ?? admission?.deliveredMessageUid ?? undefined,
+    remoteState: delivered ? "delivered" : admission?.item?.state === "cancelled" ? message.remoteState : admission?.item?.state ?? message.remoteState,
+    appearance: delivered ? "message" : message.appearance,
+    timelineAt: message.timelineAt ?? (delivered ? new Date().toISOString() : undefined),
+    optimistic: false,
+  }
+}
+
+/** True once the transcript already represents this outgoing bridge. */
+export function isCanonicalQueuedMessage(
+  message: QueuedMessage,
+  canonicalUserUids: ReadonlySet<string>,
+): boolean {
+  return (!!message.messageUid && canonicalUserUids.has(message.messageUid))
+    || (!!message.deliveredMessageUid && canonicalUserUids.has(message.deliveredMessageUid))
 }
 
 /** Timestamp used when an outgoing bridge is merged with transcript rows. */

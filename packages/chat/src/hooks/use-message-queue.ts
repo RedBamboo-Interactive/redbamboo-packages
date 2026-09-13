@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useSyncExternalStore } from "react"
 import type { ChatQueueTransport, ImageAttachment, SendOptions, UploadedAttachment } from "../types"
-import { enqueue, cancel as cancelEntry, shouldDrain, type QueuedMessage } from "../lib/message-queue"
+import { acknowledgeRemoteMessage, type RemoteMessageAdmission, createRemoteMessageIdentity, enqueue, cancel as cancelEntry, remoteSubmissionOptions, shouldDrain, type QueuedMessage } from "../lib/message-queue"
 import { loadQueue, saveQueue, pruneStaleQueues } from "../lib/message-queue-storage"
 import { createMessageQueueStore, type MessageQueueStore } from "../lib/message-queue-store"
 import {
@@ -127,11 +127,7 @@ export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, d
     const storage = getStorage()
     if (!storage) return
     void migrateLegacyOutbox(storage, sessionId, item =>
-      onDrainRef.current(item.text, item.images, item.attachments, {
-        delivery: "after-current",
-        idempotencyKey: item.id,
-        displayContent: item.text,
-      }),
+      onDrainRef.current(item.text, item.images, item.attachments, remoteSubmissionOptions(item)),
       () => refreshRemoteMessageQueue(sessionId),
     ).catch(() => {})
   }, [persistQueue, remote, sessionId])
@@ -184,29 +180,11 @@ export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, d
     store.update(previous => enqueue(previous.filter(item => item.id !== entry.id), { ...entry, optimistic: true }))
     const storage = getStorage()
     void admitWithOutbox(storage, sessionId, entry, () =>
-      onDrainRef.current(entry.text, entry.images, entry.attachments, {
-        ...options,
-        delivery: options?.delivery ?? "after-current",
-        idempotencyKey: entry.id,
-        displayContent: entry.text,
-      }),
+      onDrainRef.current(entry.text, entry.images, entry.attachments, remoteSubmissionOptions(entry, options)),
     ).then(async admission => {
-      const result = admission as {
-        disposition?: "queued" | "delivered"
-        queueItemId?: string | null
-        messageUid?: string | null
-        item?: { id?: string; messageUid?: string; deliveredMessageUid?: string | null; state?: QueuedMessage["remoteState"] } | null
-      } | null
-      store.update(previous => previous.map(item => item.id !== entry.id ? item : {
-        ...item,
-        remoteId: result?.item?.id ?? result?.queueItemId ?? item.remoteId,
-        messageUid: result?.item?.messageUid ?? result?.messageUid ?? item.messageUid,
-        deliveredMessageUid: result?.item?.deliveredMessageUid ?? undefined,
-        remoteState: result?.disposition === "delivered" ? "delivered" : result?.item?.state ?? item.remoteState,
-        appearance: result?.disposition === "delivered" ? "message" : item.appearance,
-        timelineAt: item.timelineAt ?? (result?.disposition === "delivered" ? new Date().toISOString() : undefined),
-        optimistic: false,
-      }))
+      const result = admission as RemoteMessageAdmission | null
+      store.update(previous => previous.map(item => item.id !== entry.id
+        ? item : acknowledgeRemoteMessage(item, result)))
       await refreshRemoteMessageQueue(sessionId)
     }).catch(async error => {
       try {
@@ -234,11 +212,15 @@ export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, d
     if (!isStreamingRef.current) sawStreamingRef.current = false
     const createdAt = new Date().toISOString()
     const immediate = !isStreamingRef.current
+    const identity = remote
+      ? createRemoteMessageIdentity()
+      : { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}` }
     const entry: QueuedMessage = {
-      id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      ...identity,
       sessionId: sessionId ?? undefined,
       text,
       images,
+      delivery: options?.delivery ?? "after-current",
       appearance: immediate ? "message" : "queue",
       createdAt,
       timelineAt: immediate ? createdAt : undefined,
@@ -251,12 +233,16 @@ export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, d
     if (!isStreamingRef.current) sawStreamingRef.current = false
     const createdAt = new Date().toISOString()
     const immediate = !isStreamingRef.current
+    const identity = remote
+      ? createRemoteMessageIdentity()
+      : { id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}` }
     const entry: QueuedMessage = {
-      id: `q-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      ...identity,
       sessionId: sessionId ?? undefined,
       text,
       images,
       attachments,
+      delivery: options?.delivery ?? "after-current",
       appearance: immediate ? "message" : "queue",
       createdAt,
       timelineAt: immediate ? createdAt : undefined,

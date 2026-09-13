@@ -1,8 +1,58 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { enqueue, cancel, coalesce, queuedMessageTimelineTimestamp, shouldDrain, drainStep, type QueuedMessage } from "./message-queue.ts"
+import { acknowledgeRemoteMessage, canonicalUserMessageUids, enqueue, cancel, coalesce, createRemoteMessageIdentity, isCanonicalQueuedMessage, remoteSubmissionOptions, queuedMessageTimelineTimestamp, shouldDrain, drainStep, type QueuedMessage } from "./message-queue.ts"
 
 const msg = (id: string, text: string, images?: QueuedMessage["images"]): QueuedMessage => ({ id, text, images })
+
+test("remote optimistic messages have their canonical identity before admission", () => {
+  assert.deepEqual(
+    createRemoteMessageIdentity("625ae27a-caf2-4d6b-ab4c-89c97838a077"),
+    {
+      id: "q-625ae27acaf24d6bab4c89c97838a077",
+      messageUid: "625ae27acaf24d6bab4c89c97838a077",
+    },
+  )
+})
+
+test("outbox recovery resubmits the original canonical identity", () => {
+  assert.deepEqual(remoteSubmissionOptions({
+    id: "q-625ae27acaf24d6bab4c89c97838a077",
+    text: "recover me",
+    messageUid: "625ae27acaf24d6bab4c89c97838a077",
+    delivery: "interrupt-current",
+  }), {
+    delivery: "interrupt-current",
+    idempotencyKey: "q-625ae27acaf24d6bab4c89c97838a077",
+    messageUid: "625ae27acaf24d6bab4c89c97838a077",
+    displayContent: "recover me",
+  })
+})
+
+test("canonical history suppresses the optimistic bridge before acknowledgement", () => {
+  const optimistic: QueuedMessage = {
+    id: "q-625ae27acaf24d6bab4c89c97838a077",
+    text: "one bubble",
+    messageUid: "625ae27acaf24d6bab4c89c97838a077",
+    optimistic: true,
+  }
+
+  assert.equal(isCanonicalQueuedMessage(
+    optimistic,
+    new Set(["625ae27acaf24d6bab4c89c97838a077"]),
+  ), true)
+})
+
+test("a batched bridge follows the combined delivered transcript identity", () => {
+  const delivered: QueuedMessage = {
+    id: "q-second",
+    text: "second",
+    messageUid: "second",
+    deliveredMessageUid: "first",
+    remoteState: "delivered",
+  }
+
+  assert.equal(isCanonicalQueuedMessage(delivered, new Set(["first"])), true)
+})
 
 test("enqueue appends without mutating the input array", () => {
   const before: QueuedMessage[] = [msg("a", "one")]
@@ -110,4 +160,23 @@ test("drainStep is a no-op on an already-drained queue — guards against firing
   assert.ok(first)
   const second = drainStep(first!.remaining)
   assert.equal(second, null, "a stale duplicate drain call sends nothing")
+})
+
+test("canonical batch membership suppresses all represented inputs before notification", () => {
+  const ids = canonicalUserMessageUids([{
+    id: "first", role: "user", timestamp: "2026-09-12T22:00:00Z",
+    parts: [{ type: "text", content: "one\ntwo" }], inputMessageUids: ["first", "second"],
+  }])
+  assert.equal(isCanonicalQueuedMessage({ id: "client-second", text: "two", messageUid: "second", optimistic: true }, ids), true)
+  assert.equal(isCanonicalQueuedMessage({ id: "other", text: "two", messageUid: "third", optimistic: true }, ids), false)
+})
+test("a late pending acknowledgement preserves previously observed combined delivery", () => {
+  const result = acknowledgeRemoteMessage({
+    id: "client-second", text: "two", messageUid: "second", remoteId: "server-second",
+    remoteState: "delivered", deliveredMessageUid: "first", appearance: "message",
+  }, { disposition: "queued", messageUid: "second", item: { id: "server-second", state: "pending" } })
+  assert.equal(result.remoteState, "delivered")
+  assert.equal(result.deliveredMessageUid, "first")
+  assert.equal(result.appearance, "message")
+  assert.equal(result.optimistic, false)
 })

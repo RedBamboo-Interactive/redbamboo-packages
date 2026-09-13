@@ -8,7 +8,7 @@ import { isEventBlock } from "../lib/event-parts"
 import { projectActivityTimeline } from "../lib/activity-timeline"
 import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
-import { queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
+import { canonicalUserMessageUids, isCanonicalQueuedMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
 import { StreamingStatusLine } from "./streaming-status-line"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
@@ -98,12 +98,10 @@ export function ChatPanel(props: ChatPanelProps) {
     },
   })
 
-  const canonicalUserUids = useMemo(() => new Set(
-    messages.filter(message => message.role === "user").map(message => String(message.id)),
-  ), [messages])
+  const canonicalUserUids = useMemo(() => canonicalUserMessageUids(messages), [messages])
   const settledUids = useMemo(() => messageQueue.queue.flatMap(item => {
     const uid = item.deliveredMessageUid ?? item.messageUid
-    return item.remoteState === "delivered" && uid && canonicalUserUids.has(uid) ? [uid] : []
+    return item.remoteState === "delivered" && uid && isCanonicalQueuedMessage(item, canonicalUserUids) ? [uid] : []
   }), [canonicalUserUids, messageQueue.queue])
   const settledKey = settledUids.join("\u0000")
   const entranceActivationRef = useRef<{ sessionKey: string | null; shown: boolean }>({
@@ -123,10 +121,9 @@ export function ChatPanel(props: ChatPanelProps) {
   useLayoutEffect(() => {
     if (settledUids.length > 0) messageQueue.settleDelivered(settledUids)
   }, [messageQueue.settleDelivered, settledKey])
-  const visibleOutgoing = useMemo(() => messageQueue.queue.filter(item => {
-    const uid = item.deliveredMessageUid ?? item.messageUid
-    return !uid || !canonicalUserUids.has(uid)
-  }), [canonicalUserUids, messageQueue.queue])
+  const visibleOutgoing = useMemo(() => messageQueue.queue.filter(
+    item => !isCanonicalQueuedMessage(item, canonicalUserUids),
+  ), [canonicalUserUids, messageQueue.queue])
 
   const enqueueMessage = useCallback((content: string, images?: ImageAttachment[], options?: SendOptions) => {
     const prepared = prepareMessage({ content, images })

@@ -31,6 +31,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo ok",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "test:queue-ui": "node tests/queue-presentation/run.cjs",
     "clean": "rimraf dist"
   },
   "peerDependencies": {
