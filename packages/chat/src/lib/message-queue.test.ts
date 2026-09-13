@@ -180,3 +180,17 @@ test("a late pending acknowledgement preserves previously observed combined deli
   assert.equal(result.appearance, "message")
   assert.equal(result.optimistic, false)
 })
+
+
+test("projected event inputs settle queue bridges without treating assistant replies as receipts", () => {
+  const represented = canonicalUserMessageUids([
+    { id: "activity-row", role: "assistant", timestamp: "now", parts: [
+      { type: "tool_use", toolName: "event:coordination", content: "same", messageUid: "first" },
+      { type: "tool_use", toolName: "event:delegate", content: "same", messageUid: "second" },
+    ] },
+    { id: "reply", role: "assistant", timestamp: "now", parts: [{ type: "text", content: "reply", messageUid: "unrelated" }] },
+  ])
+  assert.deepEqual([...represented], ["first", "second"])
+  assert.equal(isCanonicalQueuedMessage({ id: "q", text: "event", messageUid: "second" }, represented), true)
+  assert.equal(isCanonicalQueuedMessage({ id: "q2", text: "reply", messageUid: "unrelated" }, represented), false)
+})

@@ -42,3 +42,9 @@ export function streamTargetIndex(messages: MessageBlock[]): number {
   const block = messages[index]
   return block.role === "assistant" && !isEventBlock(block) ? index : -1
 }
+
+/** Only host event parts may represent queued inputs inside assistant activity rows. */
+export function eventInputMessageUid(part: MessagePart): string | undefined {
+  return isEventPart(part) && typeof part.messageUid === "string" && part.messageUid
+    ? part.messageUid : undefined
+}

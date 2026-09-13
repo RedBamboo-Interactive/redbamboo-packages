@@ -3,6 +3,7 @@ import type { ImageAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 import { parseNovaEvent } from "../lib/nova-event"
+import { eventQueueStatus } from "./event-queue-status"
 import { NovaEventSquare } from "./nova-event-square"
 import { ContextSquare, extractRawContextXml, parseContextFromMessage } from "./context-card"
 import { stripHiddenMessageEnvelopes } from "../lib/message-content"
@@ -36,31 +37,7 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
         data-queue-item-id={item.remoteId ?? item.id}
         data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
       >
-        <NovaEventSquare event={novaEvent} queueStatus={messageAppearance ? undefined : {
-          label: item.deliveryError
-            || (item.delivery === "interrupt-current" ? "Queued, interruption requested" : "Queued, sends after this turn"),
-          failed: !!item.deliveryError,
-          actions: <>
-            <button
-              onClick={() => onSendNow(item.id)}
-              className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-amber-400 hover:bg-overlay-6 transition-colors"
-              title={item.deliveryError ? "Retry" : "Send now (interrupts the current turn)"}
-              aria-label={item.deliveryError ? "Retry queued event" : "Send queued event now"}
-            >
-              <i className={`ph-bold ${item.deliveryError ? "ph-arrow-clockwise" : "ph-paper-plane-tilt"} text-[10px]`} />
-            </button>
-            {!item.admissionUncertain && (
-              <button
-                onClick={() => onCancel(item.id)}
-                className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-red-400 hover:bg-overlay-6 transition-colors"
-                title="Cancel"
-                aria-label="Cancel queued event"
-              >
-                <i className="ph-bold ph-x text-[10px]" />
-              </button>
-            )}
-          </>,
-        }} />
+        <NovaEventSquare event={novaEvent} queueStatus={eventQueueStatus(item, onCancel, onSendNow)} />
       </div>
     )
   }

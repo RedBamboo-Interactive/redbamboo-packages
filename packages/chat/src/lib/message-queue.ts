@@ -1,3 +1,4 @@
+import { eventInputMessageUid } from "./event-parts.ts"
 import type { ChatQueuedItem, ImageAttachment, MessageBlock, SendOptions, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
@@ -57,10 +58,15 @@ export function remoteSubmissionOptions(
   }
 }
 
-/** Every original input represented by the mounted canonical user transcript. */
+/** Inputs represented by user messages or projected host events; never assistant replies. */
 export function canonicalUserMessageUids(messages: readonly MessageBlock[]): Set<string> {
-  return new Set(messages.filter(message => message.role === "user").flatMap(message =>
-    [message.id, ...(message.inputMessageUids ?? [])]))
+  return new Set(messages.flatMap(message => [
+    ...(message.role === "user" ? [message.id, ...(message.inputMessageUids ?? [])] : []),
+    ...message.parts.flatMap(part => {
+      const uid = eventInputMessageUid(part)
+      return uid ? [uid] : []
+    }),
+  ]))
 }
 
 export interface RemoteMessageAdmission {

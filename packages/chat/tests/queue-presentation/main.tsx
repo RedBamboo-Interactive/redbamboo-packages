@@ -4,7 +4,7 @@ import { StreamingText } from "../../src/components/streaming-text"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { rebuildBlocks } from "../../src/lib/rebuild-blocks"
 import { getRemoteMessageQueueStore } from "../../src/lib/remote-message-queue-store"
-import type { ChatQueueSnapshot, ChatQueueTransport, MessageBlock, SendOptions } from "../../src/types"
+import type { ChatQueueSnapshot, ChatQueueTransport, MessageBlock, SendOptions, ChatQueuedItem } from "../../src/types"
 
 const stamp = "2026-09-12T22:00:00Z"
 const test = {
@@ -63,4 +63,38 @@ function LinkProbe() {
   return <StreamingText content={'[Audit](</L:/Workspaces/Nova/memory/projects/Double Message Audit 2026-09-13.md>)\n\n[Source](/T:/Projects/file.cs:12:4)\n\n[Journal](/apps/nova/journal/memory/note.md)'}
     resolveFileLink={(filePath, location) => () => { test.opened.push({ filePath, ...location }) }} />
 }
-createRoot(document.getElementById("root")!).render(new URLSearchParams(location.search).has("links") ? <LinkProbe /> : <App />)
+const eventTest = {
+  actions: [] as string[],
+  state: "pending" as ChatQueuedItem["state"],
+  change: (_state: ChatQueuedItem["state"]) => {},
+  remount: () => {},
+}
+;(window as unknown as { eventQueueTest: typeof eventTest }).eventQueueTest = eventTest
+
+function EventApp() {
+  const [mount, setMount] = useState(0)
+  const listeners = useMemo(() => new Set<() => void>(), [])
+  const items = (): ChatQueuedItem[] => ["first", "second"].map((id, i) => ({
+    id, sessionId: "event-test", sequence: i + 1, state: eventTest.state,
+    delivery: "after-current", displayContent: '<nova-event source="coordination">Same looking event</nova-event>',
+    messageUid: id, deliveredMessageUid: eventTest.state === "delivered" ? id : undefined,
+    createdAt: stamp, updatedAt: stamp, attemptCount: 1,
+    error: eventTest.state === "failed" ? { code: "test-failure", message: "Delivery failed; retry available" } : undefined,
+  }))
+  eventTest.change = state => { eventTest.state = state; listeners.forEach(listener => listener()) }
+  eventTest.remount = () => setMount(v => v + 1)
+  const transport = useMemo<ChatQueueTransport>(() => ({
+    list: async () => ({ items: items(), queue: { depth: 2, state: "ready" } }),
+    cancel: async id => { eventTest.actions.push("cancel:" + id); eventTest.change("cancelled"); return items().find(item => item.id === id)! },
+    retry: async id => { eventTest.actions.push("retry:" + id); eventTest.change("pending"); return items().find(item => item.id === id)! },
+    sendNow: async () => { eventTest.actions.push("send-now") },
+    subscribe: listener => { listeners.add(listener); return () => { listeners.delete(listener) } },
+  }), [])
+  const messages: MessageBlock[] = [{ id: "activity", role: "assistant", timestamp: stamp, parts: [
+    { type: "tool_use", toolName: "Read", content: "Keep this tool" },
+    ...["first", "second"].map(messageUid => ({ type: "tool_use" as const, toolName: "event:coordination",
+      messageUid, content: "Same looking event", toolInput: JSON.stringify({ event: "Same looking event", timestamp: stamp }) })),
+  ] }]
+  return <ChatPanel key={mount} messages={messages} isStreaming sessionId="event-test" queueTransport={transport} persistQueue={false} />
+}
+createRoot(document.getElementById("root")!).render(new URLSearchParams(location.search).has("events") ? <EventApp /> : new URLSearchParams(location.search).has("links") ? <LinkProbe /> : <App />)

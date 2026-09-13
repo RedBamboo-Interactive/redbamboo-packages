@@ -1,3 +1,4 @@
+import { EventQueueStatusBar, type ResolveEventQueueStatus } from "./event-queue-status"
 import { memo, useState, useRef, useEffect, useCallback } from "react"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -179,6 +180,7 @@ interface ChatMessageProps {
    * isn't linkable — the affordance is hidden in that case.
    */
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  resolveEventQueueStatus?: ResolveEventQueueStatus
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
   assistantAvatar?: string
@@ -215,6 +217,7 @@ export const ChatMessage = memo(function ChatMessage({
   resolveImageSrc,
   resolveFileLink,
   resolveEventLink,
+  resolveEventQueueStatus,
   loadTranscriptPayload,
   getTranscriptPayloadDownloadUrl,
   assistantAvatar,
@@ -423,7 +426,7 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+              <PartFrieze parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
             </div>
           )
         )}
@@ -507,13 +510,14 @@ function findPairedResult(allParts: MessagePart[], toolUsePart: MessagePart): Me
   return undefined
 }
 
-function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   parts: MessagePart[]
   allParts: MessagePart[]
   isLive?: boolean
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  resolveEventQueueStatus?: ResolveEventQueueStatus
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
@@ -533,20 +537,23 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
         {parts.filter(p => p.type !== "tool_result").map((part, i) => {
           const inFlight = isLive && !!part.isPartial
           const event = isEventPart(part)
+          const queueStatus = resolveEventQueueStatus?.(part)
           const squareEvent = usesSquareEventMarker(part)
           return (
             <button
               key={i}
               onClick={() => handleClick(part)}
               className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
-              style={{ backgroundColor: getPartColor(part) }}
+              style={{ backgroundColor: queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part) }}
               title={partLabel(part)}
+              aria-label={queueStatus ? `${partLabel(part)}: ${queueStatus.label}` : partLabel(part)}
+              data-input-message-uid={event ? part.messageUid : undefined}
             />
           )
         })}
       </div>
 
-      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
     </>
   )
 }
@@ -579,7 +586,7 @@ function extractToolFile(part: MessagePart): { path: string; line?: number } | n
   }
 }
 
-function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolveImageSrc, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   part?: MessagePart
   pairedResult?: MessagePart
   open: boolean
@@ -587,6 +594,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  resolveEventQueueStatus?: ResolveEventQueueStatus
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
@@ -619,6 +627,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
             )}
           </DialogHeader>
 
+          <EventQueueStatusBar status={resolveEventQueueStatus?.(part)} />
           <div className="overflow-y-auto p-4 flex-1 min-h-0">
             <EventView
               event={event}

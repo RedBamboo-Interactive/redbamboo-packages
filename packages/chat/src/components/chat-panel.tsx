@@ -4,7 +4,8 @@ import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
 import { useMessageQueue } from "../hooks/use-message-queue"
 import { ChatMessage, extractPlanFileContent } from "./chat-message"
-import { isEventBlock } from "../lib/event-parts"
+import { eventQueueStatus, type ResolveEventQueueStatus } from "./event-queue-status"
+import { isEventBlock, eventInputMessageUid } from "../lib/event-parts"
 import { projectActivityTimeline } from "../lib/activity-timeline"
 import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
@@ -142,19 +143,30 @@ export function ChatPanel(props: ChatPanelProps) {
     if (item) composerRef.current?.loadDraft(item.text, item.images, item.attachments)
   }, [messageQueue])
 
+  const handleSendQueued = useCallback((id: string) => {
+    const current = messageQueue.queue.find(message => message.id === id)
+    if (current?.deliveryError) messageQueue.retry(id)
+    else if (!messageQueue.sendNow()) interrupt()
+  }, [messageQueue.queue, messageQueue.retry, messageQueue.sendNow, interrupt])
+
+  const eventQueueByUid = useMemo(() => new Map(messageQueue.queue.flatMap(item => {
+    const uid = item.deliveredMessageUid ?? item.messageUid
+    return uid ? [[uid, item] as const] : []
+  })), [messageQueue.queue])
+  const resolveEventQueueStatus = useCallback<ResolveEventQueueStatus>(part => {
+    const uid = eventInputMessageUid(part)
+    return uid ? eventQueueStatus(eventQueueByUid.get(uid), messageQueue.cancel, handleSendQueued) : undefined
+  }, [eventQueueByUid, messageQueue.cancel, handleSendQueued])
+
   const renderQueuedGhost = useCallback((item: QueuedMessage) => (
     <QueuedMessageGhost
       key={`outgoing:${item.id}`}
       item={item}
       onCancel={messageQueue.cancel}
       onEdit={handleEditQueued}
-      onSendNow={id => {
-        const current = messageQueue.queue.find(message => message.id === id)
-        if (current?.deliveryError) messageQueue.retry(id)
-        else if (!messageQueue.sendNow()) interrupt()
-      }}
+      onSendNow={handleSendQueued}
     />
-  ), [messageQueue.cancel, messageQueue.queue, messageQueue.retry, messageQueue.sendNow, handleEditQueued, interrupt])
+  ), [messageQueue.cancel, handleEditQueued, handleSendQueued])
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -521,6 +533,7 @@ export function ChatPanel(props: ChatPanelProps) {
                   resolveImageSrc={resolveImageSrc}
                   resolveFileLink={resolveFileLink}
                   resolveEventLink={resolveEventLink}
+                  resolveEventQueueStatus={resolveEventQueueStatus}
                   loadTranscriptPayload={loadTranscriptPayload}
                   getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl}
                   assistantAvatar={props.assistantAvatar}

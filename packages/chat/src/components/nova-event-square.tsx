@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react"
+import { EventQueueStatusBar, type EventQueueStatus } from "./event-queue-status"
+import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@redbamboo/ui"
 import type { NovaEvent } from "../lib/nova-event"
 
@@ -15,7 +16,7 @@ function novaEventIcon(type: string): string {
 interface NovaEventSquareProps {
   event: NovaEvent
   /** Pending internal inputs stay compact; their delivery controls live in the details. */
-  queueStatus?: { label: string; failed: boolean; actions: ReactNode }
+  queueStatus?: EventQueueStatus
 }
 
 export function NovaEventSquare({ event, queueStatus }: NovaEventSquareProps) {
@@ -45,14 +46,7 @@ export function NovaEventSquare({ event, queueStatus }: NovaEventSquareProps) {
             </span>
           </DialogHeader>
 
-          {queueStatus && (
-            <div data-slot="nova-event-queue-status" className="flex items-center gap-2 px-4 py-2 border-b border-border-subtle shrink-0">
-              <span className={`text-xs flex-1 ${queueStatus.failed ? "text-red-400" : "text-text-muted"}`}>
-                {queueStatus.label}
-              </span>
-              {queueStatus.actions}
-            </div>
-          )}
+          <EventQueueStatusBar status={queueStatus} />
           <div className="overflow-y-auto p-4 flex-1 min-h-0">
             <p className="text-sm text-text-primary font-serif whitespace-pre-wrap">{event.content}</p>
           </div>

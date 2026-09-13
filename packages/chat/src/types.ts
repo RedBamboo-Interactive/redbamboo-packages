@@ -12,6 +12,8 @@ export interface MessageBlock {
 export type MessagePhase = "commentary" | "final_answer"
 
 export interface MessagePart {
+  /** Existing logical input identity retained by a projected host-event part. */
+  messageUid?: string
   type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image"
   content: string
   toolName?: string
