@@ -36,13 +36,11 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
         data-queue-item-id={item.remoteId ?? item.id}
         data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
       >
-        <div className="flex items-center gap-1">
-          <NovaEventSquare event={novaEvent} />
-          {!messageAppearance && <>
-            <span className={`text-[10px] italic ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
-              {item.deliveryError
-                || (item.delivery === "interrupt-current" ? "Queued, interruption requested" : "Queued, sends after this turn")}
-            </span>
+        <NovaEventSquare event={novaEvent} queueStatus={messageAppearance ? undefined : {
+          label: item.deliveryError
+            || (item.delivery === "interrupt-current" ? "Queued, interruption requested" : "Queued, sends after this turn"),
+          failed: !!item.deliveryError,
+          actions: <>
             <button
               onClick={() => onSendNow(item.id)}
               className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-amber-400 hover:bg-overlay-6 transition-colors"
@@ -61,8 +59,8 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
                 <i className="ph-bold ph-x text-[10px]" />
               </button>
             )}
-          </>}
-        </div>
+          </>,
+        }} />
       </div>
     )
   }
