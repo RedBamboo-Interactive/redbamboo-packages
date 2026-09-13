@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
-import { isExternalWebLink, isInternalLeafLink } from "./external-web-link.ts"
+import { canonicalizeLeafLinkHref, isExternalWebLink, isInternalLeafLink } from "./external-web-link.ts"
+import { parseLocalFileLink } from "./local-file-link.ts"
 
 test("recognizes absolute HTTP and HTTPS links as external web actions", () => {
   assert.equal(isExternalWebLink("https://openai.com"), true)
@@ -33,4 +34,33 @@ test("the external web pill explicitly defeats Markdown link underlining", () =>
   const externalPill = component.slice(component.indexOf('data-slot="external-web-link"'))
 
   assert.match(externalPill, /textDecoration: "none"/)
+})
+
+test("authored loopback Leaf links stay on the current origin", () => {
+  const leafPath = "/apps/nova/journal/memory/My%20Report.md?view=read#section"
+  for (const host of ["localhost", "127.0.0.1", "127.0.0.2", "[::1]", "nova.localhost"]) {
+    const href = canonicalizeLeafLinkHref("http://" + host + ":18804" + leafPath)
+    assert.equal(href, leafPath)
+    assert.equal(new URL(href!, "https://leaf.example").origin, "https://leaf.example")
+    assert.equal(isInternalLeafLink(href, "https://leaf.example"), true)
+  }
+  assert.equal(canonicalizeLeafLinkHref("https://localhost:18804/workspace/abc"), "/workspace/abc")
+})
+
+test("historical localhost-wrapped drive paths still reach the file resolver", () => {
+  assert.deepEqual(parseLocalFileLink(canonicalizeLeafLinkHref(
+    "http://localhost:18804/L:/Workspaces/Nova/My%20Report.md:12:4",
+  )), { filePath: "L:/Workspaces/Nova/My Report.md", line: 12, column: 4 })
+})
+
+test("ordinary external links, other local services and non-web references are preserved", () => {
+  for (const href of [
+    undefined, "", "docs/note.md", "/apps/nova", "//localhost:18804/apps/nova",
+    "L:/Workspaces/Nova/note.md", "file:///L:/Workspaces/Nova/note.md",
+    "mailto:nova@example.com", "http://localhost:3000/apps/nova",
+    "http://127.0.0.1:18800/health", "http://localhost/apps/nova",
+    "http://localhost.evil.example:18804/apps/nova", "https://example.com:18804/apps/nova",
+    "http://user:pass@localhost:18804/apps/nova", "http://[broken",
+    "http://localhost:18804//example.com/path",
+  ]) assert.equal(canonicalizeLeafLinkHref(href), href)
 })

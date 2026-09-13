@@ -17,7 +17,7 @@ import {
   type EntityEmbedReference,
 } from "../lib/entity-embed"
 import { isImageUrl } from "../lib/event-image"
-import { isExternalWebLink, isInternalLeafLink } from "../lib/external-web-link"
+import { canonicalizeLeafLinkHref, isExternalWebLink, isInternalLeafLink } from "../lib/external-web-link"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseLocalFileLink } from "../lib/local-file-link"
 
@@ -102,6 +102,7 @@ function MarkdownLink({
     return <ImageThumbnail src={href} alt={alt} resolve={resolve} />
   }
 
+  href = canonicalizeLeafLinkHref(href)
   const localFile = parseLocalFileLink(href)
   if (localFile) {
     const action = resolveFileLink?.(localFile.filePath, {

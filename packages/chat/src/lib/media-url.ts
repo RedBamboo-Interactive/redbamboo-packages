@@ -26,7 +26,7 @@ function normalizeLocalMediaSrc(src: string): string {
   }
 }
 
-function isLoopbackHost(hostname: string): boolean {
+export function isLoopbackHost(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "").toLowerCase()
   return host === "localhost"
     || host.endsWith(".localhost")

@@ -1,3 +1,17 @@
+import { isLoopbackHost } from "./media-url.ts"
+
+/** Keep authored links to this Leaf server on the current desktop or tunnel origin. */
+export function canonicalizeLeafLinkHref(href: string | undefined): string | undefined {
+  if (!href || !/^https?:\/\//i.test(href)) return href
+  try {
+    const url = new URL(href)
+    if (!isLoopbackHost(url.hostname) || url.port !== "18804" || url.username || url.password || url.pathname.startsWith("//")) return href
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return href
+  }
+}
+
 export function isExternalWebLink(href?: string): boolean {
   return /^https?:\/\//i.test(href ?? "")
 }
