@@ -21,8 +21,8 @@ public static class OpenApiGenerator
 
         if (OperatingSystem.IsWindows())
         {
-            AddPath(paths, "/api/autostart", "get", "AutoStartGet", "Whether the app starts with Windows");
-            AddPath(paths, "/api/autostart", "put", "AutoStartSet", "Enable or disable starting with Windows",
+            AddPath(paths, "/api/autostart", "get", "AutoStartGet", "Verified Windows startup registration state");
+            AddPath(paths, "/api/autostart", "put", "AutoStartSet", "Create, repair, or remove the verified Windows startup registration",
                 [new ParameterDescriptor("enabled", "boolean", Required: true, Location: ParamLocation.Body)]);
         }
 

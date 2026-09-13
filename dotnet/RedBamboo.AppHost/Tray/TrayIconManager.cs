@@ -87,10 +87,21 @@ public class TrayIconManager : IDisposable
             };
             autoStartItem.Click += (_, _) =>
             {
-                StartupManager.SetEnabled(
-                    _config.AppName,
-                    autoStartItem.IsChecked,
-                    _config.AutoStartCommand);
+                try
+                {
+                    var status = StartupManager.SetEnabled(
+                        _config.AppName,
+                        autoStartItem.IsChecked,
+                        _config.AutoStartCommand);
+                    autoStartItem.IsChecked = status.Enabled;
+                }
+                catch (Exception error)
+                {
+                    autoStartItem.IsChecked = StartupManager.GetStatus(
+                        _config.AppName, _config.AutoStartCommand).Enabled;
+                    MessageBox.Show(error.Message, $"{_config.AppName} startup setup failed",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             };
             menu.Items.Add(autoStartItem);
         }
@@ -172,7 +183,8 @@ public class TrayIconManager : IDisposable
             if (item.Tag?.ToString() == "status")
                 item.Header = header;
             else if (item.Tag?.ToString() == "autostart")
-                item.IsChecked = StartupManager.IsEnabled(_config.AppName);
+                item.IsChecked = StartupManager.GetStatus(
+                    _config.AppName, _config.AutoStartCommand).Enabled;
             else if (item.Tag?.ToString() == "submenu" && subMenuEntries != null)
                 RebuildSubMenu(item, subMenuEntries);
         }

@@ -12,7 +12,7 @@ public static class AutoStartEndpoints
         StartupLaunchCommand? launchCommand = null)
     {
         app.MapGet("/api/autostart", () =>
-            Results.Ok(new { enabled = StartupManager.IsEnabled(appName) }));
+            Results.Ok(StartupManager.GetStatus(appName, launchCommand)));
 
         app.MapPut("/api/autostart", async (HttpContext ctx) =>
         {
@@ -20,8 +20,19 @@ public static class AutoStartEndpoints
             if (body is null)
                 return Results.BadRequest(new { error = "invalid_body" });
 
-            StartupManager.SetEnabled(appName, body.Enabled, launchCommand);
-            return Results.Ok(new { enabled = StartupManager.IsEnabled(appName) });
+            try
+            {
+                return Results.Ok(StartupManager.SetEnabled(appName, body.Enabled, launchCommand));
+            }
+            catch (Exception error)
+            {
+                return Results.Json(new
+                {
+                    error = "autostart_setup_failed",
+                    message = error.Message,
+                    status = StartupManager.GetStatus(appName, launchCommand),
+                }, statusCode: StatusCodes.Status500InternalServerError);
+            }
         });
     }
 
