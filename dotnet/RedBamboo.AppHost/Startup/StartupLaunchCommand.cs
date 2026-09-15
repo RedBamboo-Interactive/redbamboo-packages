@@ -14,6 +14,14 @@ public sealed record StartupLaunchCommand(
         return string.Join(" ", new[] { Quote(ExecutablePath) }.Concat(Arguments.Select(Quote)));
     }
 
+    public string ToTaskArguments()
+    {
+        if (!Path.IsPathFullyQualified(ExecutablePath))
+            throw new ArgumentException("Startup executable path must be absolute.", nameof(ExecutablePath));
+
+        return string.Join(" ", Arguments.Select(Quote));
+    }
+
     private static string Quote(string value)
     {
         if (value.Length > 0 && value.All(character =>
