@@ -344,6 +344,26 @@ function Get-RedBambooLockOwners {
     }
 }
 
+function Get-RedBambooFileSha256 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path
+    )
+
+    $resolvedPath = (Resolve-Path -LiteralPath $Path).Path
+    $stream = [IO.File]::OpenRead($resolvedPath)
+    try {
+        $hasher = [Security.Cryptography.SHA256]::Create()
+        try {
+            [BitConverter]::ToString($hasher.ComputeHash($stream)).Replace('-', '')
+        } finally {
+            $hasher.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
+}
+
 function Get-RedBambooTreeManifest {
     [CmdletBinding()]
     param(
@@ -361,7 +381,7 @@ function Get-RedBambooTreeManifest {
                 [pscustomobject]@{
                     relativePath = $_.FullName.Substring($root.Length + 1)
                     length = [long]$_.Length
-                    sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+                    sha256 = Get-RedBambooFileSha256 -Path $_.FullName
                 }
             } |
             Sort-Object relativePath
