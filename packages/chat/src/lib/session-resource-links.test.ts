@@ -5,7 +5,7 @@ import { getSessionResourceHref } from "./session-resource-links.ts"
 test("session resource links target their canonical suite detail views", () => {
   assert.equal(
     getSessionResourceHref("job", "57483355-abcd"),
-    "/apps/compute-dashboard/jobs?select=57483355-abcd",
+    "/apps/compute/jobs?select=57483355-abcd",
   )
   assert.equal(
     getSessionResourceHref("session", "79ebd27e-abcd"),
