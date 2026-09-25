@@ -27,6 +27,32 @@ export function getEffectiveToolName(toolName?: string, toolInput?: string): str
   return toolName
 }
 
+export type ToolActivityCategory = "agent" | "read-only" | "mutating" | "shell"
+
+const readOnlyTools = new Set([
+  "read", "glob", "grep", "agent", "websearch", "webfetch",
+  "toolsearch", "cronlist", "todoread", "monitor",
+  "exitplanmode", "enterplanmode", "askuserquestion",
+  "list", "codesearch", "explore",
+])
+
+const mutatingTools = new Set([
+  "edit", "write", "notebookedit", "todowrite",
+  "croncreate", "crondelete", "pushnotification",
+])
+
+/** Provider-neutral semantic colour category without replacing the visible tool name. */
+export function getToolActivityCategory(toolName?: string, toolInput?: string): ToolActivityCategory | null {
+  const effective = getEffectiveToolName(toolName, toolInput)
+  if (!effective) return null
+  const name = effective.toLowerCase()
+  if (name.startsWith("agent:")) return "agent"
+  if (readOnlyTools.has(name) || /(?:^|_)(?:read|search|list)$/.test(name)) return "read-only"
+  if (mutatingTools.has(name) || /(?:^|_)(?:create|update|edit|delete|post|generate)$/.test(name)) return "mutating"
+  if (name === "bash" || name === "powershell") return "shell"
+  return null
+}
+
 function parseCommand(toolInput?: string): string | undefined {
   if (!toolInput) return undefined
   try {

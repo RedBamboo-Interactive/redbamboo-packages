@@ -572,6 +572,8 @@ export interface ChatPanelProps {
   // Avatar
   assistantAvatar?: string
   resolveAgentInfo?: (agentId: string) => { name: string; avatarUrl: string } | undefined
+  /** Opt-in sender treatment for prose-led experiences such as roleplay. */
+  senderPresentation?: "compact" | "portrait"
 
   // Render props
   renderStatusLine?: (state: {

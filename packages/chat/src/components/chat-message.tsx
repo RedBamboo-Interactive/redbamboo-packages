@@ -20,7 +20,7 @@ import { ToolOutputView } from "./tool-output"
 import { LazyToolOutput } from "./lazy-tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
 import { isEventPart, isEventBlock, usesSquareEventMarker } from "../lib/event-parts"
-import { getEffectiveToolName } from "../lib/tool-semantics"
+import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
@@ -28,24 +28,6 @@ import { AttachmentCard } from "./attachment-card"
 import { parseNovaEvent } from "../lib/nova-event"
 import { NovaEventSquare } from "./nova-event-square"
 import { getAgentJobHref } from "../lib/session-resource-links"
-
-const readOnlyTools = new Set([
-  "read", "glob", "grep", "agent", "websearch", "webfetch",
-  "toolsearch", "cronlist", "todoread", "monitor",
-  "exitplanmode", "enterplanmode", "askuserquestion",
-  "list", "codesearch", "explore",
-])
-
-const mutatingTools = new Set([
-  "edit", "write", "notebookedit", "todowrite",
-  "croncreate", "crondelete", "pushnotification",
-])
-
-const shellTools = new Set(["bash", "powershell"])
-
-function matchTool(set: Set<string>, name?: string): boolean {
-  return !!name && set.has(name.toLowerCase())
-}
 
 const COLOR = {
   thinking: "var(--color-domain-imagination)",
@@ -92,10 +74,11 @@ export function getPartColor(part: MessagePart): string {
     return meta.color ?? COLOR.event
   }
   if (part.type === "tool_use" && part.toolName) {
-    const effectiveName = getEffectiveToolName(part.toolName, part.toolInput)
-    if (matchTool(readOnlyTools, effectiveName)) return COLOR.readOnly
-    if (matchTool(mutatingTools, effectiveName)) return COLOR.mutating
-    if (matchTool(shellTools, effectiveName)) return COLOR.shell
+    const category = getToolActivityCategory(part.toolName, part.toolInput)
+    if (category === "agent") return COLOR.thinking
+    if (category === "read-only") return COLOR.readOnly
+    if (category === "mutating") return COLOR.mutating
+    if (category === "shell") return COLOR.shell
   }
   return COLOR.fallback
 }
@@ -110,10 +93,11 @@ export function getSpinnerColor(messages: MessageBlock[]): string {
       const part = block.parts[j]
       if (part.type === "thinking") return COLOR.thinking
       if (part.type === "tool_use" && part.toolName) {
-        const effectiveName = getEffectiveToolName(part.toolName, part.toolInput)
-        if (matchTool(readOnlyTools, effectiveName)) return COLOR.readOnly
-        if (matchTool(mutatingTools, effectiveName)) return COLOR.mutating
-        if (matchTool(shellTools, effectiveName)) return COLOR.shell
+        const category = getToolActivityCategory(part.toolName, part.toolInput)
+        if (category === "agent") return COLOR.thinking
+        if (category === "read-only") return COLOR.readOnly
+        if (category === "mutating") return COLOR.mutating
+        if (category === "shell") return COLOR.shell
       }
       if (part.type === "text") return COLOR.readOnly
     }
@@ -187,6 +171,7 @@ interface ChatMessageProps {
   assistantAvatar?: string
   senderName?: string
   senderAvatarUrl?: string
+  senderPresentation?: "compact" | "portrait"
   extra?: React.ReactNode
   sideActions?: React.ReactNode
   /** Index of the block in the full message list, for the render callbacks. */
@@ -224,6 +209,7 @@ export const ChatMessage = memo(function ChatMessage({
   assistantAvatar,
   senderName,
   senderAvatarUrl,
+  senderPresentation = "compact",
   extra,
   sideActions,
   blockIndex = 0,
@@ -287,6 +273,27 @@ export const ChatMessage = memo(function ChatMessage({
   }, [actionsOpen, environment.document])
 
   const touchProps = { onTouchStart, onTouchEnd: cancelLongPress, onTouchMove: cancelLongPress, onContextMenu }
+  const portraitSender = senderPresentation === "portrait"
+    && block.parts.every(part => part.type === "text" || part.type === "image" || part.type === "audio")
+
+  const portrait = (side: "left" | "right") => senderName ? (
+    <div
+      data-chat-sender-presentation="portrait"
+      className={`mb-2 flex items-end gap-3 ${side === "right" ? "justify-end" : "justify-start"}`}
+    >
+      {side === "left" && (senderAvatarUrl
+        ? <img src={senderAvatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-md ring-1 ring-overlay-10 sm:h-11 sm:w-11" />
+        : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-overlay-8 text-sm font-semibold text-text-muted ring-1 ring-overlay-10 sm:h-11 sm:w-11">{senderName.slice(0, 1).toUpperCase()}</span>)}
+      <div className={`flex min-w-0 items-center gap-2 ${side === "right" ? "justify-end" : "flex-1"}`}>
+        {side === "right" && <span className="h-px min-w-6 flex-1 bg-gradient-to-r from-transparent to-overlay-10" />}
+        <span className="truncate text-sm font-semibold tracking-wide text-contrast">{senderName}</span>
+        {side === "left" && <span className="h-px min-w-8 flex-1 bg-gradient-to-r from-overlay-10 to-transparent" />}
+      </div>
+      {side === "right" && (senderAvatarUrl
+        ? <img src={senderAvatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-md ring-1 ring-overlay-10 sm:h-11 sm:w-11" />
+        : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-overlay-8 text-sm font-semibold text-text-muted ring-1 ring-overlay-10 sm:h-11 sm:w-11">{senderName.slice(0, 1).toUpperCase()}</span>)}
+    </div>
+  ) : null
 
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
@@ -317,12 +324,14 @@ export const ChatMessage = memo(function ChatMessage({
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
         <div className="flex justify-end">
-          <div
-            data-chat-user-bubble
-            className="relative max-w-[80%] bg-overlay-10 px-4 py-2.5"
-            style={USER_BUBBLE_SHAPE_STYLE}
-          >
-            {senderName && (
+          <div className={portraitSender ? "min-w-0 max-w-[88%]" : "contents"}>
+            {portraitSender && portrait("right")}
+            <div
+              data-chat-user-bubble
+              className={`relative bg-overlay-10 px-4 py-2.5 ${portraitSender ? "max-w-full" : "max-w-[80%]"}`}
+              style={USER_BUBBLE_SHAPE_STYLE}
+            >
+            {senderName && !portraitSender && (
               <div className="flex items-center gap-1.5 mb-1.5">
                 {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
                 <span className="text-xs text-text-muted font-medium">{senderName}</span>
@@ -356,6 +365,7 @@ export const ChatMessage = memo(function ChatMessage({
             {content && (
               <p className="text-sm whitespace-pre-wrap break-words font-serif">{content}</p>
             )}
+            </div>
           </div>
         </div>
         {/* Mobile styles are `max-md:`-qualified rather than unquantified base
@@ -396,7 +406,8 @@ export const ChatMessage = memo(function ChatMessage({
   return (
     <div className={`${compactAfter ? "mb-0" : "mb-4"} min-w-0 group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
       <div className="relative max-w-full min-w-0 overflow-hidden">
-        {senderName && (
+        {portraitSender && portrait("left")}
+        {senderName && !portraitSender && (
           <div className="flex items-center gap-1.5 mb-1.5">
             {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
             <span className="text-xs text-text-muted font-medium">{senderName}</span>
@@ -561,11 +572,7 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
 
 function toolCategory(part: MessagePart): string | null {
   if (part.type !== "tool_use" || !part.toolName) return null
-  const effectiveName = getEffectiveToolName(part.toolName, part.toolInput)
-  if (matchTool(readOnlyTools, effectiveName)) return "read-only"
-  if (matchTool(mutatingTools, effectiveName)) return "mutating"
-  if (matchTool(shellTools, effectiveName)) return "shell"
-  return null
+  return getToolActivityCategory(part.toolName, part.toolInput)
 }
 
 // Grep/Glob `path` may be a directory — hosts are expected to handle both.

@@ -539,6 +539,7 @@ export function ChatPanel(props: ChatPanelProps) {
                   assistantAvatar={props.assistantAvatar}
                   senderName={row.ownsSender ? senderAgent?.name : undefined}
                   senderAvatarUrl={row.ownsSender ? senderAgent?.avatarUrl : undefined}
+                  senderPresentation={props.senderPresentation}
                   renderExtra={row.ownsActions ? renderMessageExtra : undefined}
                   renderSideActions={row.ownsActions ? renderSideActions : undefined}
                   compactAfter={row.compactAfter}

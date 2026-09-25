@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { getEffectiveToolName } from "./tool-semantics.ts"
+import { getEffectiveToolName, getToolActivityCategory } from "./tool-semantics.ts"
 
 const shell = (command: string) => JSON.stringify({ command, description: "C:\\repo" })
 
@@ -23,4 +23,13 @@ test("keeps mixed or mutating commands in the shell category", () => {
 test("leaves first-class and malformed tool calls unchanged", () => {
   assert.equal(getEffectiveToolName("Read", JSON.stringify({ file_path: "a.ts" })), "Read")
   assert.equal(getEffectiveToolName("Bash", "not json"), "Bash")
+})
+
+test("classifies agent and namespaced native tools without hiding their names", () => {
+  assert.equal(getToolActivityCategory("agent:Game Master"), "agent")
+  assert.equal(getToolActivityCategory("roleplay_channel_read"), "read-only")
+  assert.equal(getToolActivityCategory("roleplay_memory_search"), "read-only")
+  assert.equal(getToolActivityCategory("roleplay_message_edit"), "mutating")
+  assert.equal(getToolActivityCategory("roleplay_visual_generate"), "mutating")
+  assert.equal(getEffectiveToolName("roleplay_message_edit"), "roleplay_message_edit")
 })
