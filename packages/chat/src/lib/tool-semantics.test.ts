@@ -31,5 +31,6 @@ test("classifies agent and namespaced native tools without hiding their names", 
   assert.equal(getToolActivityCategory("roleplay_memory_search"), "read-only")
   assert.equal(getToolActivityCategory("roleplay_message_edit"), "mutating")
   assert.equal(getToolActivityCategory("roleplay_visual_generate"), "mutating")
+  assert.equal(getToolActivityCategory("roleplay_memory_upsert"), "mutating")
   assert.equal(getEffectiveToolName("roleplay_message_edit"), "roleplay_message_edit")
 })

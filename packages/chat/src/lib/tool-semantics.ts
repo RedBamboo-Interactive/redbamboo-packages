@@ -48,7 +48,7 @@ export function getToolActivityCategory(toolName?: string, toolInput?: string): 
   const name = effective.toLowerCase()
   if (name.startsWith("agent:")) return "agent"
   if (readOnlyTools.has(name) || /(?:^|_)(?:read|search|list)$/.test(name)) return "read-only"
-  if (mutatingTools.has(name) || /(?:^|_)(?:create|update|edit|delete|post|generate)$/.test(name)) return "mutating"
+  if (mutatingTools.has(name) || /(?:^|_)(?:create|update|edit|delete|post|generate|upsert)$/.test(name)) return "mutating"
   if (name === "bash" || name === "powershell") return "shell"
   return null
 }

@@ -30,7 +30,7 @@ import { NovaEventSquare } from "./nova-event-square"
 import { getAgentJobHref } from "../lib/session-resource-links"
 
 const COLOR = {
-  thinking: "var(--color-domain-imagination)",
+  thinking: "var(--color-domain-imagination, #7C4DFF)",
   readOnly: "var(--color-accent-teal)",
   mutating: "var(--color-accent-gold)",
   shell: "var(--color-accent-gold)",
