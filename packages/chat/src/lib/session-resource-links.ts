@@ -9,3 +9,15 @@ const RESOURCE_PATHS: Record<SessionResourceKind, (id: string) => string> = {
 export function getSessionResourceHref(kind: SessionResourceKind, id: string): string {
   return RESOURCE_PATHS[kind](id)
 }
+
+export function getAgentJobHref(toolName: string | undefined, toolInput: string | undefined): string | undefined {
+  if (!toolName?.startsWith("agent:") || !toolInput) return undefined
+  try {
+    const input = JSON.parse(toolInput) as Record<string, unknown>
+    return typeof input.jobId === "string" && input.jobId.trim()
+      ? getSessionResourceHref("job", input.jobId)
+      : undefined
+  } catch {
+    return undefined
+  }
+}

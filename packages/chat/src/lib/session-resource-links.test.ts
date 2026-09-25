@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { getSessionResourceHref } from "./session-resource-links.ts"
+import { getAgentJobHref, getSessionResourceHref } from "./session-resource-links.ts"
 
 test("session resource links target their canonical suite detail views", () => {
   assert.equal(
@@ -22,4 +22,13 @@ test("session resource ids are encoded before entering a URL", () => {
     getSessionResourceHref("discussion", "id/with spaces"),
     "/apps/nova/chat/id%2Fwith%20spaces",
   )
+})
+
+test("agent activity links to its exact Compute job", () => {
+  assert.equal(
+    getAgentJobHref("agent:Game Master", JSON.stringify({ jobId: "b91c2e76-ab37" })),
+    "/apps/compute/jobs?select=b91c2e76-ab37",
+  )
+  assert.equal(getAgentJobHref("Bash", JSON.stringify({ jobId: "ignored" })), undefined)
+  assert.equal(getAgentJobHref("agent:Game Master", "not-json"), undefined)
 })

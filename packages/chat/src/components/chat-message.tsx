@@ -27,6 +27,7 @@ import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 import { AttachmentCard } from "./attachment-card"
 import { parseNovaEvent } from "../lib/nova-event"
 import { NovaEventSquare } from "./nova-event-square"
+import { getAgentJobHref } from "../lib/session-resource-links"
 
 const readOnlyTools = new Set([
   "read", "glob", "grep", "agent", "websearch", "webfetch",
@@ -602,6 +603,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
   const event = parseEventPart(part)
   const category = toolCategory(part)
   const isToolUse = part.type === "tool_use"
+  const agentJobHref = isToolUse ? getAgentJobHref(part.toolName, part.toolInput) : undefined
   const resultContent = pairedResult?.content || (isToolUse ? undefined : part.content)
   const resultPayloadRef = pairedResult?.payloadRef || (isToolUse ? undefined : part.payloadRef)
   const isError = part.type === "error" || (pairedResult?.type === "tool_result" && pairedResult.content?.toLowerCase().startsWith("error"))
@@ -664,6 +666,18 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
               <i className="ph ph-code text-[11px]" />
               Open
             </button>
+          )}
+          {agentJobHref && (
+            <a
+              href={agentJobHref}
+              onClick={onClose}
+              className="ml-auto mr-7 inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1 text-xs text-text-muted transition-colors hover:bg-overlay-10 hover:text-contrast"
+              aria-label="Open job in Compute"
+              title="Open job in Compute"
+            >
+              <i className="ph ph-arrow-square-out text-[11px]" />
+              Compute
+            </a>
           )}
         </DialogHeader>
 
