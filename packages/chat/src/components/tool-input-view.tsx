@@ -1,5 +1,7 @@
 import { useState } from "react"
 import { JsonHighlight } from "@redbamboo/utility"
+import { parseStructuredJson } from "../lib/structured-data"
+import { StructuredDataView } from "./structured-data-view"
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i
 
@@ -12,12 +14,16 @@ interface Props {
 }
 
 export function ToolInputView({ toolName, toolInput, onOpenFile, resolveImageSrc }: Props) {
-  let parsed: Record<string, unknown> = {}
-  try {
-    parsed = JSON.parse(toolInput)
-  } catch {
+  const structured = parseStructuredJson(toolInput)
+  if (structured === undefined) {
     return <JsonHighlight json={toolInput} />
   }
+
+  const parsed = structured !== null && typeof structured === "object" && !Array.isArray(structured)
+    ? structured as Record<string, unknown>
+    : null
+
+  if (!parsed) return <StructuredDataView value={structured} rawJson={toolInput} resolveImageSrc={resolveImageSrc} />
 
   switch (toolName) {
     case "Read":
@@ -40,7 +46,7 @@ export function ToolInputView({ toolName, toolInput, onOpenFile, resolveImageSrc
     case "WebFetch":
       return <WebFetchView p={parsed} />
     default:
-      return <JsonHighlight json={toolInput} />
+      return <StructuredDataView value={structured} rawJson={toolInput} resolveImageSrc={resolveImageSrc} />
   }
 }
 

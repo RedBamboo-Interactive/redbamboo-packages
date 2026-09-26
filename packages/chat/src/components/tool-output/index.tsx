@@ -1,4 +1,3 @@
-import { JsonHighlight } from "@redbamboo/utility"
 import { ExpandableText, type OutputResolvers } from "./shared"
 import { ReadOutputView } from "./read"
 import { GrepOutputView } from "./grep"
@@ -6,6 +5,8 @@ import { FileListOutputView } from "./file-list"
 import { ShellOutputView } from "./shell"
 import { MarkdownOutputView } from "./markdown"
 import { WebSearchOutputView } from "./web"
+import { parseStructuredJson } from "../../lib/structured-data"
+import { StructuredDataView } from "../structured-data-view"
 
 interface Props {
   content: string
@@ -56,22 +57,14 @@ export function ToolOutputView({ content, isError, toolName, toolInput, resolveF
       return <WebSearchOutputView content={content} />
   }
 
-  const isJson = content.trimStart().startsWith("{") || content.trimStart().startsWith("[")
-  let parsedJson = false
-  if (isJson) {
-    try {
-      JSON.parse(content)
-      parsedJson = true
-    } catch { /* not valid json */ }
+  const structured = parseStructuredJson(content)
+  if (structured !== undefined) {
+    return <StructuredDataView value={structured} rawJson={content} resolveImageSrc={resolveImageSrc} />
   }
 
   return (
     <ExpandableText content={content}>
-      {visible => parsedJson ? (
-        <JsonHighlight json={visible} />
-      ) : (
-        <pre className="text-xs font-mono whitespace-pre-wrap break-all">{visible}</pre>
-      )}
+      {visible => <pre className="text-xs font-mono whitespace-pre-wrap break-all">{visible}</pre>}
     </ExpandableText>
   )
 }

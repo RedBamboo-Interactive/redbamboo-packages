@@ -683,7 +683,10 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
+      <DialogContent
+        className="flex flex-col p-0 gap-0"
+        style={{ maxWidth: "min(42rem, calc(100vw - 2rem))", maxHeight: "82vh" }}
+      >
         <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
           <div
             className="w-3 h-3 rounded-[2px]"
@@ -722,6 +725,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
         <div className="overflow-y-auto p-4 flex-1 min-h-0">
           {isToolUse && part.toolInput && (
             <div className="mb-3">
+              <div className="text-[10px] uppercase text-text-muted mb-1.5 font-semibold">Input</div>
               <ToolInputView
                 toolName={part.toolName || "Unknown"}
                 toolInput={part.toolInput}
