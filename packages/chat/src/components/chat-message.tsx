@@ -280,7 +280,15 @@ export const ChatMessage = memo(function ChatMessage({
 
   const portrait = (side: "left" | "right") => {
     if (!senderName) return null
-    const placement = side === "right" ? "float-right ml-3" : "float-left mr-3"
+    const placement = side === "right" ? "ml-3" : "mr-3"
+    // Hosts do not necessarily scan linked package sources for uncommon
+    // Tailwind utilities. Keep the float and semantic border live at runtime.
+    const portraitStyle = {
+      borderColor: "var(--color-border-subtle)",
+      float: side,
+      position: "relative",
+      zIndex: 1,
+    } as React.CSSProperties
     if (!senderAvatarUrl) {
       return (
         <span
@@ -288,6 +296,7 @@ export const ChatMessage = memo(function ChatMessage({
           data-chat-sender-name={senderName}
           title={senderName}
           className={`${placement} mb-1 grid h-10 w-10 place-items-center rounded-xl border border-border-subtle bg-overlay-8 text-sm font-semibold text-text-muted shadow-md sm:h-11 sm:w-11`}
+          style={portraitStyle}
         >
           {senderName.slice(0, 1).toUpperCase()}
         </span>
@@ -303,6 +312,7 @@ export const ChatMessage = memo(function ChatMessage({
         aria-label={`Open ${senderName} portrait`}
         onClick={() => setPortraitPreview({ src: senderAvatarUrl, alt: senderName })}
         className={`${placement} mb-1 h-10 w-10 cursor-zoom-in overflow-hidden rounded-xl border border-border-subtle bg-surface-deep shadow-md transition-colors hover:border-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-11 sm:w-11`}
+        style={portraitStyle}
       >
         <img src={senderAvatarUrl} alt="" className="h-full w-full object-cover" />
       </button>
@@ -342,8 +352,8 @@ export const ChatMessage = memo(function ChatMessage({
           <div className={portraitSender ? "min-w-0 max-w-[88%]" : "contents"}>
             <div
               data-chat-user-bubble
-              className={`relative flow-root bg-overlay-10 px-4 py-2.5 ${portraitSender ? "max-w-full" : "max-w-[80%]"}`}
-              style={USER_BUBBLE_SHAPE_STYLE}
+              className={`relative bg-overlay-10 px-4 py-2.5 ${portraitSender ? "max-w-full" : "max-w-[80%]"}`}
+              style={portraitSender ? { ...USER_BUBBLE_SHAPE_STYLE, display: "flow-root" } : USER_BUBBLE_SHAPE_STYLE}
             >
             {portraitSender && portrait("right")}
             {senderName && !portraitSender && (
