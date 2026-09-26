@@ -12,6 +12,7 @@
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
     },
+    "./styles.css": "./src/chat.css",
     "./event-parts": {
       "types": "./src/lib/event-parts.ts",
       "default": "./src/lib/event-parts.ts"
