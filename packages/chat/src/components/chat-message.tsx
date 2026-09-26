@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  ImageLightbox,
   useUiEnvironment,
 } from "@redbamboo/ui"
 import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef } from "../types"
@@ -231,6 +232,7 @@ export const ChatMessage = memo(function ChatMessage({
   const extraNode = showActions ? (extra ?? renderExtra?.(block, blockIndex)) : null
   const sideActionsNode = showActions ? (sideActions ?? renderSideActions?.(block, blockIndex)) : null
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [portraitPreview, setPortraitPreview] = useState<{ src: string; alt: string } | null>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didFire = useRef(false)
   const actionsRef = useRef<HTMLDivElement>(null)
@@ -276,24 +278,36 @@ export const ChatMessage = memo(function ChatMessage({
   const portraitSender = senderPresentation === "portrait"
     && block.parts.every(part => part.type === "text" || part.type === "image" || part.type === "audio")
 
-  const portrait = (side: "left" | "right") => senderName ? (
-    <div
-      data-chat-sender-presentation="portrait"
-      className={`mb-2 flex items-end gap-3 ${side === "right" ? "justify-end" : "justify-start"}`}
-    >
-      {side === "left" && (senderAvatarUrl
-        ? <img src={senderAvatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-md ring-1 ring-overlay-10 sm:h-11 sm:w-11" />
-        : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-overlay-8 text-sm font-semibold text-text-muted ring-1 ring-overlay-10 sm:h-11 sm:w-11">{senderName.slice(0, 1).toUpperCase()}</span>)}
-      <div className={`flex min-w-0 items-center gap-2 ${side === "right" ? "justify-end" : "flex-1"}`}>
-        {side === "right" && <span className="h-px min-w-6 flex-1 bg-gradient-to-r from-transparent to-overlay-10" />}
-        <span className="truncate text-sm font-semibold tracking-wide text-contrast">{senderName}</span>
-        {side === "left" && <span className="h-px min-w-8 flex-1 bg-gradient-to-r from-overlay-10 to-transparent" />}
-      </div>
-      {side === "right" && (senderAvatarUrl
-        ? <img src={senderAvatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-md ring-1 ring-overlay-10 sm:h-11 sm:w-11" />
-        : <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-overlay-8 text-sm font-semibold text-text-muted ring-1 ring-overlay-10 sm:h-11 sm:w-11">{senderName.slice(0, 1).toUpperCase()}</span>)}
-    </div>
-  ) : null
+  const portrait = (side: "left" | "right") => {
+    if (!senderName) return null
+    const placement = side === "right" ? "float-right ml-3" : "float-left mr-3"
+    if (!senderAvatarUrl) {
+      return (
+        <span
+          data-chat-sender-presentation="portrait"
+          data-chat-sender-name={senderName}
+          title={senderName}
+          className={`${placement} mb-1 grid h-10 w-10 place-items-center rounded-xl border border-border-subtle bg-overlay-8 text-sm font-semibold text-text-muted shadow-md sm:h-11 sm:w-11`}
+        >
+          {senderName.slice(0, 1).toUpperCase()}
+        </span>
+      )
+    }
+
+    return (
+      <button
+        type="button"
+        data-chat-sender-presentation="portrait"
+        data-chat-sender-name={senderName}
+        title={senderName}
+        aria-label={`Open ${senderName} portrait`}
+        onClick={() => setPortraitPreview({ src: senderAvatarUrl, alt: senderName })}
+        className={`${placement} mb-1 h-10 w-10 cursor-zoom-in overflow-hidden rounded-xl border border-border-subtle bg-surface-deep shadow-md transition-colors hover:border-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:h-11 sm:w-11`}
+      >
+        <img src={senderAvatarUrl} alt="" className="h-full w-full object-cover" />
+      </button>
+    )
+  }
 
   if (block.role === "user") {
     const rawContent = block.parts[0]?.content || ""
@@ -319,18 +333,19 @@ export const ChatMessage = memo(function ChatMessage({
     }
 
     return (
+      <>
       <div className={`mb-3 ${animateOnMount ? "msg-enter-user" : ""} group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
         {contextData && (
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
         <div className="flex justify-end">
           <div className={portraitSender ? "min-w-0 max-w-[88%]" : "contents"}>
-            {portraitSender && portrait("right")}
             <div
               data-chat-user-bubble
-              className={`relative bg-overlay-10 px-4 py-2.5 ${portraitSender ? "max-w-full" : "max-w-[80%]"}`}
+              className={`relative flow-root bg-overlay-10 px-4 py-2.5 ${portraitSender ? "max-w-full" : "max-w-[80%]"}`}
               style={USER_BUBBLE_SHAPE_STYLE}
             >
+            {portraitSender && portrait("right")}
             {senderName && !portraitSender && (
               <div className="flex items-center gap-1.5 mb-1.5">
                 {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
@@ -380,6 +395,8 @@ export const ChatMessage = memo(function ChatMessage({
         </div>
         {extraNode}
       </div>
+      {portraitPreview && <ImageLightbox src={portraitPreview.src} alt={portraitPreview.alt} onClose={() => setPortraitPreview(null)} />}
+      </>
     )
   }
 
@@ -404,6 +421,7 @@ export const ChatMessage = memo(function ChatMessage({
   }
 
   return (
+    <>
     <div className={`${compactAfter ? "mb-0" : "mb-4"} min-w-0 group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
       <div className="relative max-w-full min-w-0 overflow-hidden">
         {portraitSender && portrait("left")}
@@ -470,6 +488,8 @@ export const ChatMessage = memo(function ChatMessage({
       )}
       {extraNode}
     </div>
+    {portraitPreview && <ImageLightbox src={portraitPreview.src} alt={portraitPreview.alt} onClose={() => setPortraitPreview(null)} />}
+    </>
   )
 })
 
