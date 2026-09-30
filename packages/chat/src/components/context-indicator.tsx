@@ -21,13 +21,18 @@ function formatResetForToast(value?: string | null): string | undefined {
   }).format(date)
 }
 
-export function SessionInfoButton({ stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, loadProviderUsage, onConfigChange, children }: SessionInfoButtonProps) {
-  const [open, setOpen] = useState(false)
+export function SessionInfoButton({ stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, loadProviderUsage, onConfigChange, open: controlledOpen, onOpenChange, children }: SessionInfoButtonProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const open = controlledOpen ?? uncontrolledOpen
   const [providerUsage, setProviderUsage] = useState<ProviderUsageSnapshot | null>(null)
   const [providerUsageLoading, setProviderUsageLoading] = useState(false)
   const providerUsageRequest = useRef(0)
   const { toast } = useToast()
   const providerId = stats?.provider ?? stats?.providerEntity
+  const setOpen = useCallback((nextOpen: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }, [controlledOpen, onOpenChange])
 
   const refreshProviderUsage = useCallback(async (forceRefresh = false) => {
     const request = ++providerUsageRequest.current

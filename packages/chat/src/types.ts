@@ -356,6 +356,8 @@ export interface SessionInfoButtonProps {
   providerOptions?: SessionConfigOption[]
   loadProviderUsage?: ProviderUsageLoader
   onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
 }
 
