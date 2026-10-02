@@ -1,5 +1,5 @@
-import type { ChatQueueTransport, ChatQueuedItem } from "../types.ts"
-import type { QueuedMessage } from "./message-queue.ts"
+import type { ChatQueueTransport, ChatQueuedItem, ChatQueueSummary } from "../types.ts"
+import { remoteMessageAppearance, type QueuedMessage } from "./message-queue.ts"
 import { createMessageQueueStore, type MessageQueueStore } from "./message-queue-store.ts"
 
 interface RemoteQueueEntry {
@@ -16,18 +16,20 @@ function sameMessage(left: QueuedMessage, right: QueuedMessage): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-function queuedMessage(item: ChatQueuedItem, previous?: QueuedMessage): QueuedMessage {
+function queuedMessage(item: ChatQueuedItem, previous: QueuedMessage | undefined, summary: ChatQueueSummary): QueuedMessage {
+  if (previous?.remoteState === "delivered" && item.state !== "delivered") return previous
   const deliveredAt = item.completedAt ?? (item.state === "delivered" ? item.updatedAt : undefined)
   return {
-    id: item.clientId ?? previous?.id ?? item.id,
+    ...(previous?.images ? { images: previous.images } : {}),
+    id: previous?.id ?? item.clientId ?? item.id,
     remoteId: item.id,
     clientId: item.clientId ?? undefined,
     sessionId: item.sessionId,
     text: item.displayContent,
-    attachments: item.attachments,
+    attachments: item.attachments ?? previous?.attachments,
     deliveryError: item.error?.message,
     remoteState: item.state === "cancelled" ? undefined : item.state,
-    appearance: item.state === "delivered" ? "message" : previous?.appearance ?? "queue",
+    appearance: remoteMessageAppearance(item.state === "cancelled" ? undefined : item.state, previous?.appearance, summary),
     delivery: item.delivery,
     messageUid: item.messageUid,
     deliveredMessageUid: item.deliveredMessageUid ?? undefined,
@@ -87,7 +89,7 @@ export async function refreshRemoteMessageQueue(sessionId: string): Promise<void
         // Delivered receipts remain only when they bridge a bubble already visible in this client.
         // Other clients converge through their transcript without manufacturing old outgoing UI.
         .filter(({ item, previous }) => item.state !== "cancelled" && (item.state !== "delivered" || previous))
-        .map(({ item, previous }) => queuedMessage(item, previous))
+        .map(({ item, previous }) => queuedMessage(item, previous, snapshot.queue))
       entry.store.update(previous => {
         const next = [
           ...server,

@@ -4,6 +4,39 @@ import { acknowledgeRemoteMessage, canonicalUserMessageUids, enqueue, cancel, co
 
 const msg = (id: string, text: string, images?: QueuedMessage["images"]): QueuedMessage => ({ id, text, images })
 
+test("authoritative waiting admission corrects an optimistic immediate bubble without changing identity", () => {
+  for (const blockedReason of ["active_turn", "maintenance", "pending_question", "user_stopped"]) {
+    const message: QueuedMessage = { id: "client", text: "followup", appearance: "message", optimistic: true, createdAt: "2026-10-02T14:00:00Z" }
+    const corrected = acknowledgeRemoteMessage(message, {
+      disposition: "queued", queueItemId: "remote", messageUid: "uid",
+      queue: { depth: 1, state: "waiting_for_session", blockedReason },
+    })
+    assert.equal(corrected.appearance, "queue")
+    assert.equal(corrected.id, message.id)
+    assert.equal(corrected.createdAt, message.createdAt)
+  }
+})
+
+test("ready admissions and omitted legacy summaries keep immediate presentation", () => {
+  const immediate: QueuedMessage = { id: "client", text: "hello", appearance: "message", optimistic: true }
+  for (const queue of [undefined, { depth: 1, state: "ready" as const }, { depth: 1, state: "delivering" as const }])
+    assert.equal(acknowledgeRemoteMessage(immediate, { disposition: "queued", queue }).appearance, "message")
+})
+
+test("late blocked acknowledgement cannot regress observed delivery or resurrect sent appearance", () => {
+  const queued: QueuedMessage = { id: "client", text: "wait", appearance: "queue", remoteState: "delivering", timelineAt: "2026-10-02T14:00:00Z", attachments: [{ id: "file", name: "note", kind: "file", mediaType: "text/plain", size: 1, downloadUrl: "/file" }] }
+  const ack = { disposition: "queued" as const, item: { state: "pending" as const }, queue: { depth: 1, state: "waiting_for_session" as const, blockedReason: "active_turn" } }
+  const delivering = acknowledgeRemoteMessage(queued, ack)
+  assert.equal(delivering.remoteState, "delivering")
+  assert.equal(delivering.appearance, "queue")
+  assert.equal(delivering.attachments, queued.attachments)
+  assert.equal(delivering.timelineAt, queued.timelineAt)
+  const delivered = acknowledgeRemoteMessage({ ...queued, remoteState: "delivered", appearance: "message", deliveredMessageUid: "batch" }, ack)
+  assert.equal(delivered.remoteState, "delivered")
+  assert.equal(delivered.appearance, "message")
+  assert.equal(delivered.deliveredMessageUid, "batch")
+})
+
 test("remote optimistic messages have their canonical identity before admission", () => {
   assert.deepEqual(
     createRemoteMessageIdentity("625ae27a-caf2-4d6b-ab4c-89c97838a077"),

@@ -14,6 +14,28 @@ const empty: ChatQueueSnapshot = {
   queue: { depth: 0, state: "empty" },
 }
 
+test("a waiting snapshot corrects immediate presentation and keeps its client identity through delivery", async () => {
+  resetRemoteMessageQueueStores()
+  const store = getRemoteMessageQueueStore("waiting")
+  store.update(() => [{ id: "client", text: "followup", appearance: "message", optimistic: true }])
+  let snapshot: ChatQueueSnapshot = {
+    items: [{ id: "remote", clientId: "client", sessionId: "waiting", sequence: 1, state: "pending", delivery: "after-current", displayContent: "followup", messageUid: "uid", createdAt: "2026-10-02T14:00:00Z", updatedAt: "2026-10-02T14:00:00Z", attemptCount: 0 }],
+    queue: { depth: 1, state: "waiting_for_session", blockedReason: "maintenance" },
+  }
+  connectRemoteMessageQueue("waiting", { list: async () => snapshot, cancel: async () => snapshot.items[0]!, retry: async () => snapshot.items[0]!, sendNow: async () => {} })
+  await refreshRemoteMessageQueue("waiting")
+  assert.equal(store.getSnapshot().queue[0]?.appearance, "queue")
+  assert.equal(store.getSnapshot().queue[0]?.id, "client")
+  snapshot = { items: [{ ...snapshot.items[0]!, state: "delivering" }], queue: { depth: 1, state: "delivering" } }
+  await refreshRemoteMessageQueue("waiting")
+  assert.equal(store.getSnapshot().queue[0]?.appearance, "queue")
+  snapshot = { items: [{ ...snapshot.items[0]!, state: "delivered", deliveredMessageUid: "uid" }], queue: { depth: 0, state: "empty" } }
+  await refreshRemoteMessageQueue("waiting")
+  assert.equal(store.getSnapshot().queue[0]?.appearance, "message")
+  settleRemoteMessageQueue("waiting", ["uid"])
+  assert.equal(store.getSnapshot().queue.length, 0)
+})
+
 test("an invalidation during an in-flight refresh forces a second authoritative read", async () => {
   resetRemoteMessageQueueStores()
   let releaseFirst!: (snapshot: ChatQueueSnapshot) => void

@@ -1,5 +1,5 @@
 import { eventInputMessageUid } from "./event-parts.ts"
-import type { ChatQueuedItem, ImageAttachment, MessageBlock, SendOptions, UploadedAttachment } from "../types"
+import type { ChatQueuedItem, ChatQueueSummary, ImageAttachment, MessageBlock, SendOptions, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
   /** Stable presentation identity. For remote items this remains the client id across acknowledgement. */
@@ -75,18 +75,32 @@ export interface RemoteMessageAdmission {
   messageUid?: string | null
   deliveredMessageUid?: string | null
   item?: Partial<ChatQueuedItem> | null
+  queue?: ChatQueueSummary | null
+}
+
+/** A delivery lease is not a wait. Only authoritative blocking corrects an immediate bubble. */
+export function remoteMessageAppearance(
+  state: QueuedMessage["remoteState"],
+  previous: QueuedMessage["appearance"],
+  queue?: ChatQueueSummary | null,
+): QueuedMessage["appearance"] {
+  if (state === "delivered") return "message"
+  if (state === "failed" || state === "pending" && (queue?.state === "waiting_for_session" || !!queue?.blockedReason)) return "queue"
+  return previous ?? "queue"
 }
 
 /** An admission acknowledgement can arrive after delivery has already been observed. */
 export function acknowledgeRemoteMessage(message: QueuedMessage, admission: RemoteMessageAdmission | null): QueuedMessage {
   const delivered = message.remoteState === "delivered" || admission?.disposition === "delivered"
+  const state = delivered ? "delivered" : !message.optimistic && message.remoteState && message.remoteState !== "pending"
+    ? message.remoteState : admission?.item?.state === "cancelled" ? message.remoteState : admission?.item?.state ?? message.remoteState ?? (admission?.disposition === "queued" ? "pending" : undefined)
   return {
     ...message,
     remoteId: admission?.item?.id ?? admission?.queueItemId ?? message.remoteId,
     messageUid: admission?.item?.messageUid ?? admission?.messageUid ?? message.messageUid,
     deliveredMessageUid: message.deliveredMessageUid ?? admission?.item?.deliveredMessageUid ?? admission?.deliveredMessageUid ?? undefined,
-    remoteState: delivered ? "delivered" : admission?.item?.state === "cancelled" ? message.remoteState : admission?.item?.state ?? message.remoteState,
-    appearance: delivered ? "message" : message.appearance,
+    remoteState: state,
+    appearance: remoteMessageAppearance(state, message.appearance, admission?.queue),
     timelineAt: message.timelineAt ?? (delivered ? new Date().toISOString() : undefined),
     optimistic: false,
   }

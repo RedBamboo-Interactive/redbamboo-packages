@@ -22,7 +22,73 @@ async function main() {
     await server.listen()
     const origin = server.resolvedUrls.local[0]
     browser = await chromium.launch({ headless: true })
-    for (const width of [1100, 390]) {
+    for (const width of [1440, 390]) {
+      for (const scenario of ["waiting-ack", "maintenance-refresh", "idle-ready"]) {
+        const page = await browser.newPage({ viewport: { width, height: width === 390 ? 844 : 900 } })
+        const errors = []; page.on("pageerror", error => errors.push(error.message))
+        await page.goto(origin)
+        if (process.env.QUEUE_UI_THEME_CSS) {
+          await page.addStyleTag({ path: process.env.QUEUE_UI_THEME_CSS })
+          await page.evaluate(() => { document.documentElement.classList.add("dark"); document.body.className = "bg-bg-base text-text-primary" })
+        }
+        await page.waitForFunction(() => queueTest.requests.length === 1)
+        await page.evaluate(() => queueTest.requests.shift()({ items: [], queue: { depth: 0, state: "empty" } }))
+        await page.locator("textarea").first().fill("waiting presentation fixture")
+        await page.locator("textarea").first().press("Enter")
+        await page.waitForFunction(() => queueTest.submissions.length === 1)
+        const row = page.locator("[data-queue-item-id]").first()
+        await row.waitFor()
+        await row.evaluate(node => { window.originalQueueNode = node })
+        assert.equal(await page.evaluate(() => queueTest.read()[0].appearance), "message", "idle optimism remains solid")
+        await page.evaluate(scenario => {
+          const snapshot = queueTest.snapshot("pending")
+          snapshot.queue = scenario === "idle-ready" ? { depth: 1, state: "ready" }
+            : { depth: 1, state: "waiting_for_session", blockedReason: scenario === "waiting-ack" ? "active_turn" : "maintenance" }
+          if (scenario === "maintenance-refresh") {
+            queueTest.listeners.forEach(listener => listener())
+            window.confirmedSnapshot = snapshot
+          } else queueTest.submissions[0].resolve({ disposition: "queued", item: snapshot.items[0], queue: snapshot.queue })
+        }, scenario)
+        await page.waitForFunction(() => queueTest.requests.length === 1)
+        await page.evaluate(scenario => {
+          const snapshot = window.confirmedSnapshot || queueTest.snapshot("pending")
+          if (!window.confirmedSnapshot) snapshot.queue = scenario === "idle-ready" ? { depth: 1, state: "ready" } : { depth: 1, state: "waiting_for_session", blockedReason: "active_turn" }
+          queueTest.requests.shift()(snapshot)
+        }, scenario)
+        await page.waitForFunction(expected => queueTest.read()[0]?.appearance === expected, scenario === "idle-ready" ? "message" : "queue")
+        assert.equal(await row.evaluate(node => node === window.originalQueueNode), true, "correction keeps the same DOM node")
+        const queued = scenario !== "idle-ready"
+        assert.equal(await row.getAttribute("data-slot"), queued ? "queued-message" : "outgoing-message")
+        if (queued) {
+          await row.getByText("Queued, sends after this turn", { exact: true }).waitFor()
+          assert(await row.getByRole("button", { name: "Cancel queued message", exact: true }).isEnabled())
+          assert(await row.getByRole("button", { name: "Send queued message now", exact: true }).isEnabled())
+        }
+        if (process.env.QUEUE_UI_THEME_CSS) {
+          const border = await row.locator("[data-chat-user-bubble]").evaluate(node => getComputedStyle(node).borderStyle)
+          assert.equal(border, queued ? "dashed" : "none")
+        }
+        await row.evaluate(async node => {
+          await Promise.all(node.getAnimations({ subtree: true }).filter(a => Number.isFinite(a.effect.getComputedTiming().endTime)).map(a => a.finished.catch(() => {})))
+        })
+        await page.screenshot({ path: path.join(scratch, `${scenario}-${width}.png`), fullPage: true })
+        await page.evaluate(() => queueTest.listeners.forEach(listener => listener()))
+        await page.waitForFunction(() => queueTest.requests.length === 1)
+        await page.evaluate(() => { const s = queueTest.snapshot("delivering"); s.queue = { depth: 1, state: "delivering" }; queueTest.requests.shift()(s) })
+        await page.waitForFunction(() => queueTest.read()[0]?.remoteState === "delivering")
+        assert.equal(await page.evaluate(() => queueTest.read()[0].appearance), scenario === "idle-ready" ? "message" : "queue")
+        await page.evaluate(() => queueTest.listeners.forEach(listener => listener()))
+        await page.waitForFunction(() => queueTest.requests.length === 1)
+        await page.evaluate(() => queueTest.requests.shift()(queueTest.snapshot("delivered")))
+        await page.waitForFunction(() => queueTest.read()[0]?.remoteState === "delivered")
+        if (scenario === "maintenance-refresh") await page.evaluate(() => queueTest.submissions[0].resolve({ disposition: "queued", item: queueTest.snapshot("pending").items[0], queue: { depth: 1, state: "waiting_for_session", blockedReason: "maintenance" } }))
+        assert.equal(await row.evaluate(node => node === window.originalQueueNode), true, "delivery keeps the same DOM node")
+        await page.evaluate(() => queueTest.canonical())
+        await page.waitForFunction(() => document.querySelectorAll('[data-slot="outgoing-message"], [data-slot="queued-message"]').length === 0)
+        assert.deepEqual(errors, [])
+        results.push({ scenario, width, passed: true, scope: "deterministic shared ChatPanel fixture" })
+        await page.close()
+      }
       const events = await browser.newPage({ viewport: { width, height: 850 } })
       const eventErrors = []
       events.on("pageerror", error => eventErrors.push(error.message))
