@@ -314,6 +314,32 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
         return doc.RootElement.TryGetProperty("count", out var count) && count.GetInt32() > 0;
     }
 
+    /// <summary>Bounded presence lookup; failures never mean that records are missing.</summary>
+    public async Task<HashSet<string>> ExistingRecordIdsAsync(string stream,
+        IReadOnlyCollection<string> externalIds, CancellationToken ct = default)
+    {
+        if (externalIds.Count > 1000 || externalIds.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 256))
+            throw new ArgumentException("Supply at most 1000 non-empty external IDs of at most 256 characters", nameof(externalIds));
+        if (externalIds.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
+        var requested = externalIds.ToHashSet(StringComparer.Ordinal);
+        using var content = JsonContent.Create(new { external_ids = requested.ToArray() });
+        using var response = await _http.PostAsync(
+            $"api/streams/{Uri.EscapeDataString(stream)}/records/exists", content, ct);
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.ValueKind != JsonValueKind.Object
+            || !doc.RootElement.TryGetProperty("external_ids", out var ids) || ids.ValueKind != JsonValueKind.Array)
+            throw new JsonException("Invalid record presence response");
+        var present = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var id in ids.EnumerateArray())
+        {
+            if (id.ValueKind != JsonValueKind.String || !requested.Contains(id.GetString()!))
+                throw new JsonException("Record presence response contains an unrequested ID");
+            present.Add(id.GetString()!);
+        }
+        return present;
+    }
+
     private async Task RunAsync(CancellationToken ct)
     {
         try
