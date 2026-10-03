@@ -564,13 +564,18 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
-  const [selected, setSelected] = useState<{ part: MessagePart; result?: MessagePart } | null>(null)
+  const [selected, setSelected] = useState<{ part: MessagePart; result?: MessagePart; index: number } | null>(null)
+
+  // An opened thinking detail must follow immutable live item updates.
+  const currentThinking = selected?.part.type === "thinking" ? allParts[selected.index] : undefined
+  const selectedPart = currentThinking?.type === "thinking" && currentThinking.messageId === selected?.part.messageId
+    ? currentThinking : selected?.part
 
   const handleClick = (part: MessagePart) => {
     if (part.type === "tool_use") {
-      setSelected({ part, result: findPairedResult(allParts, part) })
+      setSelected({ part, result: findPairedResult(allParts, part), index: allParts.indexOf(part) })
     } else {
-      setSelected({ part })
+      setSelected({ part, index: allParts.indexOf(part) })
     }
   }
 
@@ -596,7 +601,7 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
         })}
       </div>
 
-      <PartModal part={selected?.part} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+      <PartModal part={selectedPart} pairedResult={selected?.result} open={!!selected} onClose={() => setSelected(null)} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
     </>
   )
 }
@@ -807,7 +812,7 @@ function PartModal({ part, pairedResult, open, onClose, resolveFileLink, resolve
           )}
 
           {!part.content && !part.toolInput && !part.payloadRef && (
-            <p className="text-sm text-text-muted italic">No content</p>
+            <p className="text-sm text-text-muted italic">{part.type === "thinking" && part.thinkingState === "active" ? "Thinking..." : "No content"}</p>
           )}
         </div>
       </DialogContent>

@@ -207,7 +207,40 @@ function closeQuestion(question: QuestionState): QuestionState {
   return { pending: null, outcome: question.pending.requestId ? "unresolved" : question.outcome }
 }
 
+/** Update the same native thinking item, even across an ambient visual boundary. */
+function reconcileThinkingItem(messages: MessageBlock[], event: ChatEvent): MessageBlock[] | null {
+  if (event.type !== "thinking" || !event.messageId || event.isPartial === undefined) return null
+  for (let blockIndex = messages.length - 1; blockIndex >= 0; blockIndex--) {
+    const block = messages[blockIndex]
+    if (block.role !== "assistant") {
+      if (isEventBlock(block)) continue
+      break
+    }
+    if (event.messageUid && block.metadata?.messageUid !== event.messageUid && block.id !== event.messageUid) continue
+    for (let partIndex = block.parts.length - 1; partIndex >= 0; partIndex--) {
+      const part = block.parts[partIndex]
+      if (part.type !== "thinking" || part.messageId !== event.messageId) continue
+      // OpenCode can reuse a message id for a later reasoning part. A completed
+      // part must not absorb the next part's live chunks.
+      if (event.isPartial && part.thinkingState === "completed") return null
+      const parts = [...block.parts]
+      parts[partIndex] = {
+        ...part,
+        content: event.isPartial ? part.content + (event.content ?? "") : event.content || part.content,
+        isPartial: event.isPartial,
+        thinkingState: event.isPartial ? "active" : "completed",
+      }
+      const next = [...messages]
+      next[blockIndex] = { ...block, parts }
+      return next
+    }
+  }
+  return null
+}
+
 function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] {
+  const thinkingUpdate = reconcileThinkingItem(messages, event)
+  if (thinkingUpdate) return thinkingUpdate
   let msgs = [...messages]
   let idx = streamTargetIndex(msgs)
   const incomingTurnUid = event.messageUid || null
@@ -270,6 +303,9 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
     toolInput: event.toolInput || undefined,
     payloadRef: event.payloadRef || undefined,
     phase: event.phase || undefined,
+    ...(event.type === "thinking" && event.messageId ? { messageId: event.messageId } : {}),
+    ...(event.type === "thinking" && event.isPartial !== undefined
+      ? { thinkingState: event.isPartial ? "active" : "completed" } : {}),
   }
 
   if (event.type === "text" && lastBlock.parts.length > 0) {
@@ -285,7 +321,8 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
 
   if (event.type === "thinking" && lastBlock.parts.length > 0) {
     const lastPart = lastBlock.parts[lastBlock.parts.length - 1]
-    if (lastPart.type === "thinking" && lastPart.isPartial) {
+    if (lastPart.type === "thinking" && lastPart.isPartial
+        && (!part.messageId || part.messageId === lastPart.messageId)) {
       lastBlock.parts[lastBlock.parts.length - 1] = {
         ...lastPart,
         content: lastPart.content + (event.content || ""),
@@ -301,6 +338,6 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
     }
   }
 
-  lastBlock.parts.push({ ...part, isPartial: true })
+  lastBlock.parts.push({ ...part, isPartial: event.type === "thinking" ? event.isPartial ?? true : true })
   return msgs
 }

@@ -12,6 +12,10 @@ export interface MessageBlock {
 export type MessagePhase = "commentary" | "final_answer"
 
 export interface MessagePart {
+  /** Native reasoning identity, distinct from the logical turn uid. */
+  messageId?: string
+  /** Survives visual segment finalization around ambient events. */
+  thinkingState?: "active" | "completed"
   /** Existing logical input identity retained by a projected host-event part. */
   messageUid?: string
   type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image"
@@ -156,6 +160,8 @@ export interface ChatQueueTransport {
 }
 
 export interface ChatEvent {
+  /** Thinking starts/deltas are partial; a completed item settles its square. */
+  isPartial?: boolean
   /**
    * `question` / `question_resolved` are control events, not conversation:
    * they open and close a pending question rather than adding a message part.

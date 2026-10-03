@@ -119,6 +119,8 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       toolInput: rec.toolInput ?? undefined,
       payloadRef: rec.payloadRef ?? undefined,
       phase: rec.phase ?? undefined,
+      ...(rec.eventType === "thinking" && rec.messageId
+        ? { messageId: rec.messageId, thinkingState: "completed" } : {}),
     }
 
     if (rec.eventType === "text" && currentBlock.parts.length > 0) {
@@ -131,7 +133,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
 
     if (rec.eventType === "thinking" && currentBlock.parts.length > 0) {
       const last = currentBlock.parts[currentBlock.parts.length - 1]
-      if (last.type === "thinking") {
+      if (last.type === "thinking" && (!part.messageId || part.messageId === last.messageId)) {
         last.content += rec.content || ""
         continue
       }
