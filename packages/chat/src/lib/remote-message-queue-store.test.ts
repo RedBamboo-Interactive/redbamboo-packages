@@ -25,6 +25,7 @@ test("a waiting snapshot corrects immediate presentation and keeps its client id
   connectRemoteMessageQueue("waiting", { list: async () => snapshot, cancel: async () => snapshot.items[0]!, retry: async () => snapshot.items[0]!, sendNow: async () => {} })
   await refreshRemoteMessageQueue("waiting")
   assert.equal(store.getSnapshot().queue[0]?.appearance, "queue")
+  assert.equal(store.getSnapshot().queue[0]?.blockedReason, "maintenance")
   assert.equal(store.getSnapshot().queue[0]?.id, "client")
   snapshot = { items: [{ ...snapshot.items[0]!, state: "delivering" }], queue: { depth: 1, state: "delivering" } }
   await refreshRemoteMessageQueue("waiting")
@@ -32,6 +33,7 @@ test("a waiting snapshot corrects immediate presentation and keeps its client id
   snapshot = { items: [{ ...snapshot.items[0]!, state: "delivered", deliveredMessageUid: "uid" }], queue: { depth: 0, state: "empty" } }
   await refreshRemoteMessageQueue("waiting")
   assert.equal(store.getSnapshot().queue[0]?.appearance, "message")
+  assert.equal(store.getSnapshot().queue[0]?.blockedReason, undefined)
   settleRemoteMessageQueue("waiting", ["uid"])
   assert.equal(store.getSnapshot().queue.length, 0)
 })

@@ -22,6 +22,7 @@ export type {
   ChatEvent,
   ChatBackend,
   ChatPanelProps,
+  ChatMaintenanceStatus,
   OutgoingMessageDraft,
   QuestionOption,
   StructuredQuestion,
@@ -128,3 +129,5 @@ export { hasUnreadConversation } from "./lib/conversation-read-state"
 export type { ConversationReadState } from "./lib/conversation-read-state"
 export { ShareDialog } from "./components/share-dialog"
 export type { ShareDialogProps } from "./components/share-dialog"
+
+export { parseMaintenanceStatus } from "./lib/maintenance-status"

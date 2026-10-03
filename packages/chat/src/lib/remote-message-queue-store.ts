@@ -28,6 +28,7 @@ function queuedMessage(item: ChatQueuedItem, previous: QueuedMessage | undefined
     text: item.displayContent,
     attachments: item.attachments ?? previous?.attachments,
     deliveryError: item.error?.message,
+    ...(item.state === "pending" && summary.blockedReason ? { blockedReason: summary.blockedReason } : {}),
     remoteState: item.state === "cancelled" ? undefined : item.state,
     appearance: remoteMessageAppearance(item.state === "cancelled" ? undefined : item.state, previous?.appearance, summary),
     delivery: item.delivery,

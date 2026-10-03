@@ -13,6 +13,8 @@ export interface QueuedMessage {
   images?: ImageAttachment[]
   attachments?: UploadedAttachment[]
   deliveryError?: string
+  /** Canonical queue blocker, cleared once delivery is underway or complete. */
+  blockedReason?: string
   remoteState?: "pending" | "delivering" | "failed" | "delivered"
   /** Human presentation. Idle submissions look like messages; genuinely waiting work looks queued. */
   appearance?: "message" | "queue"
@@ -100,6 +102,9 @@ export function acknowledgeRemoteMessage(message: QueuedMessage, admission: Remo
     messageUid: admission?.item?.messageUid ?? admission?.messageUid ?? message.messageUid,
     deliveredMessageUid: message.deliveredMessageUid ?? admission?.item?.deliveredMessageUid ?? admission?.deliveredMessageUid ?? undefined,
     remoteState: state,
+    blockedReason: state === "delivered" || state === "delivering" ? undefined
+      : !message.optimistic && message.remoteState ? message.blockedReason
+      : admission?.queue?.blockedReason ?? message.blockedReason,
     appearance: remoteMessageAppearance(state, message.appearance, admission?.queue),
     timelineAt: message.timelineAt ?? (delivered ? new Date().toISOString() : undefined),
     optimistic: false,

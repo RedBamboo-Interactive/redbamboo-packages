@@ -11,6 +11,7 @@ import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
 import { canonicalUserMessageUids, isCanonicalQueuedMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
 import { StreamingStatusLine } from "./streaming-status-line"
+import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
 import { MediaLightbox } from "./streaming-text"
@@ -44,6 +45,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const {
     sessionId, queueTransport, persistQueue = true, disabled = false, hideComposer = false, onResume,
     isReconnecting = false,
+    maintenanceStatus, maintenanceStatusUnavailable = false, hasServerSession = Boolean(sessionId),
     hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadDownloadUrl,
@@ -407,6 +409,9 @@ export function ChatPanel(props: ChatPanelProps) {
         ? <PendingQuestionLine />
         : null
 
+  const maintenanceEl = hideComposer ? null : <MaintenanceNotice status={maintenanceStatus}
+    hasServerSession={hasServerSession} unavailable={maintenanceStatusUnavailable} />
+
   const composerEl = hideComposer ? null : (
     <Composer
       ref={composerRef}
@@ -445,6 +450,7 @@ export function ChatPanel(props: ChatPanelProps) {
           </div>
         </div>
         {footer}
+        {maintenanceEl}
         {composerEl}
       </div>
     )
@@ -562,6 +568,7 @@ export function ChatPanel(props: ChatPanelProps) {
       </div>
 
       {footer}
+      {maintenanceEl}
       {composerEl}
       <MediaLightbox />
     </div>

@@ -60,9 +60,9 @@ async function main() {
         const queued = scenario !== "idle-ready"
         assert.equal(await row.getAttribute("data-slot"), queued ? "queued-message" : "outgoing-message")
         if (queued) {
-          await row.getByText("Queued, sends after this turn", { exact: true }).waitFor()
+          await row.getByText(scenario === "maintenance-refresh" ? "Saved, waiting for the update to finish" : "Queued, sends after this turn", { exact: true }).waitFor()
           assert(await row.getByRole("button", { name: "Cancel queued message", exact: true }).isEnabled())
-          assert(await row.getByRole("button", { name: "Send queued message now", exact: true }).isEnabled())
+          assert.equal(await row.getByRole("button", { name: "Send queued message now", exact: true }).isEnabled(), scenario !== "maintenance-refresh")
         }
         if (process.env.QUEUE_UI_THEME_CSS) {
           const border = await row.locator("[data-chat-user-bubble]").evaluate(node => getComputedStyle(node).borderStyle)

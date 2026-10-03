@@ -470,6 +470,16 @@ export interface OutgoingMessageDraft {
   attachments?: UploadedAttachment[]
 }
 
+/** Authenticated aggregate deployment progress. No session names or private identifiers. */
+export interface ChatMaintenanceStatus {
+  state: "idle" | "draining" | "launching" | "failed"
+  paused: boolean
+  runId: string | null
+  startedAt: string | null
+  changedAt: string
+  activeTurnCount: number | null
+}
+
 export interface ChatPanelProps {
   // Uncontrolled mode: ChatPanel manages state via useChatStream
   backend?: ChatBackend
@@ -479,6 +489,10 @@ export interface ChatPanelProps {
   isStreaming?: boolean
   /** The upstream AI event connection is temporarily unavailable and retrying. */
   isReconnecting?: boolean
+  maintenanceStatus?: ChatMaintenanceStatus | null
+  maintenanceStatusUnavailable?: boolean
+  /** Separate from the product discussion ID used as the browser outbox key. */
+  hasServerSession?: boolean
   onSend?: (content: string, images?: ImageAttachment[], options?: SendOptions) => void | Promise<unknown>
   onSendInput?: (input: ChatInputPart[], attachments: UploadedAttachment[], options?: SendOptions) => void | Promise<unknown>
   onInterrupt?: () => void
