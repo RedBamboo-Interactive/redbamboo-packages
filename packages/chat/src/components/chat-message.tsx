@@ -22,6 +22,7 @@ import { LazyToolOutput } from "./lazy-tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
 import { isEventPart, isEventBlock, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
+import { CONTEXT_COMPACTION_TOOL_NAME } from "../lib/chat-status"
 import { parseStructuredQuestions } from "../lib/process-stream-event"
 import { AudioPlayerWidget } from "./audio-player-widget"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
@@ -536,7 +537,9 @@ function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
 function partLabel(part: MessagePart): string {
   switch (part.type) {
     case "thinking": return "Thinking"
-    case "tool_use": return part.toolName?.startsWith("event:") ? part.toolName.slice(6) : getEffectiveToolName(part.toolName, part.toolInput) || "Tool"
+    case "tool_use": return part.toolName === CONTEXT_COMPACTION_TOOL_NAME
+      ? "Context compaction"
+      : part.toolName?.startsWith("event:") ? part.toolName.slice(6) : getEffectiveToolName(part.toolName, part.toolInput) || "Tool"
     case "tool_result": return "Result"
     case "error": return "Error"
     default: return part.type
@@ -583,7 +586,13 @@ function PartFrieze({ parts, allParts, isLive, resolveFileLink, resolveImageSrc,
     <>
       <div className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5">
         {parts.filter(p => p.type !== "tool_result").map((part, i) => {
-          const inFlight = isLive && !!part.isPartial
+          // Persisted history deliberately omits transient partial flags. An
+          // unresolved compaction pair in an active turn is nevertheless live,
+          // so a reconnect must restore the same animated square as the stream.
+          const unresolvedCompaction = part.type === "tool_use"
+            && part.toolName === CONTEXT_COMPACTION_TOOL_NAME
+            && !findPairedResult(allParts, part)
+          const inFlight = isLive && (!!part.isPartial || unresolvedCompaction)
           const event = isEventPart(part)
           const queueStatus = resolveEventQueueStatus?.(part)
           const squareEvent = usesSquareEventMarker(part)

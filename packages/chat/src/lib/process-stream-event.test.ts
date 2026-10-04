@@ -255,6 +255,24 @@ test("a status with no content (older backends) is terminal-and-safe", () => {
   assert.equal(result.resumePending, false)
 })
 
+test("context compaction is a live activity pair and never a terminal status", () => {
+  const started = processStreamEvent([user("q")], true, {
+    type: "tool_use", content: null, toolName: "ContextCompaction",
+    toolInput: null, toolResult: null, messageId: "compact-1", messageUid: "turn-1",
+  })
+  assert.equal(started.isStreaming, true)
+  assert.equal(started.messages[1]!.parts[0]!.type, "tool_use")
+  assert.equal(started.messages[1]!.parts[0]!.isPartial, true)
+
+  const completed = processStreamEvent(started.messages, started.isStreaming, {
+    type: "tool_result", content: "Context compacted", toolName: null,
+    toolInput: null, toolResult: "Context compacted", messageId: "compact-1", messageUid: "turn-1",
+  })
+  assert.equal(completed.isStreaming, true)
+  assert.equal(completed.messages[1]!.parts[0]!.isPartial, false)
+  assert.equal(completed.messages[1]!.parts[1]!.type, "tool_result")
+})
+
 // --- AskUserQuestion lifecycle ---
 //
 // The card used to be inferred purely from the parts: an AskUserQuestion

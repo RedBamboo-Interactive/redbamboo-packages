@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import type { MessageBlock } from "../types"
-import { getChatStatusPresentation } from "../lib/chat-status"
+import { getChatStatusPresentation, isContextCompactionActive } from "../lib/chat-status"
 import { getSpinnerColor } from "./chat-message"
 import { MorphSpinner } from "./morph-spinner"
 
@@ -24,7 +24,8 @@ export function StreamingStatusLine({ isStreaming, isReconnecting = false, messa
   messages: MessageBlock[]
 }) {
   const spinnerColor = useMemo(() => getSpinnerColor(messages), [messages])
-  const status = getChatStatusPresentation({ isStreaming, isReconnecting, streamingColor: spinnerColor })
+  const isCompacting = useMemo(() => isContextCompactionActive(messages), [messages])
+  const status = getChatStatusPresentation({ isStreaming, isReconnecting, streamingColor: spinnerColor, isCompacting })
 
   if (!status) return null
 

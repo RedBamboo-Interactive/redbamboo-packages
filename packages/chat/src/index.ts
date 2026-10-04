@@ -72,6 +72,7 @@ export {
 } from "./lib/provider-usage"
 export type { ProviderUsageThresholdAlert } from "./lib/provider-usage"
 export { ChatStatusLine, StreamingStatusLine } from "./components/streaming-status-line"
+export { CONTEXT_COMPACTION_TOOL_NAME, isContextCompactionActive } from "./lib/chat-status"
 export { PendingQuestionLine } from "./components/pending-question-line"
 export { HandsFreeStatusLine } from "./components/hands-free-status-line"
 export { VoiceInputButton } from "./components/voice-input-button"
