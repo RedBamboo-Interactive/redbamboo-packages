@@ -98,6 +98,14 @@ export {
   usePushToTalkSettings,
 } from "./lib/push-to-talk-settings"
 export type { PushToTalkSettings } from "./lib/push-to-talk-settings"
+export {
+  COMPOSER_FOCUS_SETTINGS_STORAGE_KEY,
+  DEFAULT_COMPOSER_AUTO_FOCUS_MODE,
+  composerFocusSettingsStore,
+  useComposerFocusSettings,
+} from "./lib/composer-focus-settings"
+export type { ComposerFocusSettings } from "./lib/composer-focus-settings"
+export type { ComposerAutoFocusMode } from "./lib/composer-focus"
 export { filterConversation } from "./lib/conversation-filter"
 export { createSpeechBackend, createProxySpeechTransport, DEFAULT_REFORMULATE_PROMPT, DEFAULT_SUMMARIZE_PROMPT } from "./lib/speech-backend"
 export type { SpeechTransport, PromptRequest, CreateSpeechBackendOptions } from "./lib/speech-backend"

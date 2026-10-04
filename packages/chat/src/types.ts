@@ -520,6 +520,8 @@ export interface ChatPanelProps {
 
   // Shared props
   sessionId?: string | null
+  /** Passive composer focus on initial load and session switches. */
+  autoFocusMode?: import("./lib/composer-focus").ComposerAutoFocusMode
   /** Enables RedCompute-owned durable queue state. Omit for the legacy in-browser fallback. */
   queueTransport?: ChatQueueTransport
   /** Disable browser outbox persistence and cleanup for isolated controlled previews. */

@@ -43,7 +43,7 @@ export function ChatPanel(props: ChatPanelProps) {
   const onAnswerQuestion = props.onAnswerQuestion ?? (props.backend ? internal.answerQuestion : undefined)
 
   const {
-    sessionId, queueTransport, persistQueue = true, disabled = false, hideComposer = false, onResume,
+    sessionId, autoFocusMode, queueTransport, persistQueue = true, disabled = false, hideComposer = false, onResume,
     isReconnecting = false,
     maintenanceStatus, maintenanceStatusUnavailable = false, hasServerSession = Boolean(sessionId),
     hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
@@ -430,6 +430,7 @@ export function ChatPanel(props: ChatPanelProps) {
       onAnswerQuestion={onAnswerQuestion}
       onResume={onResume}
       sessionId={sessionId}
+      autoFocusMode={autoFocusMode}
       enableImageAttachments={enableImageAttachments}
       enableFileAttachments={enableFileAttachments}
       attachmentTransport={attachmentTransport}

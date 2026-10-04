@@ -3,6 +3,7 @@ import type { AttachmentTransport, DraftAttachment, ImageAttachment, SendOptions
 import { AttachmentCard } from "./attachment-card"
 import { acceptedAttachmentFiles } from "../lib/attachment-selection"
 import { shouldAutoFocusComposer } from "../lib/composer-focus"
+import type { ComposerAutoFocusMode } from "../lib/composer-focus"
 import { useUiEnvironment } from "@redbamboo/ui"
 
 interface ComposerProps {
@@ -30,6 +31,7 @@ interface ComposerProps {
   onAnswerQuestion?: (answer: string, payload?: import("../types").QuestionAnswerPayload) => void
   onResume?: () => void | Promise<void>
   sessionId?: string | null
+  autoFocusMode?: ComposerAutoFocusMode
   renderInlineAction?: (state: { value: string; isStreaming: boolean; disabled: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
   renderComposerAttachments?: (state: { disabled: boolean; isStreaming: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
   renderAttachmentActions?: (state: { disabled: boolean; isStreaming: boolean; hasImages: boolean; hasAttachments: boolean }) => React.ReactNode
@@ -124,6 +126,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   onAnswerQuestion,
   onResume,
   sessionId,
+  autoFocusMode = "desktop-only",
   renderInlineAction,
   renderComposerAttachments,
   renderAttachmentActions,
@@ -188,8 +191,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [draftRestoreKey])
 
   useEffect(() => {
-    if (sessionId && shouldAutoFocusComposer(environment.window)) textareaRef.current?.focus()
-  }, [sessionId, environment.window])
+    if (sessionId && shouldAutoFocusComposer(environment.window, autoFocusMode)) textareaRef.current?.focus()
+  }, [sessionId, autoFocusMode, environment.window])
 
   // Ctrl held swaps the send button's icon to signal "this will also
   // interrupt" — purely a visual affordance ahead of the click/Enter itself,
