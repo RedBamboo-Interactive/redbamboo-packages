@@ -142,6 +142,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [dragOver, setDragOver] = useState(false)
   const [ctrlHeld, setCtrlHeld] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const autoFocusModeRef = useRef(autoFocusMode)
   const draftsRef = useRef<Record<string, { value: string; images: ImageAttachment[]; attachments: DraftAttachment[] }>>({})
   const prevSessionRef = useRef<string | null | undefined>(undefined)
   const valueRef = useRef(value)
@@ -153,6 +154,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   valueRef.current = value
   imagesRef.current = images
   attachmentsRef.current = attachments
+  autoFocusModeRef.current = autoFocusMode
   const fileAttachmentsEnabled = enableFileAttachments ?? !!attachmentTransport
 
   useEffect(() => {
@@ -191,8 +193,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [draftRestoreKey])
 
   useEffect(() => {
-    if (sessionId && shouldAutoFocusComposer(environment.window, autoFocusMode)) textareaRef.current?.focus()
-  }, [sessionId, autoFocusMode, environment.window])
+    if (sessionId && shouldAutoFocusComposer(environment.window, autoFocusModeRef.current)) textareaRef.current?.focus()
+  }, [sessionId, environment.window])
 
   // Ctrl held swaps the send button's icon to signal "this will also
   // interrupt" — purely a visual affordance ahead of the click/Enter itself,
