@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useLayoutEffect, forwardRef, 
 import type { AttachmentTransport, DraftAttachment, ImageAttachment, SendOptions, UploadedAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { acceptedAttachmentFiles } from "../lib/attachment-selection"
+import { shouldAutoFocusComposer } from "../lib/composer-focus"
 import { useUiEnvironment } from "@redbamboo/ui"
 
 interface ComposerProps {
@@ -187,8 +188,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [draftRestoreKey])
 
   useEffect(() => {
-    if (sessionId) textareaRef.current?.focus()
-  }, [sessionId])
+    if (sessionId && shouldAutoFocusComposer(environment.window)) textareaRef.current?.focus()
+  }, [sessionId, environment.window])
 
   // Ctrl held swaps the send button's icon to signal "this will also
   // interrupt" — purely a visual affordance ahead of the click/Enter itself,
