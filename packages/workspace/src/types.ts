@@ -7,3 +7,9 @@ export interface WorkspaceEntityPage{items:WorkspaceEntity[];total:number;nextCu
 export interface WorkspaceSaveInput{name:string;data:Record<string,unknown>;expectedUpdatedAt:string}
 export interface WorkspaceCreateInput{typeSlug:string;name:string;parent?:string;data?:Record<string,unknown>}
 export interface WorkspaceTransport{list(input:WorkspaceListInput):Promise<WorkspaceEntityPage>;save(entityId:string,input:WorkspaceSaveInput):Promise<WorkspaceEntity>;create(input:WorkspaceCreateInput):Promise<WorkspaceEntity>;remove(entityId:string,expectedUpdatedAt:string):Promise<void>}
+export interface WorkspaceMessages{
+ pages:string;system:string;searchResults:string;recordsCouldNotLoad:string;loading:string;noSearchResults:string;noRecords:string;loadMore:(loaded:number,total:number)=>string;
+ workspaceContents:string;searchPlaceholder:string;searchLabel:string;newRecord:string;backToWorkspace:string;saved:string;recordCouldNotSave:string;deleteConfirm:(name:string)=>string;
+ recordCouldNotDelete:string;recordTitle:string;noEditableFields:string;chooseRecord:string;typeHasNoFields:string;saving:string;saveChanges:string;unsavedChanges:string;allChangesSaved:string;delete:string;
+ select:string;none:string;newWorkspaceRecord:string;close:string;type:string;name:string;location:string;cancel:string;creating:string;create:string;
+}
