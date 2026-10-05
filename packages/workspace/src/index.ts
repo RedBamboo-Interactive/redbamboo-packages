@@ -1,2 +1,2 @@
 export { WorkspaceExplorer } from "./WorkspaceExplorer"
-export type { WorkspaceCreateInput,WorkspaceEntity,WorkspaceField,WorkspaceSaveInput,WorkspaceSnapshot,WorkspaceTransport,WorkspaceType } from "./types"
+export type { WorkspaceCreateInput,WorkspaceEntity,WorkspaceEntityPage,WorkspaceField,WorkspaceListInput,WorkspaceSaveInput,WorkspaceSnapshot,WorkspaceTransport,WorkspaceType } from "./types"

@@ -2,6 +2,8 @@ export interface WorkspaceField{key:string;name:string;fieldType:string;sortOrde
 export interface WorkspaceType{slug:string;name:string;description?:string|null;icon?:string|null;color?:string|null;folder?:string|null;system?:boolean;fields:WorkspaceField[]}
 export interface WorkspaceEntity{id:string;typeSlug:string;slug:string;name:string;data:Record<string,unknown>;createdAt:string;updatedAt:string}
 export interface WorkspaceSnapshot{root:WorkspaceEntity;entities:WorkspaceEntity[];types:WorkspaceType[]}
+export interface WorkspaceListInput{typeSlugs:string[];query?:string;cursor?:string|null;limit?:number}
+export interface WorkspaceEntityPage{items:WorkspaceEntity[];total:number;nextCursor?:string|null}
 export interface WorkspaceSaveInput{name:string;data:Record<string,unknown>;expectedUpdatedAt:string}
 export interface WorkspaceCreateInput{typeSlug:string;name:string;parent?:string;data?:Record<string,unknown>}
-export interface WorkspaceTransport{save(entityId:string,input:WorkspaceSaveInput):Promise<WorkspaceEntity>;create(input:WorkspaceCreateInput):Promise<WorkspaceEntity>;remove(entityId:string,expectedUpdatedAt:string):Promise<void>}
+export interface WorkspaceTransport{list(input:WorkspaceListInput):Promise<WorkspaceEntityPage>;save(entityId:string,input:WorkspaceSaveInput):Promise<WorkspaceEntity>;create(input:WorkspaceCreateInput):Promise<WorkspaceEntity>;remove(entityId:string,expectedUpdatedAt:string):Promise<void>}
