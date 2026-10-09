@@ -85,6 +85,61 @@ Use `EntityIdentity` when a richer surface needs the canonical avatar, name, and
 metadata anatomy but has its own outer layout. `UI_COMPONENT_CATALOG`,
 `findUiComponents()`, and `queryEntityCards()` provide machine-readable discovery.
 
+### Sidebar position and application preferences
+
+`MasterDetailLayout` accepts `sidebarPosition="left" | "right"` for desktop
+layouts, including resizable layouts. The default is `"left"`, preserving existing
+call sites. Sidebar size constraints and `layoutKey` width persistence apply to
+the sidebar on either side. Mobile and `presentation="compact"` keep their
+list/detail tab order.
+
+Expose this as **Settings / Appearance / Sidebar position** in the host app,
+using the existing `SettingRow`, `Select`, and Phosphor icon styling. Keep the
+preference in the app's existing user settings store; `layoutKey` continues to
+store sidebar width only. For example, given an app-owned `sidebarPosition` and
+`onSidebarPositionChange` that updates and persists its user setting:
+
+```tsx
+import {
+  MasterDetailLayout, SettingRow,
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@redbamboo/ui'
+import type { MasterDetailLayoutProps } from '@redbamboo/ui'
+
+type SidebarPosition = NonNullable<MasterDetailLayoutProps['sidebarPosition']>
+
+// In the application's Appearance settings section:
+<SettingRow label="Sidebar position" hint="Choose which side shows the list on desktop.">
+  <Select
+    value={sidebarPosition}
+    items={[{ value: "left", label: "Left" }, { value: "right", label: "Right" }]}
+    onValueChange={(value) => {
+      if (value === 'left' || value === 'right') onSidebarPositionChange(value)
+    }}
+  >
+    <SelectTrigger size="sm" aria-label="Sidebar position">
+      <i
+        aria-hidden="true"
+        className={`ph-bold ph-sidebar-simple ${sidebarPosition === 'right' ? 'rotate-180' : ''}`}
+      />
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="left">Left</SelectItem>
+      <SelectItem value="right">Right</SelectItem>
+    </SelectContent>
+  </Select>
+</SettingRow>
+
+// In the application's main view:
+<MasterDetailLayout
+  sidebar={list}
+  detail={content}
+  sidebarPosition={sidebarPosition}
+  layoutKey="my-app:master-detail"
+/>
+```
+
 ## Components
 
 - **EntityCard** — canonical compact entity reference with inspection, link, selection, and AI-readable semantics

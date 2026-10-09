@@ -6,6 +6,8 @@ import { cn } from "../utils"
 interface MasterDetailLayoutProps {
   sidebar: ReactNode
   detail: ReactNode
+  /** Desktop sidebar placement. Compact and mobile tab order is unchanged. */
+  sidebarPosition?: "left" | "right"
   sidebarWidth?: string
   layoutKey?: string
   sidebarDefault?: number
@@ -24,6 +26,7 @@ function MasterDetailLayout({
   sidebar,
   detail,
   sidebarWidth = "w-80",
+  sidebarPosition = "left",
   layoutKey,
   sidebarDefault = 320,
   sidebarMin = 240,
@@ -100,6 +103,56 @@ function MasterDetailLayout({
 
   const resizable = !!layoutKey
 
+  const sidebarPanel = resizable ? (
+    <ResizablePanel
+      key="sidebar"
+      id="sidebar"
+      defaultSize={savedSidebarSize ?? sidebarDefault}
+      minSize={sidebarMin}
+      maxSize={sidebarMax}
+      groupResizeBehavior="preserve-pixel-size"
+      onResize={handleSidebarResize}
+    >
+      <div
+        data-slot="master-detail-sidebar"
+        className="h-full bg-surface-elevated flex flex-col overflow-hidden"
+      >
+        {sidebar}
+      </div>
+    </ResizablePanel>
+  ) : (
+    <div
+      key="sidebar"
+      data-slot="master-detail-sidebar"
+      className={cn(
+        sidebarWidth,
+        sidebarPosition === "left" ? "border-r" : "border-l",
+        "shrink-0 bg-surface-elevated border-overlay-6 flex flex-col overflow-hidden",
+      )}
+    >
+      {sidebar}
+    </div>
+  )
+
+  const detailPanel = resizable ? (
+    <ResizablePanel key="content" id="content" groupResizeBehavior="preserve-relative-size">
+      <div
+        data-slot="master-detail-content"
+        className="h-full overflow-hidden flex flex-col min-h-0"
+      >
+        {detail}
+      </div>
+    </ResizablePanel>
+  ) : (
+    <div
+      key="content"
+      data-slot="master-detail-content"
+      className="flex-1 overflow-hidden flex flex-col min-h-0"
+    >
+      {detail}
+    </div>
+  )
+
   return (
     <div
       data-slot="master-detail"
@@ -113,48 +166,14 @@ function MasterDetailLayout({
             orientation="horizontal"
             className="flex-1 min-h-0"
           >
-            <ResizablePanel
-              id="sidebar"
-              defaultSize={savedSidebarSize ?? sidebarDefault}
-              minSize={sidebarMin}
-              maxSize={sidebarMax}
-              groupResizeBehavior="preserve-pixel-size"
-              onResize={handleSidebarResize}
-            >
-              <div
-                data-slot="master-detail-sidebar"
-                className="h-full bg-surface-elevated flex flex-col overflow-hidden"
-              >
-                {sidebar}
-              </div>
-            </ResizablePanel>
+            {sidebarPosition === "left" ? sidebarPanel : detailPanel}
             <ResizableHandle withHandle aria-label="Resize sidebar" />
-            <ResizablePanel id="content" groupResizeBehavior="preserve-relative-size">
-              <div
-                data-slot="master-detail-content"
-                className="h-full overflow-hidden flex flex-col min-h-0"
-              >
-                {detail}
-              </div>
-            </ResizablePanel>
+            {sidebarPosition === "left" ? detailPanel : sidebarPanel}
           </ResizablePanelGroup>
         ) : (
           <div className="flex flex-1 min-h-0">
-            <div
-              data-slot="master-detail-sidebar"
-              className={cn(
-                sidebarWidth,
-                "shrink-0 bg-surface-elevated border-r border-overlay-6 flex flex-col overflow-hidden",
-              )}
-            >
-              {sidebar}
-            </div>
-            <div
-              data-slot="master-detail-content"
-              className="flex-1 overflow-hidden flex flex-col min-h-0"
-            >
-              {detail}
-            </div>
+            {sidebarPosition === "left" ? sidebarPanel : detailPanel}
+            {sidebarPosition === "left" ? detailPanel : sidebarPanel}
           </div>
         )
       ) : (
