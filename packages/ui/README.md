@@ -85,6 +85,18 @@ Use `EntityIdentity` when a richer surface needs the canonical avatar, name, and
 metadata anatomy but has its own outer layout. `UI_COMPONENT_CATALOG`,
 `findUiComponents()`, and `queryEntityCards()` provide machine-readable discovery.
 
+### Master-detail sidebar position
+
+`MasterDetailLayout` accepts `sidebarPosition="left" | "right"` for fixed
+and resizable desktop layouts. The default is `"left"`, preserving existing
+call sites. Sidebar size constraints and `layoutKey` width persistence apply to
+the sidebar on either side. Mobile and `presentation="compact"` keep their
+list/detail tab order. The caller owns the position preference and its persistence.
+
+```tsx
+<MasterDetailLayout sidebar={list} detail={content} sidebarPosition="right" />
+```
+
 ## Components
 
 - **EntityCard** — canonical compact entity reference with inspection, link, selection, and AI-readable semantics
