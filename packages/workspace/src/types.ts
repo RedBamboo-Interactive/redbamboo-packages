@@ -1,6 +1,9 @@
 export interface WorkspaceField{key:string;name:string;fieldType:string;sortOrder:number;required:boolean;description?:string|null;constraints?:unknown;displayHints?:unknown}
 export interface WorkspaceType{slug:string;name:string;description?:string|null;icon?:string|null;color?:string|null;folder?:string|null;system?:boolean;fields:WorkspaceField[]}
 export interface WorkspaceEntity{id:string;typeSlug:string;slug:string;name:string;data:Record<string,unknown>;createdAt:string;updatedAt:string}
+export type WorkspacePresentationVariant='compact'|'card'|'timeline'|'detail'|'table'
+export interface WorkspacePresentationField{key:string;name:string;value:unknown;fieldType:string}
+export interface WorkspaceEntityPresentation{id:string;typeSlug:string;typeName:string;title:string;eyebrow:string;summary?:string;icon?:string|null;color?:string|null;fields:WorkspacePresentationField[];variant:WorkspacePresentationVariant}
 export interface WorkspaceSnapshot{root:WorkspaceEntity;entities:WorkspaceEntity[];types:WorkspaceType[]}
 export interface WorkspaceListInput{typeSlugs:string[];query?:string;cursor?:string|null;limit?:number}
 export interface WorkspaceEntityPage{items:WorkspaceEntity[];total:number;nextCursor?:string|null}
