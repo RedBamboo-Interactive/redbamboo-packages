@@ -11,7 +11,7 @@ import {
   ImageLightbox,
   useUiEnvironment,
 } from "@redbamboo/ui"
-import type { MessageBlock, MessagePart, ImageAttachment, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef } from "../types"
+import type { MessageBlock, MessagePart, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef } from "../types"
 import { ImageThumbnail, StreamingText, MarkdownRenderer } from "./streaming-text"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
@@ -23,7 +23,7 @@ import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
 import { isEventPart, isEventBlock, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
 import { CONTEXT_COMPACTION_TOOL_NAME } from "../lib/chat-status"
-import { parseStructuredQuestions } from "../lib/process-stream-event"
+import { resolveQuestionCardContent } from "../lib/question-card"
 import { AudioPlayerWidget } from "./audio-player-widget"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 import { AttachmentCard } from "./attachment-card"
@@ -157,7 +157,7 @@ interface ChatMessageProps {
   permissionMode?: string
   onExecutePlan?: () => void
   planFileContent?: string | null
-  isPendingQuestion?: boolean
+  pendingQuestion?: PendingQuestion | null
   /** How the last question ended, when the host tracks it. See QuestionCard. */
   questionOutcome?: QuestionOutcome | null
   onAnswerQuestion?: (answer: string, payload?: QuestionAnswerPayload) => void
@@ -202,7 +202,7 @@ export const ChatMessage = memo(function ChatMessage({
   permissionMode,
   onExecutePlan,
   planFileContent,
-  isPendingQuestion,
+  pendingQuestion,
   questionOutcome,
   onAnswerQuestion,
   resolveImageSrc,
@@ -421,20 +421,7 @@ export const ChatMessage = memo(function ChatMessage({
   const hasExitPlanMode = block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
 
   const askQuestionPart = block.parts.find(p => p.type === "tool_use" && p.toolName === "AskUserQuestion")
-  let questionText: string | null = null
-  let structuredQuestions: StructuredQuestion[] | null = null
-  if (askQuestionPart?.toolInput && !askQuestionPart.isPartial) {
-    try {
-      const parsed = JSON.parse(askQuestionPart.toolInput)
-      const sq = parseStructuredQuestions(parsed)
-      if (sq) {
-        questionText = sq[0].question || "Claude is asking a question..."
-        structuredQuestions = sq
-      } else if (parsed.question) {
-        questionText = parsed.question
-      }
-    } catch { questionText = askQuestionPart.toolInput }
-  }
+  const questionCard = resolveQuestionCardContent(pendingQuestion, askQuestionPart)
 
   return (
     <>
@@ -488,11 +475,11 @@ export const ChatMessage = memo(function ChatMessage({
             resolveImageSrc={resolveImageSrc}
           />
         )}
-        {questionText && (
+        {questionCard && (
           <QuestionCard
-            question={questionText}
-            questions={structuredQuestions}
-            status={questionCardStatus(!!isPendingQuestion, questionOutcome, askQuestionPart, block.parts)}
+            question={questionCard.question}
+            questions={questionCard.questions}
+            status={questionCardStatus(!!pendingQuestion, questionOutcome, askQuestionPart, block.parts)}
             onAnswer={onAnswerQuestion}
           />
         )}

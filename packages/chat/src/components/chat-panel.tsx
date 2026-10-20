@@ -543,7 +543,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     permissionMode={permissionMode}
                     onExecutePlan={onExecutePlan}
                     planFileContent={hasExitPlanPart(block) ? planFileContent : null}
-                    isPendingQuestion={isLastAssistant && !!pendingQuestion}
+                    pendingQuestion={isLastAssistant ? pendingQuestion : null}
                     questionOutcome={isLastAssistant ? questionOutcome : undefined}
                     onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
                     resolveImageSrc={resolveImageSrc}
