@@ -34,6 +34,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const messages = props.messages ?? internal.messages
   const isStreaming = props.isStreaming ?? internal.isStreaming
+  const supportsSteering = props.supportsSteering ?? false
   const sendMessage = props.onSend ?? internal.sendMessage
   const sendInput = props.onSendInput ?? internal.sendInput
   const interrupt = props.onInterrupt ?? internal.interrupt
@@ -426,6 +427,7 @@ export function ChatPanel(props: ChatPanelProps) {
       submitHandlesInterrupt={messageQueue.remote}
       disabled={disabled}
       isStreaming={isStreaming}
+      supportsSteering={supportsSteering}
       interrupting={interrupting}
       resumePending={resumePending}
       placeholder={voice.interimTranscript ?? placeholder}

@@ -18,7 +18,9 @@ export interface QueuedMessage {
   remoteState?: "pending" | "delivering" | "failed" | "delivered"
   /** Human presentation. Idle submissions look like messages; genuinely waiting work looks queued. */
   appearance?: "message" | "queue"
-  delivery?: "after-current" | "interrupt-current"
+  delivery?: "after-current" | "steer-current" | "interrupt-current"
+  /** The server demoted a steer that raced an unavailable active turn. */
+  steerUnavailable?: boolean
   messageUid?: string
   deliveredMessageUid?: string
   /** Submission time used to place an optimistic idle bubble in the timeline. */
@@ -101,7 +103,10 @@ export function acknowledgeRemoteMessage(message: QueuedMessage, admission: Remo
     remoteId: admission?.item?.id ?? admission?.queueItemId ?? message.remoteId,
     messageUid: admission?.item?.messageUid ?? admission?.messageUid ?? message.messageUid,
     deliveredMessageUid: message.deliveredMessageUid ?? admission?.item?.deliveredMessageUid ?? admission?.deliveredMessageUid ?? undefined,
+    delivery: admission?.item?.delivery ?? message.delivery,
     remoteState: state,
+    ...((admission?.item?.error?.code === "steer_unavailable" || message.steerUnavailable)
+      ? { steerUnavailable: true } : {}),
     blockedReason: state === "delivered" || state === "delivering" ? undefined
       : !message.optimistic && message.remoteState ? message.blockedReason
       : admission?.queue?.blockedReason ?? message.blockedReason,

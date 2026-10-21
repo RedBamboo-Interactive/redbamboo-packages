@@ -4,6 +4,7 @@ import { AttachmentCard } from "./attachment-card"
 import { acceptedAttachmentFiles } from "../lib/attachment-selection"
 import { shouldAutoFocusComposer } from "../lib/composer-focus"
 import type { ComposerAutoFocusMode } from "../lib/composer-focus"
+import { composerDelivery, shouldQueueBusyDraftOnTab } from "../lib/composer-delivery"
 import { useUiEnvironment } from "@redbamboo/ui"
 
 interface ComposerProps {
@@ -20,6 +21,7 @@ interface ComposerProps {
   submitHandlesInterrupt?: boolean
   disabled: boolean
   isStreaming: boolean
+  supportsSteering?: boolean
   /** The transitional window after an interrupt is requested but before the turn has unwound — isStreaming is still true here. */
   interrupting?: boolean
   /** The backend's process was force-killed and is being replaced — not safe to drain a queue into yet, even though isStreaming is false. */
@@ -117,6 +119,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   submitHandlesInterrupt = false,
   disabled,
   isStreaming,
+  supportsSteering = false,
   interrupting,
   resumePending,
   placeholder,
@@ -326,7 +329,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   // streaming, so idle-drains-instantly and mid-turn-queues never diverge.
   // Ctrl+Enter / Ctrl+click is that same enqueue followed by onInterrupt: not
   // a second delivery path, just this one plus an interrupt.
-  const handleSubmit = useCallback((opts?: { interruptToo?: boolean }) => {
+  const handleSubmit = useCallback((opts?: { interruptToo?: boolean; queueAfterCurrent?: boolean }) => {
     const ready = readyAttachments(attachments)
     const uploadsPending = attachments.some(attachment => attachment.state !== "ready")
     if (uploadsPending) return
@@ -344,7 +347,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       if (textareaRef.current) textareaRef.current.style.height = "auto"
     }
     const deliver = (trimmed: string) => {
-      const options: SendOptions = { delivery: opts?.interruptToo ? "interrupt-current" : "after-current" }
+      const delivery = composerDelivery({
+        isStreaming, supportsSteering,
+        interruptToo: opts?.interruptToo,
+        queueAfterCurrent: opts?.queueAfterCurrent,
+      })
+      const options: SendOptions = { delivery }
       if (ready.length > 0 && onSendInput) onSendInput(trimmed, ready, options)
       else onSend(trimmed, images.length > 0 ? images : undefined, options)
       clearComposer()
@@ -372,7 +380,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     }
     if ((!trimmed && images.length === 0 && ready.length === 0) || disabled) return
     deliver(trimmed)
-  }, [value, images, attachments, disabled, isStreaming, onSend, onSendInput, doInterrupt, submitHandlesInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
+  }, [value, images, attachments, disabled, isStreaming, supportsSteering, onSend, onSendInput, doInterrupt, submitHandlesInterrupt, pendingQuestion, onAnswerQuestion, sessionId, draftStorageKey])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape" && isStreaming) {
@@ -383,6 +391,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     if (e.key === "Tab" && e.shiftKey && onTogglePlanMode) {
       e.preventDefault()
       onTogglePlanMode()
+      return
+    }
+    if (e.key === "Tab" && shouldQueueBusyDraftOnTab({
+      isStreaming,
+      hasContent: !!value.trim() || images.length > 0
+        || attachments.some(attachment => attachment.state === "ready"),
+      shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey,
+    })) {
+      e.preventDefault()
+      handleSubmit({ queueAfterCurrent: true })
       return
     }
     if (e.key === "Enter" && !e.shiftKey) {
@@ -471,7 +489,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     : interrupting
       ? "Interrupting the current turn…"
       : isStreaming
-        ? "Press Escape to interrupt, or type to queue a follow-up..."
+        ? supportsSteering
+          ? "Enter joins this turn; Tab queues; Escape interrupts..."
+          : "Press Escape to interrupt, or type to queue a follow-up..."
         : resumePending
           ? "Reconnecting to the session…"
           : pendingQuestion
@@ -604,7 +624,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               className={`w-full flex-1 px-3 py-2 rounded-md transition-colors flex items-center justify-center ${
                 willInterrupt ? "bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400" : "bg-overlay-10 hover:bg-overlay-15"
               }`}
-              title={!hasContent ? "Interrupt (Escape)" : ctrlHeld ? "Send now (interrupts the current turn)" : "Queue — sends when the current turn ends (Ctrl+Enter to send now)"}
+              title={!hasContent ? "Interrupt (Escape)" : ctrlHeld ? "Send now (interrupts the current turn)" : supportsSteering ? "Send now: joins the current turn (Tab to queue, Ctrl+Enter to interrupt)" : "Queue — sends when the current turn ends (Ctrl+Enter to send now)"}
             >
               <i className={`ph-bold ${willInterrupt ? "ph-stop" : "ph-paper-plane"} text-sm`} />
             </button>

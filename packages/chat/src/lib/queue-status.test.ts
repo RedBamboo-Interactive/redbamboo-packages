@@ -22,6 +22,10 @@ test("normal active waits and delivery retain their own meanings", () => {
   assert.equal(queuedMessageStatusLabel({ ...pending, remoteState: "delivering" }), "Delivering message")
   assert.equal(maintenanceBlocksQueuedMessage({ ...pending, remoteState: "delivered" }), false)
 })
+test("steering and a demoted steer have distinct truthful labels", () => {
+  assert.equal(queuedMessageStatusLabel({ ...pending, blockedReason: undefined, delivery: "steer-current" }), "Sending into this turn")
+  assert.equal(queuedMessageStatusLabel({ ...pending, blockedReason: undefined, delivery: "after-current", steerUnavailable: true }), "Sends after this turn")
+})
 test("delivered input cannot reacquire a maintenance blocker from late admission", () => {
   const next = acknowledgeRemoteMessage({ ...pending, remoteState: "delivered" }, {
     disposition: "queued", queue: { state: "waiting_for_session", depth: 1, blockedReason: "maintenance_drain" },

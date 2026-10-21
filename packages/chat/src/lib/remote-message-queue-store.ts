@@ -27,7 +27,9 @@ function queuedMessage(item: ChatQueuedItem, previous: QueuedMessage | undefined
     sessionId: item.sessionId,
     text: item.displayContent,
     attachments: item.attachments ?? previous?.attachments,
-    deliveryError: item.error?.message,
+    deliveryError: item.error?.code === "steer_unavailable" ? undefined : item.error?.message,
+    ...((item.error?.code === "steer_unavailable" || previous?.steerUnavailable)
+      ? { steerUnavailable: true } : {}),
     ...(item.state === "pending" && summary.blockedReason ? { blockedReason: summary.blockedReason } : {}),
     remoteState: item.state === "cancelled" ? undefined : item.state,
     appearance: remoteMessageAppearance(item.state === "cancelled" ? undefined : item.state, previous?.appearance, summary),

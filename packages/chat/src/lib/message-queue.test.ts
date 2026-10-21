@@ -23,6 +23,20 @@ test("ready admissions and omitted legacy summaries keep immediate presentation"
     assert.equal(acknowledgeRemoteMessage(immediate, { disposition: "queued", queue }).appearance, "message")
 })
 
+test("steer demotion is informational rather than a retryable delivery failure", () => {
+  const demoted = acknowledgeRemoteMessage({
+    id: "client", text: "steer", delivery: "steer-current", appearance: "queue", optimistic: true,
+  }, {
+    disposition: "queued",
+    item: { state: "pending", delivery: "after-current", error: {
+      code: "steer_unavailable", message: "Steering unavailable", retryable: false,
+    } },
+    queue: { depth: 1, state: "waiting_for_session" },
+  })
+  assert.equal(demoted.steerUnavailable, true)
+  assert.equal(demoted.deliveryError, undefined)
+})
+
 test("late blocked acknowledgement cannot regress observed delivery or resurrect sent appearance", () => {
   const queued: QueuedMessage = { id: "client", text: "wait", appearance: "queue", remoteState: "delivering", timelineAt: "2026-10-02T14:00:00Z", attachments: [{ id: "file", name: "note", kind: "file", mediaType: "text/plain", size: 1, downloadUrl: "/file" }] }
   const ack = { disposition: "queued" as const, item: { state: "pending" as const }, queue: { depth: 1, state: "waiting_for_session" as const, blockedReason: "active_turn" } }

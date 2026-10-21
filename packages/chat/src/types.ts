@@ -101,7 +101,7 @@ export interface AttachmentTransport {
 export interface SendOptions {
   inputMethod?: "typed" | "voice"
   /** Durable session-input policy. Defaults to after-current. */
-  delivery?: "after-current" | "interrupt-current"
+  delivery?: "after-current" | "steer-current" | "interrupt-current"
   /** Retry-safe client identity forwarded as X-Idempotency-Key. */
   idempotencyKey?: string
   /** Canonical logical-message identity chosen before optimistic rendering. */
@@ -122,7 +122,7 @@ export interface ChatQueuedItem {
   sessionId: string
   sequence: number
   state: "pending" | "delivering" | "failed" | "delivered" | "cancelled"
-  delivery: "after-current" | "interrupt-current"
+  delivery: "after-current" | "steer-current" | "interrupt-current"
   displayContent: string
   messageUid: string
   attachments?: UploadedAttachment[]
@@ -493,6 +493,8 @@ export interface ChatPanelProps {
   // Controlled mode: consumer provides state + callbacks
   messages?: MessageBlock[]
   isStreaming?: boolean
+  /** Whether this session's provider can inject input into an active turn without interruption. */
+  supportsSteering?: boolean
   /** The upstream AI event connection is temporarily unavailable and retrying. */
   isReconnecting?: boolean
   maintenanceStatus?: ChatMaintenanceStatus | null
