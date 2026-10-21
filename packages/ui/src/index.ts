@@ -121,6 +121,8 @@ export {
   DropdownMenuSubContent,
 } from "./components/dropdown-menu"
 
+export { ContextMenu, ContextMenuTrigger, ContextMenuContent } from "./components/context-menu"
+
 export {
   Collapsible,
   CollapsibleTrigger,

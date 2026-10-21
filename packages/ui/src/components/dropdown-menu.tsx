@@ -3,6 +3,10 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu"
 import { cn } from "../utils"
 import { useUiEnvironment } from "../ui-environment"
 
+/** Shared surface and motion for every menu popup (dropdown and context). */
+export const menuPopupClassName =
+  "min-w-[8rem] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95"
+
 function DropdownMenu({
   ...props
 }: MenuPrimitive.Root.Props) {
@@ -28,10 +32,7 @@ function DropdownMenuContent({
       <MenuPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} className="z-50">
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
-          className={cn(
-            "min-w-[8rem] overflow-hidden rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md duration-100 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-            className
-          )}
+          className={cn(menuPopupClassName, className)}
           {...props}
         />
       </MenuPrimitive.Positioner>
