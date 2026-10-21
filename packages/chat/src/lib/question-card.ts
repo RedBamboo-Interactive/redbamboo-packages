@@ -12,8 +12,12 @@ export interface QuestionCardContent {
  * A live `question` control event is authoritative and may arrive while the
  * matching AskUserQuestion tool-use part is still marked partial. Prefer its
  * payload so the card does not wait for a later tool result to become visible.
- * Settled history has no live control state, so it continues to fall back to
- * the completed transcript part.
+ * Without live control state (settled history, or the gap between
+ * `question_resolved` and the tool result) the card falls back to the
+ * transcript part. That part may still be marked partial: the stream keeps the
+ * tail part partial until another part follows, and nothing follows a parked
+ * question until its tool result. Tool-use input is never accumulated across
+ * events, so a partial AskUserQuestion part already carries its full input.
  */
 export function resolveQuestionCardContent(
   pendingQuestion: PendingQuestion | null | undefined,
@@ -26,7 +30,7 @@ export function resolveQuestionCardContent(
     }
   }
 
-  if (!askQuestionPart?.toolInput || askQuestionPart.isPartial) return null
+  if (!askQuestionPart?.toolInput) return null
 
   try {
     const parsed = JSON.parse(askQuestionPart.toolInput)
