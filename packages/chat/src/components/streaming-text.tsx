@@ -20,6 +20,7 @@ import { isImageUrl } from "../lib/event-image"
 import { canonicalizeLeafLinkHref, isExternalWebLink, isInternalLeafLink } from "../lib/external-web-link"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseLocalFileLink } from "../lib/local-file-link"
+import { isUnsafeLinkHref, remarkUserText } from "../lib/user-markdown"
 
 type FileLinkResolver = (
   filePath: string,
@@ -170,6 +171,8 @@ function MarkdownLink({
       </a>
     )
   }
+
+  if (isUnsafeLinkHref(href)) return <span>{children}</span>
 
   return <a {...props} href={href}>{children}</a>
 }
@@ -367,12 +370,18 @@ export function StreamingText({
   )
 }
 
+const AUTHORED_REMARK_PLUGINS = [remarkGfm]
+const USER_TEXT_REMARK_PLUGINS = [remarkGfm, remarkUserText]
+
 export function MarkdownRenderer({
   content,
+  userText,
   resolveImageSrc,
   resolveFileLink,
 }: {
   content: string
+  /** Typed by a person: keep their line breaks and show raw HTML literally. */
+  userText?: boolean
   resolveImageSrc?: (src: string) => string | undefined
   resolveFileLink?: FileLinkResolver
 }) {
@@ -381,7 +390,7 @@ export function MarkdownRenderer({
 
   return (
     <Markdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={userText ? USER_TEXT_REMARK_PLUGINS : AUTHORED_REMARK_PLUGINS}
       rehypePlugins={[rehypeHighlight]}
       components={mdComponents}
       urlTransform={(u: string) => u}

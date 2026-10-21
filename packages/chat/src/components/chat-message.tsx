@@ -394,7 +394,9 @@ export const ChatMessage = memo(function ChatMessage({
               </div>
             )}
             {content && (
-              <p className="text-sm whitespace-pre-wrap break-words font-serif">{content}</p>
+              <div data-chat-user-text className="text-sm font-serif markdown-body [&>:first-child]:mt-0 [&>:last-child]:mb-0">
+                <MarkdownRenderer content={content} userText resolveImageSrc={resolveImageSrc} resolveFileLink={resolveFileLink} />
+              </div>
             )}
             </div>
           </div>
