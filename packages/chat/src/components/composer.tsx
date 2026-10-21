@@ -144,6 +144,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const [attachments, setAttachments] = useState<DraftAttachment[]>([])
   const [dragOver, setDragOver] = useState(false)
   const [ctrlHeld, setCtrlHeld] = useState(false)
+  // Long-press (touch) or right-click on the busy send button offers the deliveries a phone has
+  // no modifier keys for: queue after the turn, or interrupt and send.
+  const [deliveryMenuOpen, setDeliveryMenuOpen] = useState(false)
+  const deliveryMenuRef = useRef<HTMLDivElement>(null)
+  const sendLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sendLongPressFired = useRef(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const autoFocusModeRef = useRef(autoFocusMode)
   const draftsRef = useRef<Record<string, { value: string; images: ImageAttachment[]; attachments: DraftAttachment[] }>>({})
@@ -471,6 +477,51 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   const hasContent = !!value.trim() || images.length > 0 || attachments.some(attachment => attachment.state === "ready")
   const attachmentBusy = attachments.some(attachment => attachment.state !== "ready")
   const willInterrupt = isStreaming && (!hasContent || ctrlHeld)
+  const deliveryMenuAvailable = isStreaming && hasContent
+
+  const cancelSendLongPress = () => {
+    if (sendLongPressTimer.current) { clearTimeout(sendLongPressTimer.current); sendLongPressTimer.current = null }
+  }
+  const onSendTouchStart = () => {
+    sendLongPressFired.current = false
+    if (!deliveryMenuAvailable) return
+    cancelSendLongPress()
+    sendLongPressTimer.current = setTimeout(() => {
+      sendLongPressFired.current = true
+      setDeliveryMenuOpen(true)
+    }, 500)
+  }
+  const chooseDelivery = (opts: { interruptToo?: boolean; queueAfterCurrent?: boolean }) => {
+    setDeliveryMenuOpen(false)
+    handleSubmit(opts)
+  }
+
+  useEffect(() => {
+    if (!deliveryMenuAvailable) setDeliveryMenuOpen(false)
+  }, [deliveryMenuAvailable])
+
+  useEffect(() => {
+    if (!deliveryMenuOpen) return
+    const dismiss = (e: Event) => {
+      if (deliveryMenuRef.current?.contains(e.target as Node)) return
+      setDeliveryMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDeliveryMenuOpen(false) }
+    // Deferred so the touch that opened the menu does not immediately close it.
+    const id = setTimeout(() => {
+      environment.document.addEventListener("touchstart", dismiss)
+      environment.document.addEventListener("mousedown", dismiss)
+      environment.document.addEventListener("keydown", onKey)
+    }, 0)
+    return () => {
+      clearTimeout(id)
+      environment.document.removeEventListener("touchstart", dismiss)
+      environment.document.removeEventListener("mousedown", dismiss)
+      environment.document.removeEventListener("keydown", onKey)
+    }
+  }, [deliveryMenuOpen, environment.document])
+
+  useEffect(() => () => cancelSendLongPress(), [])
   const attachmentActions = renderAttachmentActions?.({
     disabled: inputDisabled,
     isStreaming,
@@ -619,15 +670,60 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             </button>
           )}
           {isStreaming ? (
+            <div className="relative w-full flex-1 flex">
+            {deliveryMenuOpen && (
+              <div
+                ref={deliveryMenuRef}
+                role="menu"
+                aria-label="Send options"
+                data-slot="composer-delivery-menu"
+                className="absolute bottom-full right-0 mb-1.5 z-50 min-w-[13rem] rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md"
+              >
+                <button
+                  role="menuitem"
+                  onClick={() => chooseDelivery({ queueAfterCurrent: true })}
+                  className="w-full flex items-center gap-2 rounded-md px-2 py-2 text-sm text-left hover:bg-overlay-10 focus:bg-overlay-10 outline-none"
+                >
+                  <i className="ph-bold ph-clock-countdown text-sm" />
+                  Queue for after this turn
+                </button>
+                <button
+                  role="menuitem"
+                  onClick={() => chooseDelivery({ interruptToo: true })}
+                  className="w-full flex items-center gap-2 rounded-md px-2 py-2 text-sm text-left text-amber-400 hover:bg-amber-500-a20 focus:bg-amber-500-a20 outline-none"
+                >
+                  <i className="ph-bold ph-stop text-sm" />
+                  Interrupt and send
+                </button>
+              </div>
+            )}
             <button
-              onClick={(e) => handleSubmit({ interruptToo: e.ctrlKey })}
-              className={`w-full flex-1 px-3 py-2 rounded-md transition-colors flex items-center justify-center ${
+              onClick={(e) => {
+                // The click that ends a long-press belongs to the menu it opened, not to a send.
+                if (sendLongPressFired.current) { sendLongPressFired.current = false; return }
+                handleSubmit({ interruptToo: e.ctrlKey })
+              }}
+              onTouchStart={onSendTouchStart}
+              onTouchEnd={cancelSendLongPress}
+              onTouchMove={cancelSendLongPress}
+              onTouchCancel={cancelSendLongPress}
+              onContextMenu={(e) => {
+                if (!deliveryMenuAvailable) return
+                e.preventDefault()
+                cancelSendLongPress()
+                setDeliveryMenuOpen(true)
+              }}
+              aria-haspopup="menu"
+              aria-expanded={deliveryMenuOpen}
+              style={{ WebkitTouchCallout: "none" }}
+              className={`w-full flex-1 px-3 py-2 rounded-md transition-colors flex items-center justify-center select-none ${
                 willInterrupt ? "bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400" : "bg-overlay-10 hover:bg-overlay-15"
               }`}
-              title={!hasContent ? "Interrupt (Escape)" : ctrlHeld ? "Send now (interrupts the current turn)" : supportsSteering ? "Send now: joins the current turn (Tab to queue, Ctrl+Enter to interrupt)" : "Queue — sends when the current turn ends (Ctrl+Enter to send now)"}
+              title={!hasContent ? "Interrupt (Escape)" : ctrlHeld ? "Send now (interrupts the current turn)" : supportsSteering ? "Send now: joins the current turn (Tab to queue, Ctrl+Enter to interrupt, right-click or long-press for options)" : "Queue — sends when the current turn ends (Ctrl+Enter to send now, right-click or long-press for options)"}
             >
               <i className={`ph-bold ${willInterrupt ? "ph-stop" : "ph-paper-plane"} text-sm`} />
             </button>
+            </div>
           ) : disabled && onResume ? (
             <button
               onClick={onResume}
