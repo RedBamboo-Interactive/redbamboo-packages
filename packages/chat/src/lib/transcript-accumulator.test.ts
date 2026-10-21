@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import type { ChatEvent, MessageBlock, MessagePart } from "../types.ts"
 import { TranscriptAccumulator } from "./transcript-accumulator.ts"
+import { rebuildBlocks, type PersistedMessage } from "./rebuild-blocks.ts"
 
 function assistant(parts: MessagePart[]): MessageBlock {
   return {
@@ -95,4 +96,59 @@ test("reports a sequence gap without hiding visible content", () => {
   assert.equal(first.gapDetected, false)
   assert.equal(gap.gapDetected, true)
   assert.equal(gap.messages[0].parts.length, 2)
+})
+
+const spikeSequences: Array<{ name: string; records: PersistedMessage[]; steerSequence: number }> = [
+  {
+    name: "Claude replay-user-messages: tool result, replayed steer, same-turn final",
+    steerSequence: 3,
+    records: [
+      { id: 1, role: "assistant", eventType: "tool_use", toolName: "Bash", content: "", messageUid: "claude-turn", epoch: "claude", sequence: 1, timestamp: "2026-10-21T13:26:31.000Z" },
+      { id: 2, role: "assistant", eventType: "tool_result", toolResult: "FIRST_TOOL_DONE", messageUid: "claude-turn", epoch: "claude", sequence: 2, timestamp: "2026-10-21T13:26:54.552Z" },
+      { id: 3, role: "user", eventType: "text", content: "STEER_MARKER_723379ff", messageUid: "claude-steer", epoch: "claude", sequence: 3, timestamp: "2026-10-21T13:26:54.786Z" },
+      { id: 4, role: "assistant", eventType: "text", content: "TURQUOISE", messageUid: "claude-turn", epoch: "claude", sequence: 4, timestamp: "2026-10-21T13:26:56.410Z" },
+    ],
+  },
+  {
+    name: "Codex turn/steer: userMessage before command completion, same-turn final",
+    steerSequence: 2,
+    records: [
+      { id: 1, role: "assistant", eventType: "tool_use", toolName: "commandExecution", content: "", messageUid: "codex-turn", epoch: "codex", sequence: 1, timestamp: "2026-10-21T13:26:02.000Z" },
+      { id: 2, role: "user", eventType: "text", content: "STEER_MARKER_723379ff", messageUid: "codex-steer", epoch: "codex", sequence: 2, timestamp: "2026-10-21T13:26:02.295Z" },
+      { id: 3, role: "assistant", eventType: "tool_result", toolResult: "Passed", messageUid: "codex-turn", epoch: "codex", sequence: 3, timestamp: "2026-10-21T13:26:08.000Z" },
+      { id: 4, role: "assistant", eventType: "text", content: "TURQUOISE", messageUid: "codex-turn", epoch: "codex", sequence: 4, timestamp: "2026-10-21T13:26:09.000Z" },
+    ],
+  },
+]
+
+for (const spike of spikeSequences) test(`${spike.name} replays identically live and from history`, () => {
+  const prefix = spike.records.filter(record => record.sequence! <= spike.steerSequence)
+  const suffix = spike.records.filter(record => record.sequence! > spike.steerSequence)
+  const accumulator = new TranscriptAccumulator()
+  for (const record of suffix) accumulator.receiveLive({
+    type: record.eventType as ChatEvent["type"],
+    content: record.content ?? record.toolResult,
+    toolName: record.toolName,
+    messageUid: record.messageUid,
+    epoch: record.epoch,
+    sequence: record.sequence,
+    timestamp: record.timestamp,
+  })
+  accumulator.receiveLive({
+    type: "status", content: "completed", messageUid: suffix.at(-1)!.messageUid,
+    epoch: suffix.at(-1)!.epoch, sequence: suffix.at(-1)!.sequence! + 1,
+  })
+  accumulator.startSnapshot(spike.name)
+  const live = accumulator.commitSnapshot(spike.name, rebuildBlocks(prefix), {
+    epoch: prefix.at(-1)!.epoch!, throughSequence: spike.steerSequence,
+  }).messages
+  const history = rebuildBlocks(spike.records)
+
+  const shape = (blocks: MessageBlock[]) => blocks.map(block => ({
+    id: block.id, role: block.role,
+    parts: block.parts.map(part => ({ type: part.type, content: part.content, toolName: part.toolName })),
+  }))
+  assert.deepEqual(shape(live), shape(history))
+  assert.deepEqual(live.map(block => block.role), ["assistant", "user", "assistant"])
+  assert.equal(live.filter(block => block.id === `${spike.records[0].messageUid}:segment:1`).length, 1)
 })
