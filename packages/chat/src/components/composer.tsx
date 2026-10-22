@@ -22,6 +22,8 @@ interface ComposerProps {
   disabled: boolean
   isStreaming: boolean
   supportsSteering?: boolean
+  /** "also stops 2 background agents": interrupting the turn kills running background tasks too. */
+  backgroundStopWarning?: string | null
   /** The transitional window after an interrupt is requested but before the turn has unwound — isStreaming is still true here. */
   interrupting?: boolean
   /** The backend's process was force-killed and is being replaced — not safe to drain a queue into yet, even though isStreaming is false. */
@@ -120,6 +122,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   disabled,
   isStreaming,
   supportsSteering = false,
+  backgroundStopWarning = null,
   interrupting,
   resumePending,
   placeholder,
@@ -639,7 +642,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               className={`w-full flex-1 px-3 py-2 rounded-md transition-colors flex items-center justify-center select-none ${
                 willInterrupt ? "bg-amber-500-a20 hover:bg-amber-500-a30 text-amber-400" : "bg-overlay-10 hover:bg-overlay-15"
               }`}
-              title={!hasContent ? "Interrupt (Escape)" : ctrlHeld ? "Send now (interrupts the current turn)" : supportsSteering ? "Send now: joins the current turn (Tab to queue, Ctrl+Enter to interrupt, right-click or long-press for options)" : "Queue — sends when the current turn ends (Ctrl+Enter to send now, right-click or long-press for options)"}
+              title={!hasContent ? `Interrupt (Escape)${backgroundStopWarning ? ` — ${backgroundStopWarning}` : ""}` : ctrlHeld ? `Send now (interrupts the current turn${backgroundStopWarning ? `; ${backgroundStopWarning}` : ""})` : supportsSteering ? "Send now: joins the current turn (Tab to queue, Ctrl+Enter to interrupt, right-click or long-press for options)" : "Queue — sends when the current turn ends (Ctrl+Enter to send now, right-click or long-press for options)"}
             >
               <i className={`ph-bold ${willInterrupt ? "ph-stop" : "ph-paper-plane"} text-sm`} />
             </button>
@@ -654,7 +657,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                 className="text-amber-400 focus:bg-amber-500-a20 focus:text-amber-400"
               >
                 <i className="ph-bold ph-stop" />
-                Interrupt and send
+                <span className="flex flex-col">
+                  <span>Interrupt and send</span>
+                  {backgroundStopWarning && <span className="text-[10px] text-amber-400 opacity-80">{backgroundStopWarning}</span>}
+                </span>
               </DropdownMenuItem>
             </ContextMenuContent>
             </ContextMenu>

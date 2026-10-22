@@ -1,4 +1,12 @@
-import type { MessageBlock, MessagePart, MessagePhase, TranscriptPayloadRef } from "../types"
+import type { MessageBlock, MessagePart, MessagePhase, TranscriptPayloadRef, TurnOrigin } from "../types"
+import {
+  KNOWN_RECORD_TYPES,
+  TURN_ORIGIN_KEY,
+  attachBackground,
+  backgroundPart,
+  isBackgroundRecord,
+  toolUseIdOf,
+} from "./background-work.ts"
 
 export interface PersistedMessage {
   id: number | string
@@ -14,6 +22,12 @@ export interface PersistedMessage {
    * block id when present so streamed and reloaded blocks share identity. */
   messageUid?: string | null
   phase?: MessagePhase | null
+  /** Native tool-call identity; defaults to `messageId` on tool records. */
+  toolUseId?: string | null
+  /** Launching tool call of the background work this record belongs to. */
+  parentToolUseId?: string | null
+  /** Set on the first record of a turn the provider started by itself. */
+  turnOrigin?: TurnOrigin | null
   timestamp: string
   attachmentsJson?: string | null
   epoch?: string | null
@@ -45,8 +59,17 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
     })
   const ordered = [...legacy, ...sequenced]
     .map(({ record }) => record)
+  // Background work never opens or extends a turn: it is attached to its
+  // launching tool call after the turns are built, in the same order.
+  const background: MessagePart[] = []
 
   for (const rec of ordered) {
+    if (rec.role !== "user" && !KNOWN_RECORD_TYPES.has(rec.eventType)) continue
+    if (isBackgroundRecord(rec)) {
+      background.push(backgroundPart(rec))
+      continue
+    }
+
     if (rec.role === "user") {
       currentBlock = null
       currentTurnUid = null
@@ -89,7 +112,12 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       continue
     }
 
-    if (rec.eventType === "status") continue
+    if (rec.eventType === "status") {
+      // A self-started turn's closing status also names its origin.
+      if (rec.turnOrigin && currentBlock?.role === "assistant" && !currentBlock.metadata?.[TURN_ORIGIN_KEY])
+        currentBlock.metadata = { ...currentBlock.metadata, [TURN_ORIGIN_KEY]: rec.turnOrigin }
+      continue
+    }
 
     const turnUid = rec.messageUid || null
     if (!currentBlock || currentBlock.role !== "assistant" || (!!turnUid && currentTurnUid !== turnUid)) {
@@ -111,7 +139,10 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       currentTurnUid = turnUid
       blocks.push(currentBlock)
     }
+    if (rec.turnOrigin && !currentBlock.metadata?.[TURN_ORIGIN_KEY])
+      currentBlock.metadata = { ...currentBlock.metadata, [TURN_ORIGIN_KEY]: rec.turnOrigin }
 
+    const toolUseId = toolUseIdOf(rec)
     const part: MessagePart = {
       type: rec.eventType as MessagePart["type"],
       content: rec.content || rec.toolResult || "",
@@ -121,6 +152,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       phase: rec.phase ?? undefined,
       ...(rec.eventType === "thinking" && rec.messageId
         ? { messageId: rec.messageId, thinkingState: "completed" } : {}),
+      ...(toolUseId ? { toolUseId, ...(rec.messageId ? { messageId: rec.messageId } : {}) } : {}),
     }
 
     if (rec.eventType === "text" && currentBlock.parts.length > 0) {
@@ -156,5 +188,5 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
     }
   }
 
-  return blocks
+  return attachBackground(blocks, background)
 }

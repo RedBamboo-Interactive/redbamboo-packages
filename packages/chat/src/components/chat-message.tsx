@@ -20,8 +20,11 @@ import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { LazyToolOutput } from "./lazy-tool-output"
 import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
-import { isEventPart, isEventBlock, usesSquareEventMarker } from "../lib/event-parts"
+import { isEventPart, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
+import { PART_COLOR, getPartColor, getSpinnerColor, isBackgroundRunning } from "../lib/part-colors"
+import { findPairedResult, turnOriginOf } from "../lib/background-work"
+import { BackgroundTaskPanel, ChildFrieze, TurnOriginMarker, childLabel, useBackgroundWork } from "./background-task-view"
 import { CONTEXT_COMPACTION_TOOL_NAME } from "../lib/chat-status"
 import { resolveQuestionCardContent } from "../lib/question-card"
 import { AudioPlayerWidget } from "./audio-player-widget"
@@ -32,17 +35,6 @@ import { NovaEventSquare } from "./nova-event-square"
 import { getAgentJobHref } from "../lib/session-resource-links"
 import { squarePosition, squareSequence, stepSquare, type SquareRef, type SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
-
-const COLOR = {
-  thinking: "var(--color-domain-imagination, #7C4DFF)",
-  readOnly: "var(--color-accent-teal)",
-  mutating: "var(--color-accent-gold)",
-  shell: "var(--color-accent-gold)",
-  result: "color-mix(in oklch, var(--color-accent-teal), black 30%)",
-  error: "var(--color-accent-red)",
-  event: "var(--color-text-disabled)",
-  fallback: "var(--color-text-disabled)",
-}
 
 interface TaskNotification {
   taskId: string
@@ -61,53 +53,7 @@ function parseTaskNotification(content: string): TaskNotification | null {
   }
 }
 
-function getEventMeta(part: MessagePart): { color?: string; icon?: string } {
-  if (!part.toolInput) return {}
-  try {
-    const data = JSON.parse(part.toolInput)
-    return { color: data.color ?? undefined, icon: data.icon ?? undefined }
-  } catch { return {} }
-}
-
-export function getPartColor(part: MessagePart): string {
-  if (part.type === "thinking") return COLOR.thinking
-  if (part.type === "error") return COLOR.error
-  if (part.type === "tool_result") return COLOR.result
-  if (isEventPart(part)) {
-    const meta = getEventMeta(part)
-    return meta.color ?? COLOR.event
-  }
-  if (part.type === "tool_use" && part.toolName) {
-    const category = getToolActivityCategory(part.toolName, part.toolInput)
-    if (category === "agent") return COLOR.thinking
-    if (category === "read-only") return COLOR.readOnly
-    if (category === "mutating") return COLOR.mutating
-    if (category === "shell") return COLOR.shell
-  }
-  return COLOR.fallback
-}
-
-export function getSpinnerColor(messages: MessageBlock[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const block = messages[i]
-    // Ambient event groups can trail the in-flight block; they say nothing
-    // about what the model is currently doing.
-    if (block.role !== "assistant" || isEventBlock(block)) continue
-    for (let j = block.parts.length - 1; j >= 0; j--) {
-      const part = block.parts[j]
-      if (part.type === "thinking") return COLOR.thinking
-      if (part.type === "tool_use" && part.toolName) {
-        const category = getToolActivityCategory(part.toolName, part.toolInput)
-        if (category === "agent") return COLOR.thinking
-        if (category === "read-only") return COLOR.readOnly
-        if (category === "mutating") return COLOR.mutating
-        if (category === "shell") return COLOR.shell
-      }
-      if (part.type === "text") return COLOR.readOnly
-    }
-  }
-  return COLOR.readOnly
-}
+export { getPartColor, getSpinnerColor }
 
 function isPlanFile(path: string): boolean {
   return path.includes(".claude/plans/") || path.includes(".claude\\plans\\")
@@ -424,6 +370,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   const askQuestionPart = block.parts.find(p => p.type === "tool_use" && p.toolName === "AskUserQuestion")
   const questionCard = resolveQuestionCardContent(pendingQuestion, askQuestionPart)
+  const turnOrigin = turnOriginOf(block)
 
   return (
     <>
@@ -436,6 +383,7 @@ export const ChatMessage = memo(function ChatMessage({
             <span className="text-xs text-text-muted font-medium">{senderName}</span>
           </div>
         )}
+        {turnOrigin && <TurnOriginMarker origin={turnOrigin} />}
         {groups.map((group, i) =>
           group.kind === "text" ? (
             <div key={i} className="text-sm leading-relaxed font-serif markdown-body msg-enter-ai">
@@ -543,15 +491,6 @@ function partLabel(part: MessagePart): string {
   }
 }
 
-function findPairedResult(allParts: readonly MessagePart[], toolUsePart: MessagePart): MessagePart | undefined {
-  const idx = allParts.indexOf(toolUsePart)
-  if (idx === -1) return undefined
-  for (let j = idx + 1; j < allParts.length; j++) {
-    if (allParts[j].type === "tool_result") return allParts[j]
-    if (allParts[j].type === "tool_use") return undefined
-  }
-  return undefined
-}
 
 function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
@@ -613,9 +552,25 @@ function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolve
     ? { position, total: sequence.length, onStep: step }
     : undefined
 
+  // The background status line and turn-origin circles open a launching square
+  // from outside the row. Only the frieze that renders that square answers.
+  const { openRequest } = useBackgroundWork()
+  const friezeRef = useRef<HTMLDivElement>(null)
+  const handledOpen = useRef<number | null>(null)
+  useEffect(() => {
+    if (!openRequest || handledOpen.current === openRequest.nonce) return
+    const target = parts.find(part => part.type === "tool_use" && part.toolUseId === openRequest.toolUseId)
+    if (!target) return
+    handledOpen.current = openRequest.nonce
+    setMinHeight(0)
+    select({ rowId: blockId, index: allParts.indexOf(target) })
+    friezeRef.current?.querySelector(`[data-tool-use-id="${CSS.escape(openRequest.toolUseId)}"]`)
+      ?.scrollIntoView({ block: "center", behavior: "smooth" })
+  })
+
   return (
     <>
-      <div className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5">
+      <div ref={friezeRef} className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5">
         {parts.filter(p => p.type !== "tool_result").map((part, i) => {
           // Persisted history deliberately omits transient partial flags. An
           // unresolved compaction pair in an active turn is nevertheless live,
@@ -623,7 +578,9 @@ function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolve
           const unresolvedCompaction = part.type === "tool_use"
             && part.toolName === CONTEXT_COMPACTION_TOOL_NAME
             && !findPairedResult(allParts, part)
-          const inFlight = isLive && (!!part.isPartial || unresolvedCompaction)
+          // A launching square keeps moving for as long as its background task
+          // runs, whether or not the main turn is still streaming.
+          const inFlight = (isLive && (!!part.isPartial || unresolvedCompaction)) || isBackgroundRunning(part)
           const event = isEventPart(part)
           const queueStatus = resolveEventQueueStatus?.(part)
           const squareEvent = usesSquareEventMarker(part)
@@ -633,9 +590,11 @@ function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolve
               onClick={() => handleClick(part)}
               className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
               style={{ backgroundColor: queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part) }}
-              title={partLabel(part)}
-              aria-label={queueStatus ? `${partLabel(part)}: ${queueStatus.label}` : partLabel(part)}
+              title={part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
+              aria-label={queueStatus ? `${partLabel(part)}: ${queueStatus.label}` : part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
               data-input-message-uid={event ? part.messageUid : undefined}
+              data-tool-use-id={part.toolUseId}
+              data-task-status={part.task?.status}
             />
           )
         })}
@@ -708,7 +667,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
     && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")
 }
 
-function PartModal({ part, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+interface PartModalProps {
   part?: MessagePart
   pairedResult?: MessagePart
   open: boolean
@@ -721,6 +680,87 @@ function PartModal({ part, pairedResult, open, onClose, navigation, minHeight, r
   resolveEventQueueStatus?: ResolveEventQueueStatus
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
+}
+
+function childKey(part: MessagePart, siblings: readonly MessagePart[]): string {
+  return part.toolUseId ?? part.messageId ?? `#${siblings.indexOf(part)}`
+}
+
+/**
+ * A launching square's details also hold the work it launched: the task's
+ * state, and a mini-frieze of its children. Opening a child keeps the dialog
+ * and shows an "Agent › Bash" breadcrumb; previous/next then walks the
+ * children. The path is kept by identity, so live updates never reset it.
+ */
+function PartModal(props: PartModalProps) {
+  const { part, pairedResult, open, navigation } = props
+  const [path, setPath] = useState<string[]>([])
+  const rootKey = part ? part.toolUseId ?? part.messageId ?? null : null
+  const [pathRoot, setPathRoot] = useState(rootKey)
+  if (pathRoot !== rootKey) {
+    setPathRoot(rootKey)
+    setPath([])
+  }
+  useEffect(() => { if (!open) setPath([]) }, [open])
+  if (!part) return null
+
+  const chain: MessagePart[] = [part]
+  for (const key of path) {
+    const children = chain[chain.length - 1].children ?? []
+    const child = children.find(candidate => childKey(candidate, children) === key)
+    if (!child) break
+    chain.push(child)
+  }
+  const current = chain[chain.length - 1]
+  const parent = chain.length > 1 ? chain[chain.length - 2] : undefined
+  const depth = chain.length - 1
+  const enter = (child: MessagePart) => setPath([...path.slice(0, depth), childKey(child, current.children ?? [])])
+
+  let effectiveNavigation = navigation
+  let effectiveResult = pairedResult
+  if (parent) {
+    const siblings = (parent.children ?? []).filter(sibling => sibling.type !== "tool_result")
+    const position = siblings.indexOf(current)
+    effectiveResult = current.type === "tool_use" ? findPairedResult(parent.children ?? [], current) : undefined
+    effectiveNavigation = siblings.length > 1 ? {
+      position,
+      total: siblings.length,
+      onStep: (direction) => {
+        const next = siblings[position + direction]
+        if (next) setPath([...path.slice(0, depth - 1), childKey(next, parent.children ?? [])])
+      },
+    } : undefined
+  }
+
+  const breadcrumb = parent ? (
+    <nav aria-label="Background activity path" className="flex items-center gap-1.5 min-w-0 text-sm">
+      {chain.slice(0, -1).map((ancestor, index) => (
+        <span key={index} className="flex items-center gap-1.5 min-w-0 max-w-[7rem]">
+          <button type="button" onClick={() => setPath(path.slice(0, index))}
+            className="truncate text-text-muted hover:text-contrast transition-colors cursor-pointer">
+            {index === 0 ? partLabel(ancestor) : childLabel(ancestor)}
+          </button>
+          <i aria-hidden className="ph-bold ph-caret-right text-[9px] text-text-disabled" />
+        </span>
+      ))}
+      <DialogTitle className="text-sm shrink-0">{childLabel(current)}</DialogTitle>
+    </nav>
+  ) : undefined
+
+  const background = current.task || current.children?.length ? (
+    <>
+      {current.task && <BackgroundTaskPanel part={current} />}
+      {!!current.children?.length && <ChildFrieze parts={current.children} onSelect={enter} />}
+    </>
+  ) : undefined
+
+  return <PartModalView {...props} part={current} pairedResult={effectiveResult}
+    navigation={effectiveNavigation} breadcrumb={breadcrumb} background={background} />
+}
+
+function PartModalView({ part, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
+  breadcrumb?: React.ReactNode
+  background?: React.ReactNode
 }) {
   if (!part) return null
   const event = parseEventPart(part)
@@ -792,8 +832,8 @@ function PartModal({ part, pairedResult, open, onClose, navigation, minHeight, r
             className="w-3 h-3 rounded-[2px]"
             style={{ backgroundColor: getPartColor(part) }}
           />
-          <DialogTitle className="text-sm">{partLabel(part)}</DialogTitle>
-          {category && (
+          {breadcrumb ?? <DialogTitle className="text-sm">{partLabel(part)}</DialogTitle>}
+          {category && !breadcrumb && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-overlay-6 text-text-disabled">
               {category}
             </span>
@@ -828,6 +868,7 @@ function PartModal({ part, pairedResult, open, onClose, navigation, minHeight, r
         </DialogHeader>
 
         <div className="overflow-y-auto p-4 flex-1 min-h-0">
+          {background}
           {isToolUse && part.toolInput && (
             <div className="mb-3">
               <div className="text-[10px] uppercase text-text-muted mb-1.5 font-semibold">Input</div>
@@ -1490,14 +1531,14 @@ function TaskNotificationSquare({ notification }: { notification: TaskNotificati
       <button
         onClick={() => setOpen(true)}
         className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
-        style={{ backgroundColor: COLOR.fallback }}
+        style={{ backgroundColor: PART_COLOR.fallback }}
         title={notification.summary}
       />
 
       <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
         <DialogContent motion="snappy" className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-            <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: COLOR.fallback }} />
+            <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: PART_COLOR.fallback }} />
             <DialogTitle className="text-sm">Background Task</DialogTitle>
             <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${failed ? "bg-accent-red-a10 text-accent-red" : "bg-overlay-6 text-text-disabled"}`}>
               {notification.status}

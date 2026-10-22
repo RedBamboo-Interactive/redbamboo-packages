@@ -29,8 +29,12 @@ export function getEffectiveToolName(toolName?: string, toolInput?: string): str
 
 export type ToolActivityCategory = "agent" | "read-only" | "mutating" | "shell"
 
+// Claude Code's subagent launchers. They delegate work like Leaf `agent:` tools
+// and launch background tasks, so they share the agent colour, not read-only teal.
+const agentTools = new Set(["agent", "task"])
+
 const readOnlyTools = new Set([
-  "read", "glob", "grep", "agent", "websearch", "webfetch",
+  "read", "glob", "grep", "websearch", "webfetch",
   "toolsearch", "cronlist", "todoread", "monitor",
   "exitplanmode", "enterplanmode", "askuserquestion",
   "list", "codesearch", "explore",
@@ -46,7 +50,7 @@ export function getToolActivityCategory(toolName?: string, toolInput?: string): 
   const effective = getEffectiveToolName(toolName, toolInput)
   if (!effective) return null
   const name = effective.toLowerCase()
-  if (name.startsWith("agent:")) return "agent"
+  if (name.startsWith("agent:") || agentTools.has(name)) return "agent"
   if (readOnlyTools.has(name) || /(?:^|_)(?:read|search|list)$/.test(name)) return "read-only"
   if (mutatingTools.has(name) || /(?:^|_)(?:create|update|edit|delete|post|generate|upsert)$/.test(name)) return "mutating"
   if (name === "bash" || name === "powershell") return "shell"

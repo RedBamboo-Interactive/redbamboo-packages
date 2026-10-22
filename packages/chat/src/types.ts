@@ -11,14 +11,63 @@ export interface MessageBlock {
 
 export type MessagePhase = "commentary" | "final_answer"
 
+export type BackgroundTaskStatus = "running" | "completed" | "failed" | "stopped" | "lost"
+export type BackgroundTaskKind = "agent" | "shell" | "other"
+
+/**
+ * The state of one background task (a subagent or background shell) as its
+ * durable `task` records report it. It belongs to the tool call that launched
+ * the task, never to the timeline.
+ */
+export interface BackgroundTaskState {
+  taskId: string
+  kind: BackgroundTaskKind | string
+  status: BackgroundTaskStatus | string
+  description?: string | null
+  agentType?: string | null
+  summary?: string | null
+  usage?: { toolUses?: number | null; tokens?: number | null; durationMs?: number | null } | null
+  startedAt?: string | null
+  endedAt?: string | null
+  parentTaskId?: string | null
+}
+
+/** A running background task as the session reports it live (`session.backgroundTasks`). */
+export interface BackgroundTaskInfo extends BackgroundTaskState {
+  /** The provider's latest progress line, e.g. "Running Echo alpha". */
+  lastActivity?: string | null
+  lastToolName?: string | null
+  /** The tool call that launched the task. */
+  parentToolUseId?: string | null
+  messageUid?: string | null
+}
+
+/** Why a turn started without user input (a background task finished). */
+export interface TurnOrigin {
+  kind: "background-task" | string
+  taskId?: string | null
+}
+
 export interface MessagePart {
+  /** Native tool-call identity of a tool_use and of the tool_result answering it. */
+  toolUseId?: string
+  /** Set on background parts: the tool call that launched the work they belong to. */
+  parentToolUseId?: string
+  /**
+   * Background work launched by this tool call (a subagent's own tool calls,
+   * results and commentary), in order. Never part of the block's own parts:
+   * lifecycle helpers that read a turn's parts never see background work.
+   */
+  children?: MessagePart[]
+  /** State of the background task this tool call launched, folded from `task` records. */
+  task?: BackgroundTaskState
   /** Native reasoning identity, distinct from the logical turn uid. */
   messageId?: string
   /** Survives visual segment finalization around ambient events. */
   thinkingState?: "active" | "completed"
   /** Existing logical input identity retained by a projected host-event part. */
   messageUid?: string
-  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image"
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image" | "task"
   content: string
   toolName?: string
   toolInput?: string
@@ -168,7 +217,7 @@ export interface ChatEvent {
    * See process-stream-event.ts for why the pending question can't be inferred
    * from the parts alone.
    */
-  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "status" | "question" | "question_resolved" | "image"
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "status" | "question" | "question_resolved" | "image" | "task"
   content?: string | null
   toolName?: string | null
   toolInput?: string | null
@@ -197,6 +246,16 @@ export interface ChatEvent {
    * is why those events are deliberately not persisted.
    */
   requestId?: string | null
+  /** Native tool-call identity. Defaults to `messageId` for tool_use/tool_result events. */
+  toolUseId?: string | null
+  /**
+   * Set when the event belongs to background work (a subagent): the tool call
+   * that launched it. Such events never extend, open or close a turn and say
+   * nothing about whether the main turn is busy. See `isBackgroundEvent`.
+   */
+  parentToolUseId?: string | null
+  /** On the first event (and closing status) of a turn the provider started by itself. */
+  turnOrigin?: TurnOrigin | null
   /** Stable transcript lineage assigned by RedCompute. */
   epoch?: string | null
   /** Strictly increasing inside one session epoch. */
@@ -466,6 +525,11 @@ export interface ProcessEventResult {
    * resume — callers must not treat this as safe-to-send.
    */
   resumePending: boolean
+  /**
+   * The event belonged to background work: only `messages` changed. Hosts must
+   * not let it latch streaming, steering or the Stop button.
+   */
+  background?: boolean
 }
 
 // --- ChatPanel types ---
@@ -495,6 +559,16 @@ export interface ChatPanelProps {
   isStreaming?: boolean
   /** Whether this session's provider can inject input into an active turn without interruption. */
   supportsSteering?: boolean
+  /**
+   * Running background work as the session reports it (`session.backgroundTasks`).
+   * Drives the background status line and the Stop affordance's warning; it never
+   * makes the panel streaming.
+   */
+  backgroundTasks?: BackgroundTaskInfo[]
+  /** Stop one background task. Its presence is the capability: the Stop button only shows with it. */
+  onStopBackgroundTask?: (taskId: string) => Promise<void> | void
+  /** Host-owned work shown in the same row as background tasks, e.g. Nova's "1 delegation". */
+  backgroundStatusExtras?: BackgroundStatusSegment[]
   /** The upstream AI event connection is temporarily unavailable and retrying. */
   isReconnecting?: boolean
   maintenanceStatus?: ChatMaintenanceStatus | null
@@ -633,4 +707,12 @@ export interface ChatPanelProps {
   }) => React.ReactNode
   renderMessageExtra?: (block: MessageBlock, index: number) => React.ReactNode
   renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode
+}
+
+/** One host-owned segment of the background status row. */
+export interface BackgroundStatusSegment {
+  key: string
+  label: string
+  title?: string
+  onClick?: () => void
 }

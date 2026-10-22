@@ -2,6 +2,16 @@ import type { ChatEvent, MessageBlock, MessagePart, PendingQuestion, ProcessEven
 // Explicit extension: this module is exercised by node:test, and bare Node ESM
 // does not resolve extensionless relative specifiers.
 import { isEventBlock, streamTargetIndex } from "./event-parts.ts"
+import {
+  KNOWN_EVENT_TYPES,
+  TURN_ORIGIN_KEY,
+  attachBackground,
+  backgroundPart,
+  collectOrphans,
+  isBackgroundEvent,
+  resolveBackgroundOrphans,
+  toolUseIdOf,
+} from "./background-work.ts"
 
 let partIdCounter = 0
 
@@ -148,6 +158,28 @@ export function processStreamEvent(
   resumePending = false,
   question: QuestionState = NO_QUESTION,
 ): ProcessEventResult {
+  // An event type this client does not know is skipped rather than rendered
+  // as a junk part, so a newer backend cannot corrupt an older client.
+  if (!KNOWN_EVENT_TYPES.has(event.type)) {
+    return { messages, isStreaming, pendingQuestion: question.pending, question, interrupting: false, resumePending }
+  }
+
+  // Background work (a subagent's calls, a task's lifecycle) is routed to the
+  // tool call that launched it before any block is selected. It never opens,
+  // extends or closes a turn and moves no turn-level state: the main loop may
+  // be idle while it runs.
+  if (isBackgroundEvent(event)) {
+    return {
+      messages: attachBackground(messages, [backgroundPart(event)]),
+      isStreaming,
+      pendingQuestion: question.pending,
+      question,
+      interrupting: false,
+      resumePending,
+      background: true,
+    }
+  }
+
   if (event.type === "status") {
     // "interrupting" fires the instant an interrupt request reaches the CLI's
     // stdin — an ack of receipt, not a turn-ended signal. The turn is still
@@ -166,7 +198,7 @@ export function processStreamEvent(
     // The turn is over, so nothing can still be waiting on an answer; any
     // outcome already recorded is kept so the card keeps saying how it ended.
     return {
-      messages: finalizeStreamBlock(messages),
+      messages: withStatusTurnOrigin(finalizeStreamBlock(messages), event),
       isStreaming: false,
       pendingQuestion: null,
       question: closeQuestion(question),
@@ -199,6 +231,24 @@ export function processStreamEvent(
   const endedUnderQuestion = event.type === "question_resolved" && q.outcome === "session_ended"
   const streamingOut = q.pending || endedUnderQuestion ? false : isStreaming
   return { messages: msgs, isStreaming: streamingOut, pendingQuestion: q.pending, question: q, interrupting: false, resumePending }
+}
+
+/**
+ * A self-started turn's closing status names its origin too. Mark the turn
+ * when its first event was missed (a client that joined mid-turn).
+ */
+function withStatusTurnOrigin(messages: MessageBlock[], event: ChatEvent): MessageBlock[] {
+  if (!event.turnOrigin) return messages
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const block = messages[index]
+    if (block.role === "user") return messages
+    if (isEventBlock(block)) continue
+    if (block.metadata?.[TURN_ORIGIN_KEY]) return messages
+    const next = [...messages]
+    next[index] = { ...block, metadata: { ...block.metadata, [TURN_ORIGIN_KEY]: event.turnOrigin } }
+    return next
+  }
+  return messages
 }
 
 /** Drop anything still pending without claiming it was answered. */
@@ -286,16 +336,24 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
       role: "assistant",
       parts: [],
       timestamp,
-      metadata: turnUid ? { messageUid: turnUid } : undefined,
+      metadata: turnUid || event.turnOrigin
+        ? {
+            ...(turnUid ? { messageUid: turnUid } : {}),
+            ...(event.turnOrigin ? { [TURN_ORIGIN_KEY]: event.turnOrigin } : {}),
+          }
+        : undefined,
     }
     // Appended after any trailing event group. This may begin a new turn or
     // continue the same turn after an ambient chronological boundary.
     msgs.push(lastBlock)
   } else {
     lastBlock = { ...msgs[idx], parts: [...msgs[idx].parts] }
+    if (event.turnOrigin && !lastBlock.metadata?.[TURN_ORIGIN_KEY])
+      lastBlock.metadata = { ...lastBlock.metadata, [TURN_ORIGIN_KEY]: event.turnOrigin }
     msgs[idx] = lastBlock
   }
 
+  const toolUseId = toolUseIdOf(event)
   const part: MessagePart = {
     type: event.type as MessagePart["type"],
     content: event.content || event.toolResult || "",
@@ -303,7 +361,8 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
     toolInput: event.toolInput || undefined,
     payloadRef: event.payloadRef || undefined,
     phase: event.phase || undefined,
-    ...(event.type === "thinking" && event.messageId ? { messageId: event.messageId } : {}),
+    ...((event.type === "thinking" || toolUseId) && event.messageId ? { messageId: event.messageId } : {}),
+    ...(toolUseId ? { toolUseId } : {}),
     ...(event.type === "thinking" && event.isPartial !== undefined
       ? { thinkingState: event.isPartial ? "active" : "completed" } : {}),
   }
@@ -339,5 +398,14 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
   }
 
   lastBlock.parts.push({ ...part, isPartial: event.type === "thinking" ? event.isPartial ?? true : true })
+  // A launching tool call can arrive after work that names it (reconnect,
+  // out-of-order delivery). Its parked children attach now.
+  if (part.type === "tool_use" && toolUseId && collectOrphans(msgs).length > 0)
+    return resolveBackgroundOrphans(msgs)
   return msgs
+}
+
+/** Background parts for a batch of events, attached in one pass. Exposed for hosts and tests. */
+export function applyBackgroundEvents(messages: MessageBlock[], events: readonly ChatEvent[]): MessageBlock[] {
+  return attachBackground(messages, events.filter(isBackgroundEvent).map(backgroundPart))
 }

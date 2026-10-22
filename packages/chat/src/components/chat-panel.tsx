@@ -13,6 +13,8 @@ import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
 import { canonicalUserMessageUids, isCanonicalQueuedMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
 import { StreamingStatusLine } from "./streaming-status-line"
+import { BackgroundStatusLine, BackgroundWorkContext, type BackgroundWorkContextValue } from "./background-task-view"
+import { backgroundStopWarning, findLaunchingSquare, indexBackgroundTasks } from "../lib/background-work"
 import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
@@ -57,7 +59,11 @@ export function ChatPanel(props: ChatPanelProps) {
     prepareOutgoingMessage,
     speechBackend, handsFreeEnabled, pushToTalkKey, globalPushToTalk,
     renderStatusLine, renderComposerInlineAction, renderComposerAttachments, renderAttachmentActions, renderMessageExtra, renderSideActions,
+    backgroundTasks, onStopBackgroundTask, backgroundStatusExtras,
   } = props
+  const runningBackgroundTasks = useMemo(
+    () => (backgroundTasks ?? []).filter(task => !task.status || task.status === "running"),
+    [backgroundTasks])
 
   const prepareMessage = useCallback((message: OutgoingMessageDraft): OutgoingMessageDraft => (
     prepareOutgoingMessage ? prepareOutgoingMessage(message) : message
@@ -407,6 +413,31 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const inlineAction = renderComposerInlineAction ?? defaultVoiceAction ?? undefined
 
+  // Background work lives on its launching squares. Rows read the task index,
+  // live progress and open requests from one context instead of new props.
+  const [openRequest, setOpenRequest] = useState<BackgroundWorkContextValue["openRequest"]>(null)
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
+  const requestOpen = useCallback((toolUseId: string) => {
+    const square = findLaunchingSquare(messagesRef.current, toolUseId)
+    if (!square) return
+    if (square.blockIndex < startIndexRef.current) {
+      shouldAutoScroll.current = false
+      setStartIndex(square.blockIndex)
+    }
+    setOpenRequest(previous => ({ toolUseId: square.toolUseId, nonce: (previous?.nonce ?? 0) + 1 }))
+  }, [])
+  const backgroundTaskIndex = useMemo(() => indexBackgroundTasks(messages), [messages])
+  const liveBackgroundTasks = useMemo(
+    () => new Map((backgroundTasks ?? []).map(task => [task.taskId, task] as const)), [backgroundTasks])
+  const backgroundWork = useMemo<BackgroundWorkContextValue>(() => ({
+    onStopBackgroundTask, requestOpen, openRequest, tasks: backgroundTaskIndex, live: liveBackgroundTasks,
+  }), [onStopBackgroundTask, requestOpen, openRequest, backgroundTaskIndex, liveBackgroundTasks])
+  const backgroundLine = runningBackgroundTasks.length > 0 || (backgroundStatusExtras?.length ?? 0) > 0
+    ? <BackgroundStatusLine tasks={runningBackgroundTasks} extras={backgroundStatusExtras}
+        onOpenTask={task => { if (task.parentToolUseId) requestOpen(task.parentToolUseId) }} />
+    : null
+
   const statusLine = renderStatusLine
     ? renderStatusLine({ isStreaming, isReconnecting, messages, pendingQuestion: pendingQuestion ?? null })
     : isStreaming || isReconnecting
@@ -428,6 +459,7 @@ export function ChatPanel(props: ChatPanelProps) {
       disabled={disabled}
       isStreaming={isStreaming}
       supportsSteering={supportsSteering}
+      backgroundStopWarning={backgroundStopWarning(runningBackgroundTasks)}
       interrupting={interrupting}
       resumePending={resumePending}
       placeholder={voice.interimTranscript ?? placeholder}
@@ -519,9 +551,10 @@ export function ChatPanel(props: ChatPanelProps) {
                 <span className="h-px flex-1 bg-overlay-6" />
               </button>
             )}
+            <BackgroundWorkContext.Provider value={backgroundWork}>
             <ActivityRowsContext.Provider value={getActivityRows}>
               {visualTimeline.map((visual) => {
-                if (visual.kind === "status") return <div key={visual.key}>{statusLine}</div>
+                if (visual.kind === "status") return <div key={visual.key}>{statusLine}{backgroundLine}</div>
                 if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
                 const row = visual.row
                 const block = row.block
@@ -567,6 +600,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 )
               })}
             </ActivityRowsContext.Provider>
+            </BackgroundWorkContext.Provider>
           </div>
         </div>
 

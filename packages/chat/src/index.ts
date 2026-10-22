@@ -4,6 +4,12 @@ export type {
   MessageBlock,
   MessagePart,
   MessagePhase,
+  BackgroundTaskState,
+  BackgroundTaskInfo,
+  BackgroundTaskStatus,
+  BackgroundTaskKind,
+  BackgroundStatusSegment,
+  TurnOrigin,
   TranscriptPayloadRef,
   TranscriptPayloadRange,
   TranscriptPayloadChunk,
@@ -109,7 +115,21 @@ export type { ComposerAutoFocusMode } from "./lib/composer-focus"
 export { filterConversation } from "./lib/conversation-filter"
 export { createSpeechBackend, createProxySpeechTransport, DEFAULT_REFORMULATE_PROMPT, DEFAULT_SUMMARIZE_PROMPT } from "./lib/speech-backend"
 export type { SpeechTransport, PromptRequest, CreateSpeechBackendOptions } from "./lib/speech-backend"
-export { processStreamEvent, parseStructuredQuestions } from "./lib/process-stream-event"
+export { processStreamEvent, parseStructuredQuestions, applyBackgroundEvents } from "./lib/process-stream-event"
+export {
+  isBackgroundEvent,
+  isBackgroundRecord,
+  attachBackground,
+  resolveBackgroundOrphans,
+  findPairedResult,
+  findPartByToolUseId,
+  findLaunchingSquare,
+  indexBackgroundTasks,
+  describeBackgroundCount,
+  backgroundStopWarning,
+  turnOriginOf,
+} from "./lib/background-work"
+export { BackgroundStatusLine, BackgroundTaskPanel } from "./components/background-task-view"
 export { EVENT_TOOL_PREFIX, isEventPart, isEventBlock, streamTargetIndex } from "./lib/event-parts"
 export { getEffectiveToolName } from "./lib/tool-semantics"
 export { rebuildBlocks } from "./lib/rebuild-blocks"
