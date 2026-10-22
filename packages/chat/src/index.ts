@@ -8,7 +8,8 @@ export type {
   BackgroundTaskInfo,
   BackgroundTaskStatus,
   BackgroundTaskKind,
-  BackgroundStatusSegment,
+  ActivityStatusGroup,
+  ActivityStatusItem,
   TurnOrigin,
   TranscriptPayloadRef,
   TranscriptPayloadRange,
@@ -127,10 +128,13 @@ export {
   findLaunchingSquare,
   indexBackgroundTasks,
   describeBackgroundCount,
+  orderBackgroundActivity,
+  runningBackgroundTasks,
+  summarizeBackgroundActivity,
   backgroundStopWarning,
   turnOriginOf,
 } from "./lib/background-work"
-export { BackgroundStatusLine, BackgroundTaskPanel } from "./components/background-task-view"
+export { BackgroundTaskPanel } from "./components/background-task-view"
 export { EVENT_TOOL_PREFIX, isEventPart, isEventBlock, streamTargetIndex } from "./lib/event-parts"
 export { getEffectiveToolName } from "./lib/tool-semantics"
 export { rebuildBlocks } from "./lib/rebuild-blocks"

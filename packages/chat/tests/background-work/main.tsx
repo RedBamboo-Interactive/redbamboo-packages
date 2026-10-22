@@ -2,12 +2,13 @@ import React, { useState } from "react"
 import { createRoot } from "react-dom/client"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { rebuildBlocks, type PersistedMessage } from "../../src/lib/rebuild-blocks"
-import type { BackgroundTaskInfo } from "../../src/types"
+import type { ActivityStatusGroup, BackgroundTaskInfo } from "../../src/types"
 import "./fixture.css"
 
 // Background work fixture: Agent squares in every task state, a running
 // background shell, a subagent's own calls under its square, a turn the
-// provider started after a task finished, and the background status line.
+// provider started after a task finished, and the one activity row with
+// host-owned work (delegations) after the background tasks.
 // The transcript is built through rebuildBlocks, exactly as hosts load history.
 
 const ts = (second: number) => `2026-10-22T09:0${Math.floor(second / 60)}:${String(second % 60).padStart(2, "0")}Z`
@@ -61,16 +62,39 @@ const backgroundTasks: BackgroundTaskInfo[] = [
     parentToolUseId: "toolu_shell" },
 ]
 
+// Host-owned work, as Nova passes its delegations: circles after the tasks.
+const delegation = (key: string, title: string, running: boolean) => ({
+  key, title: "Delegation", label: `${title}: ${running ? "running" : "waiting to resume"}`,
+  color: "rgb(236 72 153)", shape: "circle" as const, running,
+  renderDetails: (close: () => void) => (
+    <div data-slot="fixture-delegation">
+      <p className="text-sm text-contrast">{title}</p>
+      <p className="text-xs text-text-muted">RedLeaf · {running ? "Running" : "Waiting to resume"}</p>
+      <button type="button" onClick={close}>Open in Code</button>
+    </div>
+  ),
+})
+const hostActivity: ActivityStatusGroup = {
+  label: "2 delegations ongoing…",
+  items: [delegation("d1", "Sentinel shield for Discord and Commons", true), delegation("d2", "Pin bump for release builds", false)],
+}
+
 declare global { interface Window { __stops: string[] } }
 window.__stops = []
 
 function App() {
-  const [messages] = useState(() => rebuildBlocks(records))
+  const [messages] = useState(() => new URLSearchParams(location.search).has("detached")
+    ? rebuildBlocks(records.slice(0, 1)) : rebuildBlocks(records))
   // ?streaming shows the busy composer, whose Stop must warn about the running tasks.
-  const streaming = new URLSearchParams(location.search).has("streaming")
+  // ?host adds delegations; ?hostOnly shows delegations with no background task running;
+  // ?detached drops the transcript so a task's launching square is not loaded.
+  const params = new URLSearchParams(location.search)
+  const streaming = params.has("streaming")
+  const hostOnly = params.has("hostOnly")
   return <div style={{ width: "100%", height: "100vh" }}>
     <ChatPanel messages={messages} isStreaming={streaming} sessionId="background-work" persistQueue={false}
-      backgroundTasks={backgroundTasks}
+      backgroundTasks={hostOnly ? [] : backgroundTasks}
+      hostActivity={params.has("host") || hostOnly ? hostActivity : null}
       onStopBackgroundTask={taskId => { window.__stops.push(taskId) }} />
   </div>
 }

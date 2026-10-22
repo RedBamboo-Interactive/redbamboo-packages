@@ -1,7 +1,11 @@
+import { useActivityShapes } from "./activity-status-row"
+
 export function PendingQuestionLine() {
+  const shapes = useActivityShapes()
   return (
     <div data-slot="pending-question-line" className="flex items-center gap-2.5 text-teal-400 text-sm py-1">
       <i className="ph-bold ph-question text-xs animate-pulse" />
+      {shapes}
       <span>Waiting for your answer...</span>
     </div>
   )

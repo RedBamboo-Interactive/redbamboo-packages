@@ -347,6 +347,51 @@ export function describeBackgroundCount(tasks: readonly { kind?: string | null }
   return segments.join(" · ")
 }
 
+type ActivityTask = Pick<BackgroundTaskState, "kind" | "status" | "startedAt"> & { lastActivity?: string | null }
+
+/** Background tasks still running: an unknown status counts as running. */
+export function runningBackgroundTasks<T extends Pick<BackgroundTaskState, "status">>(tasks: readonly T[] | undefined): T[] {
+  return (tasks ?? []).filter(task => !task.status || task.status === "running")
+}
+
+/**
+ * Running background work in activity-row priority: agents before other
+ * background tasks, oldest first within each group.
+ */
+export function orderBackgroundActivity<T extends ActivityTask>(tasks: readonly T[]): T[] {
+  const started = (task: T) => Date.parse(task.startedAt ?? "") || 0
+  const rank = (task: T) => task.kind === "agent" ? 0 : 1
+  return [...tasks].sort((a, b) => rank(a) - rank(b) || started(a) - started(b))
+}
+
+/** What the activity row says when the main session is not working. */
+export interface BackgroundActivitySummary {
+  /** Which work owns the text: running agents, other background tasks, or the host's work. */
+  source: "agents" | "tasks" | "host"
+  label: string
+  /** The leading task's latest progress line, e.g. "Running Echo alpha". */
+  detail?: string
+  title?: string
+}
+
+/**
+ * One status text for the work behind an idle session, by priority: agents,
+ * then other background tasks, then host-owned work such as delegations. Only
+ * the leading group is described; every item still has its own shape.
+ */
+export function summarizeBackgroundActivity(running: readonly ActivityTask[],
+  host?: { label: string; title?: string } | null): BackgroundActivitySummary | null {
+  const ordered = orderBackgroundActivity(running)
+  const agents = ordered.filter(task => task.kind === "agent")
+  const group = agents.length ? agents : ordered
+  if (group.length) {
+    const detail = group[0].lastActivity || undefined
+    return { source: agents.length ? "agents" : "tasks", label: `${describeBackgroundCount(group)} working`, ...(detail ? { detail } : {}) }
+  }
+  if (host?.label) return { source: "host", label: host.label, ...(host.title ? { title: host.title } : {}) }
+  return null
+}
+
 /** The Stop affordance's warning: interrupting the main turn also kills every running task. */
 export function backgroundStopWarning(tasks: readonly { kind?: string | null }[] | undefined): string | null {
   if (!tasks?.length) return null

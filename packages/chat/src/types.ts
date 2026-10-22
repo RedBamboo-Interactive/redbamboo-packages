@@ -567,8 +567,12 @@ export interface ChatPanelProps {
   backgroundTasks?: BackgroundTaskInfo[]
   /** Stop one background task. Its presence is the capability: the Stop button only shows with it. */
   onStopBackgroundTask?: (taskId: string) => Promise<void> | void
-  /** Host-owned work shown in the same row as background tasks, e.g. Nova's "1 delegation". */
-  backgroundStatusExtras?: BackgroundStatusSegment[]
+  /**
+   * Host-owned work shown in the activity row after background tasks, e.g.
+   * Nova's delegations: one shape per item, and the row's text when nothing
+   * of higher priority runs.
+   */
+  hostActivity?: ActivityStatusGroup | null
   /** The upstream AI event connection is temporarily unavailable and retrying. */
   isReconnecting?: boolean
   maintenanceStatus?: ChatMaintenanceStatus | null
@@ -678,6 +682,11 @@ export interface ChatPanelProps {
   senderPresentation?: "compact" | "portrait"
 
   // Render props
+  /**
+   * The main session's status while it streams or reconnects. Build it from
+   * ChatStatusLine or StreamingStatusLine so the activity row's shapes appear
+   * inside it; when the session is not working the panel renders the row itself.
+   */
   renderStatusLine?: (state: {
     isStreaming: boolean
     isReconnecting: boolean
@@ -709,10 +718,26 @@ export interface ChatPanelProps {
   renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode
 }
 
-/** One host-owned segment of the background status row. */
-export interface BackgroundStatusSegment {
+/** One piece of host-owned work in the activity row, e.g. a Nova delegation. */
+export interface ActivityStatusItem {
   key: string
+  /** Accessible name and tooltip of its shape. */
+  label: string
+  /** Title of its details dialog. */
+  title: string
+  color: string
+  /** Circles read as events (a delegation is one); squares as tool work. */
+  shape?: "square" | "circle"
+  /** Moves while true; waiting, blocked or unknown work stays still. */
+  running: boolean
+  /** Body of the details dialog; `close` dismisses it, e.g. before navigating away. */
+  renderDetails: (close: () => void) => React.ReactNode
+}
+
+/** Host-owned work for the activity row, lowest in its text priority. */
+export interface ActivityStatusGroup {
+  items: ActivityStatusItem[]
+  /** The row's text when this is the highest-priority work, e.g. "1 delegation running…". */
   label: string
   title?: string
-  onClick?: () => void
 }

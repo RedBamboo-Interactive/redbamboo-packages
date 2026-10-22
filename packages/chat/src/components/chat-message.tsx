@@ -692,7 +692,7 @@ function childKey(part: MessagePart, siblings: readonly MessagePart[]): string {
  * and shows an "Agent › Bash" breadcrumb; previous/next then walks the
  * children. The path is kept by identity, so live updates never reset it.
  */
-function PartModal(props: PartModalProps) {
+export function PartModal(props: PartModalProps) {
   const { part, pairedResult, open, navigation } = props
   const [path, setPath] = useState<string[]>([])
   const rootKey = part ? part.toolUseId ?? part.messageId ?? null : null

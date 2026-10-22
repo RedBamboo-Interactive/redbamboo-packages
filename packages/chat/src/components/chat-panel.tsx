@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from "react"
-import type { ChatInputPart, ChatPanelProps, ImageAttachment, MessageBlock as MessageBlockType, OutgoingMessageDraft, SendOptions, UploadedAttachment } from "../types"
+import type { ActivityStatusItem, BackgroundTaskInfo, ChatInputPart, ChatPanelProps, ImageAttachment, MessageBlock as MessageBlockType, MessagePart, OutgoingMessageDraft, SendOptions, UploadedAttachment } from "../types"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
 import { useMessageQueue } from "../hooks/use-message-queue"
-import { ChatMessage, extractPlanFileContent } from "./chat-message"
+import { ChatMessage, PartModal, extractPlanFileContent } from "./chat-message"
 import { eventQueueStatus, type ResolveEventQueueStatus } from "./event-queue-status"
 import { isEventBlock, eventInputMessageUid } from "../lib/event-parts"
 import { projectActivityTimeline } from "../lib/activity-timeline"
@@ -12,9 +12,11 @@ import { ActivityRowsContext } from "./activity-rows-context"
 import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
 import { canonicalUserMessageUids, isCanonicalQueuedMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
-import { StreamingStatusLine } from "./streaming-status-line"
-import { BackgroundStatusLine, BackgroundWorkContext, type BackgroundWorkContextValue } from "./background-task-view"
-import { backgroundStopWarning, findLaunchingSquare, indexBackgroundTasks } from "../lib/background-work"
+import { ChatStatusLine, StreamingStatusLine } from "./streaming-status-line"
+import { BackgroundWorkContext, taskTitle, type BackgroundWorkContextValue } from "./background-task-view"
+import { ActivityItemDialog, ActivityShapes, ActivityShapesProvider, type ActivityShape } from "./activity-status-row"
+import { backgroundStopWarning, findLaunchingSquare, indexBackgroundTasks, orderBackgroundActivity, runningBackgroundTasks as filterRunningTasks, summarizeBackgroundActivity } from "../lib/background-work"
+import { PART_COLOR, getPartColor } from "../lib/part-colors"
 import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
@@ -59,11 +61,9 @@ export function ChatPanel(props: ChatPanelProps) {
     prepareOutgoingMessage,
     speechBackend, handsFreeEnabled, pushToTalkKey, globalPushToTalk,
     renderStatusLine, renderComposerInlineAction, renderComposerAttachments, renderAttachmentActions, renderMessageExtra, renderSideActions,
-    backgroundTasks, onStopBackgroundTask, backgroundStatusExtras,
+    backgroundTasks, onStopBackgroundTask, hostActivity,
   } = props
-  const runningBackgroundTasks = useMemo(
-    () => (backgroundTasks ?? []).filter(task => !task.status || task.status === "running"),
-    [backgroundTasks])
+  const runningBackgroundTasks = useMemo(() => filterRunningTasks(backgroundTasks), [backgroundTasks])
 
   const prepareMessage = useCallback((message: OutgoingMessageDraft): OutgoingMessageDraft => (
     prepareOutgoingMessage ? prepareOutgoingMessage(message) : message
@@ -418,14 +418,15 @@ export function ChatPanel(props: ChatPanelProps) {
   const [openRequest, setOpenRequest] = useState<BackgroundWorkContextValue["openRequest"]>(null)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
-  const requestOpen = useCallback((toolUseId: string) => {
+  const requestOpen = useCallback((toolUseId: string): boolean => {
     const square = findLaunchingSquare(messagesRef.current, toolUseId)
-    if (!square) return
+    if (!square) return false
     if (square.blockIndex < startIndexRef.current) {
       shouldAutoScroll.current = false
       setStartIndex(square.blockIndex)
     }
     setOpenRequest(previous => ({ toolUseId: square.toolUseId, nonce: (previous?.nonce ?? 0) + 1 }))
+    return true
   }, [])
   const backgroundTaskIndex = useMemo(() => indexBackgroundTasks(messages), [messages])
   const liveBackgroundTasks = useMemo(
@@ -433,18 +434,73 @@ export function ChatPanel(props: ChatPanelProps) {
   const backgroundWork = useMemo<BackgroundWorkContextValue>(() => ({
     onStopBackgroundTask, requestOpen, openRequest, tasks: backgroundTaskIndex, live: liveBackgroundTasks,
   }), [onStopBackgroundTask, requestOpen, openRequest, backgroundTaskIndex, liveBackgroundTasks])
-  const backgroundLine = runningBackgroundTasks.length > 0 || (backgroundStatusExtras?.length ?? 0) > 0
-    ? <BackgroundStatusLine tasks={runningBackgroundTasks} extras={backgroundStatusExtras}
-        onOpenTask={task => { if (task.parentToolUseId) requestOpen(task.parentToolUseId) }} />
-    : null
+  // One activity row: spinner, a shape per piece of background work, one text.
+  // The text follows priority: the session itself, then agents, then other
+  // background tasks, then host work (Nova's delegations). Shapes follow the
+  // same order. A task's shape opens its launching square's own details; a task
+  // whose launching square is not in the loaded transcript opens the same
+  // dialog from its live state.
+  const [detachedTask, setDetachedTask] = useState<BackgroundTaskInfo | null>(null)
+  const [openHostItem, setOpenHostItem] = useState<ActivityStatusItem | null>(null)
+  const orderedTasks = useMemo(() => orderBackgroundActivity(runningBackgroundTasks), [runningBackgroundTasks])
+  const hostItems = hostActivity?.items ?? []
+  const taskColor = (task: BackgroundTaskInfo) => {
+    const launcher = backgroundTaskIndex.get(task.taskId)?.part
+    if (launcher) return getPartColor(launcher)
+    return task.kind === "agent" ? PART_COLOR.delegation : task.kind === "shell" ? PART_COLOR.shell : PART_COLOR.fallback
+  }
+  const activityShapes: ActivityShape[] = [
+    ...orderedTasks.map(task => ({
+      key: `task:${task.taskId}`,
+      label: `${taskTitle(task)} (${task.kind === "agent" ? "background agent" : task.kind === "shell" ? "background shell" : "background task"})`,
+      color: taskColor(task),
+      shape: "square" as const,
+      running: true,
+      onOpen: () => { if (!task.parentToolUseId || !requestOpen(task.parentToolUseId)) setDetachedTask(task) },
+    })),
+    ...hostItems.map(item => ({
+      key: `host:${item.key}`,
+      label: item.label,
+      color: item.color,
+      shape: item.shape ?? "square",
+      running: item.running,
+      onOpen: () => setOpenHostItem(item),
+    })),
+  ]
+  // Keep an open item's details current while it stays listed.
+  const shownHostItem = openHostItem ? hostItems.find(item => item.key === openHostItem.key) ?? openHostItem : null
+  const detachedPart = useMemo<MessagePart | undefined>(() => detachedTask ? {
+    type: "tool_use",
+    content: "",
+    toolName: detachedTask.kind === "agent" ? "Agent" : detachedTask.kind === "shell" ? "Bash" : "Task",
+    toolUseId: detachedTask.parentToolUseId ?? detachedTask.taskId,
+    task: liveBackgroundTasks.get(detachedTask.taskId) ?? detachedTask,
+  } : undefined, [detachedTask, liveBackgroundTasks])
 
-  const statusLine = renderStatusLine
-    ? renderStatusLine({ isStreaming, isReconnecting, messages, pendingQuestion: pendingQuestion ?? null })
-    : isStreaming || isReconnecting
-      ? <StreamingStatusLine isStreaming={isStreaming} isReconnecting={isReconnecting} messages={messages} />
-      : pendingQuestion
-        ? <PendingQuestionLine />
-        : null
+  const sessionLine = isStreaming || isReconnecting
+    ? renderStatusLine
+      ? renderStatusLine({ isStreaming, isReconnecting, messages, pendingQuestion: pendingQuestion ?? null })
+      : <StreamingStatusLine isStreaming={isStreaming} isReconnecting={isReconnecting} messages={messages} />
+    : pendingQuestion && !renderStatusLine
+      ? <PendingQuestionLine />
+      : null
+  const backgroundSummary = sessionLine ? null : summarizeBackgroundActivity(orderedTasks, hostActivity)
+  const backgroundColor = backgroundSummary?.source === "host"
+    ? hostItems[0]?.color ?? PART_COLOR.delegation
+    : orderedTasks[0] ? taskColor(orderedTasks[0]) : PART_COLOR.delegation
+  const statusLine = (
+    <div data-slot="activity-status-row" className="min-w-0">
+      <ActivityShapesProvider value={<ActivityShapes shapes={activityShapes} />}>
+        {sessionLine ?? (backgroundSummary && (
+          <ChatStatusLine color={backgroundColor} label={backgroundSummary.label} detail={backgroundSummary.detail} title={backgroundSummary.title} />
+        ))}
+      </ActivityShapesProvider>
+      <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTask(null)}
+        resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink}
+        loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+      <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostItem(null)} />
+    </div>
+  )
 
   const maintenanceEl = hideComposer ? null : <MaintenanceNotice status={maintenanceStatus}
     hasServerSession={hasServerSession} unavailable={maintenanceStatusUnavailable} />
@@ -554,7 +610,7 @@ export function ChatPanel(props: ChatPanelProps) {
             <BackgroundWorkContext.Provider value={backgroundWork}>
             <ActivityRowsContext.Provider value={getActivityRows}>
               {visualTimeline.map((visual) => {
-                if (visual.kind === "status") return <div key={visual.key}>{statusLine}{backgroundLine}</div>
+                if (visual.kind === "status") return <div key={visual.key}>{statusLine}</div>
                 if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
                 const row = visual.row
                 const block = row.block

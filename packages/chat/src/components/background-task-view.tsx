@@ -1,10 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import { Button } from "@redbamboo/ui"
-import type { BackgroundStatusSegment, BackgroundTaskInfo, BackgroundTaskState, MessagePart, TurnOrigin } from "../types"
-import { describeBackgroundCount } from "../lib/background-work"
+import type { BackgroundTaskInfo, BackgroundTaskState, MessagePart, TurnOrigin } from "../types"
 import { PART_COLOR, getPartColor, isBackgroundRunning } from "../lib/part-colors"
 import { getEffectiveToolName } from "../lib/tool-semantics"
-import { MorphSpinner } from "./morph-spinner"
 
 /**
  * Panel-wide background work state shared with every message row without
@@ -166,50 +164,6 @@ export function ChildFrieze({ parts, selected, onSelect }: {
             data-task-status={part.task?.status}
           />
         ))}
-      </div>
-    </div>
-  )
-}
-
-/**
- * One row for work that runs behind the conversation: "2 agents working ·
- * Running Echo alpha". It never touches the composer and never claims the
- * main turn is busy. Clicking opens the oldest running agent.
- */
-export function BackgroundStatusLine({ tasks, extras = [], onOpenTask }: {
-  tasks: readonly BackgroundTaskInfo[]
-  extras?: readonly BackgroundStatusSegment[]
-  onOpenTask?: (task: BackgroundTaskInfo) => void
-}) {
-  const running = tasks.filter(task => task.status === "running" || !task.status)
-  if (running.length === 0 && extras.length === 0) return null
-  const oldest = [...running].sort((a, b) =>
-    (Date.parse(a.startedAt ?? "") || 0) - (Date.parse(b.startedAt ?? "") || 0))[0]
-  const activity = oldest?.lastActivity
-  const count = describeBackgroundCount(running)
-  return (
-    <div data-slot="background-status-line" className="flex items-center gap-2.5 text-text-muted text-sm py-1 min-w-0">
-      <MorphSpinner color={PART_COLOR.delegation} />
-      <div className="flex items-center gap-1.5 min-w-0">
-        {extras.map(extra => extra.onClick ? (
-          <button key={extra.key} type="button" onClick={extra.onClick} title={extra.title} className="shrink-0 hover:text-text-secondary transition-colors cursor-pointer">{extra.label}</button>
-        ) : (
-          <span key={extra.key} title={extra.title} className="shrink-0">{extra.label}</span>
-        )).flatMap((node, index) => index === 0 ? [node] : [<span key={`sep-${index}`} aria-hidden className="text-text-disabled">·</span>, node])}
-        {extras.length > 0 && running.length > 0 && <span aria-hidden className="text-text-disabled">·</span>}
-        {running.length > 0 && (
-          <button
-            type="button"
-            onClick={() => oldest && onOpenTask?.(oldest)}
-            disabled={!onOpenTask}
-            className="flex items-center gap-1.5 min-w-0 hover:text-text-secondary transition-colors cursor-pointer disabled:cursor-default"
-            title={oldest ? `Open ${taskTitle(oldest)}` : undefined}
-          >
-            <span className="shrink-0">{count} working</span>
-            {activity && <span aria-hidden className="text-text-disabled">·</span>}
-            {activity && <span className="truncate text-text-disabled">{activity}</span>}
-          </button>
-        )}
       </div>
     </div>
   )
