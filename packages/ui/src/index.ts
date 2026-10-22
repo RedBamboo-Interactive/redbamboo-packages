@@ -58,6 +58,32 @@ export type {
   EntityPresentationResolver,
 } from "./components/entity-presentation"
 
+export {
+  EntityPickerProvider,
+  entityPickerItemMatches,
+  useEntityPickerResolution,
+  useEntityPickerSearch,
+  useEntityPickerSource,
+} from "./components/entity-picker-source"
+export type {
+  EntityPickerItem,
+  EntityPickerProviderProps,
+  EntityPickerResolution,
+  EntityPickerResolveRequest,
+  EntityPickerSearchRequest,
+  EntityPickerSearchState,
+  EntityPickerSearchStatus,
+  EntityPickerSource,
+} from "./components/entity-picker-source"
+export { EntityPickerDialog, EntityRefField, EntityRefListField } from "./components/entity-picker"
+export type {
+  EntityPickerDialogProps,
+  EntityPickerMultipleDialogProps,
+  EntityPickerSingleDialogProps,
+  EntityRefFieldProps,
+  EntityRefListFieldProps,
+} from "./components/entity-picker"
+
 export { findUiComponents, UI_COMPONENT_CATALOG } from "./component-catalog"
 export type { UiComponentDescriptor } from "./component-catalog"
 

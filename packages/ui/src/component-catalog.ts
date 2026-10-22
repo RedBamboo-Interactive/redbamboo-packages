@@ -82,6 +82,7 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
     ],
     avoidWhen: [
       "Rendering a generic non-entity card.",
+      "Building an entity picker or reference field; use entity-picker.",
       "Rendering a rich workspace tile or document preview whose outer layout has different semantics; compose EntityIdentity instead.",
       "Fetching, parsing, or resolving RedLeaf entity data inside the design system.",
     ],
@@ -99,6 +100,48 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
       '[data-entity-action="inspect"]',
       '[data-entity-width]',
       '[data-inspected]',
+    ],
+  },
+  {
+    id: "entity-picker",
+    packageName: "@redbamboo/ui",
+    exports: [
+      "EntityRefField",
+      "EntityRefListField",
+      "EntityPickerDialog",
+      "EntityPickerProvider",
+      "useEntityPickerSource",
+      "useEntityPickerSearch",
+      "useEntityPickerResolution",
+    ],
+    description: "Canonical entity-reference field and searchable picker dialog. Single or multiple selection, rendered with entity-card rows; data comes from a host EntityPickerSource.",
+    tags: ["entity", "picker", "reference", "relation", "select", "search", "form", "field", "ai-native"],
+    useWhen: [
+      "A form or settings page stores a reference to one entity, for example a bound agent, color, or page.",
+      "A form stores a list of entity references.",
+      "Choosing entities of a known type from a searchable list.",
+      "A plugin inside the RedLeaf shell needs an entity picker; the shell provides EntityPickerProvider.",
+    ],
+    avoidWhen: [
+      "Hand-rolling an EntityCard list inside a Dialog; use EntityPickerDialog or EntityRefField instead.",
+      "Choosing from a short fixed set of plain values; use Select.",
+      "Fetching, parsing, or resolving RedLeaf entity data inside the design system; implement EntityPickerSource in the host.",
+    ],
+    variants: ["single", "multiple", "audio-preview"],
+    selectors: [
+      '[data-slot="entity-ref-field"]',
+      '[data-entity-ref-type]',
+      '[data-slot="entity-ref-empty"]',
+      '[data-slot="entity-ref-change"]',
+      '[data-slot="entity-ref-clear"]',
+      '[data-slot="entity-ref-unresolved"]',
+      '[data-entity-picker-type]',
+      '[data-slot="entity-picker-search"]',
+      '[data-slot="entity-picker-list"]',
+      '[data-slot="entity-picker-status"]',
+      '[data-slot="entity-picker-preview"]',
+      '[data-slot="entity-picker-toggle"]',
+      '[data-slot="entity-picker-done"]',
     ],
   },
   {
@@ -125,21 +168,28 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
   },
 ]
 
-/** Search the machine-readable design-system catalog by purpose, tag, or export name. */
+/**
+ * Search the machine-readable design-system catalog by purpose, tag, or export name.
+ * Components whose id, then tags or exports, match rank ahead of prose-only matches.
+ */
 export function findUiComponents(query: string): UiComponentDescriptor[] {
   const normalized = query.trim().toLowerCase()
   if (!normalized) return [...UI_COMPONENT_CATALOG]
-  return UI_COMPONENT_CATALOG.filter((component) => {
+  const score = (component: UiComponentDescriptor) => {
+    if (component.id.includes(normalized)) return 3
+    if ([...component.tags, ...component.exports].some((value) => value.toLowerCase().includes(normalized))) return 2
     const text = [
-      component.id,
       component.packageName,
       component.description,
-      ...component.exports,
-      ...component.tags,
       ...component.useWhen,
       ...component.avoidWhen,
       ...component.variants,
     ].join(" ").toLowerCase()
-    return text.includes(normalized)
-  })
+    return text.includes(normalized) ? 1 : 0
+  }
+  return UI_COMPONENT_CATALOG
+    .map((component, index) => ({ component, index, score: score(component) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.component)
 }

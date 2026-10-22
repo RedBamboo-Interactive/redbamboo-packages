@@ -85,10 +85,37 @@ Use `EntityIdentity` when a richer surface needs the canonical avatar, name, and
 metadata anatomy but has its own outer layout. `UI_COMPONENT_CATALOG`,
 `findUiComponents()`, and `queryEntityCards()` provide machine-readable discovery.
 
+### Entity pickers
+
+Never hand-roll an `EntityCard` list in a `Dialog`. Use `EntityRefField` for a
+stored reference to one entity, `EntityRefListField` for a list, or
+`EntityPickerDialog` directly. They render the chosen entity as an outlined card
+with Change/Clear and a searchable list of entity-card rows.
+
+```tsx
+import { EntityRefField } from '@redbamboo/ui'
+
+<EntityRefField
+  targetType="agent"
+  title="Choose an Agent"
+  value={config.agent_id}
+  onChange={(id) => save({ agent_id: id ?? null })}
+/>
+```
+
+The design system does not fetch entities. The host wraps its UI in
+`EntityPickerProvider` with an `EntityPickerSource`: `search({ type, query, limit })`
+and `resolve({ type, id })` return `EntityPickerItem`s (`entity`, `visual`,
+`subtitle`, `details`, `href`, `previewAudioUrl`, `trailing`), performed with the
+caller's own session, and optional `subscribe(type, onChange)` invalidates mounted
+fields. The RedLeaf shell provides one to every plugin; outside a host the picker
+reports that search is unavailable. Pass `source` to override it.
+
 ## Components
 
 - **EntityCard** — canonical compact entity reference with inspection, link, selection, and AI-readable semantics
 - **EntityIdentity** — reusable identity anatomy for richer entity surfaces
+- **EntityRefField / EntityRefListField / EntityPickerDialog** — canonical entity reference fields and searchable picker, fed by a host `EntityPickerSource`
 
 - **Button** — multi-variant, multi-size with CVA
 - **Card** — composite (Card, CardHeader, CardTitle, CardDescription, CardAction, CardContent, CardFooter)

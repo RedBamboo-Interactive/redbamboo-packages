@@ -28,6 +28,7 @@
     "lint": "echo ok",
     "test": "node --experimental-strip-types --test \"src/**/*.test.mjs\"",
     "test:browser": "node tests/media-overlays/run.mjs",
+    "test:entity-picker": "node tests/entity-picker/run.mjs",
     "clean": "rimraf dist"
   },
   "peerDependencies": {
