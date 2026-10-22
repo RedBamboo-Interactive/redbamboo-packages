@@ -36,6 +36,29 @@ const db: Row[] = [
 
 const listeners = new Map<string, Set<() => void>>()
 const calls: string[] = []
+// Tests slow resolves down to observe revalidation.
+const resolveDelay = { ms: 20 }
+
+// Confidential rows only a plugin's own endpoint lists (the Mail case).
+const confidential: Row[] = [
+  { id: "c1", slug: "cipher", type: "agent", name: "Cipher", description: "Owner-only agent", hue: 160 },
+]
+
+// Per-field override: its own search, the provider's resolve and subscribe.
+const confidentialSearch: EntityPickerSource["search"] = async (request, signal) => {
+  calls.push(`override-search:${request.query}`)
+  const shared = await source.search(request, signal)
+  const q = request.query.toLowerCase()
+  return [...shared, ...confidential.filter((row) => !q || row.name.toLowerCase().includes(q)).map(toItem)]
+}
+
+// Fails its first resolve with a transient error, then answers normally.
+let flakyFailures = 1
+const flakyResolve: EntityPickerSource["resolve"] = async (request, signal) => {
+  calls.push(`flaky-resolve:${request.id}`)
+  if (flakyFailures-- > 0) throw new Error("502 Bad Gateway")
+  return source.resolve(request, signal)
+}
 
 function toItem(row: Row): EntityPickerItem {
   return {
@@ -65,7 +88,7 @@ const source: EntityPickerSource = {
   },
   async resolve({ type, id }, signal) {
     calls.push(`resolve:${type}:${id}`)
-    await delay(20, signal)
+    await delay(resolveDelay.ms, signal)
     const row = db.find((candidate) => candidate.type === type && (candidate.id === id || candidate.slug === id))
     return row ? toItem(row) : null
   },
@@ -85,6 +108,7 @@ const presentation: EntityPresentationResolver = async (entity) => {
 
 Object.assign(window, {
   __pickerCalls: calls,
+  __setResolveDelay(ms: number) { resolveDelay.ms = ms },
   __renameEntity(id: string, name: string) {
     const row = db.find((candidate) => candidate.id === id)
     if (!row) return
@@ -100,6 +124,8 @@ function Story() {
   const [voices, setVoices] = React.useState<string[]>(["v1"])
   const [missing, setMissing] = React.useState<string | undefined>("deleted-agent")
   const [orphan, setOrphan] = React.useState<string | undefined>(undefined)
+  const [secret, setSecret] = React.useState<string | undefined>("a2")
+  const [flaky, setFlaky] = React.useState<string | undefined>("a4")
 
   React.useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark")
@@ -119,6 +145,16 @@ function Story() {
             <SettingRow label="Voices" hint="List reference with audio previews.">
               <div className="w-72" data-testid="voices-field">
                 <EntityRefListField targetType="voice" value={voices} onChange={setVoices} />
+              </div>
+            </SettingRow>
+            <SettingRow label="Override search" hint="Lists a confidential agent; the provider still resolves.">
+              <div className="w-72" data-testid="override-field">
+                <EntityRefField targetType="agent" title="Choose an Agent" value={secret} onChange={setSecret} source={{ search: confidentialSearch }} />
+              </div>
+            </SettingRow>
+            <SettingRow label="Flaky resolve" hint="First resolve fails transiently.">
+              <div className="w-72" data-testid="flaky-field">
+                <EntityRefField targetType="agent" value={flaky} onChange={setFlaky} source={{ resolve: flakyResolve }} />
               </div>
             </SettingRow>
             <SettingRow label="Stale reference" hint="Points at a deleted entity.">

@@ -1,12 +1,23 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react"
 import type { EntityCardDetail, EntityCardEntity, EntityCardVisual } from "./entity-card"
+import {
+  itemMatchesReference,
+  mergeEntityPickerSource,
+  needsResolve,
+  readResolution,
+  retryDelay,
+  settleResolution,
+  type ResolutionEntry,
+} from "./entity-picker-core"
 
 /** One pickable entity, already projected into the canonical entity-card shape by the host. */
 export interface EntityPickerItem {
@@ -46,11 +57,22 @@ export interface EntityPickerResolveRequest {
  */
 export interface EntityPickerSource {
   search(request: EntityPickerSearchRequest, signal: AbortSignal): Promise<readonly EntityPickerItem[]>
-  /** Resolves one stored reference. Return null for a missing or inaccessible entity. */
+  /**
+   * Resolves one stored reference. Return null only for an authoritative answer
+   * (not found, forbidden, or another type). Throw for transient failures: the
+   * field keeps showing what it had and retries.
+   */
   resolve(request: EntityPickerResolveRequest, signal: AbortSignal): Promise<EntityPickerItem | null>
   /** Optional invalidation. Call `onChange` whenever entities of `type` may have changed. */
   subscribe?(type: string, onChange: () => void): () => void
 }
+
+/**
+ * Per-field override: any subset of the methods. The rest come from the nearest
+ * `EntityPickerProvider`. With no provider, a missing `resolve` lists the type
+ * through `search` and matches the reference.
+ */
+export type EntityPickerSourceOverride = Partial<EntityPickerSource>
 
 const EntityPickerContext = createContext<EntityPickerSource | null>(null)
 
@@ -67,15 +89,30 @@ export function EntityPickerProvider({ source, children }: EntityPickerProviderP
   )
 }
 
-/** The nearest host source, or the explicit override. Null when no host provides one. */
-export function useEntityPickerSource(override?: EntityPickerSource | null): EntityPickerSource | null {
+/**
+ * The source a field uses: the nearest provider, with any per-field override
+ * methods taking precedence. Override methods are read at call time, so inline
+ * functions are fine; only adding or removing a method changes the identity.
+ * Without an override this is the provider itself. Null when nothing can search.
+ */
+export function useEntityPickerSource(override?: EntityPickerSourceOverride | null): EntityPickerSource | null {
   const provided = useContext(EntityPickerContext)
-  return override ?? provided
+  const latest = useRef(override)
+  latest.current = override
+  const hasOverride = !!override
+  const hasSearch = !!override?.search
+  const hasResolve = !!override?.resolve
+  const hasSubscribe = !!override?.subscribe
+  return useMemo(
+    () => (hasOverride ? mergeEntityPickerSource(provided, () => latest.current) : provided),
+    // The has* flags stand in for `override`, which is read through `latest`.
+    [provided, hasOverride, hasSearch, hasResolve, hasSubscribe],
+  )
 }
 
 /** Whether a stored reference (id or slug) points at this item. */
 export function entityPickerItemMatches(item: EntityPickerItem, reference: string | null | undefined): boolean {
-  return !!reference && (item.entity.id === reference || item.slug === reference)
+  return itemMatchesReference(item, reference)
 }
 
 function isAbort(cause: unknown) {
@@ -117,7 +154,7 @@ export function useEntityPickerSearch({
   limit?: number
   enabled?: boolean
   debounceMs?: number
-  source?: EntityPickerSource | null
+  source?: EntityPickerSourceOverride | null
 }): EntityPickerSearchState {
   const source = useEntityPickerSource(override)
   const revision = useSourceRevision(enabled ? source : null, type)
@@ -174,11 +211,21 @@ export type EntityPickerResolution =
   | { status: "loading" }
   | { status: "resolved"; item: EntityPickerItem }
   | { status: "missing" }
+  | { status: "error"; error: string }
+
+export interface EntityPickerResolutionState {
+  /** Current view of one reference. A resolved item stays visible while it revalidates. */
+  get(reference: string): EntityPickerResolution
+  /** Retry failed resolves now instead of waiting for the backoff. */
+  retry(): void
+}
 
 /**
- * Resolves stored references to items. `known` items (initial data, or items
- * just picked) render immediately and are not re-fetched until the host reports
- * a change for the type.
+ * Resolves stored references to items, stale-while-revalidate. When the host
+ * reports a change, the last resolved item stays on screen until the new answer
+ * lands. Only an authoritative null from the host means missing; failures keep
+ * the previous answer and retry with backoff. `known` items (initial data, or
+ * items just picked) render immediately.
  */
 export function useEntityPickerResolution({
   type,
@@ -189,52 +236,68 @@ export function useEntityPickerResolution({
   type: string
   references: readonly string[]
   known?: readonly EntityPickerItem[]
-  source?: EntityPickerSource | null
-}): (reference: string) => EntityPickerResolution {
+  source?: EntityPickerSourceOverride | null
+}): EntityPickerResolutionState {
   const source = useEntityPickerSource(override)
   const revision = useSourceRevision(source, type)
-  const [results, setResults] = useState<{ revision: number; map: Map<string, EntityPickerItem | null> }>(
-    () => ({ revision, map: new Map() }),
-  )
-  const map = results.revision === revision ? results.map : null
+  // One identity per (source, type, revision). Answers from an older epoch stay
+  // displayable but are resolved again.
+  const epoch = useMemo(() => ({ source, type, revision }), [source, type, revision])
+  const [entries, setEntries] = useState<ReadonlyMap<string, ResolutionEntry<EntityPickerItem>>>(() => new Map())
+  const entriesRef = useRef(entries)
+  entriesRef.current = entries
+  const [attempt, setAttempt] = useState(0)
   const key = references.join("\u0000")
 
   useEffect(() => {
     if (!source || !type) return
-    const current = results.revision === revision ? results.map : new Map<string, EntityPickerItem | null>()
-    const pending = references.filter((reference) => !current.has(reference))
-    if (pending.length === 0) {
-      if (current !== results.map) setResults({ revision, map: current })
-      return
-    }
+    const pending = references.filter((reference) => needsResolve(entriesRef.current.get(reference), epoch))
+    if (pending.length === 0) return
     const controller = new AbortController()
-    Promise.all(pending.map((reference) =>
+    for (const reference of pending) {
       Promise.resolve()
         .then(() => source.resolve({ type, id: reference }, controller.signal))
-        .catch((cause: unknown) => {
-          if (isAbort(cause)) throw cause
-          return null
+        .then(
+          (item) => ({ item }),
+          (cause: unknown) => {
+            if (controller.signal.aborted || isAbort(cause)) return null
+            return { error: cause instanceof Error ? cause.message : "Could not load this entity" }
+          },
+        )
+        .then((outcome) => {
+          if (!outcome || controller.signal.aborted) return
+          setEntries((previous) => {
+            const next = new Map(previous)
+            next.set(reference, settleResolution(previous.get(reference), epoch, outcome))
+            return next
+          })
         })
-        .then((item) => [reference, item] as const)))
-      .then((entries) => {
-        if (controller.signal.aborted) return
-        setResults((previous) => {
-          const next = new Map(previous.revision === revision ? previous.map : [])
-          for (const [reference, item] of entries) next.set(reference, item)
-          return { revision, map: next }
-        })
-      })
-      .catch(() => {})
+    }
     return () => controller.abort()
-    // `results` is read only to skip work already done for this revision.
-  }, [key, revision, source, type])
+    // `references` is captured through `key`; entries are read through the ref.
+  }, [attempt, epoch, key, source, type])
 
-  return (reference: string) => {
-    const resolved = map?.get(reference)
-    if (resolved) return { status: "resolved", item: resolved }
-    const fallback = known.find((item) => entityPickerItemMatches(item, reference))
-    if (fallback) return { status: "resolved", item: fallback }
-    if (resolved === null || !source) return { status: "missing" }
-    return { status: "loading" }
+  // Failed references retry with backoff; the next success resets the count.
+  const nextRetry = references.reduce<number | null>((soonest, reference) => {
+    const entry = entries.get(reference)
+    if (!entry || entry.failures === 0) return soonest
+    const delay = retryDelay(entry.failures)
+    return soonest === null ? delay : Math.min(soonest, delay)
+  }, null)
+  useEffect(() => {
+    if (nextRetry === null) return
+    const timer = setTimeout(() => setAttempt((value) => value + 1), nextRetry)
+    return () => clearTimeout(timer)
+  }, [nextRetry, entries])
+
+  const retry = useCallback(() => setAttempt((value) => value + 1), [])
+
+  return {
+    get: (reference: string) => readResolution(
+      entries.get(reference),
+      known.find((item) => itemMatchesReference(item, reference)),
+      !!source,
+    ),
+    retry,
   }
 }

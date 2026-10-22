@@ -69,11 +69,13 @@ export type {
   EntityPickerItem,
   EntityPickerProviderProps,
   EntityPickerResolution,
+  EntityPickerResolutionState,
   EntityPickerResolveRequest,
   EntityPickerSearchRequest,
   EntityPickerSearchState,
   EntityPickerSearchStatus,
   EntityPickerSource,
+  EntityPickerSourceOverride,
 } from "./components/entity-picker-source"
 export { EntityPickerDialog, EntityRefField, EntityRefListField } from "./components/entity-picker"
 export type {

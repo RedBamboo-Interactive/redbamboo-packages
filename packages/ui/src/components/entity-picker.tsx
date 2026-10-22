@@ -15,8 +15,9 @@ import {
   useEntityPickerResolution,
   useEntityPickerSearch,
   type EntityPickerItem,
-  type EntityPickerSource,
+  type EntityPickerSourceOverride,
 } from "./entity-picker-source"
+import { entityTypeLabel, pluralizeLabel } from "./entity-picker-core"
 import { Icon } from "./icon"
 import { Input } from "./input"
 import { ScrollArea } from "./scroll-area"
@@ -32,10 +33,15 @@ interface EntityPickerDialogBaseProps {
   title?: string
   description?: string
   searchPlaceholder?: string
+  /** Singular human name of the type for labels, e.g. "agent". Defaults from `targetType`. */
+  typeLabel?: string
   /** Maximum rows requested from the host per search. */
   limit?: number
-  /** Explicit source; defaults to the nearest `EntityPickerProvider`. */
-  source?: EntityPickerSource | null
+  /**
+   * Per-field source: any subset of `search`, `resolve`, `subscribe`. Missing
+   * methods come from the nearest `EntityPickerProvider`.
+   */
+  source?: EntityPickerSourceOverride | null
 }
 
 export interface EntityPickerSingleDialogProps extends EntityPickerDialogBaseProps {
@@ -121,6 +127,7 @@ export function EntityPickerDialog(props: EntityPickerDialogProps) {
     title,
     description,
     searchPlaceholder = "Search...",
+    typeLabel = entityTypeLabel(targetType),
     limit,
     source,
   } = props
@@ -172,6 +179,7 @@ export function EntityPickerDialog(props: EntityPickerDialogProps) {
   }
 
   const loading = search.status === "loading" && search.items.length === 0
+  const resultCount = search.items.length
   const statusText = search.status === "unavailable"
     ? "Entity search is not available here"
     : search.status === "error"
@@ -181,6 +189,9 @@ export function EntityPickerDialog(props: EntityPickerDialogProps) {
         : search.items.length === 0
           ? (query.trim() ? "No matches" : "No entities found")
           : null
+  // Announced politely; silent while a refinement is loading over visible rows.
+  const announcement = statusText
+    ?? (search.status === "loading" ? "" : `${resultCount} ${resultCount === 1 ? "result" : "results"}`)
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -198,7 +209,7 @@ export function EntityPickerDialog(props: EntityPickerDialogProps) {
           <Input
             data-slot="entity-picker-search"
             placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
+            aria-label={`Search ${pluralizeLabel(typeLabel)}`}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             autoFocus
@@ -206,12 +217,15 @@ export function EntityPickerDialog(props: EntityPickerDialogProps) {
           />
         </div>
 
+        <div data-slot="entity-picker-announcer" role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {announcement}
+        </div>
+
         <ScrollArea className="h-[min(32rem,calc(100svh-10rem))] min-h-0 -mx-5 px-5 overscroll-contain">
           {statusText ? (
             <div
               data-slot="entity-picker-status"
               data-status={search.status}
-              role={search.status === "error" ? "alert" : undefined}
               className="py-8 text-center text-sm text-text-muted"
             >
               {statusText}
@@ -375,19 +389,23 @@ function EntityRefCard({
 function EntityRefPlaceholder({
   reference,
   status,
+  typeLabel,
   onChange,
   onClear,
 }: {
   reference: string
-  status: "loading" | "missing"
+  status: "loading" | "missing" | "error"
+  typeLabel: string
   onChange?: () => void
   onClear?: () => void
 }) {
+  const described = status === "missing" ? `unavailable ${typeLabel}` : typeLabel
   return (
     <div
       data-slot="entity-ref-unresolved"
       data-status={status}
       aria-busy={status === "loading" || undefined}
+      title={status === "error" ? `Could not load this ${typeLabel}; retrying` : undefined}
       className="flex items-center gap-3 rounded-md border border-overlay-6 bg-overlay-4/50 px-3 py-2"
     >
       <span className={cn("min-w-0 flex-1 truncate font-mono text-xs text-text-muted", status === "loading" && "opacity-60")}>
@@ -399,12 +417,13 @@ function EntityRefPlaceholder({
           data-slot="entity-ref-change"
           onClick={onChange}
           aria-haspopup="dialog"
+          aria-label={`Change ${described} ${reference}`}
           className="text-[10px] text-text-muted transition-colors hover:text-primary"
         >
           Change
         </button>
       )}
-      {onClear && <EntityRefClear name={reference} onClear={onClear} />}
+      {onClear && <EntityRefClear name={`${described} ${reference}`} onClear={onClear} />}
     </div>
   )
 }
@@ -417,7 +436,13 @@ interface EntityRefFieldBaseProps {
   description?: string
   /** Empty-state label. */
   placeholder?: string
-  source?: EntityPickerSource | null
+  /** Singular human name of the type for labels, e.g. "agent". Defaults from `targetType`. */
+  typeLabel?: string
+  /**
+   * Per-field source: any subset of `search`, `resolve`, `subscribe`. Missing
+   * methods come from the nearest `EntityPickerProvider`.
+   */
+  source?: EntityPickerSourceOverride | null
   className?: string
 }
 
@@ -447,6 +472,7 @@ export function EntityRefField({
   title,
   description,
   placeholder = "None",
+  typeLabel = entityTypeLabel(targetType),
   source,
   className,
 }: EntityRefFieldProps) {
@@ -454,25 +480,29 @@ export function EntityRefField({
   const [picked, setPicked] = useState<EntityPickerItem | null>(null)
   const known = [picked, initialItem].filter((item): item is EntityPickerItem => !!item)
   const references = value ? [value] : []
-  const resolve = useEntityPickerResolution({ type: targetType, references, known, source })
-  const resolution = value ? resolve(value) : null
+  const resolution = useEntityPickerResolution({ type: targetType, references, known, source })
+  const current = value ? resolution.get(value) : null
   const openPicker = disabled ? undefined : () => setOpen(true)
   const clear = disabled || !clearable ? undefined : () => onChange(undefined)
 
   return (
     <div data-slot="entity-ref-field" data-entity-ref-type={targetType} data-disabled={disabled || undefined} className={className}>
-      {!resolution ? (
+      {!current ? (
         <EntityRefEmpty onOpen={() => setOpen(true)} disabled={disabled} label={placeholder} />
-      ) : resolution.status === "resolved" ? (
-        <EntityRefCard item={resolution.item} onChange={openPicker} onClear={clear} />
+      ) : current.status === "resolved" ? (
+        <EntityRefCard item={current.item} onChange={openPicker} onClear={clear} />
       ) : (
-        <EntityRefPlaceholder reference={value!} status={resolution.status} onChange={openPicker} onClear={clear} />
+        <EntityRefPlaceholder reference={value!} status={current.status} typeLabel={typeLabel} onChange={openPicker} onClear={clear} />
       )}
       {!disabled && (
         <EntityPickerDialog
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={(next) => {
+            setOpen(next)
+            resolution.retry()
+          }}
           targetType={targetType}
+          typeLabel={typeLabel}
           title={title}
           description={description}
           source={source}
@@ -503,16 +533,17 @@ export function EntityRefListField({
   title,
   description,
   placeholder = "None",
+  typeLabel = entityTypeLabel(targetType),
   source,
   className,
 }: EntityRefListFieldProps) {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<EntityPickerItem[]>([])
   const known = [...picked, ...initialItems]
-  const resolve = useEntityPickerResolution({ type: targetType, references: value, known, source })
+  const resolution = useEntityPickerResolution({ type: targetType, references: value, known, source })
   const resolvedItems = () => value.flatMap((reference) => {
-    const resolution = resolve(reference)
-    return resolution.status === "resolved" ? [resolution.item] : []
+    const current = resolution.get(reference)
+    return current.status === "resolved" ? [current.item] : []
   })
   const removeAt = (index: number) => {
     const next = value.filter((_, itemIndex) => itemIndex !== index)
@@ -525,12 +556,12 @@ export function EntityRefListField({
         {value.length === 0 ? (
           <EntityRefEmpty onOpen={() => setOpen(true)} disabled={disabled} label={placeholder} />
         ) : value.map((reference, index) => {
-          const resolution = resolve(reference)
+          const current = resolution.get(reference)
           const clear = disabled ? undefined : () => removeAt(index)
-          return resolution.status === "resolved" ? (
-            <EntityRefCard key={`${reference}-${resolution.item.entity.id}`} item={resolution.item} onClear={clear} />
+          return current.status === "resolved" ? (
+            <EntityRefCard key={`${reference}-${current.item.entity.id}`} item={current.item} onClear={clear} />
           ) : (
-            <EntityRefPlaceholder key={`${reference}-${index}`} reference={reference} status={resolution.status} onClear={clear} />
+            <EntityRefPlaceholder key={`${reference}-${index}`} reference={reference} status={current.status} typeLabel={typeLabel} onClear={clear} />
           )
         })}
         {!disabled && value.length > 0 && (
@@ -543,8 +574,12 @@ export function EntityRefListField({
       {!disabled && (
         <EntityPickerDialog
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={(next) => {
+            setOpen(next)
+            resolution.retry()
+          }}
           targetType={targetType}
+          typeLabel={typeLabel}
           title={title}
           description={description}
           source={source}

@@ -109,7 +109,36 @@ and `resolve({ type, id })` return `EntityPickerItem`s (`entity`, `visual`,
 `subtitle`, `details`, `href`, `previewAudioUrl`, `trailing`), performed with the
 caller's own session, and optional `subscribe(type, onChange)` invalidates mounted
 fields. The RedLeaf shell provides one to every plugin; outside a host the picker
-reports that search is unavailable. Pass `source` to override it.
+reports that search is unavailable.
+
+`resolve` returns null only for an authoritative miss (not found, forbidden, or
+another type) and throws for transient failures. Fields show the last resolved
+entity while they revalidate, and retry failed resolves with backoff and when the
+picker opens.
+
+Every field and the dialog accept a per-field `source`: any subset of `search`,
+`resolve` and `subscribe`. Missing methods come from the provider (with no
+provider, `resolve` lists the type through `search`). Use it when a field must
+list what the shared listing hides, for example an owner's confidential agents
+from a plugin endpoint. Override methods are read at call time, so inline
+functions do not cause refetches.
+
+```tsx
+const shell = useEntityPickerSource() // the provider's source
+<EntityRefField
+  targetType="agent"
+  value={agentId}
+  onChange={save}
+  source={{
+    search: async (request, signal) => mergeById(
+      await shell!.search(request, signal),
+      await ownAgents(request.query, signal),
+    ),
+    resolve: async (request, signal) =>
+      (await ownAgent(request.id, signal)) ?? shell!.resolve(request, signal),
+  }}
+/>
+```
 
 ## Components
 

@@ -70,6 +70,9 @@ test("the entity picker catalog documents its host contract and machine selector
     '[data-slot="entity-picker-done"]',
   ]) assert.ok(picker.selectors.includes(selector), selector)
   assert.deepEqual([...picker.variants].sort(), ["audio-preview", "multiple", "single"])
+  assert.ok(picker.exports.includes("EntityPickerSourceOverride"))
+  assert.ok(picker.useWhen.some((rule) => /per-field `source` override/.test(rule)))
+  assert.ok(picker.selectors.includes('[data-slot="entity-picker-announcer"]'))
 })
 
 test("every catalog export is exported by the package entry", async () => {

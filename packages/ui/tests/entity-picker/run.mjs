@@ -31,6 +31,11 @@ try {
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()) })
 
   await page.goto(`${baseUrl}?theme=dark`, { waitUntil: "networkidle" })
+
+  // A transient resolve failure shows an error state (not "missing") and retries.
+  const flakyField = page.getByTestId("flaky-field").locator('[data-slot="entity-ref-field"]')
+  await flakyField.locator('[data-slot="entity-ref-unresolved"][data-status="error"]').waitFor()
+  await flakyField.locator('[data-slot="entity-card"][data-entity-id="a4"]').waitFor({ timeout: 5000 })
   const agentField = page.getByTestId("agent-field").locator('[data-slot="entity-ref-field"]')
   assert.equal(await agentField.getAttribute("data-entity-ref-type"), "agent")
 
@@ -52,6 +57,10 @@ try {
   await dialog.getByRole("heading", { name: "Choose an Agent" }).waitFor()
   const search = dialog.locator('[data-slot="entity-picker-search"]')
   await page.waitForFunction(() => document.activeElement?.getAttribute("data-slot") === "entity-picker-search")
+  assert.equal(await search.getAttribute("aria-label"), "Search agents")
+  const announcer = dialog.locator('[data-slot="entity-picker-announcer"]')
+  assert.equal(await announcer.getAttribute("aria-live"), "polite")
+  await announcer.filter({ hasText: "4 results" }).waitFor()
   const rows = dialog.locator('[data-slot="entity-picker-list"] [data-slot="entity-card"]')
   await rows.nth(3).waitFor()
   assert.equal(await rows.count(), 4)
@@ -64,6 +73,7 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('[data-slot="entity-picker-list"] [data-slot="entity-card"]').length === 1)
   await search.fill("zzz")
   await dialog.locator('[data-slot="entity-picker-status"]', { hasText: "No matches" }).waitFor()
+  await dialog.locator('[data-slot="entity-picker-announcer"]', { hasText: "No matches" }).waitFor()
   await search.fill("orion")
   await dialog.getByRole("button", { name: "Select Orion" }).click()
   await dialog.waitFor({ state: "hidden" })
@@ -77,9 +87,26 @@ try {
   await page.keyboard.press("Escape")
   await dialog.waitFor({ state: "hidden" })
 
-  // Host invalidation re-resolves the mounted reference in place.
-  await page.evaluate(() => window.__renameEntity("a2", "Orion Prime"))
+  // Host invalidation revalidates in place: the old card (and its avatar
+  // element) stays mounted until the new answer lands; no raw-id placeholder.
+  await page.evaluate(() => {
+    const field = document.querySelector('[data-testid="override-field"]')
+    field.querySelector('[data-slot="entity-media"] img').dataset.marker = "kept"
+    window.__sawPlaceholder = false
+    new MutationObserver(() => {
+      if (field.querySelector('[data-slot="entity-ref-unresolved"], [data-slot="entity-ref-empty"]')) window.__sawPlaceholder = true
+    }).observe(field, { subtree: true, childList: true })
+    window.__setResolveDelay(400)
+    window.__renameEntity("a2", "Orion Prime")
+  })
+  await page.waitForTimeout(200)
+  const watched = page.getByTestId("override-field")
+  assert.equal(await watched.locator('[data-slot="entity-card"]').getAttribute("data-entity-name"), "Orion", "stale item shown while revalidating")
+  await watched.locator('[data-slot="entity-card"][data-entity-name="Orion Prime"]').waitFor()
   await agentField.locator('[data-entity-name="Orion Prime"]').first().waitFor()
+  assert.equal(await page.evaluate(() => window.__sawPlaceholder), false, "no placeholder during revalidation")
+  assert.equal(await watched.locator('img[data-marker="kept"]').count(), 1, "avatar element was not remounted")
+  await page.evaluate(() => window.__setResolveDelay(20))
 
   // Clear empties the field; the dashed None button reopens the picker.
   await agentField.getByRole("button", { name: "Clear Orion Prime" }).click()
@@ -128,12 +155,14 @@ try {
   const unresolved = missingField.locator('[data-slot="entity-ref-unresolved"][data-status="missing"]')
   await unresolved.waitFor()
   assert.match(await unresolved.textContent(), /deleted-agent/)
-  await missingField.getByRole("button", { name: "Clear deleted-agent" }).click()
+  await missingField.getByRole("button", { name: "Change unavailable agent deleted-agent" }).waitFor()
+  await missingField.getByRole("button", { name: "Clear unavailable agent deleted-agent" }).click()
   assert.equal((await state(page)).missing, null)
 
   // Without a host source the picker says so rather than inventing data.
   await page.getByTestId("orphan-field").locator('[data-slot="entity-ref-empty"]').click()
   await page.locator('[data-slot="entity-picker-status"][data-status="unavailable"]').waitFor()
+  await page.locator('[data-slot="entity-picker-announcer"]', { hasText: "Entity search is not available here" }).waitFor()
   await page.keyboard.press("Escape")
   await page.locator('[data-slot="entity-picker-status"]').waitFor({ state: "hidden" })
 
@@ -147,7 +176,21 @@ try {
   await page.screenshot({ path: path.join(outputDir, "dialog-single-light.png") })
   await page.keyboard.press("Escape")
 
+  // Per-field search override: lists a confidential agent the provider hides,
+  // while the provider still resolves the stored value.
+  const overrideField = page.getByTestId("override-field").locator('[data-slot="entity-ref-field"]')
+  await overrideField.locator('[data-slot="entity-card"][data-entity-id="a2"]').waitFor()
+  await overrideField.locator('[data-slot="entity-ref-change"]').click()
+  await dialog.locator('[data-slot="entity-picker-list"] [data-slot="entity-card"][data-entity-id="c1"]').waitFor()
+  await dialog.getByRole("button", { name: "Select Cipher" }).click()
+  await dialog.waitFor({ state: "hidden" })
+  await overrideField.locator('[data-slot="entity-card"][data-entity-id="c1"]').waitFor()
+  await page.screenshot({ path: path.join(outputDir, "override-field.png") })
+
   const calls = await page.evaluate(() => window.__pickerCalls)
+  assert.ok(calls.includes("override-search:"), "override search ran")
+  assert.ok(calls.includes("resolve:agent:a2"), "provider resolve used as the override's fallback")
+  assert.ok(calls.filter((call) => call === "flaky-resolve:a4").length >= 2, "failed resolve was retried, not cached")
   assert.ok(calls.includes("resolve:agent:nova"), "slug reference resolved through the host")
   assert.ok(calls.includes("search:agent:orion"), "search query forwarded to the host")
   assert.deepEqual(errors, [])

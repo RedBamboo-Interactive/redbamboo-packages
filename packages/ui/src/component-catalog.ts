@@ -113,6 +113,7 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
       "useEntityPickerSource",
       "useEntityPickerSearch",
       "useEntityPickerResolution",
+      "EntityPickerSourceOverride",
     ],
     description: "Canonical entity-reference field and searchable picker dialog. Single or multiple selection, rendered with entity-card rows; data comes from a host EntityPickerSource.",
     tags: ["entity", "picker", "reference", "relation", "select", "search", "form", "field", "ai-native"],
@@ -121,6 +122,7 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
       "A form stores a list of entity references.",
       "Choosing entities of a known type from a searchable list.",
       "A plugin inside the RedLeaf shell needs an entity picker; the shell provides EntityPickerProvider.",
+      "A field must list entities the host listing hides (for example an owner's confidential agents from a plugin endpoint): pass a per-field `source` override with its own `search` (and `resolve`); missing methods fall back to the provider.",
     ],
     avoidWhen: [
       "Hand-rolling an EntityCard list inside a Dialog; use EntityPickerDialog or EntityRefField instead.",
@@ -142,6 +144,7 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
       '[data-slot="entity-picker-preview"]',
       '[data-slot="entity-picker-toggle"]',
       '[data-slot="entity-picker-done"]',
+      '[data-slot="entity-picker-announcer"]',
     ],
   },
   {
