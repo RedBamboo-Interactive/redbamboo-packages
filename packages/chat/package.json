@@ -20,6 +20,18 @@
     "./conversation-read-state": {
       "types": "./src/lib/conversation-read-state.ts",
       "default": "./src/lib/conversation-read-state.ts"
+    },
+    "./background-work": {
+      "types": "./src/lib/background-work.ts",
+      "default": "./src/lib/background-work.ts"
+    },
+    "./tool-semantics": {
+      "types": "./src/lib/tool-semantics.ts",
+      "default": "./src/lib/tool-semantics.ts"
+    },
+    "./chat-status": {
+      "types": "./src/lib/chat-status.ts",
+      "default": "./src/lib/chat-status.ts"
     }
   },
   "files": [

@@ -6,7 +6,9 @@ import { rebuildBlocks, type PersistedMessage } from "./rebuild-blocks.ts"
 import {
   BACKGROUND_ORPHANS_KEY,
   attachBackground,
+  attachBackgroundRecords,
   backgroundPart,
+  isBackgroundRecord,
   backgroundStopWarning,
   collectOrphans,
   describeBackgroundCount,
@@ -200,6 +202,10 @@ test("a parent on an older page: children park, then attach when that page loads
   const stitched = resolveBackgroundOrphans([...rebuildBlocks(older), ...newestPage])
   assert.deepEqual(shape(stitched), shape(merged))
   assert.equal(collectOrphans(stitched).length, 0)
+  // Hosts that route background records out of their spans attach them once at the end.
+  const all = [...older, ...newer]
+  const routed = attachBackgroundRecords(rebuildBlocks(all.filter(record => !isBackgroundRecord(record))), all)
+  assert.deepEqual(shape(routed), shape(merged))
 })
 
 test("nested agents attach through their parents and a nested task folds into the child that launched it", () => {

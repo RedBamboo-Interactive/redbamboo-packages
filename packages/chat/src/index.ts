@@ -120,6 +120,7 @@ export {
   isBackgroundEvent,
   isBackgroundRecord,
   attachBackground,
+  attachBackgroundRecords,
   resolveBackgroundOrphans,
   findPairedResult,
   findPartByToolUseId,

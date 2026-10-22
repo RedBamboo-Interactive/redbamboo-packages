@@ -175,6 +175,18 @@ export function attachBackground(messages: MessageBlock[], parts: readonly Messa
   return next
 }
 
+/**
+ * Attach background records to blocks a host assembled itself (for example by
+ * rebuilding record spans around its own overlay blocks). Hosts route these
+ * records out of their spans and call this once on the final array.
+ */
+export function attachBackgroundRecords<T extends BackgroundSource & Parameters<typeof backgroundPart>[0]>(
+  messages: MessageBlock[],
+  records: readonly T[],
+): MessageBlock[] {
+  return attachBackground(messages, records.filter(isBackgroundRecord).map(backgroundPart))
+}
+
 /** Re-attach parked parts after their parents may have been loaded. */
 export function resolveBackgroundOrphans(messages: MessageBlock[]): MessageBlock[] {
   return collectOrphans(messages).length === 0 ? messages : attachBackground(messages, [])
