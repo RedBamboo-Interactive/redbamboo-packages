@@ -1,5 +1,21 @@
 # @redbamboo/ui
 
+## 0.7.0
+
+### Minor Changes
+
+- 09f14e8: Add accessible Sheet and multi-item MediaViewer components, and raise compact SectionHeader labels to AA contrast across every supported theme.
+- 9fcfd31: Add the canonical entity picker: `EntityRefField` and `EntityRefListField`
+  reference fields plus a searchable `EntityPickerDialog` (single and multiple
+  selection, inline audio previews), rendered with entity-card rows. Data comes
+  from a host-provided `EntityPickerSource` through `EntityPickerProvider`, so the
+  design system never fetches entity data itself. Fields and the dialog accept a
+  per-field `source` (any subset of `search`, `resolve`, `subscribe`) that falls
+  back to the provider. References revalidate without flashing, transient resolve
+  failures retry instead of reading as missing, and results are announced to
+  assistive technology. The component catalog now ranks id and tag matches first,
+  so `picker` finds `entity-picker`.
+
 ## 0.6.1
 
 ### Patch Changes
