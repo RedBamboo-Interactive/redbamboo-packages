@@ -90,7 +90,7 @@ public static class StartupManager
             }
 
             var taskFile = Path.Combine(
-                Path.GetTempPath(),
+                ElevationExchangeDirectory(),
                 $"redleaf-startup-{Guid.NewGuid():N}.xml");
             try
             {
@@ -443,20 +443,66 @@ public static class StartupManager
         params object[] arguments)
         => target.GetType().InvokeMember(member, kind, null, target, arguments);
 
+    /// <summary>
+    /// A directory both this process and its elevated schtasks child can reach.
+    /// TEMP is unsafe: it may sit on a subst drive, and subst drives exist only
+    /// in the logon session that created them, never in the elevated token's.
+    /// </summary>
+    private static string ElevationExchangeDirectory()
+    {
+        var localAppData = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData,
+            Environment.SpecialFolderOption.DoNotVerify);
+        if (string.IsNullOrWhiteSpace(localAppData))
+            throw new InvalidOperationException(
+                "RedLeaf could not resolve the local application data folder.");
+        var directory = Path.Combine(localAppData, "RedBamboo", "Startup");
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    internal static string BuildElevatedSchtasksCommandLine(
+        string schtasksPath,
+        string outputPath,
+        IReadOnlyList<string> arguments)
+    {
+        // cmd.exe expands % even inside quotes, so such a value cannot be passed safely.
+        static string Quote(string value)
+            => value.IndexOfAny(['"', '%']) >= 0
+                ? throw new ArgumentException(
+                    "Startup task arguments cannot contain quotes or percent signs.")
+                : $"\"{value}\"";
+
+        var command = string.Join(
+            " ",
+            arguments.Prepend(schtasksPath).Select(Quote));
+        // /s strips only the outermost quote pair, leaving every inner quote intact.
+        return $"/d /s /c \"{command} > {Quote(outputPath)} 2>&1\"";
+    }
+
     private static void RunElevatedSchtasks(
         params string[] arguments)
     {
+        // An elevated ShellExecute child cannot redirect its streams back to us, so
+        // schtasks writes its own explanation to a file we read after it exits.
+        var outputFile = Path.Combine(
+            ElevationExchangeDirectory(),
+            $"redleaf-startup-{Guid.NewGuid():N}.log");
         var startInfo = new ProcessStartInfo
         {
             FileName = Path.Combine(
                 Environment.SystemDirectory,
-                "schtasks.exe"),
+                "cmd.exe"),
+            Arguments = BuildElevatedSchtasksCommandLine(
+                Path.Combine(
+                    Environment.SystemDirectory,
+                    "schtasks.exe"),
+                outputFile,
+                arguments),
             UseShellExecute = true,
             Verb = "runas",
             WindowStyle = ProcessWindowStyle.Hidden,
         };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
 
         try
         {
@@ -465,8 +511,13 @@ public static class StartupManager
                     "Windows did not start the startup-task installer.");
             process.WaitForExit();
             if (process.ExitCode != 0)
+            {
+                var detail = ReadElevatedOutput(outputFile);
                 throw new InvalidOperationException(
-                    $"Windows rejected the RedLeaf startup task (exit code {process.ExitCode}).");
+                    string.IsNullOrEmpty(detail)
+                        ? $"Windows rejected the RedLeaf startup task (exit code {process.ExitCode})."
+                        : $"Windows rejected the RedLeaf startup task (exit code {process.ExitCode}): {detail}");
+            }
         }
         catch (Win32Exception error)
             when (error.NativeErrorCode == 1223)
@@ -475,7 +526,40 @@ public static class StartupManager
                 "The Windows administrator approval was cancelled.",
                 error);
         }
+        finally
+        {
+            try { File.Delete(outputFile); } catch { }
+        }
     }
+
+    private static string ReadElevatedOutput(string outputFile)
+    {
+        try
+        {
+            // schtasks writes through cmd redirection in the console's OEM code page.
+            var text = File.ReadAllText(
+                outputFile,
+                CodePagesEncodingProvider.Instance.GetEncoding(
+                    (int)GetOEMCP()) ?? Encoding.Default);
+            return string.Join(
+                " ",
+                text.Split(
+                    ['\r', '\n'],
+                    StringSplitOptions.RemoveEmptyEntries
+                    | StringSplitOptions.TrimEntries));
+        }
+        catch (IOException)
+        {
+            return string.Empty;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern uint GetOEMCP();
 
     private static ProcessResult RunSchtasks(
         params string[] arguments)

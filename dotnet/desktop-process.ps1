@@ -60,7 +60,7 @@ namespace RedBamboo
                     throw new Win32Exception(Marshal.GetLastWin32Error(),
                         "Windows could not bind the deployment process to the desktop shell.");
 
-                environment = BuildEnvironmentBlock();
+                environment = BuildUserEnvironmentBlock();
                 var startup = new StartupInfoEx
                 {
                     StartupInfo = new StartupInfo { Size = Marshal.SizeOf(typeof(StartupInfoEx)) },
@@ -89,30 +89,57 @@ namespace RedBamboo
                     Marshal.FreeHGlobal(attributeList);
                 }
                 if (parentValue != IntPtr.Zero) Marshal.FreeHGlobal(parentValue);
-                if (environment != IntPtr.Zero) Marshal.FreeHGlobal(environment);
+                if (environment != IntPtr.Zero) DestroyEnvironmentBlock(environment);
                 CloseHandle(shellProcess);
             }
         }
 
-        private static IntPtr BuildEnvironmentBlock()
+        // The deployer must look exactly like an Explorer launch, so it gets the user's
+        // registry environment rather than the caller's. Copying the caller's block leaked
+        // agent scratch TEMP (a subst drive invisible to elevated children) and session
+        // credentials into RedLeaf and everything it later spawned.
+        public static IntPtr BuildUserEnvironmentBlock()
         {
-            var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            IntPtr token;
+            if (!OpenProcessToken(GetCurrentProcess(), TokenQuery | TokenDuplicate, out token))
+                throw new Win32Exception(Marshal.GetLastWin32Error(),
+                    "Windows could not open the current user token.");
+            try
             {
-                "REDLEAF_EXECUTION_TOKEN",
-                "X_COMPUTE_PROVENANCE",
-            };
-            var entries = new List<string>();
-            foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
-            {
-                var key = Convert.ToString(entry.Key) ?? string.Empty;
-                if (key.Length == 0 || excluded.Contains(key)) continue;
-                entries.Add(key + "=" + (Convert.ToString(entry.Value) ?? string.Empty));
+                IntPtr block;
+                if (!CreateEnvironmentBlock(out block, token, false))
+                    throw new Win32Exception(Marshal.GetLastWin32Error(),
+                        "Windows could not build the desktop user environment.");
+                return block;
             }
-            entries.Sort(StringComparer.OrdinalIgnoreCase);
-            var bytes = Encoding.Unicode.GetBytes(string.Join("\0", entries) + "\0\0");
-            var block = Marshal.AllocHGlobal(bytes.Length);
-            Marshal.Copy(bytes, 0, block, bytes.Length);
-            return block;
+            finally
+            {
+                CloseHandle(token);
+            }
+        }
+
+        public static Dictionary<string, string> ReadUserEnvironment()
+        {
+            var block = BuildUserEnvironmentBlock();
+            try
+            {
+                var variables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var offset = 0;
+                while (true)
+                {
+                    var entry = Marshal.PtrToStringUni(IntPtr.Add(block, offset));
+                    if (string.IsNullOrEmpty(entry)) break;
+                    offset += (entry.Length + 1) * 2;
+                    var separator = entry.IndexOf('=', 1);
+                    if (separator > 0)
+                        variables[entry.Substring(0, separator)] = entry.Substring(separator + 1);
+                }
+                return variables;
+            }
+            finally
+            {
+                DestroyEnvironmentBlock(block);
+            }
         }
 
         private static string Quote(string value)
@@ -191,6 +218,21 @@ namespace RedBamboo
 
         [DllImport("kernel32.dll")]
         private static extern bool CloseHandle(IntPtr handle);
+
+        private const uint TokenQuery = 0x0008;
+        private const uint TokenDuplicate = 0x0002;
+
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetCurrentProcess();
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool OpenProcessToken(IntPtr process, uint desiredAccess, out IntPtr token);
+
+        [DllImport("userenv.dll", SetLastError = true)]
+        private static extern bool CreateEnvironmentBlock(out IntPtr environment, IntPtr token, bool inherit);
+
+        [DllImport("userenv.dll", SetLastError = true)]
+        private static extern bool DestroyEnvironmentBlock(IntPtr environment);
     }
 
     public sealed class LockingProcessInfo
