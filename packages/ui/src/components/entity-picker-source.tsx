@@ -11,9 +11,11 @@ import {
 import type { EntityCardDetail, EntityCardEntity, EntityCardVisual } from "./entity-card"
 import {
   itemMatchesReference,
+  knownItemFor,
   mergeEntityPickerSource,
   needsResolve,
   readResolution,
+  resolutionKey,
   retryDelay,
   settleResolution,
   type ResolutionEntry,
@@ -251,7 +253,7 @@ export function useEntityPickerResolution({
 
   useEffect(() => {
     if (!source || !type) return
-    const pending = references.filter((reference) => needsResolve(entriesRef.current.get(reference), epoch))
+    const pending = references.filter((reference) => needsResolve(entriesRef.current.get(resolutionKey(type, reference)), epoch))
     if (pending.length === 0) return
     const controller = new AbortController()
     for (const reference of pending) {
@@ -268,7 +270,8 @@ export function useEntityPickerResolution({
           if (!outcome || controller.signal.aborted) return
           setEntries((previous) => {
             const next = new Map(previous)
-            next.set(reference, settleResolution(previous.get(reference), epoch, outcome))
+            const entryKey = resolutionKey(type, reference)
+            next.set(entryKey, settleResolution(previous.get(entryKey), epoch, outcome))
             return next
           })
         })
@@ -279,7 +282,7 @@ export function useEntityPickerResolution({
 
   // Failed references retry with backoff; the next success resets the count.
   const nextRetry = references.reduce<number | null>((soonest, reference) => {
-    const entry = entries.get(reference)
+    const entry = entries.get(resolutionKey(type, reference))
     if (!entry || entry.failures === 0) return soonest
     const delay = retryDelay(entry.failures)
     return soonest === null ? delay : Math.min(soonest, delay)
@@ -294,8 +297,8 @@ export function useEntityPickerResolution({
 
   return {
     get: (reference: string) => readResolution(
-      entries.get(reference),
-      known.find((item) => itemMatchesReference(item, reference)),
+      entries.get(resolutionKey(type, reference)),
+      knownItemFor(known, type, reference),
       !!source,
     ),
     retry,

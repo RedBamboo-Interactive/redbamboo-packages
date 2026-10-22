@@ -2,10 +2,12 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
   entityTypeLabel,
+  knownItemFor,
   mergeEntityPickerSource,
   needsResolve,
   pluralizeLabel,
   readResolution,
+  resolutionKey,
   resolveFromSearch,
   retryDelay,
   settleResolution,
@@ -112,4 +114,13 @@ test("retry backoff doubles and caps", () => {
 test("type labels read naturally", () => {
   assert.equal(entityTypeLabel("voice-preset"), "voice preset")
   assert.deepEqual(["agent", "category", "box", "match", "day"].map(pluralizeLabel), ["agents", "categories", "boxes", "matches", "days"])
+})
+
+test("entries and known items are scoped to the target type", () => {
+  assert.notEqual(resolutionKey("agent", "nova"), resolutionKey("color", "nova"))
+  assert.notEqual(resolutionKey("a", "b\u0000c"), resolutionKey("a\u0000b", "c"), "separator cannot be forged by plain slugs")
+  const agentNova = item("a1", "Nova", "nova")
+  const colorNova = { entity: { id: "c1", typeSlug: "color", name: "Nova blue" }, slug: "nova" }
+  assert.equal(knownItemFor([agentNova, colorNova], "color", "nova"), colorNova)
+  assert.equal(knownItemFor([agentNova], "color", "nova"), undefined, "an agent item is not shown for a color field")
 })

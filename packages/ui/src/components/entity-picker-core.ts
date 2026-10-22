@@ -66,6 +66,20 @@ export function mergeEntityPickerSource<Item extends EntityPickerCoreItem>(
 
 // ── Reference resolution state ───────────────────────────────────────────────
 
+/** Entries are per type: the same reference can name different entities in two types. */
+export function resolutionKey(type: string, reference: string): string {
+  return JSON.stringify([type, reference])
+}
+
+/** A caller-supplied item for this reference, ignoring items of another type. */
+export function knownItemFor<Item extends EntityPickerCoreItem>(
+  known: readonly Item[],
+  type: string,
+  reference: string,
+): Item | undefined {
+  return known.find((item) => item.entity.typeSlug === type && itemMatchesReference(item, reference))
+}
+
 /**
  * What is known about one stored reference. `item` is the last authoritative
  * answer: an item, null for missing/inaccessible, or undefined if none yet.
