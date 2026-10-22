@@ -226,7 +226,7 @@ test("task states fold onto the launching square and a terminal state is never r
   let messages = apply([], agentUse("toolu_agent"), taskEvent("toolu_agent", "t1", "running"))
   assert.equal(square(messages, "toolu_agent").task?.status, "running")
   assert.ok(isBackgroundRunning(square(messages, "toolu_agent")))
-  assert.equal(getPartColor(square(messages, "toolu_agent")), PART_COLOR.thinking)
+  assert.equal(getPartColor(square(messages, "toolu_agent")), PART_COLOR.delegation)
 
   messages = apply(messages, taskEvent("toolu_agent", "t1", "completed", { summary: "sub done", usage: { toolUses: 2 } }))
   messages = apply(messages, taskEvent("toolu_agent", "t1", "running"))
@@ -234,7 +234,7 @@ test("task states fold onto the launching square and a terminal state is never r
   assert.equal(settled.task?.status, "completed")
   assert.equal(settled.task?.summary, "sub done")
   assert.ok(!isBackgroundRunning(settled))
-  assert.equal(getPartColor(settled), PART_COLOR.thinking, "completed is solid in the agent colour")
+  assert.equal(getPartColor(settled), PART_COLOR.delegation, "completed is solid in the delegation colour")
 
   for (const [status, color] of [["stopped", PART_COLOR.error], ["failed", PART_COLOR.error], ["lost", PART_COLOR.fallback]] as const) {
     const ended = square(apply([], agentUse("toolu_x"), taskEvent("toolu_x", "tx", status)), "toolu_x")
@@ -258,7 +258,7 @@ test("background work never moves turn-level state", () => {
   // The main spinner reads the turn's own parts only.
   const withChild = apply([], { type: "thinking", content: "t", messageUid: "turn-1", messageId: "m:0", isPartial: false, timestamp: ts },
     agentUse("toolu_agent"), childUse("toolu_child", "toolu_agent"))
-  assert.equal(getSpinnerColor(withChild), PART_COLOR.thinking)
+  assert.equal(getSpinnerColor(withChild), PART_COLOR.delegation)
 })
 
 test("unknown event and record types are skipped instead of rendered", () => {

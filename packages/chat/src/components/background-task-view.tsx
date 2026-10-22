@@ -43,7 +43,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 const STATUS_CLASS: Record<string, string> = {
-  running: "bg-violet-500-a15 text-violet-300",
+  running: "bg-pink-500/15 text-pink-300",
   completed: "bg-overlay-6 text-text-muted",
   failed: "bg-red-500-a20 text-red-300",
   stopped: "bg-red-500-a20 text-red-300",
@@ -189,7 +189,7 @@ export function BackgroundStatusLine({ tasks, extras = [], onOpenTask }: {
   const count = describeBackgroundCount(running)
   return (
     <div data-slot="background-status-line" className="flex items-center gap-2.5 text-text-muted text-sm py-1 min-w-0">
-      <MorphSpinner color={PART_COLOR.thinking} />
+      <MorphSpinner color={PART_COLOR.delegation} />
       <div className="flex items-center gap-1.5 min-w-0">
         {extras.map(extra => extra.onClick ? (
           <button key={extra.key} type="button" onClick={extra.onClick} title={extra.title} className="shrink-0 hover:text-text-secondary transition-colors cursor-pointer">{extra.label}</button>
@@ -215,7 +215,7 @@ export function BackgroundStatusLine({ tasks, extras = [], onOpenTask }: {
   )
 }
 
-/** The violet event circle opening a turn the provider started because a background task finished. */
+/** The delegation-coloured event circle opening a turn the provider started because a background task finished. */
 export function TurnOriginMarker({ origin }: { origin: TurnOrigin }) {
   const { tasks, requestOpen } = useBackgroundWork()
   const entry = origin.taskId ? tasks.get(origin.taskId) : undefined
@@ -229,7 +229,7 @@ export function TurnOriginMarker({ origin }: { origin: TurnOrigin }) {
         type="button"
         onClick={() => toolUseId && requestOpen(toolUseId)}
         className="w-2.5 h-2.5 rounded-full transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
-        style={{ backgroundColor: PART_COLOR.thinking }}
+        style={{ backgroundColor: PART_COLOR.delegation }}
         title={label}
         aria-label={label}
       />

@@ -4,6 +4,8 @@ import { getToolActivityCategory } from "./tool-semantics.ts"
 
 export const PART_COLOR = {
   thinking: "var(--color-domain-imagination, #7C4DFF)",
+  // Work handed to another worker: Nova delegations, subagents, Leaf agent tools.
+  delegation: "rgb(236 72 153)",
   readOnly: "var(--color-accent-teal)",
   mutating: "var(--color-accent-gold)",
   shell: "var(--color-accent-gold)",
@@ -45,7 +47,7 @@ export function getPartColor(part: MessagePart): string {
   }
   if (part.type === "tool_use" && part.toolName) {
     const category = getToolActivityCategory(part.toolName, part.toolInput)
-    if (category === "agent") return PART_COLOR.thinking
+    if (category === "agent") return PART_COLOR.delegation
     if (category === "read-only") return PART_COLOR.readOnly
     if (category === "mutating") return PART_COLOR.mutating
     if (category === "shell") return PART_COLOR.shell
@@ -70,7 +72,7 @@ export function getSpinnerColor(messages: MessageBlock[]): string {
       if (part.type === "thinking") return PART_COLOR.thinking
       if (part.type === "tool_use" && part.toolName) {
         const category = getToolActivityCategory(part.toolName, part.toolInput)
-        if (category === "agent") return PART_COLOR.thinking
+        if (category === "agent") return PART_COLOR.delegation
         if (category === "read-only") return PART_COLOR.readOnly
         if (category === "mutating") return PART_COLOR.mutating
         if (category === "shell") return PART_COLOR.shell
