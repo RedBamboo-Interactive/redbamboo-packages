@@ -50,12 +50,14 @@ try {
   const revealed = field.locator('[data-slot="protected-value-revealed"]')
   await revealed.waitFor()
   assert.equal(await field.getAttribute("data-revealed"), "true")
-  assert.equal(await field.locator('[data-slot="protected-value-revealed-value"]').textContent(), ROTATED)
-  assert.equal(await revealed.getAttribute("role"), "group")
-  assert.equal(await revealed.getAttribute("aria-label"), "New token")
-  const noticeId = await revealed.getAttribute("aria-describedby")
+  // The value is the design system Input, read-only, labelled, and described by the notice.
+  const value = field.getByRole("textbox", { name: "New token" })
+  assert.equal(await value.inputValue(), ROTATED)
+  assert.equal(await value.getAttribute("data-slot"), "protected-value-revealed-value")
+  assert.equal(await value.getAttribute("readonly"), "")
+  const noticeId = await value.getAttribute("aria-describedby")
   assert.equal(await page.locator(`[id="${noticeId}"]`).textContent(), "Shown only once. Copy it now.")
-  await page.waitForFunction(() => document.activeElement?.getAttribute("data-slot") === "protected-value-revealed")
+  await page.waitForFunction(() => document.activeElement?.getAttribute("data-slot") === "protected-value-revealed-value")
   await page.waitForFunction(() => {
     const box = document.querySelector('[data-slot="protected-value-revealed"]').getBoundingClientRect()
     return box.top >= 0 && box.bottom <= window.innerHeight
@@ -76,7 +78,7 @@ try {
   })
   await field.locator('[data-slot="protected-value-copy"]').click()
   await field.getByText("Copy is blocked here. The value is selected; copy it manually.").waitFor()
-  assert.equal(await page.evaluate(() => window.getSelection()?.toString()), ROTATED)
+  assert.deepEqual(await value.evaluate((input) => [document.activeElement === input, input.selectionStart, input.selectionEnd]), [true, 0, ROTATED.length])
   assert.deepEqual((await state(page)).copies, ["copied", "failed"])
 
   // Clearing the value returns the card to its stored-only state.

@@ -98,7 +98,7 @@ export function ProtectedValueField({
   const [confirmClear, setConfirmClear] = React.useState(false)
   const [copyState, setCopyState] = React.useState<ProtectedValueCopyState>("idle")
   const revealedRef = React.useRef<HTMLDivElement>(null)
-  const revealedValueRef = React.useRef<HTMLElement>(null)
+  const revealedValueRef = React.useRef<HTMLInputElement>(null)
   const revealedNoticeId = `${inputId}-revealed-notice`
 
   React.useEffect(() => {
@@ -110,7 +110,7 @@ export function ProtectedValueField({
     setCopyState("idle")
     const node = revealedRef.current
     if (!revealedValue || !node) return
-    node.focus({ preventScroll: true })
+    revealedValueRef.current?.focus({ preventScroll: true })
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
     node.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" })
   }, [revealedValue])
@@ -124,13 +124,8 @@ export function ProtectedValueField({
     } catch {
       // Clipboard access is unavailable on insecure origins and some mobile browsers:
       // select the value so it can be copied by hand.
-      const selection = window.getSelection()
-      if (revealedValueRef.current && selection) {
-        const range = document.createRange()
-        range.selectNodeContents(revealedValueRef.current)
-        selection.removeAllRanges()
-        selection.addRange(range)
-      }
+      revealedValueRef.current?.focus()
+      revealedValueRef.current?.select()
       setCopyState("failed")
       onRevealedValueCopy?.("failed")
     }
@@ -375,22 +370,18 @@ export function ProtectedValueField({
               )}
             </div>
             {revealedValue && (
-              <div
-                ref={revealedRef}
-                data-slot="protected-value-revealed"
-                role="group"
-                aria-label={revealedLabel}
-                aria-describedby={revealedNoticeId}
-                tabIndex={-1}
-                className="mt-2.5 space-y-1.5 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <code
+              <div ref={revealedRef} data-slot="protected-value-revealed" className="mt-2 space-y-2">
+                <Input
                   ref={revealedValueRef}
                   data-slot="protected-value-revealed-value"
-                  className="block select-all break-all rounded-md border border-primary/25 bg-primary/5 px-2 py-1.5 font-mono text-xs text-foreground"
-                >
-                  {revealedValue}
-                </code>
+                  readOnly
+                  value={revealedValue}
+                  spellCheck={false}
+                  aria-label={revealedLabel}
+                  aria-describedby={revealedNoticeId}
+                  className="font-mono text-xs"
+                  onFocus={(event) => event.currentTarget.select()}
+                />
                 <p id={revealedNoticeId} className="text-[11px] text-amber-600 dark:text-amber-400" role="status">
                   {copyState === "failed"
                     ? "Copy is blocked here. The value is selected; copy it manually."
@@ -406,6 +397,7 @@ export function ProtectedValueField({
                 <Button type="button" variant="ghost" size="xs" className="mr-auto"
                   data-slot="protected-value-copy"
                   onClick={() => void copyRevealedValue()}>
+                  <i className={cn("ph-bold", copyState === "copied" ? "ph-check" : "ph-copy")} aria-hidden="true" />
                   {copyState === "copied" ? "Copied" : `Copy ${kind === "credential-file" ? "credential" : kind}`}
                 </Button>
               )}
