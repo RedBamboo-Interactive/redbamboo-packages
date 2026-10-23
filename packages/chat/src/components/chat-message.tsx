@@ -35,6 +35,7 @@ import { NovaEventSquare } from "./nova-event-square"
 import { getAgentJobHref } from "../lib/session-resource-links"
 import { squarePosition, squareSequence, stepSquare, type SquareRef, type SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
+import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 
 interface TaskNotification {
   taskId: string
@@ -1023,7 +1024,7 @@ function PlanCard({ onExecute, permissionMode, planText, resolveImageSrc }: {
           </DialogHeader>
 
           <div className="overflow-y-auto p-5 flex-1 min-h-0 text-sm leading-relaxed font-serif markdown-body">
-            <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents} urlTransform={(u: string) => u}>
+            <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight, rehypeOrderedListMarkers]} components={mdComponents} urlTransform={(u: string) => u}>
               {planText}
             </Markdown>
           </div>

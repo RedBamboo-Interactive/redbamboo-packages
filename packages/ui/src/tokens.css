@@ -560,9 +560,13 @@ body {
   padding-left: 1.5em;
   margin: 0.5em 0;
 }
+/* Outside markers live in this padding and the message frame clips past it.
+   --marker-digits comes from the chat's ordered-list rehype plugin; renderers
+   without it still fit two-digit numbers. Each digit is at most 1ch wide, and
+   the extra 1.5ch holds the ". " suffix. */
 .markdown-body ol {
   list-style-type: decimal;
-  padding-left: 1.5em;
+  padding-left: max(1.5em, calc((var(--marker-digits, 2) + 1.5) * 1ch));
   margin: 0.5em 0;
 }
 .markdown-body li { margin: 0.2em 0; }

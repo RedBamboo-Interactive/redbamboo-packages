@@ -22,6 +22,7 @@ import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseLocalFileLink } from "../lib/local-file-link"
 import { isUnsafeLinkHref, remarkUserText } from "../lib/user-markdown"
 import { rehypeColorSwatches } from "../lib/color-swatch"
+import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 
 type FileLinkResolver = (
   filePath: string,
@@ -320,7 +321,7 @@ function useMarkdownComponents(
 }
 
 const CHARS_PER_FRAME = 3
-const MESSAGE_REHYPE_PLUGINS = [rehypeHighlight, rehypeColorSwatches]
+const MESSAGE_REHYPE_PLUGINS = [rehypeHighlight, rehypeColorSwatches, rehypeOrderedListMarkers]
 
 export function StreamingText({
   content,
