@@ -134,13 +134,17 @@ function MasterDetailLayout({
     maxSize: sidebarMax,
     // The pre-dock sidebar width seeds the app's first list placement.
     defaultSize: savedSidebarSize ?? sidebarDefault,
+    // The list keeps the sidebar's elevated surface, now painted by the dock over
+    // its header row and body together; the sidebar element inside paints nothing.
+    surface: "elevated",
     collapsible: true,
     disabled: !dock || nested || presentation !== "responsive" || !isDesktop,
     content: (
       <MasterDetailNesting.Provider value>
         <div
           data-slot="master-detail-sidebar"
-          className="h-full bg-surface-elevated flex flex-col overflow-hidden"
+          data-docked=""
+          className="h-full flex flex-col overflow-hidden"
         >
           {sidebar}
         </div>

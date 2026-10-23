@@ -276,6 +276,7 @@ export {
   sanitizeLayout as sanitizeDockLayout,
 } from "./components/dock/layout"
 export type { DockGroup, DockLayout, DockTarget, DockZone } from "./components/dock/layout"
+export type { DockSize, DockSurface } from "./components/dock/store"
 
 export { FilterBar, FilterPillGroup } from "./components/filter-bar"
 export type {

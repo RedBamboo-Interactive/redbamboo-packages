@@ -20,6 +20,12 @@ import {
 } from "./layout"
 import { captureScroll, resyncScrollListeners, restoreScroll, type ScrollRecord } from "./scroll-memory"
 
+/** A zone thickness: pixels, or a share of the dock frame such as "26.3%". */
+export type DockSize = number | `${number}%`
+
+/** What a docked panel paints behind its header row and body, as one surface. */
+export type DockSurface = "elevated" | "none"
+
 export interface DockPanelMeta {
   title: string
   icon?: string
@@ -27,7 +33,8 @@ export interface DockPanelMeta {
   order?: number
   minSize?: number
   maxSize?: number
-  defaultSize?: number
+  defaultSize?: DockSize
+  surface: DockSurface
   collapsible: boolean
   closable: boolean
 }
@@ -41,6 +48,8 @@ export interface DockSnapshot {
   panels: ReadonlyMap<string, DockPanelMeta>
   /** Panels whose content renders its own primary `PanelHeader`. */
   headers: ReadonlySet<string>
+  /** The primary header's own classes, which the group header row takes on. */
+  headerClasses: ReadonlyMap<string, string>
   /** Bumped when a whole layout is (re)loaded, so zones re-apply stored sizes. */
   generation: number
 }
@@ -87,6 +96,7 @@ interface HeaderRegistration {
   element: HTMLElement
   /** Stable element holding the header's content; the dock re-parents it into the group header row. */
   contentHost: HTMLElement
+  className: string
 }
 
 const ZONE_EDGE = 44
@@ -150,8 +160,13 @@ export class DockStore {
     const panels = new Map<string, DockPanelMeta>()
     for (const [id, registration] of this.registrations) panels.set(id, registration.meta)
     const headers = new Set<string>()
-    for (const id of this.headerRegistrations.keys()) {
-      if (this.primaryHeaderToken(id)) headers.add(id)
+    const headerClasses = new Map<string, string>()
+    for (const [id, list] of this.headerRegistrations) {
+      const token = this.primaryHeaderToken(id)
+      if (!token) continue
+      headers.add(id)
+      const primary = list.find((entry) => entry.token === token)
+      if (primary) headerClasses.set(id, primary.className)
     }
     return {
       enabled: this.config.enabled,
@@ -160,6 +175,7 @@ export class DockStore {
       visible: visibleLayout(this.layout, (id) => this.registrations.has(id)),
       panels,
       headers,
+      headerClasses,
       generation: this.generation,
     }
   }
@@ -238,7 +254,8 @@ export class DockStore {
     return ensurePanel(
       layout,
       id,
-      { zone: meta.defaultZone, order: meta.order, size: meta.defaultSize },
+      // Only pixel sizes are stored; a share of the frame stays proportional until resized.
+      { zone: meta.defaultZone, order: meta.order, size: typeof meta.defaultSize === "number" ? meta.defaultSize : undefined },
       (panelId) => this.registrations.get(panelId)?.meta.order,
     )
   }
@@ -296,12 +313,19 @@ export class DockStore {
 
   // --- headers ------------------------------------------------------------
 
-  registerHeader(panelId: string, token: object, element: HTMLElement, contentHost: HTMLElement) {
+  registerHeader(panelId: string, token: object, element: HTMLElement, contentHost: HTMLElement, className: string) {
     const list = this.headerRegistrations.get(panelId) ?? []
     if (list.some((entry) => entry.token === token)) return
     const before = this.primaryHeaderToken(panelId)
-    this.headerRegistrations.set(panelId, [...list, { token, element, contentHost }])
+    this.headerRegistrations.set(panelId, [...list, { token, element, contentHost, className }])
     if (this.primaryHeaderToken(panelId) !== before) this.emit()
+  }
+
+  setHeaderClass(panelId: string, token: object, className: string) {
+    const entry = this.headerRegistrations.get(panelId)?.find((candidate) => candidate.token === token)
+    if (!entry || entry.className === className) return
+    entry.className = className
+    if (this.primaryHeaderToken(panelId) === token) this.emit()
   }
 
   unregisterHeader(panelId: string, token: object) {
@@ -526,7 +550,11 @@ export class DockStore {
       const centerRect = toRect(center.getBoundingClientRect())
       for (const zone of DOCK_ZONES) {
         if (visible.zones[zone].length > 0 || visible.collapsed[zone].length > 0) continue
-        const size = this.layout.zoneSizes[zone] ?? this.registrations.get(panelId)?.meta.defaultSize ?? FALLBACK_ZONE_SIZE[zone]
+        const declared = this.registrations.get(panelId)?.meta.defaultSize
+        const span = zone === "bottom" ? centerRect.height : columnRect.width
+        const size = this.layout.zoneSizes[zone]
+          ?? (typeof declared === "string" ? (parseFloat(declared) / 100) * span : declared)
+          ?? FALLBACK_ZONE_SIZE[zone]
         if (zone === "bottom") {
           const height = Math.min(size, centerRect.height * 0.5)
           candidates.push({
@@ -569,7 +597,7 @@ function hitTest(candidates: DockDropCandidate[], x: number, y: number): DockDro
 
 function sameMeta(a: DockPanelMeta, b: DockPanelMeta): boolean {
   return a.title === b.title && a.icon === b.icon && a.defaultZone === b.defaultZone && a.order === b.order
-    && a.minSize === b.minSize && a.maxSize === b.maxSize && a.defaultSize === b.defaultSize
+    && a.minSize === b.minSize && a.maxSize === b.maxSize && a.defaultSize === b.defaultSize && a.surface === b.surface
     && a.collapsible === b.collapsible && a.closable === b.closable
 }
 

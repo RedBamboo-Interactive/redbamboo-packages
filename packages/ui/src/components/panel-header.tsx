@@ -67,7 +67,10 @@ function DockedPanelHeader({
   variant,
   className,
 }: PanelHeaderProps) {
-  const header = useDockedHeader()!
+  const rowClassName = cn(panelHeaderVariants({ variant }), className)
+  // The dock's header row takes on these classes, so a docked header keeps its
+  // height, padding and spacing.
+  const header = useDockedHeader(rowClassName)!
   const showIdentity = !(header.primary && header.mode === "tab")
   return (
     <>
@@ -75,7 +78,7 @@ function DockedPanelHeader({
         ref={header.containerRef}
         data-slot="panel-header"
         data-dock-taken-over={header.primary ? "" : undefined}
-        className={cn(panelHeaderVariants({ variant }), className)}
+        className={rowClassName}
         style={header.primary ? { display: "none" } : undefined}
       />
       {createPortal(
@@ -83,7 +86,7 @@ function DockedPanelHeader({
           <>
             {showIdentity ? leading : null}
             {showIdentity && title ? (
-              <span className="text-[14px] font-medium text-contrast flex-1 truncate">
+              <span className="text-[14px] font-medium text-contrast flex-1">
                 {title}
               </span>
             ) : null}

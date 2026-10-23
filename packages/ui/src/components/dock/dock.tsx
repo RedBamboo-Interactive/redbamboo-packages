@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "../dropdown-menu"
 import { DOCK_ZONES, findPanel, type DockZone, type VisibleDockGroup } from "./layout"
-import { DockStore, DOCK_DEFAULT_ZONE_SIZE, type DockDragState, type DockPanelMeta, type DockSnapshot } from "./store"
+import { DockStore, DOCK_DEFAULT_ZONE_SIZE, type DockDragState, type DockPanelMeta, type DockSize, type DockSnapshot, type DockSurface } from "./store"
 import { HostSlot, useStableHost } from "./host-slot"
 import { ResizablePanel, ResizablePanelGroup } from "../resizable"
 
@@ -104,8 +104,17 @@ export interface DockPanelOptions {
   order?: number
   minSize?: number
   maxSize?: number
-  /** Zone thickness in pixels used when this panel is the first to size its zone. */
-  defaultSize?: number
+  /**
+   * Zone thickness used when this panel is the first to size its zone: pixels, or a
+   * share of the dock frame ("26.3%") that stays proportional until the user resizes.
+   */
+  defaultSize?: DockSize
+  /**
+   * What the panel paints behind its header row and body, as one surface. "none"
+   * (default) lets the shell, and any wallpaper, show through; "elevated" is the
+   * list surface that master-detail sidebars use.
+   */
+  surface?: DockSurface
   collapsible?: boolean
   content: ReactNode
   onClose?: () => void
@@ -136,11 +145,11 @@ export function useDockPanel(id: string, options: DockPanelOptions): DockPanelHa
   const [rejected, setRejected] = useState(false)
   const active = wanted && enabled && !rejected
 
-  const { title, icon, defaultZone = "right", order, minSize, maxSize, defaultSize, collapsible = false } = options
+  const { title, icon, defaultZone = "right", order, minSize, maxSize, defaultSize, surface = "none", collapsible = false } = options
   const closable = typeof options.onClose === "function"
   const meta = useMemo<DockPanelMeta>(
-    () => ({ title, icon, defaultZone, order, minSize, maxSize, defaultSize, collapsible, closable }),
-    [title, icon, defaultZone, order, minSize, maxSize, defaultSize, collapsible, closable],
+    () => ({ title, icon, defaultZone, order, minSize, maxSize, defaultSize, surface, collapsible, closable }),
+    [title, icon, defaultZone, order, minSize, maxSize, defaultSize, surface, collapsible, closable],
   )
   const metaRef = useRef(meta)
   metaRef.current = meta
@@ -322,7 +331,7 @@ export interface DockedHeaderBinding {
  * header is hidden); any other header keeps its host in place. Moving the host
  * never remounts the header's content.
  */
-export function useDockedHeader(): DockedHeaderBinding | null {
+export function useDockedHeader(rowClassName: string): DockedHeaderBinding | null {
   const panel = useContext(DockPanelContext)
   const scope = useContext(DockScopeContext)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -341,9 +350,14 @@ export function useDockedHeader(): DockedHeaderBinding | null {
   )
   useLayoutEffect(() => {
     if (!panel || !containerRef.current) return
-    panel.store.registerHeader(panel.panelId, token, containerRef.current, contentHost)
+    panel.store.registerHeader(panel.panelId, token, containerRef.current, contentHost, rowClassName)
     return () => panel.store.unregisterHeader(panel.panelId, token)
+    // The class is kept current by the effect below, not by re-registering.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, token, contentHost])
+  useLayoutEffect(() => {
+    panel?.store.setHeaderClass(panel.panelId, token, rowClassName)
+  }, [panel, token, rowClassName])
   // A header the dock does not display keeps its content where it is.
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -489,7 +503,10 @@ function DragLayer({ drag }: { drag: DockDragState }) {
       )}
       <div
         className="absolute flex max-w-60 items-center gap-1.5 rounded-md border border-overlay-20 bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
-        style={{ left: drag.x + 12, top: drag.y + 12 }}
+        // Near the right edge the label flips to the cursor's left, so it stays readable.
+        style={drag.x > window.innerWidth - 300
+          ? { right: window.innerWidth - drag.x + 12, top: drag.y + 12 }
+          : { left: drag.x + 12, top: drag.y + 12 }}
       >
         {drag.icon && <i className={cn(drag.icon, "text-text-muted")} aria-hidden="true" />}
         <span className="truncate font-medium">{drag.title}</span>
@@ -584,9 +601,15 @@ export function DockFrame({ children, className }: DockFrameProps) {
     const max = maxes.length > 0 && maxes.every((value) => typeof value === "number")
       ? Math.max(min, ...(maxes as number[]))
       : undefined
-    const fallback = metas.find((meta) => meta.defaultSize)?.defaultSize ?? DOCK_DEFAULT_ZONE_SIZE[zone]
-    const size = layout.zoneSizes[zone] ?? fallback
-    return { min, max, size: Math.max(min, max ? Math.min(max, size) : size) }
+    const stored = layout.zoneSizes[zone]
+    const declared = metas.find((meta) => meta.defaultSize !== undefined)?.defaultSize ?? DOCK_DEFAULT_ZONE_SIZE[zone]
+    // A declared share of the frame stays a share (and proportional on window
+    // resize) until the user resizes the zone, which stores pixels.
+    if (stored === undefined && typeof declared === "string") {
+      return { min, max, size: declared as string, proportional: true }
+    }
+    const pixels = stored ?? (declared as number)
+    return { min, max, size: `${Math.max(min, max ? Math.min(max, pixels) : pixels)}px`, proportional: false }
   }
 
   // Only user resizes are saved; mounts and structural changes also report layouts.
@@ -606,16 +629,18 @@ export function DockFrame({ children, className }: DockFrameProps) {
   const zonePanel = (zone: DockZone) => {
     const mode = modes[zone]
     if (!mode) return null
-    const bounds = mode === "rail" ? { min: RAIL_SIZE, max: RAIL_SIZE, size: RAIL_SIZE } : zoneBounds(zone)
+    const bounds = mode === "rail"
+      ? { min: RAIL_SIZE, max: RAIL_SIZE, size: `${RAIL_SIZE}px`, proportional: false }
+      : zoneBounds(zone)
     const panel = (
       <Panel
         // react-resizable-panels remembers sizes by panel id: a rail, or a freshly
         // loaded layout, must not inherit the previous panel's size.
         id={`dock-zone-${zone}-${mode}-${generation}`}
-        defaultSize={`${bounds.size}px`}
+        defaultSize={bounds.size}
         minSize={`${bounds.min}px`}
         maxSize={bounds.max ? `${bounds.max}px` : zone === "bottom" ? "70%" : "60%"}
-        groupResizeBehavior="preserve-pixel-size"
+        groupResizeBehavior={bounds.proportional ? "preserve-relative-size" : "preserve-pixel-size"}
         onResize={(size) => { zonePixels.current[zone] = size.inPixels }}
         className="min-h-0 min-w-0"
       >
@@ -754,7 +779,8 @@ function DockZoneView({
       data-dock-zone={zone}
       role="region"
       aria-label={`${ZONE_LABEL[zone][0]!.toUpperCase()}${ZONE_LABEL[zone].slice(1)} dock`}
-      className={cn("flex h-full w-full min-h-0 min-w-0 bg-background", horizontal ? "flex-row" : "flex-col")}
+      // Zones paint nothing: the shell, and any wallpaper behind it, shows through.
+      className={cn("flex h-full w-full min-h-0 min-w-0", horizontal ? "flex-row" : "flex-col")}
     >
       {collapsed.length > 0 && <CollapsedBar store={store} zone={zone} panels={collapsed} snapshot={snapshot} />}
       <Group
@@ -811,11 +837,16 @@ function DockGroupView({ store, group, snapshot }: { store: DockStore; group: Vi
     }
   })
 
+  // The group is the panel's one surface: header row and body together, as the
+  // active panel declares it. Theming layers (Ambience) style it by data-dock-surface.
+  const surface = snapshot.panels.get(group.active)?.surface ?? "none"
   return (
     <div
       data-dock-group={group.id}
       data-dock-group-zone={group.zone}
-      className="flex h-full w-full min-h-0 min-w-0 flex-col"
+      data-slot="dock-panel-surface"
+      data-dock-surface={surface}
+      className={cn("flex h-full w-full min-h-0 min-w-0 flex-col", surface === "elevated" && "bg-surface-elevated")}
     >
       <DockGroupHeader store={store} group={group} snapshot={snapshot} />
       <div ref={bodyRef} data-dock-group-body="" className="relative min-h-0 min-w-0 flex-1" />
@@ -872,13 +903,17 @@ function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: 
     event.currentTarget.ownerDocument.getElementById(tabId(id))?.focus()
   }
 
+  // The row is the panel's own header: same classes, so the same height, padding
+  // and spacing as before docking. The grip sits in the left padding, so titles and
+  // actions stay exactly where they were.
+  const rowClass = (hasHeader ? snapshot.headerClasses.get(active) : undefined) ?? DEFAULT_HEADER_ROW
   return (
     <div
       data-slot="dock-group-header"
       data-dock-group-header=""
       ref={rowRef}
       data-dock-handle={active}
-      className="flex h-12 shrink-0 select-none items-center gap-1 border-b border-overlay-6 pl-1 pr-3"
+      className={cn(rowClass, "relative select-none")}
     >
       <DockPanelMenu store={store} panelId={active} />
       {multiple ? (
@@ -893,19 +928,14 @@ function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: 
           ))}
         </div>
       ) : !hasHeader && meta ? (
-        <span className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-[14px] font-medium text-contrast">
+        <>
           {meta.icon && <i className={cn(meta.icon, "text-sm text-text-muted")} aria-hidden="true" />}
-          <span className="truncate">{meta.title}</span>
-        </span>
+          <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-contrast">{meta.title}</span>
+        </>
       ) : null}
-      <div
-        ref={slotRef}
-        data-dock-header-slot=""
-        className={cn(
-          "flex min-w-0 items-center gap-2",
-          multiple ? "flex-1 justify-end" : hasHeader ? "flex-1 pl-1" : "",
-        )}
-      />
+      {multiple && <div className="flex-1" />}
+      {/* display: contents, so the header's own items are the row's flex items. */}
+      <div ref={slotRef} data-dock-header-slot="" style={{ display: "contents" }} />
       {!hasHeader && meta?.closable && (
         <Button
           variant="ghost"
@@ -920,6 +950,9 @@ function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: 
     </div>
   )
 }
+
+/** PanelHeader's default classes, for panels that bring no header of their own. */
+const DEFAULT_HEADER_ROW = "flex items-center gap-2 px-3 border-b border-overlay-6 shrink-0 h-12"
 
 function tabId(panelId: string) {
   return `dock-tab-${panelId.replace(/[^A-Za-z0-9_-]/g, "_")}`
@@ -1025,7 +1058,7 @@ function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: s
             data-dock-grip=""
             aria-label={label ?? `${meta.title} panel options`}
             title="Drag to move, click for options"
-            className="cursor-grab text-text-muted active:cursor-grabbing"
+            className="absolute left-0 top-1/2 h-6 w-3 -translate-y-1/2 cursor-grab rounded-sm text-[10px] text-text-muted active:cursor-grabbing"
           />
         )}
       >
