@@ -935,9 +935,19 @@ function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: 
           <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-contrast">{meta.title}</span>
         </>
       ) : null}
-      {multiple && <div className="flex-1" />}
-      {/* display: contents, so the header's own items are the row's flex items. */}
-      <div ref={slotRef} data-dock-header-slot="" style={{ display: "contents" }} />
+      {/* The header's own items live here, with the row's gap. The slot is the
+          dock-header container, so a header can adapt to the width it really has
+          (after the grip) with @container/dock-header queries; a header rendered
+          outside the dock declares the same container name on itself. */}
+      <div
+        ref={slotRef}
+        data-dock-header-slot=""
+        className={cn(
+          "@container/dock-header flex min-w-0 items-center",
+          multiple ? "flex-1 justify-end" : hasHeader && "flex-1",
+        )}
+        style={{ gap: "inherit" }}
+      />
       {!hasHeader && meta?.closable && (
         <Button
           variant="ghost"
