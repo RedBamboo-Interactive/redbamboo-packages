@@ -134,9 +134,8 @@ function MasterDetailLayout({
     maxSize: sidebarMax,
     // The pre-dock sidebar width seeds the app's first list placement.
     defaultSize: savedSidebarSize ?? sidebarDefault,
-    // The list keeps the sidebar's elevated surface, now painted by the dock over
-    // its header row and body together; the sidebar element inside paints nothing.
-    surface: "elevated",
+    // The dock paints the elevated surface (the default) over the list's header row
+    // and body together; the sidebar element inside paints nothing.
     collapsible: true,
     disabled: !dock || nested || presentation !== "responsive" || !isDesktop,
     content: (

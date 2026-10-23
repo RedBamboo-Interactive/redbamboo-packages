@@ -110,9 +110,10 @@ export interface DockPanelOptions {
    */
   defaultSize?: DockSize
   /**
-   * What the panel paints behind its header row and body, as one surface. "none"
-   * (default) lets the shell, and any wallpaper, show through; "elevated" is the
-   * list surface that master-detail sidebars use.
+   * What the panel paints behind its header row and body, as one surface.
+   * "elevated" (default) is the list's surface, which Ambience turns into a
+   * translucent blur over the wallpaper; "none" opts out and lets the shell show
+   * through, for a panel that genuinely needs to paint nothing.
    */
   surface?: DockSurface
   collapsible?: boolean
@@ -145,7 +146,7 @@ export function useDockPanel(id: string, options: DockPanelOptions): DockPanelHa
   const [rejected, setRejected] = useState(false)
   const active = wanted && enabled && !rejected
 
-  const { title, icon, defaultZone = "right", order, minSize, maxSize, defaultSize, surface = "none", collapsible = false } = options
+  const { title, icon, defaultZone = "right", order, minSize, maxSize, defaultSize, surface = "elevated", collapsible = false } = options
   const closable = typeof options.onClose === "function"
   const meta = useMemo<DockPanelMeta>(
     () => ({ title, icon, defaultZone, order, minSize, maxSize, defaultSize, surface, collapsible, closable }),
@@ -839,7 +840,7 @@ function DockGroupView({ store, group, snapshot }: { store: DockStore; group: Vi
 
   // The group is the panel's one surface: header row and body together, as the
   // active panel declares it. Theming layers (Ambience) style it by data-dock-surface.
-  const surface = snapshot.panels.get(group.active)?.surface ?? "none"
+  const surface = snapshot.panels.get(group.active)?.surface ?? "elevated"
   return (
     <div
       data-dock-group={group.id}

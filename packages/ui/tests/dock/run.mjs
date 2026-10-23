@@ -122,8 +122,8 @@ try {
     }
   }
   await assertOneHeaderRow("defaults")
-  // Surfaces: zones and tool panels paint nothing (the shell and any wallpaper show
-  // through); the list's elevated surface covers its header row and body as one element.
+  // Surfaces: zones paint nothing; every panel is one elevated surface (the default)
+  // covering its header row and body, the list and the tool panels alike.
   const painted = (locator) => locator.evaluate((el) => getComputedStyle(el).backgroundColor)
   for (const zone of await page.locator("[data-dock-zone]").all()) assert.equal(await painted(zone), "rgba(0, 0, 0, 0)", "zones paint nothing")
   const listSurface = groupOf(page, "list")
@@ -131,8 +131,8 @@ try {
   assert.notEqual(await painted(listSurface), "rgba(0, 0, 0, 0)", "the list surface is painted")
   assert.equal(await listSurface.locator("[data-dock-group-header]").count(), 1, "the list surface includes its header row")
   assert.equal(await painted(host(page, "list").locator('[data-slot="master-detail-sidebar"]')), "rgba(0, 0, 0, 0)", "the docked sidebar does not paint a second layer")
-  assert.equal(await groupOf(page, "console").getAttribute("data-dock-surface"), "none")
-  assert.equal(await painted(groupOf(page, "console")), "rgba(0, 0, 0, 0)", "tool panels paint nothing")
+  assert.equal(await groupOf(page, "console").getAttribute("data-dock-surface"), "elevated")
+  assert.equal(await painted(groupOf(page, "console")), await painted(listSurface), "tool panels share the list's surface")
   // The row is the panel's own header: same padding, so the title keeps its x position.
   const rowBox = await box(groupOf(page, "list").locator("[data-dock-group-header]"))
   const titleBox = await box(groupOf(page, "list").locator("[data-dock-group-header]").getByText("Discussions", { exact: true }))
