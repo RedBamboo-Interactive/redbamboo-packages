@@ -4,7 +4,7 @@ import { AttachmentCard } from "./attachment-card"
 import { acceptedAttachmentFiles } from "../lib/attachment-selection"
 import { shouldAutoFocusComposer } from "../lib/composer-focus"
 import type { ComposerAutoFocusMode } from "../lib/composer-focus"
-import { composerDelivery, shouldQueueBusyDraftOnTab } from "../lib/composer-delivery"
+import { composerDelivery, shouldSubmitDraftOnTab } from "../lib/composer-delivery"
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger, DropdownMenuItem, useUiEnvironment } from "@redbamboo/ui"
 
 interface ComposerProps {
@@ -399,8 +399,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       onTogglePlanMode()
       return
     }
-    if (e.key === "Tab" && shouldQueueBusyDraftOnTab({
-      isStreaming,
+    if (e.key === "Tab" && shouldSubmitDraftOnTab({
       hasContent: !!value.trim() || images.length > 0
         || attachments.some(attachment => attachment.state === "ready"),
       shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey,
