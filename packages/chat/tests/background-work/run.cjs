@@ -163,6 +163,15 @@ async function main() {
       await page.keyboard.press("Escape")
       await dialog.waitFor({ state: "detached" })
 
+      // A woken turn spanning several text segments shows its origin once,
+      // inside the frieze row that opens the turn, not on a line of its own.
+      const stoppedOrigin = page.getByRole("button", { name: "Security review of leaf-mail stopped" })
+      assert.equal(await stoppedOrigin.count(), 1, "one origin circle per woken turn")
+      assert.equal(await stoppedOrigin.evaluate(el =>
+        [...el.parentElement.children].indexOf(el) === 0 && !!el.nextElementSibling?.matches("[data-tool-use-id]")), true,
+        "the origin circle leads its turn's squares in one row")
+      await shot("08-inline-origin")
+
       assert.deepEqual(errors, [], `browser errors at ${width}px`)
       results.push({ width, passed: true })
       await page.close()

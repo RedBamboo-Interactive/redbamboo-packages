@@ -52,6 +52,18 @@ const records: PersistedMessage[] = [
   record({ role: "assistant", eventType: "text", messageUid: "turn-1", phase: "final_answer", content: "Both agents are running. I will report when they finish." }),
   record({ role: "assistant", eventType: "text", messageUid: "wake-1", phase: "final_answer", content: "The architecture map is done: extensions are RedLeaf plugins.",
     turnOrigin: { kind: "background-task", taskId: "task-map" } }),
+  // A woken turn that opens with activity and spans two text segments: one
+  // origin circle, inline at the head of its first activity row.
+  ...[
+    record({ role: "assistant", eventType: "tool_use", toolName: "Read", messageId: "toolu_w2a", messageUid: "wake-2",
+      toolInput: JSON.stringify({ file_path: "T:/Projects/leaf-mail/SECURITY.md" }) }),
+    record({ role: "assistant", eventType: "tool_result", messageId: "toolu_w2a", messageUid: "wake-2", toolResult: "# Security" }),
+    record({ role: "assistant", eventType: "text", messageUid: "wake-2", phase: "commentary", content: "The review stopped early; checking what it covered." }),
+    record({ role: "assistant", eventType: "tool_use", toolName: "Grep", messageId: "toolu_w2b", messageUid: "wake-2",
+      toolInput: JSON.stringify({ pattern: "token" }) }),
+    record({ role: "assistant", eventType: "tool_result", messageId: "toolu_w2b", messageUid: "wake-2", toolResult: "src/auth.ts" }),
+    record({ role: "assistant", eventType: "text", messageUid: "wake-2", phase: "final_answer", content: "It covered auth only; I will rerun the rest." }),
+  ].map(entry => ({ ...entry, turnOrigin: { kind: "background-task", taskId: "task-stopped" } })),
 ]
 
 const backgroundTasks: BackgroundTaskInfo[] = [

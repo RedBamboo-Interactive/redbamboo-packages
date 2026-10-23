@@ -135,3 +135,61 @@ test("legacy unphased text remains visible beside a final answer", () => {
   answer.phase = "final_answer"
   assert.equal(shape([block("assistant", [legacy, answer])]), "N(legacy text+final text)")
 })
+
+const origin = { kind: "background-task", taskId: "poll" }
+const woken = (b: MessageBlock, uid: string): MessageBlock =>
+  ({ ...b, metadata: { messageUid: uid, turnOrigin: origin } })
+
+test("a woken turn's origin joins the frieze once, inline before its first activity", () => {
+  const rows = projectActivityTimeline([
+    block("assistant", [part("tool_use", "earlier")]),
+    woken(block("assistant", [
+      part("tool_use", "bash"), part("text", "first update"),
+      part("tool_use", "read"), part("text", "second update"),
+    ]), "wake"),
+  ])
+  assert.deepEqual(rows.map(row => row.kind), ["activity", "message", "activity", "message"])
+  assert.deepEqual(rows[0].turnOrigins, [{ before: 1, origin, turnKey: "wake" }])
+  assert.equal(rows[2].turnOrigins, undefined)
+  for (const row of rows.filter(row => row.kind === "message"))
+    assert.equal(row.block.metadata?.turnOrigin, undefined)
+  // The dot's row and the turn's first text are one message: no gap between them.
+  assert.equal(rows[0].compactAfter, true)
+})
+
+test("a woken turn that opens with text keeps its origin on the preceding activity row", () => {
+  const rows = projectActivityTimeline([
+    block("assistant", [part("tool_use", "previous turn")]),
+    woken(block("assistant", [part("text", "woke up")]), "wake"),
+  ])
+  assert.equal(shape([rows[0].block]), "A(previous turn)")
+  assert.deepEqual(rows[0].turnOrigins, [{ before: 1, origin, turnKey: "wake" }])
+  assert.equal(rows.length, 2)
+})
+
+test("an origin with no preceding activity forms its own row exactly once", () => {
+  const rows = projectActivityTimeline([
+    block("user", [part("text", "question")]),
+    woken(block("assistant", [part("text", "woke up")]), "wake"),
+  ])
+  assert.deepEqual(rows.map(row => row.kind), ["message", "activity", "message"])
+  assert.deepEqual(rows[1].block.parts, [])
+  assert.deepEqual(rows[1].turnOrigins, [{ before: 0, origin, turnKey: "wake" }])
+})
+
+test("continuation segments of one woken turn do not repeat its origin", () => {
+  const event = part("tool_use", "weather")
+  event.toolName = "event:weather"
+  const first = woken(block("assistant", [part("text", "before event")]), "wake")
+  const continuation = { ...woken(block("assistant", [part("text", "after event")]), "wake"), id: "wake:segment:1" }
+  const rows = projectActivityTimeline([first, block("assistant", [event]), continuation])
+  assert.equal(rows.flatMap(row => row.turnOrigins ?? []).length, 1)
+})
+
+test("an origin learned late keeps the activity row identity", () => {
+  const plain = block("assistant", [part("tool_use", "bash"), part("text", "done")])
+  const before = projectActivityTimeline([plain])
+  const after = projectActivityTimeline([woken(plain, "wake")])
+  assert.equal(after[0].key, before[0].key)
+  assert.deepEqual(after[0].turnOrigins, [{ before: 0, origin, turnKey: "wake" }])
+})

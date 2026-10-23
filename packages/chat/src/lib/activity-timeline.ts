@@ -1,4 +1,14 @@
-import type { MessageBlock, MessagePart } from "../types"
+import type { MessageBlock, MessagePart, TurnOrigin } from "../types"
+import { TURN_ORIGIN_KEY, turnOriginOf } from "./background-work.ts"
+
+/** A turn-origin marker drawn inside an activity frieze, before `parts[before]`. */
+export interface ActivityTurnOrigin {
+  /** Index into the row's parts; equal to `parts.length` when nothing follows it. */
+  before: number
+  origin: TurnOrigin
+  /** The originating turn's identity (its messageUid when known). */
+  turnKey: string
+}
 
 export interface ActivityTimelineRow {
   key: string
@@ -12,6 +22,8 @@ export interface ActivityTimelineRow {
   ownsActions: boolean
   /** Sender identity belongs to the first content row of an original block. */
   ownsSender: boolean
+  /** Turns that start inside this activity row, positioned among its parts. */
+  turnOrigins?: ActivityTurnOrigin[]
 }
 
 function isVisibleContent(part: MessagePart): boolean {
@@ -28,6 +40,12 @@ function uniqueIndexes(indexes: number[]): number[] {
   return [...new Set(indexes)]
 }
 
+function withoutTurnOrigin(block: MessageBlock): MessageBlock {
+  if (!block.metadata || !(TURN_ORIGIN_KEY in block.metadata)) return block
+  const { [TURN_ORIGIN_KEY]: _origin, ...metadata } = block.metadata
+  return { ...block, metadata }
+}
+
 /**
  * Project canonical conversation blocks into visual timeline rows.
  *
@@ -35,6 +53,10 @@ function uniqueIndexes(indexes: number[]): number[] {
  * Persisted message boundaries are deliberately irrelevant to that frieze:
  * only visible conversational content flushes it. The canonical blocks remain
  * untouched for stream targeting, persistence, metadata and reactions.
+ *
+ * A turn origin (what woke a self-started turn) is turn-level, not segment-level:
+ * it joins the frieze once, at the turn's chronological start, and is stripped
+ * from the content rows the turn is split into.
  */
 export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0): ActivityTimelineRow[] {
   const rows: ActivityTimelineRow[] = []
@@ -43,9 +65,11 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
   let activityFirstBlock: MessageBlock | null = null
   let activityLastBlock: MessageBlock | null = null
   let activityAnchor: string | null = null
+  let activityOrigins: ActivityTurnOrigin[] = []
+  const placedOrigins = new Set<string>()
 
   const flushActivity = () => {
-    if (!activityParts.length || !activityFirstBlock || !activityLastBlock || !activityAnchor) return
+    if ((!activityParts.length && !activityOrigins.length) || !activityFirstBlock || !activityLastBlock || !activityAnchor) return
     const sourceIndices = uniqueIndexes(activitySources)
     rows.push({
       // Anchor the React identity to the first canonical part in this activity
@@ -64,8 +88,10 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
       compactAfter: false,
       ownsActions: false,
       ownsSender: false,
+      ...(activityOrigins.length ? { turnOrigins: activityOrigins } : {}),
     })
     activityParts = []
+    activityOrigins = []
     activitySources = []
     activityFirstBlock = null
     activityLastBlock = null
@@ -92,6 +118,21 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
       continue
     }
 
+    // Continuation segments of one turn share its messageUid; mark it once.
+    const origin = turnOriginOf(block)
+    const turnKey = typeof block.metadata?.messageUid === "string" ? block.metadata.messageUid : block.id
+    if (origin && !placedOrigins.has(turnKey)) {
+      placedOrigins.add(turnKey)
+      activityFirstBlock ??= block
+      // Same anchor the block's own leading activity part would take, so an
+      // origin learned late (closing status) does not remount the row.
+      activityAnchor ??= `${block.id}:0`
+      activityLastBlock = block
+      activityOrigins.push({ before: activityParts.length, origin, turnKey })
+      activitySources.push(sourceIndex)
+    }
+    const contentBlock = withoutTurnOrigin(block)
+
     let contentParts: MessagePart[] = []
     let contentSegment = 0
 
@@ -100,7 +141,7 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
       rows.push({
         key: `message:${block.id}:${contentSegment++}`,
         kind: "message",
-        block: { ...block, parts: contentParts },
+        block: { ...contentBlock, parts: contentParts },
         sourceIndices: [sourceIndex],
         compactAfter: false,
         ownsActions: false,

@@ -663,6 +663,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     renderSideActions={row.ownsActions ? renderSideActions : undefined}
                     compactAfter={row.compactAfter}
                     showActions={row.ownsActions}
+                    turnOrigins={row.turnOrigins}
                   />
                 )
               })}

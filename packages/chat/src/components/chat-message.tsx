@@ -24,7 +24,8 @@ import { isEventPart, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
 import { PART_COLOR, getPartColor, getSpinnerColor, isBackgroundRunning } from "../lib/part-colors"
 import { findPairedResult, turnOriginOf } from "../lib/background-work"
-import { BackgroundTaskPanel, ChildFrieze, TurnOriginMarker, childLabel, useBackgroundWork } from "./background-task-view"
+import { BackgroundTaskPanel, ChildFrieze, TurnOriginDot, TurnOriginMarker, childLabel, useBackgroundWork } from "./background-task-view"
+import type { ActivityTurnOrigin } from "../lib/activity-timeline"
 import { CONTEXT_COMPACTION_TOOL_NAME } from "../lib/chat-status"
 import { resolveQuestionCardContent } from "../lib/question-card"
 import { AudioPlayerWidget } from "./audio-player-widget"
@@ -139,6 +140,8 @@ interface ChatMessageProps {
   compactAfter?: boolean
   /** Activity rows spanning multiple canonical messages have no single owner. */
   showActions?: boolean
+  /** Turn-origin circles drawn inside this activity row's frieze. */
+  turnOrigins?: readonly ActivityTurnOrigin[]
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -170,6 +173,7 @@ export const ChatMessage = memo(function ChatMessage({
   renderSideActions,
   compactAfter = false,
   showActions = true,
+  turnOrigins,
 }: ChatMessageProps) {
   // Entrance is a mount-time decision. Queue reconciliation can remove the
   // outgoing bridge immediately after this row mounts; changing the prop then
@@ -367,6 +371,9 @@ export const ChatMessage = memo(function ChatMessage({
 
   const isLiveBlock = !!isStreaming && !!isLastAssistantBlock
   const groups = groupParts(block.parts, isLiveBlock)
+  // A turn can start with visible text, leaving its origin alone in a row.
+  if (turnOrigins?.length && !groups.some(group => group.kind === "frieze"))
+    groups.push({ kind: "frieze", parts: [], isLive: isLiveBlock })
   const hasExitPlanMode = block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
 
   const askQuestionPart = block.parts.find(p => p.type === "tool_use" && p.toolName === "AskUserQuestion")
@@ -414,7 +421,7 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
             </div>
           )
         )}
@@ -493,10 +500,12 @@ function partLabel(part: MessagePart): string {
 }
 
 
-function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
   parts: MessagePart[]
   allParts: MessagePart[]
+  /** Positions index `allParts`; an origin past the last part trails the frieze. */
+  turnOrigins?: readonly ActivityTurnOrigin[]
   isLive?: boolean
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
@@ -569,10 +578,17 @@ function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolve
       ?.scrollIntoView({ block: "center", behavior: "smooth" })
   })
 
+  // Origins interleave by canonical position: each is drawn before the first
+  // square at or after it, and any left over trail the row.
+  const squares = parts.filter(p => p.type !== "tool_result")
+  const positions = squares.map(part => allParts.indexOf(part))
+  const originsBefore = (i: number) => (turnOrigins ?? []).filter(entry =>
+    entry.before <= positions[i]! && entry.before > (i > 0 ? positions[i - 1]! : -1))
+  const trailingOrigins = (turnOrigins ?? []).filter(entry => entry.before > (positions.at(-1) ?? -1))
   return (
     <>
       <div ref={friezeRef} className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5">
-        {parts.filter(p => p.type !== "tool_result").map((part, i) => {
+        {squares.flatMap((part, i) => {
           // Persisted history deliberately omits transient partial flags. An
           // unresolved compaction pair in an active turn is nevertheless live,
           // so a reconnect must restore the same animated square as the stream.
@@ -585,9 +601,10 @@ function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolve
           const event = isEventPart(part)
           const queueStatus = resolveEventQueueStatus?.(part)
           const squareEvent = usesSquareEventMarker(part)
-          return (
+          return [
+            ...originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />),
             <button
-              key={i}
+              key={`part:${i}`}
               onClick={() => handleClick(part)}
               className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
               style={{ backgroundColor: queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part) }}
@@ -596,9 +613,11 @@ function PartFrieze({ blockId, parts, allParts, isLive, resolveFileLink, resolve
               data-input-message-uid={event ? part.messageUid : undefined}
               data-tool-use-id={part.toolUseId}
               data-task-status={part.task?.status}
-            />
-          )
+            />,
+          ]
         })}
+        {trailingOrigins.map(entry =>
+          <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)}
       </div>
 
       <PartModal part={selectedPart} pairedResult={modalSelection?.result} open={!!selected} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />

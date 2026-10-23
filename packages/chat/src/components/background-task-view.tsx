@@ -170,7 +170,8 @@ export function ChildFrieze({ parts, selected, onSelect }: {
 }
 
 /** The delegation-coloured event circle opening a turn the provider started because a background task finished. */
-export function TurnOriginMarker({ origin }: { origin: TurnOrigin }) {
+/** The origin circle alone, for placement inside an activity frieze. */
+export function TurnOriginDot({ origin }: { origin: TurnOrigin }) {
   const { tasks, requestOpen } = useBackgroundWork()
   const entry = origin.taskId ? tasks.get(origin.taskId) : undefined
   const label = entry
@@ -178,15 +179,22 @@ export function TurnOriginMarker({ origin }: { origin: TurnOrigin }) {
     : "A background task finished"
   const toolUseId = entry?.part.toolUseId
   return (
-    <div data-slot="turn-origin" className="flex items-center gap-[3px] py-1.5 px-0.5">
-      <button
-        type="button"
-        onClick={() => toolUseId && requestOpen(toolUseId)}
-        className="w-2.5 h-2.5 rounded-full transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
-        style={{ backgroundColor: PART_COLOR.delegation }}
-        title={label}
-        aria-label={label}
-      />
+    <button
+      type="button"
+      data-slot="turn-origin"
+      onClick={() => toolUseId && requestOpen(toolUseId)}
+      className="w-2.5 h-2.5 rounded-full transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
+      style={{ backgroundColor: PART_COLOR.delegation }}
+      title={label}
+      aria-label={label}
+    />
+  )
+}
+
+export function TurnOriginMarker({ origin }: { origin: TurnOrigin }) {
+  return (
+    <div className="flex items-center gap-[3px] py-1.5 px-0.5">
+      <TurnOriginDot origin={origin} />
     </div>
   )
 }
