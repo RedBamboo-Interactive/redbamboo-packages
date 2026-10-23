@@ -36,7 +36,7 @@ export function ActivityShapes({ shapes }: { shapes: readonly ActivityShape[] })
           key={shape.key}
           type="button"
           onClick={shape.onOpen}
-          className={`w-2.5 h-2.5 ${shape.shape === "circle" ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${shape.running ? " square-jiggle" : ""}`}
+          className={`w-2.5 h-2.5 ${shape.shape === "circle" ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${shape.running ? " square-wobble" : ""}`}
           style={{ backgroundColor: shape.color }}
           title={shape.label}
           aria-label={shape.label}

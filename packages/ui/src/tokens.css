@@ -875,17 +875,30 @@ body {
   animation-delay: var(--msg-enter-delay, 0ms);
 }
 
-/* Running work moves; it never changes size, so every square keeps one size. */
 @keyframes square-jiggle {
+  0%, 100% { transform: scale(1.25) rotate(0deg); }
+  25% { transform: scale(1.25) rotate(-4deg) translate(-0.4px, -0.3px); }
+  50% { transform: scale(1.25) rotate(0deg) translate(0, 0.3px); }
+  75% { transform: scale(1.25) rotate(4deg) translate(0.4px, -0.3px); }
+}
+
+.square-jiggle {
+  animation: square-spawn 0.45s ease-out var(--msg-enter-delay, 0ms) both,
+             square-jiggle 0.6s ease-in-out calc(0.45s + var(--msg-enter-delay, 0ms)) infinite;
+}
+
+/* The same wobble at the square's own size, for rows where every square runs
+   (the chat activity row), so they match the conversation's squares. */
+@keyframes square-wobble {
   0%, 100% { transform: rotate(0deg); }
   25% { transform: rotate(-4deg) translate(-0.4px, -0.3px); }
   50% { transform: rotate(0deg) translate(0, 0.3px); }
   75% { transform: rotate(4deg) translate(0.4px, -0.3px); }
 }
 
-.square-jiggle {
-  animation: square-spawn 0.45s ease-out var(--msg-enter-delay, 0ms) both,
-             square-jiggle 0.6s ease-in-out calc(0.45s + var(--msg-enter-delay, 0ms)) infinite;
+.square-wobble {
+  animation: square-spawn 0.45s ease-out both,
+             square-wobble 0.6s ease-in-out 0.45s infinite;
 }
 
 @keyframes audio-wave {
