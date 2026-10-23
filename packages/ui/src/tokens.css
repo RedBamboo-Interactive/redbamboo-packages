@@ -596,6 +596,16 @@ body {
   font-size: 0.85em;
   word-break: break-all;
 }
+/* Colour dot beside an inline-code colour value; the colour comes from the element's own style. */
+.markdown-body [data-slot="color-swatch"] {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-left: 0.35em;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  vertical-align: middle;
+}
 .markdown-body {
   overflow-wrap: break-word;
   word-break: break-word;

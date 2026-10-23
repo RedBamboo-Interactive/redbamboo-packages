@@ -21,6 +21,7 @@ import { canonicalizeLeafLinkHref, isExternalWebLink, isInternalLeafLink } from 
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseLocalFileLink } from "../lib/local-file-link"
 import { isUnsafeLinkHref, remarkUserText } from "../lib/user-markdown"
+import { rehypeColorSwatches } from "../lib/color-swatch"
 
 type FileLinkResolver = (
   filePath: string,
@@ -319,6 +320,7 @@ function useMarkdownComponents(
 }
 
 const CHARS_PER_FRAME = 3
+const MESSAGE_REHYPE_PLUGINS = [rehypeHighlight, rehypeColorSwatches]
 
 export function StreamingText({
   content,
@@ -361,7 +363,7 @@ export function StreamingText({
   return (
     <Markdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight]}
+      rehypePlugins={MESSAGE_REHYPE_PLUGINS}
       components={mdComponents}
       urlTransform={(u: string) => u}
     >
@@ -391,7 +393,7 @@ export function MarkdownRenderer({
   return (
     <Markdown
       remarkPlugins={userText ? USER_TEXT_REMARK_PLUGINS : AUTHORED_REMARK_PLUGINS}
-      rehypePlugins={[rehypeHighlight]}
+      rehypePlugins={MESSAGE_REHYPE_PLUGINS}
       components={mdComponents}
       urlTransform={(u: string) => u}
     >
