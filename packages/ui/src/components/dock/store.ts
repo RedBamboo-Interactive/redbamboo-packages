@@ -83,7 +83,10 @@ interface Registration {
 
 interface HeaderRegistration {
   token: object
+  /** The header's in-place container inside the panel. */
   element: HTMLElement
+  /** Stable element holding the header's content; the dock re-parents it into the group header row. */
+  contentHost: HTMLElement
 }
 
 const ZONE_EDGE = 44
@@ -293,11 +296,11 @@ export class DockStore {
 
   // --- headers ------------------------------------------------------------
 
-  registerHeader(panelId: string, token: object, element: HTMLElement) {
+  registerHeader(panelId: string, token: object, element: HTMLElement, contentHost: HTMLElement) {
     const list = this.headerRegistrations.get(panelId) ?? []
     if (list.some((entry) => entry.token === token)) return
     const before = this.primaryHeaderToken(panelId)
-    this.headerRegistrations.set(panelId, [...list, { token, element }])
+    this.headerRegistrations.set(panelId, [...list, { token, element, contentHost }])
     if (this.primaryHeaderToken(panelId) !== before) this.emit()
   }
 
@@ -321,6 +324,21 @@ export class DockStore {
 
   isPrimaryHeader(panelId: string, token: object): boolean {
     return this.primaryHeaderToken(panelId) === token
+  }
+
+  /** Content host of the panel's primary header, which the group header row displays. */
+  headerHost(panelId: string): HTMLElement | null {
+    const token = this.primaryHeaderToken(panelId)
+    return this.headerRegistrations.get(panelId)?.find((entry) => entry.token === token)?.contentHost ?? null
+  }
+
+  /** How the group header row shows this panel: its whole header alone, or only its actions beside tabs. */
+  headerMode(panelId: string): "single" | "tab" | null {
+    for (const zone of DOCK_ZONES) {
+      const group = this.snapshot.visible.zones[zone].find((candidate) => candidate.panels.includes(panelId))
+      if (group) return group.panels.length > 1 ? "tab" : "single"
+    }
+    return null
   }
 
   // --- layout actions -----------------------------------------------------

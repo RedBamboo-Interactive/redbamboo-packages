@@ -1,7 +1,8 @@
 import { cva, type VariantProps } from "class-variance-authority"
-import { useRef, type ReactNode } from "react"
+import type { ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { cn } from "../utils"
-import { useDockHeader } from "./dock/dock"
+import { useDockedHeader, useIsInDockPanel } from "./dock/dock"
 
 const panelHeaderVariants = cva(
   "flex items-center gap-2 px-3 border-b border-overlay-6 shrink-0",
@@ -24,22 +25,23 @@ export interface PanelHeaderProps
   className?: string
 }
 
-export function PanelHeader({
+export function PanelHeader(props: PanelHeaderProps) {
+  // Inside a dock panel the dock takes the header over; everywhere else
+  // (including every narrow and mobile layout) it renders exactly as it always has.
+  return useIsInDockPanel() ? <DockedPanelHeader {...props} /> : <StaticPanelHeader {...props} />
+}
+
+function StaticPanelHeader({
   leading,
   title,
   children,
   variant,
   className,
 }: PanelHeaderProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  // Inside a dock panel, the panel's first header is its drag handle and menu.
-  const dock = useDockHeader(ref)
   return (
     <div
-      ref={ref}
       data-slot="panel-header"
       className={cn(panelHeaderVariants({ variant }), className)}
-      {...dock?.handleProps}
     >
       {leading}
       {title && (
@@ -47,9 +49,50 @@ export function PanelHeader({
           {title}
         </span>
       )}
-      {dock?.menu}
       {children}
     </div>
+  )
+}
+
+/**
+ * The panel's first header becomes the dock group's header row: its content
+ * moves into that row and the in-place header is hidden, so a docked panel
+ * shows one header. In a tab group the tab names the panel and only the
+ * header's actions join the row. Other headers in the panel stay in place.
+ */
+function DockedPanelHeader({
+  leading,
+  title,
+  children,
+  variant,
+  className,
+}: PanelHeaderProps) {
+  const header = useDockedHeader()!
+  const showIdentity = !(header.primary && header.mode === "tab")
+  return (
+    <>
+      <div
+        ref={header.containerRef}
+        data-slot="panel-header"
+        data-dock-taken-over={header.primary ? "" : undefined}
+        className={cn(panelHeaderVariants({ variant }), className)}
+        style={header.primary ? { display: "none" } : undefined}
+      />
+      {createPortal(
+        header.wrap(
+          <>
+            {showIdentity ? leading : null}
+            {showIdentity && title ? (
+              <span className="text-[14px] font-medium text-contrast flex-1 truncate">
+                {title}
+              </span>
+            ) : null}
+            {children}
+          </>,
+        ),
+        header.contentHost,
+      )}
+    </>
   )
 }
 

@@ -27,9 +27,10 @@ const box = async (locator) => {
 }
 
 /** Drags with real pointer events from a handle to a point. */
-async function drag(page, handle, to, { escape = false, screenshot } = {}) {
+async function drag(page, handle, to, options = {}) {
+  const { escape = false, screenshot } = options
   const from = await box(handle)
-  const startX = from.x + 24
+  const startX = from.x + (options.fromGrip ? 14 : 80)
   const startY = from.y + from.height / 2
   await page.mouse.move(startX, startY)
   await page.mouse.down()
@@ -112,7 +113,21 @@ try {
   }
 
   // --- below the threshold and Escape both cancel -------------------------
-  const listHeader = host(page, "list").locator('[data-slot="panel-header"]')
+  // One header row per group: the dock's row carries the panel's own header content.
+  const assertOneHeaderRow = async (step) => {
+    for (const group of await page.locator("[data-dock-group]").all()) {
+      assert.equal(await group.locator("[data-dock-group-header]").count(), 1, `${step}: one header row`)
+      assert.equal(await group.locator('[data-dock-group-body] [data-slot="panel-header"]:visible').count(), 0, `${step}: no second header inside the panel`)
+      assert.equal(await group.locator("[data-dock-menu]").count(), 1, `${step}: one dock menu`)
+    }
+  }
+  await assertOneHeaderRow("defaults")
+  const listRow = groupOf(page, "list").locator("[data-dock-group-header]")
+  assert.equal(await listRow.getByText("Discussions", { exact: true }).count(), 1, "the list's own title is in the row")
+  assert.equal(await listRow.getByRole("button", { name: "New discussion" }).count(), 1, "the list's own action is in the row")
+  const consoleRow = groupOf(page, "console").locator("[data-dock-group-header]")
+  assert.equal(await consoleRow.getByRole("button", { name: /^Close console$/i }).count(), 1, "single close: the panel's own")
+  const listHeader = listRow
   assert.equal(await listHeader.getAttribute("data-dock-handle"), "list", "the list's PanelHeader is its handle")
   const cancelled = await drag(page, listHeader, await pointIn(groupOf(page, "settings"), 0.5, 0.5), { escape: true })
   assert.notEqual(cancelled, "none")
@@ -120,7 +135,8 @@ try {
   await assertPreserved("escape")
 
   // --- drag the list to the right zone (split below Settings) -------------
-  const dropped = await drag(page, listHeader, await pointIn(groupOf(page, "settings"), 0.5, 0.94), { screenshot: "02-dragging-list.png" })
+  const dropped = await drag(page, listHeader, await pointIn(groupOf(page, "settings"), 0.5, 0.94), { screenshot: "02-dragging-list.png", fromGrip: true })
+  assert.equal(await page.getByRole("menu").count(), 0, "dragging from the grip does not open its menu")
   assert.match(dropped, /^split:.*:after$/)
   assert.equal(await zoneOf(page, "list"), "right")
   assert.equal(await page.locator('[data-dock-zone="left"]').count(), 0, "the emptied left zone takes no space")
@@ -129,11 +145,16 @@ try {
   await page.screenshot({ path: path.join(outputDir, "03-list-right.png") })
 
   // --- tabs: History onto Settings ----------------------------------------
-  const historyHeader = host(page, "history").locator('[data-slot="panel-header"]')
+  const historyHeader = groupOf(page, "history").locator("[data-dock-group-header]")
   const tabbed = await drag(page, historyHeader, await pointIn(groupOf(page, "settings"), 0.5, 0.5))
   assert.match(tabbed, /^tab:/)
   const tablist = groupOf(page, "settings").getByRole("tablist")
   assert.deepEqual(await tablist.getByRole("tab").allTextContents(), ["Settings", "History"])
+  await assertOneHeaderRow("tabs")
+  const tabRow = groupOf(page, "settings").locator("[data-dock-group-header]")
+  assert.equal(await tabRow.getByText("History", { exact: true }).count(), 1, "tab group: the title appears once, in the tab")
+  assert.equal(await tabRow.getByRole("button", { name: /^Close/ }).count(), 1, "tab group: one close, the active panel's")
+  assert.equal(await tabRow.getByRole("button", { name: "Close history" }).count(), 1)
   assert.equal(await tablist.getByRole("tab", { name: "History" }).getAttribute("aria-selected"), "true")
   assert.equal(await host(page, "settings").evaluate((el) => el.inert), true, "inactive tab is inert")
   await tablist.getByRole("tab", { name: "Settings" }).click()
@@ -143,7 +164,7 @@ try {
   await assertPreserved("tabs")
 
   // --- keyboard: header menu moves Console to the bottom ------------------
-  const consoleMenu = host(page, "console").getByRole("button", { name: "Console panel options" })
+  const consoleMenu = groupOf(page, "console").getByRole("button", { name: "Console panel options" })
   await consoleMenu.focus()
   await page.keyboard.press("Enter")
   const moveBottom = page.getByRole("menuitem", { name: "Move to bottom" })
@@ -162,7 +183,8 @@ try {
   await page.getByTestId("toggle-notes").click()
   await page.evaluate(() => { window.__extraMounts = { notes: 1 } })
   const notesGroup = groupOf(page, "notes")
-  assert.equal(await notesGroup.getByRole("tablist").count() + await notesGroup.locator('[data-slot="dock-panel-header"]').count() > 0, true)
+  assert.equal(await notesGroup.locator("[data-dock-group-header]").getByText("Notes", { exact: true }).count(), 1, "headerless panels get the dock title")
+  await assertOneHeaderRow("notes")
   await assertPreserved("notes open")
 
   // --- zone resize is saved ------------------------------------------------
@@ -195,7 +217,7 @@ try {
   await page.getByTestId("app-b").click()
   await page.getByTestId("app-b-content").waitFor()
   assert.equal(await zoneOf(page, "console"), "right", "app B starts from defaults")
-  const bMenu = host(page, "console").getByRole("button", { name: "Console panel options" })
+  const bMenu = groupOf(page, "console").getByRole("button", { name: "Console panel options" })
   await bMenu.click()
   await page.getByRole("menuitem", { name: "Move to left" }).click()
   assert.equal(await zoneOf(page, "console"), "left")
@@ -213,7 +235,7 @@ try {
   assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:b:v1")), savedB, "reset leaves app B alone")
 
   // --- collapse persists ---------------------------------------------------
-  await host(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
+  await groupOf(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
   await page.getByRole("menuitem", { name: "Collapse" }).click()
   await page.getByRole("button", { name: "Expand Discussions" }).waitFor()
   assert.equal(Math.round((await box(page.locator('[data-dock-zone="left"]'))).width), 36, "collapsed zone is a rail")
@@ -248,9 +270,9 @@ try {
   await page.evaluate(() => localStorage.clear())
   await page.reload({ waitUntil: "networkidle" })
   await page.getByTestId("toggle-console").click()
-  await host(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
+  await groupOf(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
   await page.getByRole("menuitem", { name: "Move to right" }).click()
-  await host(page, "console").getByRole("button", { name: "Console panel options" }).click()
+  await groupOf(page, "console").getByRole("button", { name: "Console panel options" }).click()
   await page.getByRole("menuitem", { name: "Move to bottom" }).click()
   await page.getByTestId("composer").fill("draft across breakpoints")
   await page.evaluate(() => { window.__composer = document.querySelector('[data-testid="composer"]') })

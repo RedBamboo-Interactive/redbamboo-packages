@@ -39,6 +39,9 @@ interface DockPanelContextValue {
 
 const DockPanelContext = createContext<DockPanelContextValue | null>(null)
 
+/** The CSS scope docked content must carry (a federated plugin's), or null. */
+const DockScopeContext = createContext<ScopeAttributes | null>(null)
+
 const noopSubscribe = () => () => {}
 const DRAG_THRESHOLD = 4
 const RAIL_SIZE = 36
@@ -221,7 +224,15 @@ function DockScope({ environment, children }: { environment: UiEnvironment; chil
     observer.observe(container, { attributes: true, attributeFilter: ["class", "data-contrast", "data-plugin-css"] })
     return () => observer.disconnect()
   }, [container, scoped])
-  if (!scoped) return <>{children}</>
+  if (!scoped) return <DockScopeContext.Provider value={null}>{children}</DockScopeContext.Provider>
+  return (
+    <DockScopeContext.Provider value={scope}>
+      <ScopeAttributesWrapper scope={scope}>{children}</ScopeAttributesWrapper>
+    </DockScopeContext.Provider>
+  )
+}
+
+function ScopeAttributesWrapper({ scope, children }: { scope: ScopeAttributes; children: ReactNode }) {
   return (
     <div
       data-plugin-css={scope.pluginCss}
@@ -291,56 +302,88 @@ export function useDockController(): DockController | null {
 // Header integration (used by PanelHeader)
 // ---------------------------------------------------------------------------
 
-export interface DockHeaderBinding {
-  handleProps: {
-    onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void
-    "data-dock-handle": string
-  }
-  menu: ReactNode
+export interface DockedHeaderBinding {
+  /** The header's in-place container; hidden while the dock shows the header in its row. */
+  containerRef: RefObject<HTMLDivElement | null>
+  /** Stable element the header renders its content into. */
+  contentHost: HTMLElement
+  /** This is the panel's header, shown in the dock group's header row. */
+  primary: boolean
+  /** In a tab group the tabs name the panel, so only the header's actions are shown. */
+  mode: "single" | "tab" | null
+  /** Wraps content so a federated plugin's CSS scope survives the move into the row. */
+  wrap: (content: ReactNode) => ReactNode
 }
 
 /**
- * Lets the first `PanelHeader` inside a dock panel act as that panel's drag
- * handle and carry its dock menu. Returns null everywhere else.
+ * The dock owns one header row per group. A `PanelHeader` inside a dock panel
+ * renders its content into a stable host: the panel's first header is taken
+ * over (the dock moves that host into the group's header row and the in-place
+ * header is hidden); any other header keeps its host in place. Moving the host
+ * never remounts the header's content.
  */
-export function useDockHeader(ref: RefObject<HTMLElement | null>): DockHeaderBinding | null {
+export function useDockedHeader(): DockedHeaderBinding | null {
   const panel = useContext(DockPanelContext)
+  const scope = useContext(DockScopeContext)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const contentHost = useStableHost("panel-header-content", "display:contents")
   const [token] = useState(() => ({}))
+  const store = panel?.store ?? null
   const primary = useSyncExternalStore(
-    panel?.store.subscribe ?? noopSubscribe,
+    store?.subscribe ?? noopSubscribe,
     () => (panel ? panel.store.isPrimaryHeader(panel.panelId, token) : false),
     () => false,
   )
+  const mode = useSyncExternalStore(
+    store?.subscribe ?? noopSubscribe,
+    () => (panel ? panel.store.headerMode(panel.panelId) : null),
+    () => null,
+  )
   useLayoutEffect(() => {
-    if (!panel || !ref.current) return
-    panel.store.registerHeader(panel.panelId, token, ref.current)
+    if (!panel || !containerRef.current) return
+    panel.store.registerHeader(panel.panelId, token, containerRef.current, contentHost)
     return () => panel.store.unregisterHeader(panel.panelId, token)
-  }, [panel, ref, token])
-  const onPointerDown = useDragHandle(panel?.store ?? null, panel?.panelId ?? null)
-  if (!panel || !primary) return null
-  return {
-    handleProps: { onPointerDown, "data-dock-handle": panel.panelId },
-    menu: <DockPanelMenu store={panel.store} panelId={panel.panelId} />,
-  }
+  }, [panel, token, contentHost])
+  // A header the dock does not display keeps its content where it is.
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!primary && container && contentHost.parentElement !== container) container.appendChild(contentHost)
+  })
+  const wrap = useCallback(
+    (content: ReactNode) => (scope ? <ScopeAttributesWrapper scope={scope}>{content}</ScopeAttributesWrapper> : <>{content}</>),
+    [scope],
+  )
+  if (!panel) return null
+  return { containerRef, contentHost, primary, mode, wrap }
 }
 
 // ---------------------------------------------------------------------------
 // Drag
 // ---------------------------------------------------------------------------
 
-function useDragHandle(store: DockStore | null, panelId: string | null) {
-  return useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (!store || !panelId) return
-    if (event.button !== 0 || !event.isPrimary) return
-    const origin = event.target as Element | null
-    const interactive = origin?.closest(INTERACTIVE)
-    if (interactive && interactive !== event.currentTarget && event.currentTarget.contains(interactive)) return
-    trackPointerDrag(store, panelId, event)
-  }, [store, panelId])
+type PointerDownLike = Pick<PointerEvent, "button" | "isPrimary" | "pointerId" | "clientX" | "clientY" | "target"> & {
+  currentTarget: EventTarget | null
 }
 
-function trackPointerDrag(store: DockStore, panelId: string, event: ReactPointerEvent<HTMLElement>) {
-  const doc = event.currentTarget.ownerDocument
+function startDragFrom(store: DockStore | null, panelId: string | null, event: PointerDownLike) {
+  if (!store || !panelId) return
+  if (event.button !== 0 || !event.isPrimary) return
+  const handle = event.currentTarget as HTMLElement | null
+  if (!handle) return
+  const origin = event.target as Element | null
+  const interactive = origin?.closest(INTERACTIVE)
+  // The grip is a button but also the handle: a click opens its menu, a drag moves the panel.
+  if (interactive && interactive !== handle && handle.contains(interactive)
+    && !interactive.hasAttribute("data-dock-grip")) return
+  trackPointerDrag(store, panelId, handle, event)
+}
+
+function useDragHandle(store: DockStore | null, panelId: string | null) {
+  return useCallback((event: ReactPointerEvent<HTMLElement>) => startDragFrom(store, panelId, event), [store, panelId])
+}
+
+function trackPointerDrag(store: DockStore, panelId: string, handle: HTMLElement, event: PointerDownLike) {
+  const doc = handle.ownerDocument
   const view = doc.defaultView ?? window
   const pointerId = event.pointerId
   const startX = event.clientX
@@ -741,8 +784,6 @@ function DockZoneView({
 function DockGroupView({ store, group, snapshot }: { store: DockStore; group: VisibleDockGroup; snapshot: DockSnapshot }) {
   const bodyRef = useRef<HTMLDivElement>(null)
   const multiple = group.panels.length > 1
-  const activeMeta = snapshot.panels.get(group.active)
-  const activeHasHeader = snapshot.headers.has(group.active)
 
   // Re-parent host elements into this body and expose only the active tab.
   // Inactive tabs stay laid out (visibility, not display) so their scroll survives.
@@ -776,33 +817,49 @@ function DockGroupView({ store, group, snapshot }: { store: DockStore; group: Vi
       data-dock-group-zone={group.zone}
       className="flex h-full w-full min-h-0 min-w-0 flex-col"
     >
-      {multiple ? (
-        <DockTabStrip store={store} group={group} snapshot={snapshot} showMenu={!activeHasHeader} />
-      ) : !activeHasHeader && activeMeta ? (
-        <FallbackHeader store={store} panelId={group.active} meta={activeMeta} />
-      ) : null}
+      <DockGroupHeader store={store} group={group} snapshot={snapshot} />
       <div ref={bodyRef} data-dock-group-body="" className="relative min-h-0 min-w-0 flex-1" />
     </div>
   )
 }
 
-function tabId(panelId: string) {
-  return `dock-tab-${panelId.replace(/[^A-Za-z0-9_-]/g, "_")}`
-}
+/**
+ * The group's one header row: grip (drag handle and panel menu), then either
+ * the panel's own header (single panel) or tabs plus the active panel's header
+ * actions. The panel's own close button, when it has one, is the close.
+ */
+function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: VisibleDockGroup; snapshot: DockSnapshot }) {
+  const slotRef = useRef<HTMLDivElement>(null)
+  const multiple = group.panels.length > 1
+  const active = group.active
+  const meta = snapshot.panels.get(active)
+  const hasHeader = snapshot.headers.has(active)
+  const rowRef = useRef<HTMLDivElement>(null)
 
-function DockTabStrip({
-  store,
-  group,
-  snapshot,
-  showMenu,
-}: {
-  store: DockStore
-  group: VisibleDockGroup
-  snapshot: DockSnapshot
-  showMenu: boolean
-}) {
-  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    const index = group.panels.indexOf(group.active)
+  // The taken-over header is portalled from inside the panel, so React events
+  // from it never reach this row: listen to the DOM instead. Tabs move themselves.
+  useLayoutEffect(() => {
+    const row = rowRef.current
+    if (!row) return
+    const onPointerDown = (event: PointerEvent) => {
+      if ((event.target as Element | null)?.closest?.("[data-dock-tab]")) return
+      startDragFrom(store, active, event)
+    }
+    row.addEventListener("pointerdown", onPointerDown)
+    return () => row.removeEventListener("pointerdown", onPointerDown)
+  }, [store, active])
+
+  // Show only the active panel's taken-over header; others wait detached.
+  useLayoutEffect(() => {
+    const slot = slotRef.current
+    if (!slot) return
+    const host = hasHeader ? store.headerHost(active) : null
+    for (const child of [...slot.children]) if (child !== host) slot.removeChild(child)
+    if (host && host.parentElement !== slot) slot.appendChild(host)
+  })
+
+  const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const index = group.panels.indexOf(active)
     let next: number | null = null
     if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % group.panels.length
     else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + group.panels.length) % group.panels.length
@@ -814,26 +871,58 @@ function DockTabStrip({
     store.activate(id)
     event.currentTarget.ownerDocument.getElementById(tabId(id))?.focus()
   }
-  const activeTitle = snapshot.panels.get(group.active)?.title ?? group.active
+
   return (
-    <div className="flex h-8 shrink-0 items-stretch border-b border-overlay-6 bg-surface-base">
-      <div
-        role="tablist"
-        aria-label={`Panels: ${group.panels.map((id) => snapshot.panels.get(id)?.title ?? id).join(", ")}`}
-        className="flex min-w-0 flex-1 items-stretch overflow-x-auto"
-        onKeyDown={onKeyDown}
-      >
-        {group.panels.map((id) => (
-          <DockTab key={id} store={store} panelId={id} meta={snapshot.panels.get(id)} active={id === group.active} />
-        ))}
-      </div>
-      {showMenu && (
-        <div className="flex items-center px-1">
-          <DockPanelMenu store={store} panelId={group.active} label={`${activeTitle} panel options`} />
+    <div
+      data-slot="dock-group-header"
+      data-dock-group-header=""
+      ref={rowRef}
+      data-dock-handle={active}
+      className="flex h-12 shrink-0 select-none items-center gap-1 border-b border-overlay-6 pl-1 pr-3"
+    >
+      <DockPanelMenu store={store} panelId={active} />
+      {multiple ? (
+        <div
+          role="tablist"
+          aria-label={`Panels: ${group.panels.map((id) => snapshot.panels.get(id)?.title ?? id).join(", ")}`}
+          className="flex min-w-0 shrink items-stretch self-stretch overflow-x-auto"
+          onKeyDown={onTabKeyDown}
+        >
+          {group.panels.map((id) => (
+            <DockTab key={id} store={store} panelId={id} meta={snapshot.panels.get(id)} active={id === active} />
+          ))}
         </div>
+      ) : !hasHeader && meta ? (
+        <span className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-[14px] font-medium text-contrast">
+          {meta.icon && <i className={cn(meta.icon, "text-sm text-text-muted")} aria-hidden="true" />}
+          <span className="truncate">{meta.title}</span>
+        </span>
+      ) : null}
+      <div
+        ref={slotRef}
+        data-dock-header-slot=""
+        className={cn(
+          "flex min-w-0 items-center gap-2",
+          multiple ? "flex-1 justify-end" : hasHeader ? "flex-1 pl-1" : "",
+        )}
+      />
+      {!hasHeader && meta?.closable && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Close ${meta.title}`}
+          title={`Close ${meta.title}`}
+          onClick={() => store.close(active)}
+        >
+          <i className="ph-bold ph-x" aria-hidden="true" />
+        </Button>
       )}
     </div>
   )
+}
+
+function tabId(panelId: string) {
+  return `dock-tab-${panelId.replace(/[^A-Za-z0-9_-]/g, "_")}`
 }
 
 function DockTab({ store, panelId, meta, active }: { store: DockStore; panelId: string; meta?: DockPanelMeta; active: boolean }) {
@@ -857,43 +946,12 @@ function DockTab({ store, panelId, meta, active }: { store: DockStore; panelId: 
         }
       }}
       className={cn(
-        "group/tab flex max-w-48 shrink-0 select-none items-center gap-1.5 border-r border-overlay-6 px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-teal-a50",
-        active ? "bg-background text-contrast" : "text-text-muted hover:bg-overlay-5 hover:text-contrast",
+        "flex max-w-48 shrink-0 select-none items-center gap-1.5 border-b-2 px-2.5 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-teal-a50",
+        active ? "border-accent-teal font-medium text-contrast" : "border-transparent text-text-muted hover:text-contrast",
       )}
     >
       {meta?.icon && <i className={cn(meta.icon, "text-[12px]")} aria-hidden="true" />}
-      <span className="truncate font-medium">{title}</span>
-      {meta?.closable && (
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={`Close ${title}`}
-          title={`Close ${title}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            store.close(panelId)
-          }}
-          className="-mr-1 flex size-4 items-center justify-center rounded-sm text-text-muted opacity-0 transition-opacity hover:bg-overlay-12 hover:text-contrast group-hover/tab:opacity-100 group-focus-visible/tab:opacity-100"
-        >
-          <i className="ph-bold ph-x text-[10px]" aria-hidden="true" />
-        </button>
-      )}
-    </div>
-  )
-}
-
-function FallbackHeader({ store, panelId, meta }: { store: DockStore; panelId: string; meta: DockPanelMeta }) {
-  const onPointerDown = useDragHandle(store, panelId)
-  return (
-    <div
-      data-slot="dock-panel-header"
-      data-dock-handle={panelId}
-      onPointerDown={onPointerDown}
-      className="flex h-8 shrink-0 select-none items-center gap-2 border-b border-overlay-6 bg-surface-base px-2 text-xs text-text-muted"
-    >
-      {meta.icon && <i className={cn(meta.icon, "text-[12px]")} aria-hidden="true" />}
-      <span className="min-w-0 flex-1 truncate font-medium text-contrast">{meta.title}</span>
-      <DockPanelMenu store={store} panelId={panelId} />
+      <span className="truncate">{title}</span>
     </div>
   )
 }
@@ -964,14 +1022,16 @@ function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: s
             variant="ghost"
             size="icon-xs"
             data-dock-menu={panelId}
+            data-dock-grip=""
             aria-label={label ?? `${meta.title} panel options`}
-            title="Panel options"
+            title="Drag to move, click for options"
+            className="cursor-grab text-text-muted active:cursor-grabbing"
           />
         )}
       >
-        <i className="ph-bold ph-dots-three-vertical" aria-hidden="true" />
+        <i className="ph-bold ph-dots-six-vertical" aria-hidden="true" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-44">
+      <DropdownMenuContent align="start" className="min-w-44">
         {DOCK_ZONES.map((target) => (
           <DropdownMenuItem
             key={target}
