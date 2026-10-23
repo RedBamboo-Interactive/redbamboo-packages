@@ -27,6 +27,8 @@ import {
 } from "../dropdown-menu"
 import { DOCK_ZONES, findPanel, type DockZone, type VisibleDockGroup } from "./layout"
 import { DockStore, DOCK_DEFAULT_ZONE_SIZE, type DockDragState, type DockPanelMeta, type DockSnapshot } from "./store"
+import { HostSlot, useStableHost } from "./host-slot"
+import { ResizablePanel, ResizablePanelGroup } from "../resizable"
 
 const DockStoreContext = createContext<DockStore | null>(null)
 
@@ -486,11 +488,22 @@ export function DockFrame({ children, className }: DockFrameProps) {
   const parkingRef = useRef<HTMLDivElement>(null)
   const zonePixels = useRef<Partial<Record<DockZone, number>>>({})
   const resizeIntent = useRef(false)
+  const { enabled, visible, layout, generation } = snapshot
+  // The centre renders into one stable host for the frame's whole life, so the
+  // structure around it can change (docking on/off, a bottom zone appearing)
+  // without ever remounting the main content.
+  const centerHost = useStableHost("dock-center-host", "height:100%;min-height:0;min-width:0;overflow:hidden")
+  const centerSlot = <HostSlot host={centerHost} slot="dock-center-slot" />
 
   useLayoutEffect(() => {
     store.setFrame(frameRef.current)
     return () => store.setFrame(null)
-  }, [store])
+  }, [store, enabled])
+
+  useLayoutEffect(() => {
+    if (enabled) centerHost.setAttribute("data-dock-center", "")
+    else centerHost.removeAttribute("data-dock-center")
+  }, [centerHost, enabled])
 
   // The resize library swallows pointerdown at the document, so React never sees
   // it; a window capture listener runs first.
@@ -503,7 +516,7 @@ export function DockFrame({ children, className }: DockFrameProps) {
     }
     view.addEventListener("pointerdown", onPointerDown, { capture: true })
     return () => view.removeEventListener("pointerdown", onPointerDown, { capture: true })
-  }, [])
+  }, [enabled])
 
   // Children (group bodies) have attached their panels by now.
   useLayoutEffect(() => {
@@ -511,7 +524,6 @@ export function DockFrame({ children, className }: DockFrameProps) {
     store.restoreMoveState()
   })
 
-  const { enabled, visible, layout, generation } = snapshot
   const zoneMode = (zone: DockZone): "groups" | "rail" | null => {
     if (!enabled) return null
     if (visible.zones[zone].length > 0) return "groups"
@@ -582,31 +594,54 @@ export function DockFrame({ children, className }: DockFrameProps) {
     )
   }
 
+  // Only the slot moves; the portal keeps one tree position (second child of
+  // the fragment below) in every mode, which is what keeps the centre mounted.
+  const centerPortal = createPortal(children, centerHost)
+
+  // Docking off (narrow shell, phones): exactly the shell's previous structure,
+  // one full-width panel, no frame, no zones, no handlers.
+  if (!enabled) {
+    return (
+      <>
+        <ResizablePanelGroup orientation="horizontal" className={cn("flex-1 min-h-0", className)}>
+          <ResizablePanel defaultSize={100} minSize={30}>
+            {centerSlot}
+          </ResizablePanel>
+        </ResizablePanelGroup>
+        {centerPortal}
+      </>
+    )
+  }
+
   return (
+    <>
     <div
       ref={frameRef}
       data-slot="dock-frame"
-      data-dock-enabled={enabled || undefined}
+      data-dock-enabled=""
       className={cn("relative flex min-h-0 min-w-0 flex-1", className)}
       onKeyDownCapture={markIntent}
     >
       <Group id="dock-columns" orientation="horizontal" className="flex h-full w-full min-h-0" onLayoutChanged={saveColumnSizes}>
         {zonePanel("left")}
         <Panel key="center" id="dock-column" data-dock-column="" minSize="25%" groupResizeBehavior="preserve-relative-size" className="min-h-0 min-w-0">
-          <Group id="dock-center-column" orientation="vertical" className="flex h-full w-full min-h-0 flex-col" onLayoutChanged={saveColumnSizes}>
-            <Panel key="main" id="dock-main" minSize="20%" groupResizeBehavior="preserve-relative-size" className="min-h-0 min-w-0">
-              <div data-dock-center="" className="h-full min-h-0 min-w-0 overflow-hidden">
-                {children}
-              </div>
-            </Panel>
-            {zonePanel("bottom")}
-          </Group>
+          {/* The column only becomes a resizable group while the bottom zone is in use. */}
+          {modes.bottom ? (
+            <Group id="dock-center-column" orientation="vertical" className="flex h-full w-full min-h-0 flex-col" onLayoutChanged={saveColumnSizes}>
+              <Panel key="main" id="dock-main" minSize="20%" groupResizeBehavior="preserve-relative-size" className="min-h-0 min-w-0">
+                {centerSlot}
+              </Panel>
+              {zonePanel("bottom")}
+            </Group>
+          ) : centerSlot}
         </Panel>
         {zonePanel("right")}
       </Group>
       <div ref={parkingRef} data-dock-parking="" hidden />
       <DockDragOverlay store={store} />
     </div>
+    {centerPortal}
+    </>
   )
 }
 

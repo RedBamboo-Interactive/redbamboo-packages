@@ -1,7 +1,9 @@
 import { type ReactNode, createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { createPortal } from "react-dom"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./resizable"
 import { useDockPanel } from "./dock/dock"
+import { HostSlot, useStableHost } from "./dock/host-slot"
 import { cn } from "../utils"
 
 interface MasterDetailLayoutProps {
@@ -53,6 +55,14 @@ function MasterDetailLayout({
   const tab = controlledTab ?? internalTab
   const setTab = onMobileTabChange ?? setInternalTab
   const nested = useContext(MasterDetailNesting)
+  // Responsive layouts switch between desktop and tabs at 768px and between
+  // docked and inline at the shell breakpoint. The detail renders into a stable
+  // host that moves between those slots (and is detached while the mobile list
+  // tab shows), so it is never remounted and a chat keeps its draft and scroll.
+  // Compact (Float) keeps its original tabs exactly.
+  const stableDetail = presentation === "responsive"
+  const detailHost = useStableHost("master-detail-detail", "display:contents")
+  const detailNode = stableDetail ? <HostSlot host={detailHost} slot="master-detail-detail-slot" /> : detail
 
   const [isDesktop, setIsDesktop] = useState(() =>
     presentation === "compact" ? false : typeof window !== "undefined"
@@ -139,6 +149,13 @@ function MasterDetailLayout({
   })
   const docked = list.docked
 
+  // The detail first mounts in the same commit as its first slot, exactly as
+  // before (a phone opening on the list tab does not mount it yet), and then
+  // stays mounted across tab switches and breakpoints.
+  const slotVisible = isDesktop || tab === 1
+  const [detailMounted, setDetailMounted] = useState(slotVisible)
+  if (stableDetail && slotVisible && !detailMounted) setDetailMounted(true)
+
   // Docked and inline desktop share one tree; only the sidebar slots come and
   // go, so the detail keeps its position (and its state) across the switch.
   return (
@@ -179,7 +196,7 @@ function MasterDetailLayout({
                   data-slot="master-detail-content"
                   className="h-full overflow-hidden flex flex-col min-h-0"
                 >
-                  {detail}
+                  {detailNode}
                 </div>
               </ResizablePanel>
             </ResizablePanelGroup>
@@ -200,7 +217,7 @@ function MasterDetailLayout({
                 data-slot="master-detail-content"
                 className="flex-1 overflow-hidden flex flex-col min-h-0"
               >
-                {detail}
+                {detailNode}
               </div>
             </div>
           )
@@ -226,12 +243,16 @@ function MasterDetailLayout({
               value={1}
               className="min-w-0 min-h-0 overflow-hidden flex flex-col"
             >
-              {detail}
+              {detailNode}
             </TabsContent>
           </Tabs>
         )}
       </MasterDetailNesting.Provider>
       {list.element}
+      {stableDetail && detailMounted && createPortal(
+        <MasterDetailNesting.Provider value>{detail}</MasterDetailNesting.Provider>,
+        detailHost,
+      )}
     </div>
   )
 }

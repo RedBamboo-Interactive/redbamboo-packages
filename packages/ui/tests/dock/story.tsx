@@ -85,6 +85,8 @@ function Chat({ selected }: { selected: number }) {
 
 function NovaLikeApp() {
   const [selected, setSelected] = React.useState(0)
+  // `?compact=1` mirrors Floating Nova's compact presentation.
+  const compact = new URLSearchParams(window.location.search).has("compact")
   // Stand-in for a federated plugin boundary: its portal container carries the CSS scope.
   const [portal, setPortal] = React.useState<HTMLDivElement | null>(null)
   React.useLayoutEffect(() => {
@@ -102,6 +104,7 @@ function NovaLikeApp() {
     <div data-plugin-css="story-plugin" style={{ display: "contents" }}>
       <UiEnvironmentProvider document={document} portalContainer={portal}>
         <MasterDetailLayout
+          presentation={compact ? "compact" : "responsive"}
           layoutKey="story-discussions"
           mobileLabels={["Discussions", "Chat"]}
           sidebar={<DiscussionList selected={selected} onSelect={setSelected} />}

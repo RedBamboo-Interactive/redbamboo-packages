@@ -18,6 +18,7 @@ import {
   type DockZone,
   type VisibleDockLayout,
 } from "./layout"
+import { captureScroll, resyncScrollListeners, restoreScroll, type ScrollRecord } from "./scroll-memory"
 
 export interface DockPanelMeta {
   title: string
@@ -85,8 +86,6 @@ interface HeaderRegistration {
   element: HTMLElement
 }
 
-type ScrollRecord = [element: Element, top: number, left: number]
-
 const ZONE_EDGE = 44
 const GROUP_EDGE_RATIO = 0.28
 const FALLBACK_ZONE_SIZE: Record<DockZone, number> = { left: 320, right: 360, bottom: 260 }
@@ -101,6 +100,8 @@ export class DockStore {
   private layout: DockLayout = emptyLayout()
   private config: DockConfig
   private generation = 0
+  /** Storage key the in-memory layout came from; null until docking is first enabled. */
+  private loadedKey: string | null = null
   private snapshot: DockSnapshot
   private drag: DockDragState | null = null
   private frame: HTMLElement | null = null
@@ -110,7 +111,8 @@ export class DockStore {
   constructor(ownerDocument: Document, config: DockConfig) {
     this.ownerDocument = ownerDocument
     this.config = config
-    this.layout = this.load()
+    // Below the desktop breakpoints the dock is inert: nothing is read until it is enabled.
+    if (config.enabled) this.load()
     this.snapshot = this.buildSnapshot()
   }
 
@@ -167,12 +169,13 @@ export class DockStore {
       && previous.enabled === next.enabled) return
     this.cancelDrag()
     this.config = next
-    if (previous.layoutId !== next.layoutId || previous.storagePrefix !== next.storagePrefix) {
-      this.captureMoveState()
-      this.layout = this.load()
-      this.generation += 1
-    } else if (next.enabled) {
-      this.layout = this.withRegisteredPanels(this.layout)
+    if (next.enabled) {
+      if (this.loadedKey !== this.layoutKeyId()) {
+        this.captureMoveState()
+        this.load()
+      } else {
+        this.layout = this.withRegisteredPanels(this.layout)
+      }
     }
     this.emit()
   }
@@ -190,7 +193,12 @@ export class DockStore {
     }
   }
 
-  private load(): DockLayout {
+  private layoutKeyId(): string {
+    return this.storageKey() ?? `memory:${this.config.layoutId}`
+  }
+
+  /** Replaces the in-memory layout with the stored one for the current layout id. */
+  private load() {
     const key = this.storageKey()
     let layout = emptyLayout()
     if (key) {
@@ -200,7 +208,9 @@ export class DockStore {
         layout = emptyLayout()
       }
     }
-    return this.withRegisteredPanels(layout)
+    this.layout = this.withRegisteredPanels(layout)
+    this.loadedKey = this.layoutKeyId()
+    this.generation += 1
   }
 
   private persist() {
@@ -387,11 +397,7 @@ export class DockStore {
   private captureMoveState() {
     const records: ScrollRecord[] = this.pendingScroll ?? []
     for (const host of this.hosts.values()) {
-      if (!host.isConnected) continue
-      if (host.scrollTop || host.scrollLeft) records.push([host, host.scrollTop, host.scrollLeft])
-      for (const element of host.querySelectorAll("*")) {
-        if (element.scrollTop || element.scrollLeft) records.push([element, element.scrollTop, element.scrollLeft])
-      }
+      if (host.isConnected) captureScroll(host, records)
     }
     this.pendingScroll = records
     const active = this.ownerDocument.activeElement
@@ -407,11 +413,8 @@ export class DockStore {
     this.pendingScroll = null
     this.pendingFocus = null
     if (records) {
-      for (const [element, top, left] of records) {
-        if (!element.isConnected) continue
-        if (element.scrollTop !== top) element.scrollTop = top
-        if (element.scrollLeft !== left) element.scrollLeft = left
-      }
+      restoreScroll(records)
+      for (const host of this.hosts.values()) resyncScrollListeners(host)
     }
     if (focus && focus.isConnected) {
       const active = this.ownerDocument.activeElement
