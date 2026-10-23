@@ -133,10 +133,18 @@ try {
   assert.equal(await painted(host(page, "list").locator('[data-slot="master-detail-sidebar"]')), "rgba(0, 0, 0, 0)", "the docked sidebar does not paint a second layer")
   assert.equal(await groupOf(page, "console").getAttribute("data-dock-surface"), "elevated")
   assert.equal(await painted(groupOf(page, "console")), await painted(listSurface), "tool panels share the list's surface")
-  // The row is the panel's own header: same padding, so the title keeps its x position.
-  const rowBox = await box(groupOf(page, "list").locator("[data-dock-group-header]"))
-  const titleBox = await box(groupOf(page, "list").locator("[data-dock-group-header]").getByText("Discussions", { exact: true }))
-  assert.equal(Math.round(titleBox.x - rowBox.x), 12, "title sits at the header's 12px padding; the grip lives inside the padding")
+  // The grip has its own slot: 8px from the panel edge, a 24px-tall hit target, then the
+  // header's own 8px gap before the title.
+  for (const id of ["list", "console"]) {
+    const row = groupOf(page, id).locator("[data-dock-group-header]")
+    const rowBox = await box(row)
+    const gripBox = await box(row.locator("[data-dock-grip]"))
+    const title = id === "list" ? "Discussions" : "Console"
+    const titleBox = await box(row.getByText(title, { exact: true }))
+    assert.equal(Math.round(gripBox.x - rowBox.x), 8, `${id}: grip 8px from the panel edge`)
+    assert.ok(gripBox.height >= 24, `${id}: grip hit target at least 24px tall`)
+    assert.equal(Math.round(titleBox.x - (gripBox.x + gripBox.width)), 8, `${id}: 8px between grip and title`)
+  }
   const listRow = groupOf(page, "list").locator("[data-dock-group-header]")
   assert.equal(await listRow.getByText("Discussions", { exact: true }).count(), 1, "the list's own title is in the row")
   assert.equal(await listRow.getByRole("button", { name: "New discussion" }).count(), 1, "the list's own action is in the row")

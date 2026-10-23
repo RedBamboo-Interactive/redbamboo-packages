@@ -904,9 +904,10 @@ function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: 
     event.currentTarget.ownerDocument.getElementById(tabId(id))?.focus()
   }
 
-  // The row is the panel's own header: same classes, so the same height, padding
-  // and spacing as before docking. The grip sits in the left padding, so titles and
-  // actions stay exactly where they were.
+  // The row is the panel's own header: same classes, so the same height, gaps and
+  // right padding as before docking. The grip has its own slot: the left padding
+  // narrows to 8px and the header's own gap (icon to title) follows the grip, so
+  // the title moves right by the grip's slot, by design.
   const rowClass = (hasHeader ? snapshot.headerClasses.get(active) : undefined) ?? DEFAULT_HEADER_ROW
   return (
     <div
@@ -914,7 +915,7 @@ function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: 
       data-dock-group-header=""
       ref={rowRef}
       data-dock-handle={active}
-      className={cn(rowClass, "relative select-none")}
+      className={cn(rowClass, "select-none pl-2")}
     >
       <DockPanelMenu store={store} panelId={active} />
       {multiple ? (
@@ -1059,7 +1060,7 @@ function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: s
             data-dock-grip=""
             aria-label={label ?? `${meta.title} panel options`}
             title="Drag to move, click for options"
-            className="absolute left-0 top-1/2 h-6 w-3 -translate-y-1/2 cursor-grab rounded-sm text-[10px] text-text-muted active:cursor-grabbing"
+            className="h-6 w-4 shrink-0 cursor-grab rounded-sm text-[12px] text-text-muted active:cursor-grabbing"
           />
         )}
       >
