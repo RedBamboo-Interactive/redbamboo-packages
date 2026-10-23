@@ -503,7 +503,7 @@ export function ChatPanel(props: ChatPanelProps) {
     <div data-slot="activity-status-row" className="min-w-0">
       <ActivityShapesProvider value={<ActivityShapes shapes={activityShapes} />}>
         {sessionLine ?? (backgroundSummary && (
-          <ChatStatusLine color={backgroundColor} paused={backgroundPaused} label={backgroundSummary.label} detail={backgroundSummary.detail} title={backgroundSummary.title} />
+          <ChatStatusLine color={backgroundColor} paused={backgroundPaused} icon={backgroundSummary.icon} label={backgroundSummary.label} title={backgroundSummary.title} />
         ))}
       </ActivityShapesProvider>
       <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTaskId(null)}

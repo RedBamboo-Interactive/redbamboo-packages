@@ -368,27 +368,31 @@ export function orderBackgroundActivity<T extends ActivityTask>(tasks: readonly 
 export interface BackgroundActivitySummary {
   /** Which work owns the text: running agents, other background tasks, or the host's work. */
   source: "agents" | "tasks" | "host"
+  /** Icon and verb, like the session's own status ("Thinking..."). */
+  icon?: string
   label: string
-  /** The leading task's latest progress line, e.g. "Running Echo alpha". */
-  detail?: string
   title?: string
 }
 
 /**
- * One status text for the work behind an idle session, by priority: agents,
- * then other background tasks, then host-owned work such as delegations. Only
- * the leading group is described; every item still has its own shape.
+ * One icon and verb for the work behind an idle session, by priority: agents,
+ * then other background tasks, then host-owned work such as delegations. The
+ * shapes carry the count and each item's details; the text only says what
+ * kind of work leads.
  */
 export function summarizeBackgroundActivity(running: readonly ActivityTask[],
-  host?: { label: string; title?: string } | null): BackgroundActivitySummary | null {
+  host?: { label: string; icon?: string; title?: string } | null): BackgroundActivitySummary | null {
   const ordered = orderBackgroundActivity(running)
   const agents = ordered.filter(task => task.kind === "agent")
-  const group = agents.length ? agents : ordered
-  if (group.length) {
-    const detail = group[0].lastActivity || undefined
-    return { source: agents.length ? "agents" : "tasks", label: `${describeBackgroundCount(group)} working`, ...(detail ? { detail } : {}) }
+  if (agents.length) return { source: "agents", icon: "ph-bold ph-robot", label: agents.length === 1 ? "Agent working..." : "Agents working..." }
+  if (ordered.length) {
+    const lead = ordered[0].kind
+    const same = ordered.filter(task => task.kind === lead).length
+    return lead === "shell"
+      ? { source: "tasks", icon: "ph-bold ph-terminal", label: same === 1 ? "Running command..." : "Running commands..." }
+      : { source: "tasks", icon: "ph-bold ph-gear", label: "Working..." }
   }
-  if (host?.label) return { source: "host", label: host.label, ...(host.title ? { title: host.title } : {}) }
+  if (host?.label) return { source: "host", label: host.label, ...(host.icon ? { icon: host.icon } : {}), ...(host.title ? { title: host.title } : {}) }
   return null
 }
 

@@ -76,6 +76,7 @@ const delegation = (key: string, title: string, running: boolean) => ({
 })
 const hostActivity: ActivityStatusGroup = {
   label: "2 delegations ongoing…",
+  icon: "ph-bold ph-code",
   items: [delegation("d1", "Sentinel shield for Discord and Commons", true), delegation("d2", "Pin bump for release builds", false)],
 }
 

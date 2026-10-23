@@ -739,5 +739,7 @@ export interface ActivityStatusGroup {
   items: ActivityStatusItem[]
   /** The row's text when this is the highest-priority work, e.g. "1 delegation running…". */
   label: string
+  /** Icon beside that text, like the session's own status icons. */
+  icon?: string
   title?: string
 }

@@ -9,14 +9,12 @@ import { useActivityShapes } from "./activity-status-row"
  * Spinner and one status text. In the chat panel's status slot it also shows
  * the activity row's shapes between the two.
  */
-export function ChatStatusLine({ color, paused = false, icon, label, detail, title }: {
+export function ChatStatusLine({ color, paused = false, icon, label, title }: {
   color: string
   /** Still spinner, for work that is only waiting. */
   paused?: boolean
   icon?: string
   label: string
-  /** Secondary text after the label, e.g. the leading agent's latest progress. */
-  detail?: string
   title?: string
 }) {
   const shapes = useActivityShapes()
@@ -25,9 +23,7 @@ export function ChatStatusLine({ color, paused = false, icon, label, detail, tit
       <MorphSpinner color={color} paused={paused} />
       {shapes}
       {icon && <i className={`${icon} text-[10px] opacity-60`} />}
-      <span className="shrink-0">{label}</span>
-      {detail && <span aria-hidden className="text-text-disabled">·</span>}
-      {detail && <span className="truncate text-text-disabled">{detail}</span>}
+      <span className="truncate">{label}</span>
     </div>
   )
 }

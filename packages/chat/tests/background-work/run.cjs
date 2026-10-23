@@ -132,8 +132,8 @@ async function main() {
       // the leading group only. A shape opens its launching square's own dialog.
       const row = page.locator('[data-slot="activity-status-row"]')
       const shapes = row.getByRole("group", { name: "Background work" }).getByRole("button")
-      await row.getByText("1 agent working", { exact: true }).waitFor()
-      await row.getByText("Running Echo alpha").waitFor()
+      await row.getByText("Agent working...", { exact: true }).waitFor()
+      assert.equal(await row.getByText("Running Echo alpha").count(), 0, "the row names the kind of work, not its progress")
       assert.equal(await row.locator('[data-slot="streaming-status-line"]').count(), 1, "one line, not two")
       assert.deepEqual(await shapes.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-activity-key"))),
         ["task:task-research", "task:task-shell"], "agents before other tasks")
@@ -180,8 +180,9 @@ async function main() {
       .evaluateAll(nodes => nodes.map(node => [node.getAttribute("data-activity-key"), node.getAttribute("data-running") === "true"]))
     await row.getByRole("group", { name: "Background work" }).waitFor()
     assert.equal(await row.locator('[data-slot="streaming-status-line"]').count(), 1, "session and background share one line")
-    assert.equal(await row.getByText("agent working").count(), 0, "the session owns the text while it works")
+    assert.equal(await row.getByText("Agent working...").count(), 0, "the session owns the text while it works")
     assert.deepEqual(await shapeKeys(), [["task:task-research", true], ["task:task-shell", true], ["host:d1", true], ["host:d2", false]])
+    await page.waitForTimeout(600)
     await page.screenshot({ path: path.join(shots, "05-streaming-row-1440.png") })
     await page.close()
     results.push({ stopWarning: true, streamingRow: true })
@@ -189,8 +190,15 @@ async function main() {
     // Delegations only: they own the text, and a circle opens the standard dialog with the host's details.
     const hostPage = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 })
     await hostPage.goto(`${origin}?hostOnly`)
+    if (phosphorRoot) {
+      for (const weight of ["regular", "bold"]) {
+        await hostPage.addStyleTag({ url: `${origin}@fs/${path.join(phosphorRoot, "src", weight, "style.css").replace(/\\/g, "/")}` })
+      }
+      await hostPage.evaluate(() => document.fonts.ready)
+    }
     const hostRow = hostPage.locator('[data-slot="activity-status-row"]')
     await hostRow.getByText("2 delegations ongoing…").waitFor()
+    await hostPage.waitForTimeout(600)
     await hostPage.screenshot({ path: path.join(shots, "06-delegations-row-1440.png") })
     await hostRow.getByRole("button", { name: "Sentinel shield for Discord and Commons: running" }).click({ force: true })
     const hostDialog = hostPage.locator('[data-slot="dialog-content"]')

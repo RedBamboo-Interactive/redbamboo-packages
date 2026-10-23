@@ -345,17 +345,20 @@ test("activity row: agents lead, then other tasks, then host work; each group ol
   const running = runningBackgroundTasks(tasks)
   assert.deepEqual(running.map(task => task.taskId), ["shell", "late-agent", "early-agent", "monitor"])
   assert.deepEqual(orderBackgroundActivity(running).map(task => task.taskId), ["early-agent", "late-agent", "monitor", "shell"])
-  const host = { label: "1 delegation running…", title: "Delegations" }
-  // Agents own the text, described alone; other work keeps only its shape.
+  const host = { label: "1 delegation running…", icon: "ph-bold ph-code", title: "Delegations" }
+  // Agents own the text as an icon and verb; the shapes carry counts and details.
   assert.deepEqual(summarizeBackgroundActivity(running, host),
-    { source: "agents", label: "2 agents working", detail: "Running Echo alpha" })
-  // Without agents, the remaining background tasks lead.
+    { source: "agents", icon: "ph-bold ph-robot", label: "Agents working..." })
+  assert.equal(summarizeBackgroundActivity([tasks[1]], host)?.label, "Agent working...")
+  // Without agents, the oldest remaining task's kind leads.
   assert.deepEqual(summarizeBackgroundActivity(running.filter(task => task.kind !== "agent"), host),
-    { source: "tasks", label: "1 shell · 1 task working" })
+    { source: "tasks", icon: "ph-bold ph-gear", label: "Working..." })
   assert.deepEqual(summarizeBackgroundActivity([tasks[0]], host),
-    { source: "tasks", label: "1 shell working", detail: "npm test" })
+    { source: "tasks", icon: "ph-bold ph-terminal", label: "Running command..." })
+  assert.equal(summarizeBackgroundActivity([tasks[0], { ...tasks[0], taskId: "shell-2" }], host)?.label, "Running commands...")
   // Host work only speaks when nothing else runs.
-  assert.deepEqual(summarizeBackgroundActivity([], host), { source: "host", label: "1 delegation running…", title: "Delegations" })
+  assert.deepEqual(summarizeBackgroundActivity([], host),
+    { source: "host", icon: "ph-bold ph-code", label: "1 delegation running…", title: "Delegations" })
   assert.equal(summarizeBackgroundActivity([], null), null)
   assert.equal(summarizeBackgroundActivity([], { label: "" }), null)
 })
