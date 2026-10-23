@@ -3,22 +3,33 @@ import { JsonHighlight } from "@redbamboo/utility"
 import { humanizeJsonKey, isImageJsonField, isTechnicalJsonKey, type StructuredJson } from "../lib/structured-data"
 import { ExpandableText } from "./tool-output/shared"
 
+// Styled with design-system utilities only: chat.css does not reach the
+// plugin bundles that render this view, so custom classes would ship bare.
+
 interface Props {
   value: StructuredJson
   rawJson: string
   resolveImageSrc?: (src: string) => string | undefined
 }
 
+type ImageResolver = ((src: string) => string | undefined) | undefined
+
+const LONG_TEXT = 90
+const IDENTIFIER = /^[\w.:/\\@#+=~-]+$/
+
 export function StructuredDataView({ value, rawJson, resolveImageSrc }: Props) {
   let prettyJson = rawJson
   try { prettyJson = JSON.stringify(JSON.parse(rawJson), null, 2) } catch { /* already faithful text */ }
 
   return (
-    <div data-slot="structured-data-view" className="structured-data-view">
-      <StructuredValue value={value} depth={0} resolveImageSrc={resolveImageSrc} />
-      <details className="structured-data-disclosure">
-        <summary>Raw JSON</summary>
-        <div className="structured-data-raw">
+    <div data-slot="structured-data-view" className="flex min-w-0 flex-col gap-2">
+      <StructuredValue value={value} resolveImageSrc={resolveImageSrc} />
+      <details className="group/raw min-w-0">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded px-1 py-0.5 -mx-1 text-[11px] text-text-muted transition-colors hover:text-contrast [&::-webkit-details-marker]:hidden">
+          <i className="ph-bold ph-caret-right text-[9px] transition-transform group-open/raw:rotate-90" />
+          Raw JSON
+        </summary>
+        <div className="mt-1.5 overflow-x-auto rounded-md border border-border-subtle bg-overlay-3 px-3 py-2">
           <ExpandableText content={prettyJson}>
             {visible => <JsonHighlight json={visible} />}
           </ExpandableText>
@@ -28,126 +39,144 @@ export function StructuredDataView({ value, rawJson, resolveImageSrc }: Props) {
   )
 }
 
-function StructuredValue({ value, depth, resolveImageSrc }: {
-  value: StructuredJson
-  depth: number
-  resolveImageSrc?: (src: string) => string | undefined
-}) {
-  if (Array.isArray(value)) return <ArrayValue value={value} depth={depth} resolveImageSrc={resolveImageSrc} />
-  if (value !== null && typeof value === "object") return <ObjectValue value={value} depth={depth} resolveImageSrc={resolveImageSrc} />
+function StructuredValue({ value, resolveImageSrc }: { value: StructuredJson; resolveImageSrc: ImageResolver }) {
+  if (Array.isArray(value)) return <ArrayValue value={value} resolveImageSrc={resolveImageSrc} />
+  if (isObject(value)) return <ObjectValue value={value} resolveImageSrc={resolveImageSrc} />
   return <ScalarValue value={value} />
 }
 
-function ObjectValue({ value, depth, resolveImageSrc }: {
+/**
+ * A key/value list on one shared grid: short values sit beside their key,
+ * long text and nested structures take the full row beneath it. Technical
+ * identifiers trail the list, dimmed, so the readable fields lead.
+ */
+function ObjectValue({ value, resolveImageSrc }: {
   value: { [key: string]: StructuredJson }
-  depth: number
-  resolveImageSrc?: (src: string) => string | undefined
+  resolveImageSrc: ImageResolver
 }) {
   const entries = Object.entries(value)
   if (entries.length === 0) return <EmptyState>No parameters</EmptyState>
 
-  const primary = entries.filter(([key]) => !isTechnicalJsonKey(key))
-  const technical = entries.filter(([key]) => isTechnicalJsonKey(key))
+  const ordered = [
+    ...entries.filter(([key]) => !isTechnicalJsonKey(key)),
+    ...entries.filter(([key]) => isTechnicalJsonKey(key)),
+  ]
 
   return (
-    <div className="structured-data-stack">
-      {primary.map(([key, entry]) => (
-        <Field key={key} name={key} value={entry} depth={depth} resolveImageSrc={resolveImageSrc} />
+    <dl
+      data-slot="structured-data-list"
+      className="m-0 grid min-w-0 grid-cols-[minmax(5rem,max-content)_minmax(0,1fr)] divide-y divide-border-subtle overflow-hidden rounded-md border border-border-subtle bg-overlay-3"
+    >
+      {ordered.map(([key, entry]) => (
+        <Field key={key} name={key} value={entry} technical={isTechnicalJsonKey(key)} resolveImageSrc={resolveImageSrc} />
       ))}
-      {technical.length > 0 && (
-        <details className="structured-data-disclosure">
-          <summary>
-            Technical details
-            <span className="structured-data-count">{technical.length}</span>
-          </summary>
-          <div className="structured-data-disclosure-body">
-            {technical.map(([key, entry]) => (
-              <Field key={key} name={key} value={entry} depth={depth} resolveImageSrc={resolveImageSrc} compact />
-            ))}
-          </div>
-        </details>
-      )}
-    </div>
+    </dl>
   )
 }
 
-function Field({ name, value, depth, resolveImageSrc, compact = false }: {
+function Field({ name, value, technical, resolveImageSrc }: {
   name: string
   value: StructuredJson
-  depth: number
-  resolveImageSrc?: (src: string) => string | undefined
-  compact?: boolean
+  technical: boolean
+  resolveImageSrc: ImageResolver
 }) {
-  const complex = Array.isArray(value) || (value !== null && typeof value === "object")
   const label = humanizeJsonKey(name)
+  const keyClass = `max-w-48 text-[11px] leading-[18px] break-words ${technical ? "text-text-disabled" : "text-text-muted"}`
 
-  if (complex) {
+  if (isStacked(value)) {
     return (
-      <section className="structured-data-card structured-data-section">
-        <div className="structured-data-label">{label}</div>
-        <StructuredValue value={value} depth={depth + 1} resolveImageSrc={resolveImageSrc} />
-      </section>
+      <div className="col-span-2 flex min-w-0 flex-col gap-1.5 px-3 py-2">
+        <dt className={keyClass}>{label}</dt>
+        <dd className="m-0 min-w-0">
+          {typeof value === "string"
+            ? <LongText value={value} />
+            : <StructuredValue value={value} resolveImageSrc={resolveImageSrc} />}
+        </dd>
+      </div>
     )
   }
 
   return (
-    <div className={`structured-data-card${compact ? " is-compact" : ""}`}>
-      <div className="structured-data-label">{label}</div>
-      <ScalarValue value={value} compact={compact} />
-      {isImageJsonField(name, value) && (
-        <ImagePreview src={value} alt={label} resolveImageSrc={resolveImageSrc} />
-      )}
+    <div className="col-span-2 grid grid-cols-subgrid items-baseline gap-x-4 px-3 py-1.5">
+      <dt className={keyClass}>{label}</dt>
+      <dd className="m-0 min-w-0">
+        {isScalar(value)
+          ? <ScalarValue value={value} muted={technical} />
+          : <StructuredValue value={value} resolveImageSrc={resolveImageSrc} />}
+        {isImageJsonField(name, value) && (
+          <ImagePreview src={value} alt={label} resolveImageSrc={resolveImageSrc} />
+        )}
+      </dd>
     </div>
   )
 }
 
-function ArrayValue({ value, depth, resolveImageSrc }: {
-  value: StructuredJson[]
-  depth: number
-  resolveImageSrc?: (src: string) => string | undefined
-}) {
-  if (value.length === 0) return <EmptyState>Nothing here</EmptyState>
+function ArrayValue({ value, resolveImageSrc }: { value: StructuredJson[]; resolveImageSrc: ImageResolver }) {
+  if (value.length === 0) return <EmptyState>None</EmptyState>
+
+  // Short scalars read best as a row of chips; anything richer gets a numbered list.
+  if (value.every(entry => isScalar(entry) && !isStacked(entry))) {
+    return (
+      <div data-slot="structured-data-chips" className="flex flex-wrap gap-1.5">
+        {value.map((entry, index) => (
+          <span key={index} className="inline-flex max-w-full items-center rounded bg-overlay-6 px-1.5 py-0.5">
+            <ScalarValue value={entry as Scalar} />
+          </span>
+        ))}
+      </div>
+    )
+  }
+
   return (
-    <div className="structured-data-stack">
-      {value.map((entry, index) => {
-        const complex = Array.isArray(entry) || (entry !== null && typeof entry === "object")
-        return complex ? (
-          <section key={index} className="structured-data-card structured-data-array-item">
-            <div className="structured-data-label">Item {index + 1}</div>
-            <StructuredValue value={entry} depth={depth + 1} resolveImageSrc={resolveImageSrc} />
-          </section>
-        ) : (
-          <div key={index} className="structured-data-card is-compact">
-            <ScalarValue value={entry} compact />
+    <ol data-slot="structured-data-items" className="m-0 flex min-w-0 list-none flex-col gap-2 p-0">
+      {value.map((entry, index) => (
+        <li key={index} className="flex min-w-0 gap-2.5">
+          <span className="w-4 shrink-0 pt-1.5 text-right font-mono text-[10px] text-text-disabled tabular-nums">
+            {index + 1}
+          </span>
+          <div className="min-w-0 flex-1">
+            {typeof entry === "string" ? <LongText value={entry} /> : <StructuredValue value={entry} resolveImageSrc={resolveImageSrc} />}
           </div>
-        )
-      })}
-    </div>
+        </li>
+      ))}
+    </ol>
   )
 }
 
-function ScalarValue({ value, compact = false }: { value: string | number | boolean | null; compact?: boolean }) {
-  if (value === null || value === "") return <span className="structured-data-empty-inline">Not set</span>
+function ScalarValue({ value, muted = false }: { value: Scalar; muted?: boolean }) {
+  if (value === null || value === "") return <span className="text-xs italic text-text-disabled">Not set</span>
   if (typeof value === "boolean") {
     return (
-      <span className={`structured-data-boolean${value ? " is-true" : ""}`}>
+      <span className={`inline-flex items-center gap-1.5 text-xs ${value ? "text-accent-teal" : "text-text-muted"}`}>
+        <span className={`size-1.5 rounded-full ${value ? "bg-accent-teal-a50" : "bg-overlay-20"}`} />
         {value ? "Yes" : "No"}
       </span>
     )
   }
-  if (typeof value === "number") return <span className="structured-data-number">{value.toLocaleString()}</span>
+  if (typeof value === "number") {
+    return <span className="font-mono text-xs tabular-nums text-text-primary">{value.toLocaleString()}</span>
+  }
 
-  const long = value.length > 80 || value.includes("\n")
+  const tone = muted ? "text-text-muted" : "text-text-primary"
+  if (IDENTIFIER.test(value) && /[\d/\\]/.test(value)) {
+    return <span className={`font-mono text-xs break-all ${tone}`}>{value}</span>
+  }
+  return <span className={`text-xs leading-[18px] break-words ${tone}`}>{value}</span>
+}
+
+function LongText({ value }: { value: string }) {
   return (
-    <p
-      className={`structured-data-value${long && !compact ? " is-long" : ""}`}
-    >
-      {value}
-    </p>
+    <ExpandableText content={value}>
+      {visible => (
+        <p className="m-0 whitespace-pre-wrap break-words font-serif text-sm leading-relaxed text-text-primary">
+          {visible}
+        </p>
+      )}
+    </ExpandableText>
   )
 }
 
-function ImagePreview({ src, alt, resolveImageSrc }: { src: string; alt: string; resolveImageSrc?: (src: string) => string | undefined }) {
+function ImagePreview({ src, alt, resolveImageSrc }: { src: string; alt: string; resolveImageSrc: ImageResolver }) {
   const [failed, setFailed] = useState(false)
   const resolved = resolveImageSrc?.(src) ?? src
   if (failed) return null
@@ -156,12 +185,30 @@ function ImagePreview({ src, alt, resolveImageSrc }: { src: string; alt: string;
       src={resolved}
       alt={alt}
       loading="lazy"
-      className="structured-data-image"
+      className="mt-2 block max-h-72 w-full rounded-md border border-border-subtle bg-overlay-3 object-contain"
       onError={() => setFailed(true)}
     />
   )
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="structured-data-empty">{children}</p>
+  return <p className="m-0 text-xs italic text-text-disabled">{children}</p>
+}
+
+type Scalar = string | number | boolean | null
+
+function isScalar(value: StructuredJson): value is Scalar {
+  return value === null || typeof value !== "object"
+}
+
+function isObject(value: StructuredJson): value is { [key: string]: StructuredJson } {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+/** Values that need the full row: nested structures and prose-length text. */
+function isStacked(value: StructuredJson): boolean {
+  if (value === null || typeof value !== "object") {
+    return typeof value === "string" && (value.length > LONG_TEXT || value.includes("\n"))
+  }
+  return Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0
 }
