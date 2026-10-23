@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from "react"
+import { EntityCard, useEntityCardPresentation } from "@redbamboo/ui"
 import { JsonHighlight } from "@redbamboo/utility"
+import { getEntityHref } from "@redbamboo/utility/entity-links"
 import { humanizeJsonKey, isImageJsonField, isTechnicalJsonKey, type StructuredJson } from "../lib/structured-data"
 import { ExpandableText } from "./tool-output/shared"
 
@@ -15,6 +17,8 @@ interface Props {
 type ImageResolver = ((src: string) => string | undefined) | undefined
 
 const LONG_TEXT = 90
+// RedLeaf entity IDs are GUIDs; anything else cannot name an entity.
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const IDENTIFIER = /^[\w.:/\\@#+=~-]+$/
 
 export function StructuredDataView({ value, rawJson, resolveImageSrc }: Props) {
@@ -100,9 +104,11 @@ function Field({ name, value, technical, resolveImageSrc }: {
     <div className="col-span-2 grid grid-cols-subgrid items-baseline gap-x-4 px-3 py-1.5">
       <dt className={keyClass}>{label}</dt>
       <dd className="m-0 min-w-0">
-        {isScalar(value)
-          ? <ScalarValue value={value} muted={technical} />
-          : <StructuredValue value={value} resolveImageSrc={resolveImageSrc} />}
+        {technical && typeof value === "string" && GUID.test(value)
+          ? <EntityReference id={value} />
+          : isScalar(value)
+            ? <ScalarValue value={value} muted={technical} />
+            : <StructuredValue value={value} resolveImageSrc={resolveImageSrc} />}
         {isImageJsonField(name, value) && (
           <ImagePreview src={value} alt={label} resolveImageSrc={resolveImageSrc} />
         )}
@@ -162,6 +168,32 @@ function ScalarValue({ value, muted = false }: { value: Scalar; muted?: boolean 
     return <span className={`font-mono text-xs break-all ${tone}`}>{value}</span>
   }
   return <span className={`text-xs leading-[18px] break-words ${tone}`}>{value}</span>
+}
+
+/**
+ * An ID field that names an entity the viewer can read becomes its canonical
+ * card. Unknown, foreign, or forbidden IDs keep the plain identifier.
+ */
+function EntityReference({ id }: { id: string }) {
+  const presentation = useEntityCardPresentation({ id })
+  if (!presentation || presentation.entity.id !== id) return <ScalarValue value={id} muted />
+
+  const { entity } = presentation
+  return (
+    <div data-slot="structured-data-entity" title={id} className="max-w-md font-sans">
+      <EntityCard
+        entity={entity}
+        visual={presentation.visual}
+        subtitle={presentation.subtitle}
+        variant="outlined"
+        action={{
+          kind: "inspect",
+          href: getEntityHref(entity.typeSlug, entity.id),
+          ariaLabel: `Inspect ${entity.name}`,
+        }}
+      />
+    </div>
+  )
 }
 
 function LongText({ value }: { value: string }) {

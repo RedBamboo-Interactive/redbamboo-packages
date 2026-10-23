@@ -7,8 +7,19 @@ export interface EntityCardPresentation {
   visual?: EntityCardVisual
 }
 
+/**
+ * The identity to hydrate. A reference that only carries an ID (a raw
+ * `entityId` in a tool payload) omits the type and name; the host then
+ * resolves the entity by ID alone.
+ */
+export interface EntityPresentationRequest {
+  id: string
+  typeSlug?: string
+  name?: string
+}
+
 export type EntityPresentationResolver = (
-  entity: EntityCardEntity,
+  entity: EntityPresentationRequest,
   signal: AbortSignal,
 ) => Promise<EntityCardPresentation | null>
 
@@ -39,20 +50,20 @@ export function EntityPresentationProvider({
  * A missing provider, failed lookup, or denied entity leaves the caller's fallback intact.
  */
 export function useEntityCardPresentation(
-  entity: EntityCardEntity | null,
+  entity: EntityPresentationRequest | null,
 ): EntityCardPresentation | null {
   const resolve = useContext(EntityPresentationContext)
   const id = entity?.id
-  const typeSlug = entity?.typeSlug
-  const name = entity?.name
-  const key = id && typeSlug ? `${typeSlug}:${id}` : null
+  const typeSlug = entity?.typeSlug || undefined
+  const name = entity?.name || undefined
+  const key = id ? `${typeSlug ?? "*"}:${id}` : null
   const [state, setState] = useState<{
     key: string
     presentation: EntityCardPresentation | null
   } | null>(null)
 
   useEffect(() => {
-    if (!resolve || !id || !typeSlug || !name || !key) return
+    if (!resolve || !id || !key) return
     const controller = new AbortController()
     let current = true
 

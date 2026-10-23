@@ -55,6 +55,7 @@ export {
 export type {
   EntityCardPresentation,
   EntityPresentationProviderProps,
+  EntityPresentationRequest,
   EntityPresentationResolver,
 } from "./components/entity-presentation"
 
