@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { JsonHighlight } from "@redbamboo/utility"
-import { parseStructuredJson } from "../lib/structured-data"
+import { parseStructuredJson, type StructuredJson } from "../lib/structured-data"
 import { StructuredDataView } from "./structured-data-view"
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i
@@ -251,7 +251,7 @@ function WebSearchView({ p }: { p: Record<string, unknown> }) {
       <i className="ph-bold ph-globe text-[10px] text-text-disabled" />
       <span>{query}</span>
     </div>
-  ) : <JsonHighlight json={JSON.stringify(p, null, 2)} />
+  ) : <StructuredDataView value={p as StructuredJson} rawJson={JSON.stringify(p)} />
 }
 
 function WebFetchView({ p }: { p: Record<string, unknown> }) {
@@ -261,5 +261,5 @@ function WebFetchView({ p }: { p: Record<string, unknown> }) {
       <i className="ph-bold ph-globe text-[10px] text-text-disabled" />
       <span className="text-blue-300-a80">{url}</span>
     </div>
-  ) : <JsonHighlight json={JSON.stringify(p, null, 2)} />
+  ) : <StructuredDataView value={p as StructuredJson} rawJson={JSON.stringify(p)} />
 }

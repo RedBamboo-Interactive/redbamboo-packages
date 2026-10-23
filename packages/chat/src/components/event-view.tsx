@@ -1,7 +1,8 @@
 import { useState } from "react"
-import { JsonHighlight } from "@redbamboo/utility"
 import { eventImage, type EventImage } from "../lib/event-image"
 import { resolveChatMediaSrc } from "../lib/media-url"
+import { parseStructuredJson } from "../lib/structured-data"
+import { StructuredDataView } from "./structured-data-view"
 import type { MessagePart } from "../types"
 
 /** A frieze event part decoded from its tool_use carrier. */
@@ -86,7 +87,7 @@ function EventBody({ event, resolveImageSrc, resolveEventLink, onNavigate }: Eve
         return <DeviceEventView event={event} />
     }
   }
-  return <GenericEventView event={event} />
+  return <GenericEventView event={event} resolveImageSrc={resolveImageSrc} />
 }
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -520,11 +521,18 @@ function DeviceEventView({ event }: { event: ParsedEvent }) {
   )
 }
 
-function GenericEventView({ event }: { event: ParsedEvent }) {
+function GenericEventView({ event, resolveImageSrc }: {
+  event: ParsedEvent
+  resolveImageSrc?: (src: string) => string | undefined
+}) {
+  const rawJson = event.data ? JSON.stringify(event.data) : null
+  const structured = rawJson ? parseStructuredJson(rawJson) : undefined
   return (
     <div data-slot="event-view" className="space-y-3">
       <p className="text-sm text-text-primary font-serif whitespace-pre-wrap">{event.text || "No content"}</p>
-      {event.data && <JsonHighlight json={JSON.stringify(event.data, null, 2)} />}
+      {rawJson && structured !== undefined && (
+        <StructuredDataView value={structured} rawJson={rawJson} resolveImageSrc={resolveImageSrc} />
+      )}
     </div>
   )
 }
