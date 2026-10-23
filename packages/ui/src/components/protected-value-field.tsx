@@ -41,7 +41,19 @@ export interface ProtectedValueFieldProps {
   onRotate?: () => Promise<void> | void
   onVerify?: () => Promise<void> | void
   onClear?: () => Promise<void> | void
+  /**
+   * A value the caller may show once, such as the token returned by a rotation. It is
+   * rendered inside the stored-value card with a copy action until the caller clears it;
+   * the field never stores, logs, or reuses it. Focus moves to it when it appears.
+   */
+  revealedValue?: string | null
+  /** Short one-time visibility notice shown with `revealedValue`. */
+  revealedValueNotice?: string
+  /** Reports the outcome of the built-in copy action for `revealedValue`. */
+  onRevealedValueCopy?: (result: "copied" | "failed") => void
 }
+
+export type ProtectedValueCopyState = "idle" | "copied" | "failed"
 
 const verificationLabels: Record<ProtectedValueVerification, string> = {
   unverified: "Not checked",
@@ -70,6 +82,9 @@ export function ProtectedValueField({
   onRotate,
   onVerify,
   onClear,
+  revealedValue,
+  revealedValueNotice = "Shown only once. Copy it now.",
+  onRevealedValueCopy,
 }: ProtectedValueFieldProps) {
   const generatedId = React.useId()
   const inputId = id ?? generatedId
@@ -81,11 +96,45 @@ export function ProtectedValueField({
   const [busy, setBusy] = React.useState<"save" | "rotate" | "verify" | "clear" | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [confirmClear, setConfirmClear] = React.useState(false)
+  const [copyState, setCopyState] = React.useState<ProtectedValueCopyState>("idle")
+  const revealedRef = React.useRef<HTMLDivElement>(null)
+  const revealedValueRef = React.useRef<HTMLElement>(null)
+  const revealedNoticeId = `${inputId}-revealed-notice`
 
   React.useEffect(() => {
     if (!status.configured && replaceable) setEditing(true)
     else if (!draft) setEditing(false)
   }, [status.configured, draft, replaceable])
+
+  React.useEffect(() => {
+    setCopyState("idle")
+    const node = revealedRef.current
+    if (!revealedValue || !node) return
+    node.focus({ preventScroll: true })
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    node.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" })
+  }, [revealedValue])
+
+  const copyRevealedValue = async () => {
+    if (!revealedValue) return
+    try {
+      await navigator.clipboard.writeText(revealedValue)
+      setCopyState("copied")
+      onRevealedValueCopy?.("copied")
+    } catch {
+      // Clipboard access is unavailable on insecure origins and some mobile browsers:
+      // select the value so it can be copied by hand.
+      const selection = window.getSelection()
+      if (revealedValueRef.current && selection) {
+        const range = document.createRange()
+        range.selectNodeContents(revealedValueRef.current)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+      setCopyState("failed")
+      onRevealedValueCopy?.("failed")
+    }
+  }
 
   const replace = async () => {
     if (!draft || !onReplace) return
@@ -157,6 +206,7 @@ export function ProtectedValueField({
   const presentation = protectionPresentation(status.protection)
   const verificationTone = verification === "verified" ? "success" : verification === "rejected" ? "danger" :
     verification === "unreachable" ? "warning" : "neutral"
+  const revealedLabel = `New ${kind === "credential-file" ? "credential" : kind}`
   const icon = kind === "password" ? "ph-password" :
     kind === "credential-file" ? "ph-file-lock" : "ph-key"
 
@@ -167,6 +217,7 @@ export function ProtectedValueField({
       data-configured={status.configured ? "true" : "false"}
       data-protection={status.protection}
       data-verification={verification}
+      data-revealed={revealedValue ? "true" : undefined}
       className={cn("@container/protected min-w-0 space-y-2", className)}
     >
       {label && <label htmlFor={inputId} className="text-sm font-medium text-foreground">{label}</label>}
@@ -323,10 +374,41 @@ export function ProtectedValueField({
                 </StatusPill>
               )}
             </div>
+            {revealedValue && (
+              <div
+                ref={revealedRef}
+                data-slot="protected-value-revealed"
+                role="group"
+                aria-label={revealedLabel}
+                aria-describedby={revealedNoticeId}
+                tabIndex={-1}
+                className="mt-2.5 space-y-1.5 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <code
+                  ref={revealedValueRef}
+                  data-slot="protected-value-revealed-value"
+                  className="block select-all break-all rounded-md border border-primary/25 bg-primary/5 px-2 py-1.5 font-mono text-xs text-foreground"
+                >
+                  {revealedValue}
+                </code>
+                <p id={revealedNoticeId} className="text-[11px] text-amber-600 dark:text-amber-400" role="status">
+                  {copyState === "failed"
+                    ? "Copy is blocked here. The value is selected; copy it manually."
+                    : revealedValueNotice}
+                </p>
+              </div>
+            )}
           </div>
 
-          {(canVerify && onVerify || onRotate || replaceable && onReplace || allowClear && onClear) && (
+          {(revealedValue || canVerify && onVerify || onRotate || replaceable && onReplace || allowClear && onClear) && (
             <div className="relative flex min-w-0 flex-wrap items-center justify-end gap-1 border-t border-border/70 bg-muted/15 px-2 py-1.5">
+              {revealedValue && (
+                <Button type="button" variant="ghost" size="xs" className="mr-auto"
+                  data-slot="protected-value-copy"
+                  onClick={() => void copyRevealedValue()}>
+                  {copyState === "copied" ? "Copied" : `Copy ${kind === "credential-file" ? "credential" : kind}`}
+                </Button>
+              )}
               {canVerify && onVerify && (
                 <Button type="button" variant="ghost" size="xs" disabled={disabled || busy !== null}
                   onClick={() => void verify()}>

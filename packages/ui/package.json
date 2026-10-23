@@ -29,6 +29,7 @@
     "test": "node --experimental-strip-types --test \"src/**/*.test.mjs\"",
     "test:browser": "node tests/media-overlays/run.mjs",
     "test:entity-picker": "node tests/entity-picker/run.mjs",
+    "test:protected-value-field": "node tests/protected-value-field/run.mjs",
     "clean": "rimraf dist"
   },
   "peerDependencies": {

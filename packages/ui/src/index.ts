@@ -93,6 +93,7 @@ export { Input } from "./components/input"
 export { Label } from "./components/label"
 export { ProtectedValueField } from "./components/protected-value-field"
 export type {
+  ProtectedValueCopyState,
   ProtectedValueFieldProps,
   ProtectedValueKind,
   ProtectedValueStatus,

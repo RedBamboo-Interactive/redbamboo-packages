@@ -75,6 +75,19 @@ test("the entity picker catalog documents its host contract and machine selector
   assert.ok(picker.selectors.includes('[data-slot="entity-picker-announcer"]'))
 })
 
+test("the protected value field advertises its one-time reveal state", () => {
+  const field = findUiComponents("rotate")[0]
+  assert.equal(field?.id, "protected-value-field")
+  assert.ok(field.exports.includes("ProtectedValueField"))
+  assert.ok(field.variants.includes("revealed-value"))
+  for (const selector of [
+    '[data-slot="protected-value-field"]',
+    '[data-slot="protected-value-revealed"]',
+    '[data-slot="protected-value-revealed-value"]',
+    '[data-slot="protected-value-copy"]',
+  ]) assert.ok(field.selectors.includes(selector), selector)
+})
+
 test("every catalog export is exported by the package entry", async () => {
   const { readFile } = await import("node:fs/promises")
   const index = await readFile(new URL("./index.ts", import.meta.url), "utf8")
