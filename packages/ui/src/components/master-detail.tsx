@@ -1,6 +1,7 @@
-import { type ReactNode, useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { type ReactNode, createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "./resizable"
+import { useDockPanel } from "./dock/dock"
 import { cn } from "../utils"
 
 interface MasterDetailLayoutProps {
@@ -18,7 +19,19 @@ interface MasterDetailLayoutProps {
   className?: string
   /** Force compact tabbed presentation for constrained secondary windows. */
   presentation?: "responsive" | "compact"
+  /**
+   * Inside a `DockHost` on desktop, the sidebar becomes the app's dockable
+   * `list` panel and only the detail renders here. Pass false to keep the
+   * sidebar inline (setup flows, bespoke studio shells).
+   */
+  dock?: boolean
 }
+
+/** Set inside a layout's sidebar and detail, so nested layouts never claim the dock slot. */
+const MasterDetailNesting = createContext(false)
+
+/** Shared dock id: every section of an app places its list in the same spot. */
+export const MASTER_DETAIL_DOCK_PANEL_ID = "list"
 
 function MasterDetailLayout({
   sidebar,
@@ -34,10 +47,12 @@ function MasterDetailLayout({
   header,
   className,
   presentation = "responsive",
+  dock = true,
 }: MasterDetailLayoutProps) {
   const [internalTab, setInternalTab] = useState(0)
   const tab = controlledTab ?? internalTab
   const setTab = onMobileTabChange ?? setInternalTab
+  const nested = useContext(MasterDetailNesting)
 
   const [isDesktop, setIsDesktop] = useState(() =>
     presentation === "compact" ? false : typeof window !== "undefined"
@@ -100,89 +115,123 @@ function MasterDetailLayout({
 
   const resizable = !!layoutKey
 
+  const list = useDockPanel(MASTER_DETAIL_DOCK_PANEL_ID, {
+    title: mobileLabels[0],
+    icon: "ph-bold ph-list",
+    defaultZone: "left",
+    order: 0,
+    minSize: sidebarMin,
+    maxSize: sidebarMax,
+    // The pre-dock sidebar width seeds the app's first list placement.
+    defaultSize: savedSidebarSize ?? sidebarDefault,
+    collapsible: true,
+    disabled: !dock || nested || presentation !== "responsive" || !isDesktop,
+    content: (
+      <MasterDetailNesting.Provider value>
+        <div
+          data-slot="master-detail-sidebar"
+          className="h-full bg-surface-elevated flex flex-col overflow-hidden"
+        >
+          {sidebar}
+        </div>
+      </MasterDetailNesting.Provider>
+    ),
+  })
+  const docked = list.docked
+
+  // Docked and inline desktop share one tree; only the sidebar slots come and
+  // go, so the detail keeps its position (and its state) across the switch.
   return (
     <div
       data-slot="master-detail"
+      data-docked={docked ? "" : undefined}
       className={cn("flex flex-col h-full w-full overflow-hidden", className)}
     >
       {header}
 
-      {isDesktop ? (
-        resizable ? (
-          <ResizablePanelGroup
-            orientation="horizontal"
-            className="flex-1 min-h-0"
-          >
-            <ResizablePanel
-              id="sidebar"
-              defaultSize={savedSidebarSize ?? sidebarDefault}
-              minSize={sidebarMin}
-              maxSize={sidebarMax}
-              groupResizeBehavior="preserve-pixel-size"
-              onResize={handleSidebarResize}
+      <MasterDetailNesting.Provider value>
+        {isDesktop ? (
+          resizable ? (
+            <ResizablePanelGroup
+              orientation="horizontal"
+              className="flex-1 min-h-0"
             >
-              <div
-                data-slot="master-detail-sidebar"
-                className="h-full bg-surface-elevated flex flex-col overflow-hidden"
-              >
-                {sidebar}
-              </div>
-            </ResizablePanel>
-            <ResizableHandle withHandle aria-label="Resize sidebar" />
-            <ResizablePanel id="content" groupResizeBehavior="preserve-relative-size">
+              {!docked && (
+                <ResizablePanel
+                  id="sidebar"
+                  defaultSize={savedSidebarSize ?? sidebarDefault}
+                  minSize={sidebarMin}
+                  maxSize={sidebarMax}
+                  groupResizeBehavior="preserve-pixel-size"
+                  onResize={handleSidebarResize}
+                >
+                  <div
+                    data-slot="master-detail-sidebar"
+                    className="h-full bg-surface-elevated flex flex-col overflow-hidden"
+                  >
+                    {sidebar}
+                  </div>
+                </ResizablePanel>
+              )}
+              {!docked && <ResizableHandle withHandle aria-label="Resize sidebar" />}
+              <ResizablePanel id="content" groupResizeBehavior="preserve-relative-size">
+                <div
+                  data-slot="master-detail-content"
+                  className="h-full overflow-hidden flex flex-col min-h-0"
+                >
+                  {detail}
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            <div className="flex flex-1 min-h-0">
+              {!docked && (
+                <div
+                  data-slot="master-detail-sidebar"
+                  className={cn(
+                    sidebarWidth,
+                    "shrink-0 bg-surface-elevated border-r border-overlay-6 flex flex-col overflow-hidden",
+                  )}
+                >
+                  {sidebar}
+                </div>
+              )}
               <div
                 data-slot="master-detail-content"
-                className="h-full overflow-hidden flex flex-col min-h-0"
+                className="flex-1 overflow-hidden flex flex-col min-h-0"
               >
                 {detail}
               </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        ) : (
-          <div className="flex flex-1 min-h-0">
-            <div
-              data-slot="master-detail-sidebar"
-              className={cn(
-                sidebarWidth,
-                "shrink-0 bg-surface-elevated border-r border-overlay-6 flex flex-col overflow-hidden",
-              )}
-            >
-              {sidebar}
             </div>
-            <div
-              data-slot="master-detail-content"
-              className="flex-1 overflow-hidden flex flex-col min-h-0"
+          )
+        ) : (
+          <Tabs
+            value={tab}
+            onValueChange={(v) => setTab(v as number)}
+            className="flex-1 min-w-0 min-h-0 p-3 overflow-hidden"
+          >
+            <TabsList className="w-full">
+              <TabsTrigger value={0}>{mobileLabels[0]}</TabsTrigger>
+              <TabsTrigger value={1}>{mobileLabels[1]}</TabsTrigger>
+            </TabsList>
+            <TabsContent
+              value={0}
+              className="min-w-0 min-h-0 overflow-hidden flex flex-col"
+            >
+              <div className="bg-surface-elevated rounded-lg overflow-hidden flex flex-col flex-1 min-h-0">
+                {sidebar}
+              </div>
+            </TabsContent>
+            <TabsContent
+              value={1}
+              className="min-w-0 min-h-0 overflow-hidden flex flex-col"
             >
               {detail}
-            </div>
-          </div>
-        )
-      ) : (
-        <Tabs
-          value={tab}
-          onValueChange={(v) => setTab(v as number)}
-          className="flex-1 min-w-0 min-h-0 p-3 overflow-hidden"
-        >
-          <TabsList className="w-full">
-            <TabsTrigger value={0}>{mobileLabels[0]}</TabsTrigger>
-            <TabsTrigger value={1}>{mobileLabels[1]}</TabsTrigger>
-          </TabsList>
-          <TabsContent
-            value={0}
-            className="min-w-0 min-h-0 overflow-hidden flex flex-col"
-          >
-            <div className="bg-surface-elevated rounded-lg overflow-hidden flex flex-col flex-1 min-h-0">
-              {sidebar}
-            </div>
-          </TabsContent>
-          <TabsContent
-            value={1}
-            className="min-w-0 min-h-0 overflow-hidden flex flex-col"
-          >
-            {detail}
-          </TabsContent>
-        </Tabs>
-      )}
+            </TabsContent>
+          </Tabs>
+        )}
+      </MasterDetailNesting.Provider>
+      {list.element}
     </div>
   )
 }

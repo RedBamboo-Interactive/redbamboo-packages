@@ -30,6 +30,7 @@
     "test:browser": "node tests/media-overlays/run.mjs",
     "test:entity-picker": "node tests/entity-picker/run.mjs",
     "test:protected-value-field": "node tests/protected-value-field/run.mjs",
+    "test:dock": "node tests/dock/run.mjs",
     "clean": "rimraf dist"
   },
   "peerDependencies": {

@@ -247,8 +247,34 @@ export type { MediaViewerZoom } from "./components/media-viewer-gestures"
 export { ItemList, ItemListRow } from "./components/item-list"
 export type { ItemListProps, ItemListRowProps } from "./components/item-list"
 
-export { MasterDetailLayout } from "./components/master-detail"
+export { MasterDetailLayout, MASTER_DETAIL_DOCK_PANEL_ID } from "./components/master-detail"
 export type { MasterDetailLayoutProps } from "./components/master-detail"
+
+export {
+  DockFrame,
+  DockHost,
+  DockPanel,
+  useDockController,
+  useDockPanel,
+  useIsInDockPanel,
+} from "./components/dock/dock"
+export type {
+  DockController,
+  DockFrameProps,
+  DockHostProps,
+  DockPanelHandle,
+  DockPanelInfo,
+  DockPanelOptions,
+  DockPanelProps,
+} from "./components/dock/dock"
+export {
+  DOCK_LAYOUT_VERSION,
+  DOCK_ZONES,
+  dockStorageKey,
+  parseLayout as parseDockLayout,
+  sanitizeLayout as sanitizeDockLayout,
+} from "./components/dock/layout"
+export type { DockGroup, DockLayout, DockTarget, DockZone } from "./components/dock/layout"
 
 export { FilterBar, FilterPillGroup } from "./components/filter-bar"
 export type {

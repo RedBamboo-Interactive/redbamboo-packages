@@ -1,0 +1,252 @@
+import assert from "node:assert/strict"
+import { mkdir } from "node:fs/promises"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { chromium } from "playwright"
+import { createServer } from "vite"
+
+const fixtureDir = path.dirname(fileURLToPath(import.meta.url))
+const outputDir = path.join(process.env.REDLEAF_SCRATCH_DIR || process.env.TEMP, "ui-dock")
+await mkdir(outputDir, { recursive: true })
+
+const server = await createServer({
+  root: fixtureDir,
+  configFile: path.join(fixtureDir, "vite.config.ts"),
+  server: { host: "127.0.0.1", port: 0 },
+  logLevel: "error",
+})
+
+const mounts = (page) => page.evaluate(() => ({ ...window.__mounts }))
+const dockState = async (page) => JSON.parse(await page.getByTestId("dock-state").textContent())
+const zoneOf = async (page, panelId) => (await dockState(page)).find(([id]) => id === panelId)?.[1] ?? null
+const host = (page, panelId) => page.locator(`[data-dock-panel="${panelId}"]`)
+const box = async (locator) => {
+  const rect = await locator.boundingBox()
+  assert.ok(rect, "element has no box")
+  return rect
+}
+
+/** Drags with real pointer events from a handle to a point. */
+async function drag(page, handle, to, { escape = false, screenshot } = {}) {
+  const from = await box(handle)
+  const startX = from.x + 24
+  const startY = from.y + from.height / 2
+  await page.mouse.move(startX, startY)
+  await page.mouse.down()
+  await page.mouse.move(startX + 2, startY + 1)
+  assert.equal(await page.locator('[data-slot="dock-drag-overlay"]').count(), 0, "no drag below the 4px threshold")
+  await page.mouse.move(to.x, to.y, { steps: 12 })
+  await page.locator('[data-slot="dock-drag-overlay"]').waitFor()
+  const target = await page.locator('[data-slot="dock-drag-overlay"]').getAttribute("data-dock-drop-target")
+  if (screenshot) await page.screenshot({ path: path.join(outputDir, screenshot) })
+  if (escape) await page.keyboard.press("Escape")
+  await page.mouse.up()
+  await page.locator('[data-slot="dock-drag-overlay"]').waitFor({ state: "detached" })
+  return target
+}
+
+/** Point inside a fraction of a group's box (fx, fy in 0..1). */
+async function pointIn(locator, fx, fy) {
+  const rect = await box(locator)
+  return { x: rect.x + rect.width * fx, y: rect.y + rect.height * fy }
+}
+
+const groupOf = (page, panelId) => page.locator("[data-dock-group]", { has: page.locator(`[data-dock-panel="${panelId}"]`) })
+
+let browser
+try {
+  await server.listen()
+  const baseUrl = server.resolvedUrls?.local[0]
+  assert.ok(baseUrl, "Vite did not expose a local story URL")
+  browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined })
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await context.newPage()
+  const errors = []
+  page.on("pageerror", (error) => errors.push(error.message))
+  page.on("console", (message) => {
+    if (message.type() === "error" && !message.text().includes("404")) errors.push(message.text())
+  })
+
+  // --- defaults ------------------------------------------------------------
+  await page.goto(`${baseUrl}?app=a`, { waitUntil: "networkidle" })
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: "networkidle" })
+  await page.getByTestId("toggle-console").click()
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("toggle-history").click()
+  assert.deepEqual(await dockState(page), [["list", "left", false], ["console", "right", false], ["settings", "right", false], ["history", "right", false]])
+  // Default stacking follows declared order, not open order.
+  const rightOrder = await page.locator('[data-dock-zone="right"] [data-dock-panel]').evaluateAll((els) => els.map((el) => el.dataset.dockPanel))
+  assert.deepEqual(rightOrder, ["history", "console", "settings"])
+  assert.equal(await page.locator('[data-dock-zone="bottom"]').count(), 0, "an empty zone renders nothing")
+  // The list is seeded from the pre-dock layoutKey default width.
+  assert.equal(Math.round((await box(page.locator('[data-dock-zone="left"]'))).width), 320)
+  // Docked plugin content keeps its plugin CSS scope.
+  assert.equal(await host(page, "list").locator('[data-plugin-css="story-plugin"]').count(), 1)
+  assert.equal(await page.locator('[data-slot="master-detail"]').getAttribute("data-docked"), "")
+  await page.screenshot({ path: path.join(outputDir, "01-defaults.png") })
+
+  // --- state that must survive every move --------------------------------
+  await page.getByTestId("composer").fill("draft that must survive")
+  await page.getByTestId("row-41").click()
+  await page.getByTestId("list-scroll").evaluate((el) => { el.scrollTop = 1200 })
+  await page.getByTestId("console-scroll").evaluate((el) => { el.scrollTop = 400 })
+  await page.evaluate(() => {
+    window.__nodes = {
+      list: document.querySelector('[data-testid="list-scroll"]'),
+      chat: document.querySelector('[data-testid="chat-body"]'),
+      console: document.querySelector('[data-testid="console-scroll"]'),
+      main: document.querySelector('[data-testid="main"]'),
+    }
+  })
+  const baseline = await mounts(page)
+  assert.deepEqual(baseline, { story: 1, chat: 1, list: 1, console: 1, settings: 1, history: 1 })
+  const sameNodes = () => page.evaluate(() => Object.entries(window.__nodes).every(([key, node]) =>
+    node.isConnected && node === document.querySelector(`[data-testid="${key === "main" ? "main" : key === "chat" ? "chat-body" : `${key}-scroll`}"]`)))
+  const assertPreserved = async (step) => {
+    assert.deepEqual(await mounts(page), { ...baseline, ...(await page.evaluate(() => window.__extraMounts ?? {})) }, `${step}: no remount`)
+    assert.ok(await sameNodes(), `${step}: same DOM nodes`)
+    assert.equal(await page.getByTestId("composer").inputValue(), "draft that must survive", `${step}: composer draft`)
+    assert.equal(await page.getByTestId("row-41").getAttribute("aria-selected"), "true", `${step}: list selection`)
+    assert.equal(await page.getByTestId("list-scroll").evaluate((el) => el.scrollTop), 1200, `${step}: list scroll`)
+  }
+
+  // --- below the threshold and Escape both cancel -------------------------
+  const listHeader = host(page, "list").locator('[data-slot="panel-header"]')
+  assert.equal(await listHeader.getAttribute("data-dock-handle"), "list", "the list's PanelHeader is its handle")
+  const cancelled = await drag(page, listHeader, await pointIn(groupOf(page, "settings"), 0.5, 0.5), { escape: true })
+  assert.notEqual(cancelled, "none")
+  assert.equal(await zoneOf(page, "list"), "left", "Escape cancels the drop")
+  await assertPreserved("escape")
+
+  // --- drag the list to the right zone (split below Settings) -------------
+  const dropped = await drag(page, listHeader, await pointIn(groupOf(page, "settings"), 0.5, 0.94), { screenshot: "02-dragging-list.png" })
+  assert.match(dropped, /^split:.*:after$/)
+  assert.equal(await zoneOf(page, "list"), "right")
+  assert.equal(await page.locator('[data-dock-zone="left"]').count(), 0, "the emptied left zone takes no space")
+  await assertPreserved("list to right")
+  assert.equal(await page.getByTestId("console-scroll").evaluate((el) => el.scrollTop), 400, "other panels keep scroll")
+  await page.screenshot({ path: path.join(outputDir, "03-list-right.png") })
+
+  // --- tabs: History onto Settings ----------------------------------------
+  const historyHeader = host(page, "history").locator('[data-slot="panel-header"]')
+  const tabbed = await drag(page, historyHeader, await pointIn(groupOf(page, "settings"), 0.5, 0.5))
+  assert.match(tabbed, /^tab:/)
+  const tablist = groupOf(page, "settings").getByRole("tablist")
+  assert.deepEqual(await tablist.getByRole("tab").allTextContents(), ["Settings", "History"])
+  assert.equal(await tablist.getByRole("tab", { name: "History" }).getAttribute("aria-selected"), "true")
+  assert.equal(await host(page, "settings").evaluate((el) => el.inert), true, "inactive tab is inert")
+  await tablist.getByRole("tab", { name: "Settings" }).click()
+  assert.equal(await host(page, "history").evaluate((el) => el.style.visibility), "hidden")
+  await tablist.getByRole("tab", { name: "Settings" }).press("ArrowRight")
+  assert.equal(await tablist.getByRole("tab", { name: "History" }).getAttribute("aria-selected"), "true", "arrow keys switch tabs")
+  await assertPreserved("tabs")
+
+  // --- keyboard: header menu moves Console to the bottom ------------------
+  const consoleMenu = host(page, "console").getByRole("button", { name: "Console panel options" })
+  await consoleMenu.focus()
+  await page.keyboard.press("Enter")
+  const moveBottom = page.getByRole("menuitem", { name: "Move to bottom" })
+  await moveBottom.waitFor()
+  assert.equal(await page.getByRole("menuitem", { name: "Move to right" }).getAttribute("aria-disabled"), "true")
+  await moveBottom.focus()
+  await page.keyboard.press("Enter")
+  await page.locator('[data-dock-zone="bottom"] [data-dock-panel="console"]').waitFor()
+  assert.equal(await page.getByTestId("console-scroll").evaluate((el) => el.scrollTop), 400, "moved panel keeps scroll")
+  await assertPreserved("console to bottom")
+
+  // --- the centre keeps its width when a panel moves ----------------------
+  await page.screenshot({ path: path.join(outputDir, "04-arranged.png") })
+
+  // --- headerless panels get a fallback handle ----------------------------
+  await page.getByTestId("toggle-notes").click()
+  await page.evaluate(() => { window.__extraMounts = { notes: 1 } })
+  const notesGroup = groupOf(page, "notes")
+  assert.equal(await notesGroup.getByRole("tablist").count() + await notesGroup.locator('[data-slot="dock-panel-header"]').count() > 0, true)
+  await assertPreserved("notes open")
+
+  // --- zone resize is saved ------------------------------------------------
+  const rightSeparator = page.getByRole("separator", { name: "Resize right dock" })
+  const separatorBox = await box(rightSeparator)
+  const rightBefore = (await box(page.locator('[data-dock-zone="right"]'))).width
+  await page.mouse.move(separatorBox.x + separatorBox.width / 2, separatorBox.y + 200)
+  await page.mouse.down()
+  await page.mouse.move(separatorBox.x - 60, separatorBox.y + 200, { steps: 6 })
+  await page.mouse.up()
+  const rightResized = Math.round((await box(page.locator('[data-dock-zone="right"]'))).width)
+  assert.ok(Math.abs(rightResized - (rightBefore + 60)) <= 2, `right zone widened (${rightBefore} -> ${rightResized})`)
+  await assertPreserved("resize")
+
+  // --- persistence ---------------------------------------------------------
+  const savedA = await page.evaluate(() => localStorage.getItem("story:dock:a:v1"))
+  assert.ok(savedA, "layout saved under the app key")
+  await page.reload({ waitUntil: "networkidle" })
+  assert.deepEqual(await dockState(page), [["list", "right", false]], "transient panels reopen closed")
+  for (const name of ["console", "settings", "history"]) await page.getByTestId(`toggle-${name}`).click()
+  assert.equal(await zoneOf(page, "console"), "bottom")
+  assert.deepEqual(await groupOf(page, "settings").getByRole("tab").allTextContents(), ["Settings", "History"])
+  assert.equal(await groupOf(page, "settings").getByRole("tab", { name: "History" }).getAttribute("aria-selected"), "true", "active tab persists")
+  const rightAfterReload = await page.locator('[data-dock-zone="right"] [data-dock-group]').evaluateAll((els) => els.map((el) => [...el.querySelectorAll("[data-dock-panel]")].map((p) => p.dataset.dockPanel)))
+  assert.deepEqual(rightAfterReload, [["settings", "history"], ["list"]])
+  assert.ok(Math.abs(Math.round((await box(page.locator('[data-dock-zone="right"]'))).width) - rightResized) <= 2, "zone size persists")
+  await page.screenshot({ path: path.join(outputDir, "05-after-reload.png") })
+
+  // --- per-app independence -----------------------------------------------
+  await page.getByTestId("app-b").click()
+  await page.getByTestId("app-b-content").waitFor()
+  assert.equal(await zoneOf(page, "console"), "right", "app B starts from defaults")
+  const bMenu = host(page, "console").getByRole("button", { name: "Console panel options" })
+  await bMenu.click()
+  await page.getByRole("menuitem", { name: "Move to left" }).click()
+  assert.equal(await zoneOf(page, "console"), "left")
+  const savedB = await page.evaluate(() => localStorage.getItem("story:dock:b:v1"))
+  await page.getByTestId("app-a").click()
+  await host(page, "list").waitFor()
+  assert.equal(await zoneOf(page, "console"), "bottom", "app A layout is untouched by app B")
+  assert.equal(await zoneOf(page, "list"), "right")
+
+  // --- reset applies to the current app only ------------------------------
+  await page.getByTestId("reset").click()
+  assert.equal(await zoneOf(page, "list"), "left")
+  assert.equal(await zoneOf(page, "console"), "right")
+  assert.equal(Math.round((await box(page.locator('[data-dock-zone="left"]'))).width), 320, "reset restores default sizes")
+  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:b:v1")), savedB, "reset leaves app B alone")
+
+  // --- collapse persists ---------------------------------------------------
+  await host(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
+  await page.getByRole("menuitem", { name: "Collapse" }).click()
+  await page.getByRole("button", { name: "Expand Discussions" }).waitFor()
+  assert.equal(Math.round((await box(page.locator('[data-dock-zone="left"]'))).width), 36, "collapsed zone is a rail")
+  await page.reload({ waitUntil: "networkidle" })
+  await page.getByRole("button", { name: "Expand Discussions" }).click()
+  await host(page, "list").getByTestId("list-scroll").waitFor()
+  assert.equal(Math.round((await box(page.locator('[data-dock-zone="left"]'))).width), 320, "expanding restores the zone size")
+
+  // --- corrupt storage falls back to defaults ------------------------------
+  await page.evaluate(() => localStorage.setItem("story:dock:a:v1", "{not json"))
+  await page.reload({ waitUntil: "networkidle" })
+  assert.deepEqual(await dockState(page), [["list", "left", false]])
+  await page.evaluate(() => localStorage.setItem("story:dock:a:v1", JSON.stringify({ version: 1, zones: { right: [{ id: "g", panels: ["list", "ghost"], active: "ghost" }] } })))
+  await page.reload({ waitUntil: "networkidle" })
+  assert.equal(await zoneOf(page, "list"), "right", "valid parts of stored data still apply; unknown panels are skipped")
+
+  // --- narrow: docking is off and the inline layout is unchanged ----------
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: "networkidle" })
+  await page.setViewportSize({ width: 900, height: 900 })
+  await page.locator('[data-slot="master-detail"]:not([data-docked])').waitFor()
+  assert.equal(await page.locator("[data-dock-zone]").count(), 0)
+  assert.equal(await page.locator('[data-slot="master-detail"] [data-slot="master-detail-sidebar"]').count(), 1, "inline sidebar")
+  await page.screenshot({ path: path.join(outputDir, "06-narrow.png") })
+  await page.setViewportSize({ width: 600, height: 900 })
+  await page.getByRole("tab", { name: "Discussions" }).waitFor()
+  await page.screenshot({ path: path.join(outputDir, "07-mobile.png") })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await host(page, "list").waitFor()
+
+  assert.deepEqual(errors, [])
+  console.log(`dock story passed; screenshots in ${outputDir}`)
+} finally {
+  await browser?.close()
+  await server.close()
+}

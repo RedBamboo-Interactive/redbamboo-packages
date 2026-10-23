@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority"
-import type { ReactNode } from "react"
+import { useRef, type ReactNode } from "react"
 import { cn } from "../utils"
+import { useDockHeader } from "./dock/dock"
 
 const panelHeaderVariants = cva(
   "flex items-center gap-2 px-3 border-b border-overlay-6 shrink-0",
@@ -30,10 +31,15 @@ export function PanelHeader({
   variant,
   className,
 }: PanelHeaderProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  // Inside a dock panel, the panel's first header is its drag handle and menu.
+  const dock = useDockHeader(ref)
   return (
     <div
+      ref={ref}
       data-slot="panel-header"
       className={cn(panelHeaderVariants({ variant }), className)}
+      {...dock?.handleProps}
     >
       {leading}
       {title && (
@@ -41,6 +47,7 @@ export function PanelHeader({
           {title}
         </span>
       )}
+      {dock?.menu}
       {children}
     </div>
   )
