@@ -439,9 +439,14 @@ export function ChatPanel(props: ChatPanelProps) {
   // background tasks, then host work (Nova's delegations). Shapes follow the
   // same order. A task's shape opens its launching square's own details; a task
   // whose launching square is not in the loaded transcript opens the same
-  // dialog from its live state.
-  const [detachedTask, setDetachedTask] = useState<BackgroundTaskInfo | null>(null)
-  const [openHostItem, setOpenHostItem] = useState<ActivityStatusItem | null>(null)
+  // dialog from its live state. Details opened from the row close once their
+  // work leaves it, and never follow the panel to another session.
+  const [detachedTaskId, setDetachedTaskId] = useState<string | null>(null)
+  const [openHostKey, setOpenHostKey] = useState<string | null>(null)
+  useEffect(() => {
+    setDetachedTaskId(null)
+    setOpenHostKey(null)
+  }, [sessionId])
   const orderedTasks = useMemo(() => orderBackgroundActivity(runningBackgroundTasks), [runningBackgroundTasks])
   const hostItems = hostActivity?.items ?? []
   const taskColor = (task: BackgroundTaskInfo) => {
@@ -456,7 +461,10 @@ export function ChatPanel(props: ChatPanelProps) {
       color: taskColor(task),
       shape: "square" as const,
       running: true,
-      onOpen: () => { if (!task.parentToolUseId || !requestOpen(task.parentToolUseId)) setDetachedTask(task) },
+      onOpen: () => {
+        const launcher = task.parentToolUseId ?? backgroundTaskIndex.get(task.taskId)?.part.toolUseId
+        if (!launcher || !requestOpen(launcher)) setDetachedTaskId(task.taskId)
+      },
     })),
     ...hostItems.map(item => ({
       key: `host:${item.key}`,
@@ -464,18 +472,19 @@ export function ChatPanel(props: ChatPanelProps) {
       color: item.color,
       shape: item.shape ?? "square",
       running: item.running,
-      onOpen: () => setOpenHostItem(item),
+      onOpen: () => setOpenHostKey(item.key),
     })),
   ]
-  // Keep an open item's details current while it stays listed.
-  const shownHostItem = openHostItem ? hostItems.find(item => item.key === openHostItem.key) ?? openHostItem : null
+  // Open details always read the current item, so they never show a stale state.
+  const shownHostItem: ActivityStatusItem | null = openHostKey ? hostItems.find(item => item.key === openHostKey) ?? null : null
+  const detachedTask = detachedTaskId ? liveBackgroundTasks.get(detachedTaskId) : undefined
   const detachedPart = useMemo<MessagePart | undefined>(() => detachedTask ? {
     type: "tool_use",
     content: "",
     toolName: detachedTask.kind === "agent" ? "Agent" : detachedTask.kind === "shell" ? "Bash" : "Task",
     toolUseId: detachedTask.parentToolUseId ?? detachedTask.taskId,
-    task: liveBackgroundTasks.get(detachedTask.taskId) ?? detachedTask,
-  } : undefined, [detachedTask, liveBackgroundTasks])
+    task: detachedTask,
+  } : undefined, [detachedTask])
 
   const sessionLine = isStreaming || isReconnecting
     ? renderStatusLine
@@ -488,17 +497,19 @@ export function ChatPanel(props: ChatPanelProps) {
   const backgroundColor = backgroundSummary?.source === "host"
     ? hostItems[0]?.color ?? PART_COLOR.delegation
     : orderedTasks[0] ? taskColor(orderedTasks[0]) : PART_COLOR.delegation
+  // Host work that is only waiting, blocked or unknown keeps the spinner still, like its shapes.
+  const backgroundPaused = backgroundSummary?.source === "host" && !hostItems.some(item => item.running)
   const statusLine = (
     <div data-slot="activity-status-row" className="min-w-0">
       <ActivityShapesProvider value={<ActivityShapes shapes={activityShapes} />}>
         {sessionLine ?? (backgroundSummary && (
-          <ChatStatusLine color={backgroundColor} label={backgroundSummary.label} detail={backgroundSummary.detail} title={backgroundSummary.title} />
+          <ChatStatusLine color={backgroundColor} paused={backgroundPaused} label={backgroundSummary.label} detail={backgroundSummary.detail} title={backgroundSummary.title} />
         ))}
       </ActivityShapesProvider>
-      <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTask(null)}
+      <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTaskId(null)}
         resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink}
         loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
-      <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostItem(null)} />
+      <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostKey(null)} />
     </div>
   )
 

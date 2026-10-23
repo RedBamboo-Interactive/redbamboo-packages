@@ -73,6 +73,13 @@ async function main() {
       assert.deepEqual([map.status, map.jiggle], ["completed", false], "completed agent is still")
       assert.deepEqual([stopped.status, stopped.jiggle, lost.status, lost.jiggle], ["stopped", false, "lost", false])
       assert.equal(research.color, map.color, "running and completed keep the agent colour")
+      // Running squares move but keep the one square size.
+      const scaleOf = id => squareFor(id).evaluate(node => {
+        const m = new DOMMatrix(getComputedStyle(node).transform)
+        return Math.hypot(m.a, m.b)
+      })
+      await page.waitForTimeout(700)
+      assert.ok(Math.abs(await scaleOf("toolu_research") - 1) < 0.02, "a running square is not enlarged")
       assert.notEqual(stopped.color, map.color, "stopped is not the agent colour")
       assert.notEqual(lost.color, stopped.color, "lost differs from stopped")
       // A subagent's own calls are not squares of the turn.
@@ -130,6 +137,10 @@ async function main() {
       assert.equal(await row.locator('[data-slot="streaming-status-line"]').count(), 1, "one line, not two")
       assert.deepEqual(await shapes.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-activity-key"))),
         ["task:task-research", "task:task-shell"], "agents before other tasks")
+      for (const node of await shapes.all()) {
+        const scale = await node.evaluate(el => { const m = new DOMMatrix(getComputedStyle(el).transform); return Math.hypot(m.a, m.b) })
+        assert.ok(Math.abs(scale - 1) < 0.02, "activity shapes keep the one square size")
+      }
       await shot("04-activity-row")
       await shapes.nth(1).click({ force: true })
       await heading("Bash").waitFor()
