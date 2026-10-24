@@ -48,6 +48,8 @@ export type {
   SessionStats,
   SessionConfigOption,
   SessionAgentInfo,
+  AgentDisplayInfo,
+  ResolveAgentInfo,
   ProviderUsageWindow,
   ProviderUsageCredits,
   ProviderUsageBucket,

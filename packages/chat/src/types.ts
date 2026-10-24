@@ -403,6 +403,19 @@ export interface SessionConfigOption {
   aliases?: string[]
 }
 
+/** Display identity of an Agent that sent a message or event. */
+export interface AgentDisplayInfo {
+  name: string
+  avatarUrl: string
+}
+
+/**
+ * Resolve an Agent for display. Message senders pass the Agent id; an Agent
+ * note event passes the sender reference from its data (`agent`), which a host
+ * may carry as an id or a slug.
+ */
+export type ResolveAgentInfo = (agentRef: string) => AgentDisplayInfo | undefined
+
 export interface SessionAgentInfo {
   id: string
   name: string
@@ -677,7 +690,7 @@ export interface ChatPanelProps {
 
   // Avatar
   assistantAvatar?: string
-  resolveAgentInfo?: (agentId: string) => { name: string; avatarUrl: string } | undefined
+  resolveAgentInfo?: ResolveAgentInfo
   /** Opt-in sender treatment for prose-led experiences such as roleplay. */
   senderPresentation?: "compact" | "portrait"
 

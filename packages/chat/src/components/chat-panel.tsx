@@ -508,6 +508,7 @@ export function ChatPanel(props: ChatPanelProps) {
       </ActivityShapesProvider>
       <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTaskId(null)}
         resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink}
+        resolveAgentInfo={props.resolveAgentInfo}
         loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
       <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostKey(null)} />
     </div>
@@ -652,6 +653,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     resolveFileLink={resolveFileLink}
                     resolveEventLink={resolveEventLink}
                     resolveEventQueueStatus={resolveEventQueueStatus}
+                    resolveAgentInfo={props.resolveAgentInfo}
                     loadTranscriptPayload={loadTranscriptPayload}
                     getTranscriptPayloadMediaUrl={getTranscriptPayloadMediaUrl}
                     getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl}

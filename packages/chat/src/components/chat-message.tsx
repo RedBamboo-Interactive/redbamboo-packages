@@ -11,7 +11,7 @@ import {
   ImageLightbox,
   useUiEnvironment,
 } from "@redbamboo/ui"
-import type { MessageBlock, MessagePart, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef } from "../types"
+import type { MessageBlock, MessagePart, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, StructuredQuestion, TranscriptPayloadLoader, TranscriptPayloadRef, AgentDisplayInfo, ResolveAgentInfo } from "../types"
 import { ImageThumbnail, StreamingText, MarkdownRenderer } from "./streaming-text"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
@@ -118,6 +118,8 @@ interface ChatMessageProps {
    */
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
   resolveEventQueueStatus?: ResolveEventQueueStatus
+  /** Agent identity for event senders, e.g. the portrait on an Agent note. */
+  resolveAgentInfo?: ResolveAgentInfo
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadMediaUrl?: (ref: TranscriptPayloadRef) => string
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
@@ -159,6 +161,7 @@ export const ChatMessage = memo(function ChatMessage({
   resolveFileLink,
   resolveEventLink,
   resolveEventQueueStatus,
+  resolveAgentInfo,
   loadTranscriptPayload,
   getTranscriptPayloadMediaUrl,
   getTranscriptPayloadDownloadUrl,
@@ -421,7 +424,7 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
             </div>
           )
         )}
@@ -500,7 +503,7 @@ function partLabel(part: MessagePart): string {
 }
 
 
-function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
   parts: MessagePart[]
   allParts: MessagePart[]
@@ -511,6 +514,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
   resolveEventQueueStatus?: ResolveEventQueueStatus
+  resolveAgentInfo?: ResolveAgentInfo
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
@@ -620,7 +624,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
           <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)}
       </div>
 
-      <PartModal part={selectedPart} pairedResult={modalSelection?.result} open={!!selected} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+      <PartModal part={selectedPart} pairedResult={modalSelection?.result} open={!!selected} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
     </>
   )
 }
@@ -698,6 +702,7 @@ interface PartModalProps {
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
   resolveEventQueueStatus?: ResolveEventQueueStatus
+  resolveAgentInfo?: ResolveAgentInfo
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }
@@ -778,7 +783,7 @@ export function PartModal(props: PartModalProps) {
     navigation={effectiveNavigation} breadcrumb={breadcrumb} background={background} />
 }
 
-function PartModalView({ part, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
+function PartModalView({ part, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
   breadcrumb?: React.ReactNode
   background?: React.ReactNode
 }) {
@@ -803,18 +808,34 @@ function PartModalView({ part, pairedResult, open, onClose, navigation, minHeigh
   const heldHeight = (maxHeight: string) => minHeight ? `min(${minHeight}px, ${maxHeight})` : undefined
 
   if (event) {
+    const sender = eventSender(event, resolveAgentInfo)
+    const senderAvatar = sender ? resolveChatMediaSrc(sender.avatarUrl, resolveImageSrc) : undefined
+    const senderDiscussion = typeof event.data?.discussionId === "string" ? event.data.discussionId : null
+    const title = sender ? [sender.name, senderDiscussion].filter(Boolean).join(" · ") : event.label ?? event.key
     return (
       <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
         <DialogContent motion="snappy" onKeyDown={onKeyDown} className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0" style={{ minHeight: heldHeight("70vh") }}>
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-            <div
-              className="w-3 h-3 rounded-full shrink-0"
-              style={{ backgroundColor: getPartColor(part) }}
-            />
-            {event.icon && <i className={`${event.icon} text-sm shrink-0`} style={{ color: event.color ?? undefined }} />}
+            {senderAvatar ? (
+              // The sender's portrait stands in for the dot and icon, ringed in the event colour.
+              <img
+                src={senderAvatar}
+                alt={sender!.name}
+                className="size-8 rounded-full object-cover shrink-0"
+                style={{ boxShadow: `0 0 0 2px ${getPartColor(part)}` }}
+              />
+            ) : (
+              <>
+                <div
+                  className="w-3 h-3 rounded-full shrink-0"
+                  style={{ backgroundColor: getPartColor(part) }}
+                />
+                {event.icon && <i className={`${event.icon} text-sm shrink-0`} style={{ color: event.color ?? undefined }} />}
+              </>
+            )}
             {/* Title and time stack so neither wraps beside the pager on a phone. */}
             <div className={`min-w-0 flex-1 space-y-0.5${navigation ? "" : " mr-7"}`}>
-              <DialogTitle className={`text-sm truncate${event.label ? "" : " capitalize"}`}>{event.label ?? event.key}</DialogTitle>
+              <DialogTitle className={`text-sm truncate${sender || event.label ? "" : " capitalize"}`}>{title}</DialogTitle>
               {event.timestamp && (
                 <p className="text-[10px] font-mono text-text-disabled truncate">
                   {formatEventTime(event.timestamp)}
@@ -1427,6 +1448,14 @@ function formatTimestamp(iso: string): string {
       hour: "2-digit", minute: "2-digit", second: "2-digit",
     })
   } catch { return iso }
+}
+
+/** The Agent that sent an event, when the event names one and the host knows it. */
+function eventSender(event: ParsedEvent, resolveAgentInfo?: ResolveAgentInfo): AgentDisplayInfo | undefined {
+  if (event.key !== "agent-note" || !resolveAgentInfo) return undefined
+  const ref = event.data?.agent
+  const sender = typeof ref === "string" && ref ? resolveAgentInfo(ref) : undefined
+  return sender?.avatarUrl ? sender : undefined
 }
 
 /** Event header subtitle: the year only when it isn't this one, so it fits beside the pager on a phone. */
