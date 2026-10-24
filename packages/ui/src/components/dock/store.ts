@@ -1,21 +1,27 @@
 import {
   activatePanel,
+  canMoveToOwnLane,
   dockStorageKey,
   emptyLayout,
   ensurePanel,
   findPanel,
+  moveToOwnLane,
   moveToZone,
   movePanel,
   parseLayout,
   serializeLayout,
   setCollapsed,
   setGroupSizes,
-  setZoneSize,
+  setLaneSizes,
   visibleLayout,
   DOCK_ZONES,
+  LEGACY_DOCK_LAYOUT_VERSION,
+  type DockAffinity,
+  type DockFold,
   type DockLayout,
   type DockTarget,
   type DockZone,
+  type VisibleDockLane,
   type VisibleDockLayout,
 } from "./layout"
 import { captureScroll, resyncScrollListeners, restoreScroll, type ScrollRecord } from "./scroll-memory"
@@ -35,6 +41,7 @@ export interface DockPanelMeta {
   maxSize?: number
   defaultSize?: DockSize
   surface: DockSurface
+  affinity: DockAffinity
   collapsible: boolean
   closable: boolean
 }
@@ -101,6 +108,9 @@ interface HeaderRegistration {
 
 const ZONE_EDGE = 44
 const GROUP_EDGE_RATIO = 0.28
+/** Width of a group's inner/outer "new column" strip: a share of the group, capped. */
+const LANE_EDGE_RATIO = 0.2
+const LANE_EDGE_MAX = 56
 const FALLBACK_ZONE_SIZE: Record<DockZone, number> = { left: 320, right: 360, bottom: 260 }
 
 export class DockStore {
@@ -120,6 +130,8 @@ export class DockStore {
   private frame: HTMLElement | null = null
   private pendingScroll: ScrollRecord[] | null = null
   private pendingFocus: HTMLElement | null = null
+  /** Side zones the frame currently renders as one stacked column (render-time only). */
+  private fold: DockFold = { left: false, right: false }
 
   constructor(ownerDocument: Document, config: DockConfig) {
     this.ownerDocument = ownerDocument
@@ -216,13 +228,32 @@ export class DockStore {
     return this.storageKey() ?? `memory:${this.config.layoutId}`
   }
 
+  /** The previous format's key; read once to migrate a layout saved before lanes existed. */
+  private legacyStorageKey(): string | null {
+    const { storagePrefix, layoutId } = this.config
+    return storagePrefix && layoutId ? dockStorageKey(storagePrefix, layoutId, LEGACY_DOCK_LAYOUT_VERSION) : null
+  }
+
   /** Replaces the in-memory layout with the stored one for the current layout id. */
   private load() {
     const key = this.storageKey()
     let layout = emptyLayout()
+    let migrated = false
     if (key) {
       try {
-        layout = parseLayout(this.storage()?.getItem(key))
+        const storage = this.storage()
+        const stored = storage?.getItem(key) ?? null
+        if (stored !== null) {
+          layout = parseLayout(stored)
+        } else {
+          // Never reset a saved layout: a v1 layout becomes v2 (its key is left for older builds).
+          const legacyKey = this.legacyStorageKey()
+          const legacy = legacyKey ? storage?.getItem(legacyKey) ?? null : null
+          if (legacy !== null) {
+            layout = parseLayout(legacy)
+            migrated = true
+          }
+        }
       } catch {
         layout = emptyLayout()
       }
@@ -230,6 +261,7 @@ export class DockStore {
     this.layout = this.withRegisteredPanels(layout)
     this.loadedKey = this.layoutKeyId()
     this.generation += 1
+    if (migrated) this.persist()
   }
 
   private persist() {
@@ -255,7 +287,7 @@ export class DockStore {
       layout,
       id,
       // Only pixel sizes are stored; a share of the frame stays proportional until resized.
-      { zone: meta.defaultZone, order: meta.order, size: typeof meta.defaultSize === "number" ? meta.defaultSize : undefined },
+      { zone: meta.defaultZone, order: meta.order, size: typeof meta.defaultSize === "number" ? meta.defaultSize : undefined, affinity: meta.affinity },
       (panelId) => this.registrations.get(panelId)?.meta.order,
     )
   }
@@ -280,6 +312,8 @@ export class DockStore {
     if (existing && existing.token !== token) return false
     this.registrations.set(id, { token, meta, onClose })
     if (this.config.enabled) {
+      // A panel appearing can move others: lanes shift outward, a side may fold.
+      this.captureMoveState()
       const next = this.ensure(this.layout, id, meta)
       if (next !== this.layout) {
         this.layout = next
@@ -295,6 +329,7 @@ export class DockStore {
     if (!existing || existing.token !== token) return
     this.registrations.delete(id)
     if (this.drag?.panelId === id) this.cancelDrag()
+    if (this.config.enabled) this.captureMoveState()
     this.emit()
   }
 
@@ -359,8 +394,10 @@ export class DockStore {
   /** How the group header row shows this panel: its whole header alone, or only its actions beside tabs. */
   headerMode(panelId: string): "single" | "tab" | null {
     for (const zone of DOCK_ZONES) {
-      const group = this.snapshot.visible.zones[zone].find((candidate) => candidate.panels.includes(panelId))
-      if (group) return group.panels.length > 1 ? "tab" : "single"
+      for (const lane of this.snapshot.visible.zones[zone]) {
+        const group = lane.groups.find((candidate) => candidate.panels.includes(panelId))
+        if (group) return group.panels.length > 1 ? "tab" : "single"
+      }
     }
     return null
   }
@@ -383,6 +420,17 @@ export class DockStore {
     this.apply(moveToZone(this.layout, panelId, zone), true)
   }
 
+  /** Shown panels: registered and not collapsed. Closed panels keep a placement but take no room. */
+  private isShown = (panelId: string) => this.registrations.has(panelId) && !this.layout.collapsed.includes(panelId)
+
+  canMoveToOwnLane(panelId: string): boolean {
+    return canMoveToOwnLane(this.layout, panelId, this.isShown)
+  }
+
+  moveToOwnLane(panelId: string) {
+    this.apply(moveToOwnLane(this.layout, panelId, this.isShown), true)
+  }
+
   activate(panelId: string) {
     this.apply(activatePanel(this.layout, panelId), false)
   }
@@ -391,19 +439,19 @@ export class DockStore {
     this.apply(setCollapsed(this.layout, panelId, collapsed), true)
   }
 
-  setZoneSize(zone: DockZone, size: number) {
-    this.apply(setZoneSize(this.layout, zone, size), false)
+  setLaneSizes(sizes: Record<string, number>) {
+    this.apply(setLaneSizes(this.layout, sizes), false)
   }
 
-  setGroupSizes(zone: DockZone, sizes: Record<string, number>) {
-    this.apply(setGroupSizes(this.layout, zone, sizes), false)
+  setGroupSizes(laneId: string, sizes: Record<string, number>) {
+    this.apply(setGroupSizes(this.layout, laneId, sizes), false)
   }
 
   reset() {
     if (!this.config.enabled) return
     this.captureMoveState()
-    const key = this.storageKey()
-    if (key) {
+    for (const key of [this.storageKey(), this.legacyStorageKey()]) {
+      if (!key) continue
       try { this.storage()?.removeItem(key) } catch { /* ignore */ }
     }
     this.layout = this.withRegisteredPanels(emptyLayout())
@@ -433,6 +481,19 @@ export class DockStore {
   }
 
   /**
+   * The frame folds or unfolds lanes at render time (window width), which
+   * re-parents host elements without any layout change: it calls this first.
+   */
+  prepareStructuralChange() {
+    this.captureMoveState()
+  }
+
+  /** Which side zones the frame renders folded; folded zones offer no new-column targets. */
+  setFold(fold: DockFold) {
+    this.fold = fold
+  }
+
+  /**
    * Detaching a DOM node resets the scroll offsets inside it and drops focus.
    * Record both before any change that can re-parent a host element.
    */
@@ -456,6 +517,11 @@ export class DockStore {
     this.pendingFocus = null
     if (records) {
       restoreScroll(records)
+      // A newly mounted lane or fold column gets its real width from the resize
+      // library's own layout effect, which re-renders after this commit. Content
+      // that reflows meanwhile (wrapping rows) has its offset rescaled by scroll
+      // anchoring, so put the offsets back once more, still before paint.
+      queueMicrotask(() => restoreScroll(records))
       for (const host of this.hosts.values()) resyncScrollListeners(host)
     }
     if (focus && focus.isConnected) {
@@ -503,28 +569,70 @@ export class DockStore {
     if (!frame) return []
     const candidates: DockDropCandidate[] = []
     const visible = this.snapshot.visible
+    const title = (id: string) => this.registrations.get(id)?.meta.title ?? id
+    const laneLabel = (lane: VisibleDockLane) => lane.groups.flatMap((group) => group.panels).map(title).join(", ")
+    const laneElement = (laneId: string) => [...frame.querySelectorAll<HTMLElement>("[data-dock-lane]")]
+      .find((element) => element.dataset.dockLane === laneId) ?? null
 
     for (const element of frame.querySelectorAll<HTMLElement>("[data-dock-group]")) {
       const groupId = element.dataset.dockGroup!
       const zone = element.dataset.dockGroupZone as DockZone
-      const group = visible.zones[zone]?.find((candidate) => candidate.id === groupId)
-      if (!group) continue
+      const lanes = visible.zones[zone] ?? []
+      const laneIndex = lanes.findIndex((candidate) => candidate.groups.some((group) => group.id === groupId))
+      const lane = lanes[laneIndex]
+      const group = lane?.groups.find((candidate) => candidate.id === groupId)
+      if (!lane || !group) continue
       const rect = toRect(element.getBoundingClientRect())
-      const title = (id: string) => this.registrations.get(id)?.meta.title ?? id
       const groupLabel = group.panels.map(title).join(", ")
       const soleSelf = group.panels.length === 1 && group.panels[0] === panelId
       if (soleSelf) continue
       const horizontal = zone === "bottom"
-      const edge = (horizontal ? rect.width : rect.height) * GROUP_EDGE_RATIO
+
+      // Side zones, unfolded: strips on the group's inner and outer edges start a new column.
+      let middle = rect
+      if (zone !== "bottom" && !this.fold[zone]) {
+        const strip = Math.min(LANE_EDGE_MAX, rect.width * LANE_EDGE_RATIO)
+        const laneRect = toRect((laneElement(lane.id) ?? element).getBoundingClientRect())
+        // The centre is left of the right zone and right of the left zone.
+        const innerIsLeft = zone === "right"
+        const leftStrip: DockRect = { ...rect, width: strip }
+        const rightStrip: DockRect = { ...rect, left: rect.left + rect.width - strip, width: strip }
+        const leftHalf: DockRect = { ...laneRect, width: laneRect.width / 2 }
+        const rightHalf: DockRect = { ...laneRect, left: laneRect.left + laneRect.width / 2, width: laneRect.width / 2 }
+        const own = ownLaneIndex(lanes, panelId)
+        // Right beside the dragged panel's own column nothing would change.
+        const innerNoop = own !== null && (own === laneIndex || own === laneIndex - 1)
+        const outerNoop = own !== null && (own === laneIndex || own === laneIndex + 1)
+        if (!innerNoop) {
+          candidates.push({
+            target: { kind: "lane", laneId: lane.id, side: "inner" },
+            hit: innerIsLeft ? leftStrip : rightStrip,
+            preview: innerIsLeft ? leftHalf : rightHalf,
+            label: `New column ${innerIsLeft ? "left" : "right"} of ${laneLabel(lane)}`,
+          })
+        }
+        // The outermost lane's outer strip is the zone edge, added below.
+        if (!outerNoop && laneIndex < lanes.length - 1) {
+          candidates.push({
+            target: { kind: "lane", laneId: lane.id, side: "outer" },
+            hit: innerIsLeft ? rightStrip : leftStrip,
+            preview: innerIsLeft ? rightHalf : leftHalf,
+            label: `New column ${innerIsLeft ? "right" : "left"} of ${laneLabel(lane)}`,
+          })
+        }
+        middle = { ...rect, left: rect.left + strip, width: rect.width - 2 * strip }
+      }
+
+      const edge = (horizontal ? middle.width : middle.height) * GROUP_EDGE_RATIO
       const before: DockRect = horizontal
-        ? { ...rect, width: edge }
-        : { ...rect, height: edge }
+        ? { ...middle, width: edge }
+        : { ...middle, height: edge }
       const after: DockRect = horizontal
-        ? { ...rect, left: rect.left + rect.width - edge, width: edge }
-        : { ...rect, top: rect.top + rect.height - edge, height: edge }
-      const middle: DockRect = horizontal
-        ? { ...rect, left: rect.left + edge, width: rect.width - 2 * edge }
-        : { ...rect, top: rect.top + edge, height: rect.height - 2 * edge }
+        ? { ...middle, left: middle.left + middle.width - edge, width: edge }
+        : { ...middle, top: middle.top + middle.height - edge, height: edge }
+      const centre: DockRect = horizontal
+        ? { ...middle, left: middle.left + edge, width: middle.width - 2 * edge }
+        : { ...middle, top: middle.top + edge, height: middle.height - 2 * edge }
       const half = (side: "before" | "after"): DockRect => horizontal
         ? { ...rect, width: rect.width / 2, left: side === "before" ? rect.left : rect.left + rect.width / 2 }
         : { ...rect, height: rect.height / 2, top: side === "before" ? rect.top : rect.top + rect.height / 2 }
@@ -540,20 +648,42 @@ export class DockStore {
         preview: half("after"),
         label: `Split ${horizontal ? "right of" : "below"} ${groupLabel}`,
       })
-      candidates.push({ target: { kind: "tab", groupId }, hit: middle, preview: rect, label: `Tab with ${groupLabel}` })
+      candidates.push({ target: { kind: "tab", groupId }, hit: centre, preview: rect, label: `Tab with ${groupLabel}` })
     }
 
     const column = frame.querySelector<HTMLElement>("[data-dock-column]")
     const center = frame.querySelector<HTMLElement>("[data-dock-center]")
     if (column && center) {
+      const frameRect = toRect(frame.getBoundingClientRect())
       const columnRect = toRect(column.getBoundingClientRect())
       const centerRect = toRect(center.getBoundingClientRect())
       for (const zone of DOCK_ZONES) {
-        if (visible.zones[zone].length > 0 || visible.collapsed[zone].length > 0) continue
+        const lanes = visible.zones[zone]
+        if (lanes.length > 0) {
+          // A side zone in use: its outer edge starts a new outermost column.
+          if (zone === "bottom" || this.fold[zone]) continue
+          if (ownLaneIndex(lanes, panelId) === lanes.length - 1) continue
+          const outer = lanes[lanes.length - 1]!
+          const element = laneElement(outer.id)
+          if (!element) continue
+          const laneRect = toRect(element.getBoundingClientRect())
+          const strip = Math.min(LANE_EDGE_MAX, laneRect.width * LANE_EDGE_RATIO)
+          candidates.push({
+            target: { kind: "edge", zone },
+            hit: zone === "left"
+              ? { ...laneRect, left: frameRect.left, width: laneRect.left + strip - frameRect.left }
+              : { ...laneRect, left: laneRect.left + laneRect.width - strip, width: frameRect.left + frameRect.width - (laneRect.left + laneRect.width - strip) },
+            preview: zone === "left"
+              ? { ...laneRect, width: laneRect.width / 2 }
+              : { ...laneRect, left: laneRect.left + laneRect.width / 2, width: laneRect.width / 2 },
+            label: `New column at the ${zone} edge`,
+          })
+          continue
+        }
+        if (visible.collapsed[zone].length > 0) continue
         const declared = this.registrations.get(panelId)?.meta.defaultSize
         const span = zone === "bottom" ? centerRect.height : columnRect.width
-        const size = this.layout.zoneSizes[zone]
-          ?? (typeof declared === "string" ? (parseFloat(declared) / 100) * span : declared)
+        const size = (typeof declared === "string" ? (parseFloat(declared) / 100) * span : declared)
           ?? FALLBACK_ZONE_SIZE[zone]
         if (zone === "bottom") {
           const height = Math.min(size, centerRect.height * 0.5)
@@ -578,9 +708,21 @@ export class DockStore {
         }
       }
     }
-    // Zone edges win over the group regions they may overlap.
-    return candidates.sort((a, b) => Number(b.target.kind === "zone") - Number(a.target.kind === "zone"))
+    // Zone edges win over the group regions they may overlap, then the new-column strips.
+    const rank = (candidate: DockDropCandidate) => {
+      const kind = candidate.target.kind
+      return kind === "zone" || kind === "edge" ? 0 : kind === "lane" ? 1 : 2
+    }
+    return candidates.sort((a, b) => rank(a) - rank(b))
   }
+}
+
+/** Index of the visible lane the dragged panel has to itself (no other shown panel), or null. */
+function ownLaneIndex(lanes: readonly VisibleDockLane[], panelId: string): number | null {
+  const index = lanes.findIndex((lane) => lane.groups.some((group) => group.panels.includes(panelId)))
+  if (index < 0) return null
+  const lane = lanes[index]!
+  return lane.groups.length === 1 && lane.groups[0]!.panels.length === 1 && lane.collapsed.length === 0 ? index : null
 }
 
 function toRect(rect: DOMRect): DockRect {
@@ -598,7 +740,7 @@ function hitTest(candidates: DockDropCandidate[], x: number, y: number): DockDro
 function sameMeta(a: DockPanelMeta, b: DockPanelMeta): boolean {
   return a.title === b.title && a.icon === b.icon && a.defaultZone === b.defaultZone && a.order === b.order
     && a.minSize === b.minSize && a.maxSize === b.maxSize && a.defaultSize === b.defaultSize && a.surface === b.surface
-    && a.collapsible === b.collapsible && a.closable === b.closable
+    && a.collapsible === b.collapsible && a.closable === b.closable && a.affinity === b.affinity
 }
 
 export const DOCK_DEFAULT_ZONE_SIZE = FALLBACK_ZONE_SIZE

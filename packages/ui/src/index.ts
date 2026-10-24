@@ -269,13 +269,14 @@ export type {
   DockPanelProps,
 } from "./components/dock/dock"
 export {
+  DOCK_CENTER_FLOOR,
   DOCK_LAYOUT_VERSION,
   DOCK_ZONES,
   dockStorageKey,
   parseLayout as parseDockLayout,
   sanitizeLayout as sanitizeDockLayout,
 } from "./components/dock/layout"
-export type { DockGroup, DockLayout, DockTarget, DockZone } from "./components/dock/layout"
+export type { DockAffinity, DockGroup, DockLane, DockLayout, DockTarget, DockZone } from "./components/dock/layout"
 export type { DockSize, DockSurface } from "./components/dock/store"
 
 export { FilterBar, FilterPillGroup } from "./components/filter-bar"

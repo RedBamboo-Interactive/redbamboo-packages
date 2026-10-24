@@ -223,7 +223,7 @@ try {
   await assertPreserved("resize")
 
   // --- persistence ---------------------------------------------------------
-  const savedA = await page.evaluate(() => localStorage.getItem("story:dock:a:v1"))
+  const savedA = await page.evaluate(() => localStorage.getItem("story:dock:a:v2"))
   assert.ok(savedA, "layout saved under the app key")
   await page.reload({ waitUntil: "networkidle" })
   assert.deepEqual(await dockState(page), [["list", "right", false]], "transient panels reopen closed")
@@ -244,7 +244,7 @@ try {
   await bMenu.click()
   await page.getByRole("menuitem", { name: "Move to left" }).click()
   assert.equal(await zoneOf(page, "console"), "left")
-  const savedB = await page.evaluate(() => localStorage.getItem("story:dock:b:v1"))
+  const savedB = await page.evaluate(() => localStorage.getItem("story:dock:b:v2"))
   await page.getByTestId("app-a").click()
   await host(page, "list").waitFor()
   assert.equal(await zoneOf(page, "console"), "bottom", "app A layout is untouched by app B")
@@ -255,7 +255,7 @@ try {
   assert.equal(await zoneOf(page, "list"), "left")
   assert.equal(await zoneOf(page, "console"), "right")
   assert.equal(Math.round((await box(page.locator('[data-dock-zone="left"]'))).width), 320, "reset restores default sizes")
-  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:b:v1")), savedB, "reset leaves app B alone")
+  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:b:v2")), savedB, "reset leaves app B alone")
 
   // --- collapse persists ---------------------------------------------------
   await groupOf(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
@@ -268,12 +268,175 @@ try {
   assert.equal(Math.round((await box(page.locator('[data-dock-zone="left"]'))).width), 320, "expanding restores the zone size")
 
   // --- corrupt storage falls back to defaults ------------------------------
-  await page.evaluate(() => localStorage.setItem("story:dock:a:v1", "{not json"))
+  await page.evaluate(() => localStorage.setItem("story:dock:a:v2", "{not json"))
   await page.reload({ waitUntil: "networkidle" })
   assert.deepEqual(await dockState(page), [["list", "left", false]])
-  await page.evaluate(() => localStorage.setItem("story:dock:a:v1", JSON.stringify({ version: 1, zones: { right: [{ id: "g", panels: ["list", "ghost"], active: "ghost" }] } })))
+  await page.evaluate(() => localStorage.setItem("story:dock:a:v2", JSON.stringify({ version: 2, zones: { right: [{ id: "l", groups: [{ id: "g", panels: ["list", "ghost"], active: "ghost" }] }, "junk"] } })))
   await page.reload({ waitUntil: "networkidle" })
   assert.equal(await zoneOf(page, "list"), "right", "valid parts of stored data still apply; unknown panels are skipped")
+
+  // --- lanes: side-by-side columns on one side ------------------------------
+  /** Panel ids per lane of a zone, in screen order (left to right). */
+  const lanesOnScreen = (zone) => page.evaluate((zone) => [...document.querySelectorAll(`[data-dock-lane][data-dock-zone="${zone}"]`)]
+    .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)
+    .map((lane) => [...lane.querySelectorAll("[data-dock-panel]")].map((panel) => panel.dataset.dockPanel)), zone)
+  const laneBox = (panelId) => box(page.locator("[data-dock-lane]", { has: page.locator(`[data-dock-panel="${panelId}"]`) }))
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: "networkidle" })
+  // The tester's flow: list to the right, then Settings opens beside it, toward the centre.
+  await groupOf(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
+  await page.getByRole("menuitem", { name: "Move to right" }).click()
+  await page.getByTestId("composer").fill("draft across lanes")
+  await page.getByTestId("row-41").click()
+  await page.getByTestId("list-scroll").evaluate((el) => { el.scrollTop = 1200 })
+  await page.getByTestId("toggle-settings").click()
+  await host(page, "settings").waitFor()
+  assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "centre | Settings | list")
+  assert.equal(await page.locator('[data-dock-zone="left"]').count(), 0)
+  const listLaneBox = await laneBox("list")
+  assert.ok(Math.abs(listLaneBox.x + listLaneBox.width - 1440) <= 1, "the list stays pinned to the screen edge")
+  assert.equal(Math.round(listLaneBox.width), 320, "the list's column keeps its width")
+  assert.equal(Math.round((await laneBox("settings")).width), 340, "Settings opens at its declared width")
+  assert.equal(await page.getByRole("region", { name: "Right dock, column 1 of 2" }).count(), 1)
+  assert.equal(await page.getByRole("region", { name: "Right dock, column 2 of 2" }).count(), 1)
+  await assertOneHeaderRow("lanes")
+  await page.screenshot({ path: path.join(outputDir, "12-lanes-settings-beside-list.png") })
+  await page.evaluate(() => {
+    window.__laneNodes = {
+      list: document.querySelector('[data-testid="list-scroll"]'),
+      chat: document.querySelector('[data-testid="chat-body"]'),
+      composer: document.querySelector('[data-testid="composer"]'),
+      settings: document.querySelector('[data-testid="settings-scroll"]'),
+    }
+  })
+  await page.getByTestId("settings-scroll").evaluate((el) => { el.scrollTop = 300 })
+  const laneMounts = await mounts(page)
+  const assertLanesPreserved = async (step) => {
+    assert.deepEqual(await mounts(page), laneMounts, `${step}: no remount`)
+    assert.ok(await page.evaluate(() => Object.values(window.__laneNodes).every((node) => node.isConnected)), `${step}: same DOM nodes`)
+    assert.equal(await page.getByTestId("composer").inputValue(), "draft across lanes", `${step}: composer draft`)
+    assert.equal(await page.getByTestId("row-41").getAttribute("aria-selected"), "true", `${step}: list selection`)
+    assert.equal(await page.getByTestId("list-scroll").evaluate((el) => el.scrollTop), 1200, `${step}: list scroll`)
+    assert.equal(await page.getByTestId("settings-scroll").evaluate((el) => el.scrollTop), 300, `${step}: settings scroll`)
+  }
+  assert.equal(laneMounts.chat, 1, "the chat mounted once")
+
+  // Fold: 340 + 320 + 2 separators + the 640px centre floor needs 1302px.
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.locator('[data-dock-folded][data-dock-zone="right"]').waitFor()
+  assert.equal(await page.locator('[data-slot="dock-frame"]').getAttribute("data-dock-fold"), "right")
+  assert.deepEqual(await page.locator('[data-dock-folded] [data-dock-panel]').evaluateAll((els) => els.map((el) => el.dataset.dockPanel)),
+    ["settings", "list"], "folded: stacked in screen order")
+  assert.equal(Math.round((await box(page.locator('[data-dock-folded]'))).width), 340, "the folded column takes the widest lane's width")
+  await assertLanesPreserved("fold")
+  await assertOneHeaderRow("folded")
+  await page.screenshot({ path: path.join(outputDir, "13-lanes-folded-1280.png") })
+  const foldedTargets = await (async () => {
+    const handle = groupOf(page, "settings").locator("[data-dock-group-header]")
+    const from = await box(handle)
+    await page.mouse.move(from.x + 80, from.y + from.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(from.x + 100, from.y + 40, { steps: 4 })
+    await page.locator('[data-slot="dock-drag-overlay"]').waitFor()
+    const kinds = await page.locator("[data-dock-drop-candidate]").evaluateAll((els) => els.map((el) => el.dataset.dockDropCandidate.split(":")[0]))
+    await page.keyboard.press("Escape")
+    await page.mouse.up()
+    return kinds
+  })()
+  assert.ok(!foldedTargets.includes("lane") && !foldedTargets.includes("edge"), "a folded side offers no new-column targets")
+  assert.deepEqual(await lanesOnScreen("right"), [], "folding never changes the saved lanes")
+  const savedFolded = JSON.parse(await page.evaluate(() => localStorage.getItem("story:dock:a:v2")))
+  assert.equal(savedFolded.zones.right.length, 2, "the saved layout still has two lanes")
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.locator('[data-dock-folded]').waitFor({ state: "detached" })
+  assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "unfolds when space returns")
+  await assertLanesPreserved("unfold")
+
+  // Drag Settings to the list's outer edge (the zone edge), then back to its inner edge.
+  const settingsHeader = () => groupOf(page, "settings").locator("[data-dock-group-header]")
+  const listLane = await laneBox("list")
+  const toEdge = await drag(page, settingsHeader(), { x: listLane.x + listLane.width - 6, y: listLane.y + listLane.height / 2 }, { screenshot: "14-dragging-to-edge.png" })
+  assert.equal(toEdge, "edge:right")
+  assert.deepEqual(await lanesOnScreen("right"), [["list"], ["settings"]], "centre | list | Settings")
+  await assertLanesPreserved("edge")
+  const listLaneNow = await laneBox("list")
+  const toInner = await drag(page, settingsHeader(), { x: listLaneNow.x + 8, y: listLaneNow.y + listLaneNow.height / 2 }, { screenshot: "15-dragging-to-inner.png" })
+  assert.match(toInner, /^lane:.*:inner$/)
+  assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "back to centre | Settings | list")
+  await assertLanesPreserved("inner")
+
+  // Stack Settings under the list, then "Move to own column" from its header menu.
+  const stacked = await drag(page, settingsHeader(), await pointIn(groupOf(page, "list"), 0.5, 0.94))
+  assert.match(stacked, /^split:.*:after$/)
+  assert.deepEqual(await lanesOnScreen("right"), [["list", "settings"]])
+  await groupOf(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
+  assert.equal(await page.getByRole("menuitem", { name: "Move to own column" }).getAttribute("aria-disabled"), null)
+  await page.keyboard.press("Escape")
+  await groupOf(page, "settings").getByRole("button", { name: "Settings panel options" }).click()
+  await page.getByRole("menuitem", { name: "Move to own column" }).click()
+  assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "own column: tools go toward the centre")
+  await groupOf(page, "settings").getByRole("button", { name: "Settings panel options" }).click()
+  assert.equal(await page.getByRole("menuitem", { name: "Move to own column" }).getAttribute("aria-disabled"), "true", "disabled when alone")
+  await page.keyboard.press("Escape")
+  await assertLanesPreserved("own column")
+
+  // A lane separator resizes the two columns and persists per lane.
+  const between = page.getByRole("separator", { name: "Resize right dock columns" })
+  const betweenBox = await box(between)
+  const settingsBefore = (await laneBox("settings")).width
+  await page.mouse.move(betweenBox.x + betweenBox.width / 2, betweenBox.y + 300)
+  await page.mouse.down()
+  await page.mouse.move(betweenBox.x + 40, betweenBox.y + 300, { steps: 6 })
+  await page.mouse.up()
+  const settingsResized = Math.round((await laneBox("settings")).width)
+  assert.ok(Math.abs(settingsResized - (settingsBefore + 40)) <= 2, `settings lane widened (${settingsBefore} -> ${settingsResized})`)
+  const listResized = Math.round((await laneBox("list")).width)
+  assert.ok(Math.abs(listResized - 280) <= 2, `its neighbour gave the space (${listResized})`)
+  await page.screenshot({ path: path.join(outputDir, "16-lanes-resized.png") })
+  await page.reload({ waitUntil: "networkidle" })
+  await page.getByTestId("toggle-settings").click()
+  await host(page, "settings").waitFor()
+  assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "lanes persist")
+  assert.ok(Math.abs(Math.round((await laneBox("settings")).width) - settingsResized) <= 1, "lane widths persist")
+  assert.ok(Math.abs(Math.round((await laneBox("list")).width) - listResized) <= 1)
+
+  // A collapsed list keeps its column as a rail at the screen edge.
+  await groupOf(page, "list").getByRole("button", { name: "Discussions panel options" }).click()
+  await page.getByRole("menuitem", { name: "Collapse" }).click()
+  await page.getByRole("button", { name: "Expand Discussions" }).waitFor()
+  const rail = await box(page.locator("[data-dock-rail]"))
+  assert.equal(Math.round(rail.width), 36)
+  assert.ok(Math.abs(rail.x + rail.width - 1440) <= 1, "the rail stays at the edge")
+  await page.getByRole("button", { name: "Expand Discussions" }).click()
+  await host(page, "list").getByTestId("list-scroll").waitFor()
+
+  // A layout saved before lanes existed (v1, list alone on the right) migrates without loss.
+  await page.evaluate(() => {
+    localStorage.clear()
+    localStorage.setItem("story:dock:a:v1", JSON.stringify({
+      version: 1,
+      zones: { left: [], right: [{ id: "g:list", panels: ["list"], active: "list" }], bottom: [] },
+      zoneSizes: { right: 300 },
+      collapsed: [],
+    }))
+  })
+  await page.reload({ waitUntil: "networkidle" })
+  assert.equal(await zoneOf(page, "list"), "right", "v1 placement kept")
+  assert.equal(Math.round((await laneBox("list")).width), 300, "v1 zone size kept")
+  const migrated = JSON.parse(await page.evaluate(() => localStorage.getItem("story:dock:a:v2")))
+  assert.equal(migrated.version, 2)
+  assert.deepEqual(migrated.zones.right.map((lane) => [lane.size, lane.groups.map((group) => group.panels)]), [[300, [["list"]]]])
+  assert.ok(await page.evaluate(() => localStorage.getItem("story:dock:a:v1")), "the v1 key is left for older builds")
+  await page.getByTestId("toggle-settings").click()
+  await host(page, "settings").waitFor()
+  assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "migrated: Settings opens beside the list")
+  await page.screenshot({ path: path.join(outputDir, "17-migrated-v1.png") })
+
+  // Reset restores defaults for this app (and forgets the v1 copy too).
+  await page.getByTestId("reset").click()
+  assert.equal(await zoneOf(page, "list"), "left")
+  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:a:v1")), null)
+
 
   // --- narrow: docking is off and the inline layout is unchanged ----------
   await page.evaluate(() => localStorage.clear())
@@ -299,7 +462,7 @@ try {
   await page.getByRole("menuitem", { name: "Move to bottom" }).click()
   await page.getByTestId("composer").fill("draft across breakpoints")
   await page.evaluate(() => { window.__composer = document.querySelector('[data-testid="composer"]') })
-  const desktopLayout = await page.evaluate(() => localStorage.getItem("story:dock:a:v1"))
+  const desktopLayout = await page.evaluate(() => localStorage.getItem("story:dock:a:v2"))
   const chatMounts = (await mounts(page)).chat
   const sameComposer = () => page.evaluate(() => window.__composer === document.querySelector('[data-testid="composer"]') && window.__composer.isConnected)
   await page.setViewportSize({ width: 900, height: 900 })
@@ -316,7 +479,7 @@ try {
   assert.ok(await sameComposer(), "phone: composer not remounted after using the tabs")
   assert.equal(await page.getByTestId("composer").inputValue(), "draft across breakpoints")
   await page.screenshot({ path: path.join(outputDir, "09-resize-phone.png") })
-  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:a:v1")), desktopLayout, "the narrow pass writes nothing")
+  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:a:v2")), desktopLayout, "the narrow pass writes nothing")
   await page.setViewportSize({ width: 1440, height: 900 })
   await host(page, "list").waitFor()
   assert.equal(await zoneOf(page, "list"), "right", "desktop layout restored: list")
@@ -324,7 +487,7 @@ try {
   assert.ok(await sameComposer(), "desktop again: composer not remounted")
   assert.equal(await page.getByTestId("composer").inputValue(), "draft across breakpoints")
   assert.equal((await mounts(page)).chat, chatMounts, "chat mounted once across every breakpoint")
-  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:a:v1")), desktopLayout)
+  assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:a:v2")), desktopLayout)
   await page.screenshot({ path: path.join(outputDir, "10-resize-desktop-again.png") })
 
   // --- real mobile emulation: the dock is inert ----------------------------
@@ -344,7 +507,7 @@ try {
   const phone = await mobile.newPage()
   phone.on("pageerror", (error) => errors.push(`mobile: ${error.message}`))
   await phone.goto(`${baseUrl}?app=a`, { waitUntil: "networkidle" })
-  await phone.evaluate((layout) => localStorage.setItem("story:dock:a:v1", layout), desktopLayout)
+  await phone.evaluate((layout) => localStorage.setItem("story:dock:a:v2", layout), desktopLayout)
   await phone.reload({ waitUntil: "networkidle" })
   await phone.getByTestId("toggle-console").tap()
   await phone.getByRole("tab", { name: "Discussions" }).waitFor()
@@ -359,7 +522,11 @@ try {
   await touch("touchEnd")
   // A tap during the fling would only stop it, as on a real phone.
   await phone.waitForTimeout(1200)
-  await phone.getByRole("tab", { name: "Chat" }).tap()
+  // A tap that lands while the fling still runs only stops it: tap again until the tab switches.
+  for (let attempt = 0; attempt < 5 && !(await phone.getByTestId("composer").isVisible()); attempt += 1) {
+    await phone.getByRole("tab", { name: "Chat" }).tap()
+    await phone.getByTestId("composer").waitFor({ timeout: 2000 }).catch(() => {})
+  }
   await phone.getByTestId("composer").waitFor()
   await phone.getByRole("tab", { name: "Discussions" }).tap()
   const scroller = phone.getByTestId("list-scroll")

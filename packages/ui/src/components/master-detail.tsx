@@ -129,6 +129,8 @@ function MasterDetailLayout({
     title: mobileLabels[0],
     icon: "ph-bold ph-list",
     defaultZone: "left",
+    // The list stays pinned to the screen edge; tool panels open beside the centre.
+    affinity: "list",
     order: 0,
     minSize: sidebarMin,
     maxSize: sidebarMax,

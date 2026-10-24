@@ -25,7 +25,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../dropdown-menu"
-import { DOCK_ZONES, findPanel, type DockZone, type VisibleDockGroup } from "./layout"
+import {
+  computeFold,
+  DOCK_CENTER_FLOOR,
+  DOCK_ZONES,
+  findPanel,
+  type DockAffinity,
+  type DockFold,
+  type DockZone,
+  type VisibleDockGroup,
+  type VisibleDockLane,
+} from "./layout"
 import { DockStore, DOCK_DEFAULT_ZONE_SIZE, type DockDragState, type DockPanelMeta, type DockSize, type DockSnapshot, type DockSurface } from "./store"
 import { HostSlot, useStableHost } from "./host-slot"
 import { ResizablePanel, ResizablePanelGroup } from "../resizable"
@@ -116,6 +126,13 @@ export interface DockPanelOptions {
    * through, for a panel that genuinely needs to paint nothing.
    */
   surface?: DockSurface
+  /**
+   * Placement kind (default "tools"). When the panel first appears it joins the
+   * innermost column of its default zone holding panels of the same kind, else
+   * gets a column of its own: beside the centre for tools, at the screen edge
+   * for the app's list. A saved placement always wins.
+   */
+  affinity?: DockAffinity
   collapsible?: boolean
   content: ReactNode
   onClose?: () => void
@@ -146,11 +163,13 @@ export function useDockPanel(id: string, options: DockPanelOptions): DockPanelHa
   const [rejected, setRejected] = useState(false)
   const active = wanted && enabled && !rejected
 
-  const { title, icon, defaultZone = "right", order, minSize, maxSize, defaultSize, surface = "elevated", collapsible = false } = options
+  const {
+    title, icon, defaultZone = "right", order, minSize, maxSize, defaultSize, surface = "elevated", affinity = "tools", collapsible = false,
+  } = options
   const closable = typeof options.onClose === "function"
   const meta = useMemo<DockPanelMeta>(
-    () => ({ title, icon, defaultZone, order, minSize, maxSize, defaultSize, surface, collapsible, closable }),
-    [title, icon, defaultZone, order, minSize, maxSize, defaultSize, surface, collapsible, closable],
+    () => ({ title, icon, defaultZone, order, minSize, maxSize, defaultSize, surface, affinity, collapsible, closable }),
+    [title, icon, defaultZone, order, minSize, maxSize, defaultSize, surface, affinity, collapsible, closable],
   )
   const metaRef = useRef(meta)
   metaRef.current = meta
@@ -266,6 +285,8 @@ export interface DockPanelInfo {
   zone: DockZone | null
   collapsible: boolean
   collapsed: boolean
+  /** Shares its column with another shown panel in a side zone, so it can get its own. */
+  canMoveToOwnColumn: boolean
 }
 
 export interface DockController {
@@ -273,6 +294,8 @@ export interface DockController {
   layoutId: string
   panels: DockPanelInfo[]
   movePanel(panelId: string, zone: DockZone): void
+  /** A new column beside the panel's current one: toward the centre for tools, the edge for a list. */
+  moveToOwnColumn(panelId: string): void
   setCollapsed(panelId: string, collapsed: boolean): void
   resetLayout(): void
 }
@@ -295,6 +318,7 @@ export function useDockController(): DockController | null {
         zone: findPanel(snapshot.layout, id)?.zone ?? null,
         collapsible: meta.collapsible,
         collapsed: snapshot.layout.collapsed.includes(id),
+        canMoveToOwnColumn: store.canMoveToOwnLane(id),
       })
     }
     return {
@@ -302,6 +326,7 @@ export function useDockController(): DockController | null {
       layoutId: snapshot.layoutId,
       panels,
       movePanel: (panelId, zone) => store.moveToZone(panelId, zone),
+      moveToOwnColumn: (panelId) => store.moveToOwnLane(panelId),
       setCollapsed: (panelId, collapsed) => store.setCollapsed(panelId, collapsed),
       resetLayout: () => store.reset(),
     }
@@ -520,6 +545,8 @@ function DragLayer({ drag }: { drag: DockDragState }) {
 function describeTarget(target: DockDragState["candidates"][number]["target"]): string {
   if (target.kind === "zone") return `zone:${target.zone}`
   if (target.kind === "tab") return `tab:${target.groupId}`
+  if (target.kind === "lane") return `lane:${target.laneId}:${target.side}`
+  if (target.kind === "edge") return `edge:${target.zone}`
   return `split:${target.groupId}:${target.side}`
 }
 
@@ -537,28 +564,126 @@ export interface DockFrameProps {
   className?: string
 }
 
+/** One resize separator's width, which the fold computation counts per column. */
+const SEPARATOR_SIZE = 1
+const NO_FOLD: DockFold = { left: false, right: false }
+
+interface LaneBounds {
+  min: number
+  max?: number
+  /** Pixels ("320px"), or a share of the frame ("26.3%") that stays proportional until resized. */
+  size: string
+  proportional: boolean
+}
+
+function laneBounds(snapshot: DockSnapshot, zone: DockZone, lane: VisibleDockLane): LaneBounds {
+  const metas = lane.groups.flatMap((group) => group.panels)
+    .map((id) => snapshot.panels.get(id))
+    .filter((meta): meta is DockPanelMeta => !!meta)
+  const min = Math.max(120, ...metas.map((meta) => meta.minSize ?? 0))
+  const maxes = metas.map((meta) => meta.maxSize)
+  const max = maxes.length > 0 && maxes.every((value) => typeof value === "number")
+    ? Math.max(min, ...(maxes as number[]))
+    : undefined
+  const declared = metas.find((meta) => meta.defaultSize !== undefined)?.defaultSize ?? DOCK_DEFAULT_ZONE_SIZE[zone]
+  // A declared share of the frame stays a share (and proportional on window
+  // resize) until the user resizes the lane, which stores pixels.
+  if (lane.size === undefined && typeof declared === "string") return { min, max, size: declared, proportional: true }
+  const pixels = lane.size ?? (declared as number)
+  return { min, max, size: `${Math.max(min, max ? Math.min(max, pixels) : pixels)}px`, proportional: false }
+}
+
+/** The pixels a lane asks for at a given frame width (rails are fixed). */
+function lanePixels(snapshot: DockSnapshot, zone: DockZone, lane: VisibleDockLane, frameWidth: number): number {
+  if (lane.groups.length === 0) return RAIL_SIZE
+  const bounds = laneBounds(snapshot, zone, lane)
+  const raw = bounds.proportional ? (parseFloat(bounds.size) / 100) * frameWidth : parseFloat(bounds.size)
+  return Math.max(bounds.min, bounds.max ? Math.min(bounds.max, raw) : raw)
+}
+
+/** Which side zones fold at this frame width. Pure: computed from the saved layout, never written back. */
+function foldFor(snapshot: DockSnapshot, frameWidth: number): DockFold {
+  if (!snapshot.enabled) return NO_FOLD
+  const widths = (zone: "left" | "right") => snapshot.visible.zones[zone].map((lane) => lanePixels(snapshot, zone, lane, frameWidth))
+  return computeFold({
+    frameWidth,
+    floor: DOCK_CENTER_FLOOR,
+    separator: SEPARATOR_SIZE,
+    lanes: { left: widths("left"), right: widths("right") },
+  })
+}
+
+const capitalize = (value: string) => `${value[0]!.toUpperCase()}${value.slice(1)}`
+
 /**
  * Lays out the three dock zones around the centre. The tree is shaped so the
- * centre keeps its position whatever zones appear: zones are keyed siblings
+ * centre keeps its position whatever zones appear: lanes are keyed siblings
  * that come and go, and panels only ever move by re-parenting host elements.
+ *
+ * Side lanes are direct columns of one horizontal resize group, in screen order
+ * (the left zone's lanes outer to inner, then the centre, then the right zone's
+ * inner to outer), so every lane keeps its own pixel width and the centre
+ * absorbs window resizes. When a side's lanes and the centre floor do not fit,
+ * that side renders folded: its lanes' groups stacked in one column. Folding is
+ * render-time only and, like every other change here, re-parents hosts.
  */
 export function DockFrame({ children, className }: DockFrameProps) {
   const store = useRequiredStore()
   const snapshot = useDockSnapshot(store)
   const frameRef = useRef<HTMLDivElement>(null)
   const parkingRef = useRef<HTMLDivElement>(null)
-  const zonePixels = useRef<Partial<Record<DockZone, number>>>({})
+  const pixelsRef = useRef<Record<string, number>>({})
   const resizeIntent = useRef(false)
-  const { enabled, visible, layout, generation } = snapshot
+  const frameWidth = useRef(0)
+  const [, setFoldVersion] = useState(0)
+  const { enabled, visible, generation } = snapshot
   // The centre renders into one stable host for the frame's whole life, so the
   // structure around it can change (docking on/off, a bottom zone appearing)
   // without ever remounting the main content.
   const centerHost = useStableHost("dock-center-host", "height:100%;min-height:0;min-width:0;overflow:hidden")
   const centerSlot = <HostSlot host={centerHost} slot="dock-center-slot" />
+  // Fold state follows the measured width (a ref, so window resizes only re-render
+  // when a side actually folds or unfolds) and the current lanes.
+  const fold = enabled ? foldFor(snapshot, frameWidth.current) : NO_FOLD
+  const foldRef = useRef(fold)
+  foldRef.current = fold
+
+  // Each side's column structure (lanes in order, their modes, folding) has an
+  // epoch. A side whose structure changes gets new panel ids; the other side
+  // keeps its panels, so opening a first tool panel lays out exactly as before lanes.
+  const structure = (zone: "left" | "right") => (fold[zone] ? "fold:" : "")
+    + (enabled ? visible.zones[zone] : []).map((lane) => `${lane.id}=${lane.groups.length > 0 ? "groups" : "rail"}`).join(",")
+  const epochs: Record<"left" | "right", number> = {
+    left: useStructureEpoch(structure("left")),
+    right: useStructureEpoch(structure("right")),
+  }
 
   useLayoutEffect(() => {
     store.setFrame(frameRef.current)
     return () => store.setFrame(null)
+  }, [store, enabled])
+
+  useLayoutEffect(() => {
+    store.setFold(fold)
+  })
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current
+    const view = frame?.ownerDocument.defaultView
+    if (!enabled || !frame || !view) return
+    const measure = () => {
+      frameWidth.current = frame.getBoundingClientRect().width
+      const next = foldFor(store.getSnapshot(), frameWidth.current)
+      const current = foldRef.current
+      if (next.left === current.left && next.right === current.right) return
+      // Hosts are about to move between lane and fold slots: keep scroll and focus.
+      store.prepareStructuralChange()
+      setFoldVersion((version) => version + 1)
+    }
+    measure()
+    const observer = new view.ResizeObserver(measure)
+    observer.observe(frame)
+    return () => observer.disconnect()
   }, [store, enabled])
 
   useLayoutEffect(() => {
@@ -585,83 +710,156 @@ export function DockFrame({ children, className }: DockFrameProps) {
     store.restoreMoveState()
   })
 
-  const zoneMode = (zone: DockZone): "groups" | "rail" | null => {
-    if (!enabled) return null
-    if (visible.zones[zone].length > 0) return "groups"
-    if (visible.collapsed[zone].length > 0) return "rail"
-    return null
-  }
-  const modes = { left: zoneMode("left"), right: zoneMode("right"), bottom: zoneMode("bottom") }
-
-  const zoneBounds = (zone: DockZone) => {
-    const metas = [...visible.zones[zone].flatMap((group) => group.panels)]
-      .map((id) => snapshot.panels.get(id))
-      .filter((meta): meta is DockPanelMeta => !!meta)
-    const min = Math.max(120, ...metas.map((meta) => meta.minSize ?? 0))
-    const maxes = metas.map((meta) => meta.maxSize)
-    const max = maxes.length > 0 && maxes.every((value) => typeof value === "number")
-      ? Math.max(min, ...(maxes as number[]))
-      : undefined
-    const stored = layout.zoneSizes[zone]
-    const declared = metas.find((meta) => meta.defaultSize !== undefined)?.defaultSize ?? DOCK_DEFAULT_ZONE_SIZE[zone]
-    // A declared share of the frame stays a share (and proportional on window
-    // resize) until the user resizes the zone, which stores pixels.
-    if (stored === undefined && typeof declared === "string") {
-      return { min, max, size: declared as string, proportional: true }
-    }
-    const pixels = stored ?? (declared as number)
-    return { min, max, size: `${Math.max(min, max ? Math.min(max, pixels) : pixels)}px`, proportional: false }
-  }
-
   // Only user resizes are saved; mounts and structural changes also report layouts.
   const markIntent = (event: { target: EventTarget | null }) => {
     if (frameRef.current && isResizing(frameRef.current, event.target)) resizeIntent.current = true
   }
 
+  /** The lanes each zone renders as real, resizable lanes (a folded side and a multi-lane bottom render one view). */
+  const realLanes = (zone: DockZone): VisibleDockLane[] => {
+    const lanes = visible.zones[zone]
+    if (zone === "bottom") return lanes.length === 1 ? lanes : []
+    return fold[zone] && lanes.length > 1 ? [] : lanes
+  }
+
   const saveColumnSizes = (_layout: Layout) => {
     if (!resizeIntent.current) return
     resizeIntent.current = false
-    for (const zone of ["left", "right", "bottom"] as const) {
-      const pixels = zonePixels.current[zone]
-      if (modes[zone] === "groups" && pixels) store.setZoneSize(zone, pixels)
+    const sizes: Record<string, number> = {}
+    for (const zone of DOCK_ZONES) {
+      const lanes = zone === "bottom" ? visible.zones.bottom.slice(0, 1) : realLanes(zone)
+      for (const lane of lanes) {
+        const pixels = pixelsRef.current[lane.id]
+        if (lane.groups.length > 0 && pixels) sizes[lane.id] = pixels
+      }
     }
+    store.setLaneSizes(sizes)
   }
 
-  const zonePanel = (zone: DockZone) => {
-    const mode = modes[zone]
-    if (!mode) return null
-    const bounds = mode === "rail"
-      ? { min: RAIL_SIZE, max: RAIL_SIZE, size: `${RAIL_SIZE}px`, proportional: false }
-      : zoneBounds(zone)
+  const trackPixels = (id: string) => (size: { inPixels: number }) => { pixelsRef.current[id] = size.inPixels }
+
+  const separator = (zone: DockZone, key: string, label: string, disabled: boolean) => (
+    <DockSeparator key={key} orientation={zone === "bottom" ? "vertical" : "horizontal"} disabled={disabled} label={label} />
+  )
+
+  /** One side lane: a column with its own pixel width, and the separator on its inner side. */
+  const laneColumn = (zone: "left" | "right", lanes: VisibleDockLane[], index: number) => {
+    const lane = lanes[index]!
+    const mode = lane.groups.length > 0 ? "groups" : "rail"
+    const bounds = mode === "rail" ? RAIL_BOUNDS : laneBounds(snapshot, zone, lane)
+    const many = lanes.length > 1
+    // Lane numbers follow screen order: the left zone is drawn outer to inner.
+    const column = zone === "left" ? lanes.length - index : index + 1
+    const label = `${capitalize(zone)} dock${many ? `, column ${column} of ${lanes.length}` : ""}`
+    const innerRail = mode === "rail" || (index > 0 && lanes[index - 1]!.groups.length === 0)
     const panel = (
       <Panel
-        // react-resizable-panels remembers sizes by panel id: a rail, or a freshly
-        // loaded layout, must not inherit the previous panel's size.
-        id={`dock-zone-${zone}-${mode}-${generation}`}
+        // react-resizable-panels remembers layouts by panel ids and orders panels only
+        // when they register: a side with a new column structure gets new ids (its
+        // epoch), so its lanes register in screen order and start from their saved
+        // widths. Lane content is a re-parented host and never remounts.
+        id={`dock-lane-${lane.id}-${mode}-${generation}-${epochs[zone]}`}
         defaultSize={bounds.size}
         minSize={`${bounds.min}px`}
-        maxSize={bounds.max ? `${bounds.max}px` : zone === "bottom" ? "70%" : "60%"}
+        maxSize={bounds.max ? `${bounds.max}px` : "60%"}
         groupResizeBehavior={bounds.proportional ? "preserve-relative-size" : "preserve-pixel-size"}
-        onResize={(size) => { zonePixels.current[zone] = size.inPixels }}
+        onResize={trackPixels(lane.id)}
         className="min-h-0 min-w-0"
       >
-        {mode === "rail" ? <DockRail store={store} zone={zone} panels={visible.collapsed[zone]} snapshot={snapshot} />
-          : <DockZoneView store={store} zone={zone} snapshot={snapshot} resizeIntent={resizeIntent} />}
+        {mode === "rail"
+          ? <DockRail store={store} zone={zone} laneId={lane.id} panels={lane.collapsed} snapshot={snapshot} label={`Collapsed ${label.charAt(0).toLowerCase()}${label.slice(1)}`} />
+          : <DockLaneView store={store} lane={lane} snapshot={snapshot} resizeIntent={resizeIntent} label={label} persistGroups />}
       </Panel>
     )
-    const separator = (
-      <DockSeparator
-        orientation={zone === "bottom" ? "vertical" : "horizontal"}
-        disabled={mode === "rail"}
-        label={`Resize ${ZONE_LABEL[zone]} dock`}
-      />
-    )
+    const handle = separator(zone, "separator", index === 0 ? `Resize ${ZONE_LABEL[zone]} dock` : `Resize ${ZONE_LABEL[zone]} dock columns`, innerRail)
     return (
-      <Fragment key={`${zone}:${generation}:${mode}`}>
-        {zone === "right" || zone === "bottom" ? <>{separator}{panel}</> : <>{panel}{separator}</>}
+      <Fragment key={`${lane.id}:${generation}:${epochs[zone]}:${mode}`}>
+        {zone === "right" ? <>{handle}{panel}</> : <>{panel}{handle}</>}
       </Fragment>
     )
   }
+
+  /** A folded side (or a multi-lane bottom): every lane's groups in one stacked view. */
+  const combinedView = (zone: DockZone, lanes: VisibleDockLane[], key: string) => {
+    // Stacked in screen order: left to right becomes top to bottom.
+    const ordered = zone === "left" ? [...lanes].reverse() : lanes
+    const combined: VisibleDockLane = {
+      id: `${key}:${zone}`,
+      zone,
+      groups: ordered.flatMap((lane) => lane.groups),
+      collapsed: ordered.flatMap((lane) => lane.collapsed),
+    }
+    const mode = combined.groups.length > 0 ? "groups" : "rail"
+    const sized = lanes.filter((lane) => lane.groups.length > 0)
+    const bounds: LaneBounds = mode === "rail" ? RAIL_BOUNDS : (() => {
+      const all = sized.map((lane) => laneBounds(snapshot, zone, lane))
+      const pixels = Math.max(...sized.map((lane) => lanePixels(snapshot, zone, lane, frameWidth.current)))
+      const min = Math.max(...all.map((entry) => entry.min))
+      return { min, size: `${Math.max(min, pixels)}px`, proportional: false }
+    })()
+    const label = `${capitalize(zone)} dock`
+    const panel = (
+      <Panel
+        id={`dock-${key}-${zone}-${mode}-${generation}-${zone === "bottom" ? 0 : epochs[zone]}`}
+        defaultSize={bounds.size}
+        minSize={`${bounds.min}px`}
+        maxSize={bounds.max ? `${bounds.max}px` : zone === "bottom" ? "70%" : "60%"}
+        groupResizeBehavior="preserve-pixel-size"
+        onResize={zone === "bottom" ? trackPixels(lanes[0]!.id) : undefined}
+        className="min-h-0 min-w-0"
+      >
+        {mode === "rail"
+          ? <DockRail store={store} zone={zone} panels={combined.collapsed} snapshot={snapshot} label={`Collapsed ${ZONE_LABEL[zone]} dock`} />
+          : <DockLaneView store={store} lane={combined} snapshot={snapshot} resizeIntent={resizeIntent} label={label} folded={zone !== "bottom"} />}
+      </Panel>
+    )
+    const handle = separator(zone, "separator", `Resize ${ZONE_LABEL[zone]} dock`, mode === "rail")
+    return (
+      <Fragment key={`${zone}:${key}:${generation}:${zone === "bottom" ? 0 : epochs[zone]}:${mode}`}>
+        {zone === "left" ? <>{panel}{handle}</> : <>{handle}{panel}</>}
+      </Fragment>
+    )
+  }
+
+  const sideColumns = (zone: "left" | "right") => {
+    const lanes = enabled ? visible.zones[zone] : []
+    if (lanes.length === 0) return null
+    if (fold[zone] && lanes.length > 1) return combinedView(zone, lanes, "fold")
+    const columns = lanes.map((_, index) => laneColumn(zone, lanes, index))
+    return zone === "left" ? columns.reverse() : columns
+  }
+
+  const bottomLanes = enabled ? visible.zones.bottom : []
+  const bottom = bottomLanes.length === 0 ? null
+    : bottomLanes.length === 1
+      ? (() => {
+          // The bottom zone's one lane, exactly as before lanes existed.
+          const lane = bottomLanes[0]!
+          const mode = lane.groups.length > 0 ? "groups" : "rail"
+          const bounds = mode === "rail" ? RAIL_BOUNDS : laneBounds(snapshot, "bottom", lane)
+          return (
+            <Fragment key={`bottom:${generation}:${mode}`}>
+              {separator("bottom", "separator", "Resize bottom dock", mode === "rail")}
+              <Panel
+                id={`dock-zone-bottom-${mode}-${generation}`}
+                defaultSize={bounds.size}
+                minSize={`${bounds.min}px`}
+                maxSize={bounds.max ? `${bounds.max}px` : "70%"}
+                groupResizeBehavior={bounds.proportional ? "preserve-relative-size" : "preserve-pixel-size"}
+                onResize={trackPixels(lane.id)}
+                className="min-h-0 min-w-0"
+              >
+                {mode === "rail"
+                  ? <DockRail store={store} zone="bottom" laneId={lane.id} panels={lane.collapsed} snapshot={snapshot} label="Collapsed bottom dock" />
+                  : <DockLaneView store={store} lane={lane} snapshot={snapshot} resizeIntent={resizeIntent} label="Bottom dock" persistGroups />}
+              </Panel>
+            </Fragment>
+          )
+        })()
+      : combinedView("bottom", bottomLanes, "lanes")
+
+  // Side by side lanes keep the centre at its floor; a lone lane per side keeps the old 25% minimum.
+  const sideBySide = (["left", "right"] as const).some((zone) => realLanes(zone).length > 1)
 
   // Only the slot moves; the portal keeps one tree position (second child of
   // the fragment below) in every mode, which is what keeps the centre mounted.
@@ -688,23 +886,31 @@ export function DockFrame({ children, className }: DockFrameProps) {
       ref={frameRef}
       data-slot="dock-frame"
       data-dock-enabled=""
+      data-dock-fold={[fold.left && "left", fold.right && "right"].filter(Boolean).join(" ") || undefined}
       className={cn("relative flex min-h-0 min-w-0 flex-1", className)}
       onKeyDownCapture={markIntent}
     >
       <Group id="dock-columns" orientation="horizontal" className="flex h-full w-full min-h-0" onLayoutChanged={saveColumnSizes}>
-        {zonePanel("left")}
-        <Panel key="center" id="dock-column" data-dock-column="" minSize="25%" groupResizeBehavior="preserve-relative-size" className="min-h-0 min-w-0">
+        {sideColumns("left")}
+        <Panel
+          key="center"
+          id="dock-column"
+          data-dock-column=""
+          minSize={sideBySide ? `${DOCK_CENTER_FLOOR}px` : "25%"}
+          groupResizeBehavior="preserve-relative-size"
+          className="min-h-0 min-w-0"
+        >
           {/* The column only becomes a resizable group while the bottom zone is in use. */}
-          {modes.bottom ? (
+          {bottom ? (
             <Group id="dock-center-column" orientation="vertical" className="flex h-full w-full min-h-0 flex-col" onLayoutChanged={saveColumnSizes}>
               <Panel key="main" id="dock-main" minSize="20%" groupResizeBehavior="preserve-relative-size" className="min-h-0 min-w-0">
                 {centerSlot}
               </Panel>
-              {zonePanel("bottom")}
+              {bottom}
             </Group>
           ) : centerSlot}
         </Panel>
-        {zonePanel("right")}
+        {sideColumns("right")}
       </Group>
       <div ref={parkingRef} data-dock-parking="" hidden />
       <DockDragOverlay store={store} />
@@ -713,6 +919,15 @@ export function DockFrame({ children, className }: DockFrameProps) {
     </>
   )
 }
+
+/** Increments whenever `signature` changes, so ids derived from it are never reused. */
+function useStructureEpoch(signature: string): number {
+  const ref = useRef({ signature, epoch: 0 })
+  if (ref.current.signature !== signature) ref.current = { signature, epoch: ref.current.epoch + 1 }
+  return ref.current.epoch
+}
+
+const RAIL_BOUNDS: LaneBounds = { min: RAIL_SIZE, max: RAIL_SIZE, size: `${RAIL_SIZE}px`, proportional: false }
 
 const SEPARATOR_HIT_MARGIN = 8
 
@@ -753,39 +968,47 @@ function DockSeparator({ orientation, disabled, label }: { orientation: "horizon
 }
 
 // ---------------------------------------------------------------------------
-// Zones and groups
+// Lanes and groups
 // ---------------------------------------------------------------------------
 
-function DockZoneView({
+function DockLaneView({
   store,
-  zone,
+  lane,
   snapshot,
   resizeIntent,
+  label,
+  persistGroups = false,
+  folded = false,
 }: {
   store: DockStore
-  zone: DockZone
+  lane: VisibleDockLane
   snapshot: DockSnapshot
   resizeIntent: RefObject<boolean>
+  label: string
+  /** A real lane saves its group sizes; a combined view (fold, multi-lane bottom) only lays them out. */
+  persistGroups?: boolean
+  folded?: boolean
 }) {
-  const groups = snapshot.visible.zones[zone]
-  const collapsed = snapshot.visible.collapsed[zone]
+  const { zone, groups, collapsed } = lane
   const horizontal = zone === "bottom"
   const saveGroupSizes = (sizes: Layout) => {
     if (!resizeIntent.current) return
     resizeIntent.current = false
-    store.setGroupSizes(zone, sizes)
+    if (persistGroups) store.setGroupSizes(lane.id, sizes)
   }
   return (
     <div
       data-dock-zone={zone}
+      data-dock-lane={folded ? undefined : lane.id}
+      data-dock-folded={folded ? "" : undefined}
       role="region"
-      aria-label={`${ZONE_LABEL[zone][0]!.toUpperCase()}${ZONE_LABEL[zone].slice(1)} dock`}
-      // Zones paint nothing: the shell, and any wallpaper behind it, shows through.
+      aria-label={label}
+      // Lanes paint nothing: the shell, and any wallpaper behind it, shows through.
       className={cn("flex h-full w-full min-h-0 min-w-0", horizontal ? "flex-row" : "flex-col")}
     >
       {collapsed.length > 0 && <CollapsedBar store={store} zone={zone} panels={collapsed} snapshot={snapshot} />}
       <Group
-        id={`dock-${zone}-groups-${snapshot.generation}`}
+        id={`dock-${lane.id}-groups-${snapshot.generation}`}
         orientation={horizontal ? "horizontal" : "vertical"}
         className={cn("flex min-h-0 min-w-0 flex-1", horizontal ? "flex-row" : "flex-col")}
         onLayoutChanged={saveGroupSizes}
@@ -795,7 +1018,7 @@ function DockZoneView({
             {index > 0 && <DockSeparator orientation={horizontal ? "horizontal" : "vertical"} label="Resize dock group" />}
             <Panel
               id={group.id}
-              defaultSize={group.size !== undefined ? `${group.size}%` : undefined}
+              defaultSize={persistGroups && group.size !== undefined ? `${group.size}%` : undefined}
               minSize="64px"
               className="min-h-0 min-w-0"
             >
@@ -845,6 +1068,7 @@ function DockGroupView({ store, group, snapshot }: { store: DockStore; group: Vi
     <div
       data-dock-group={group.id}
       data-dock-group-zone={group.zone}
+      data-dock-group-lane={group.laneId}
       data-slot="dock-panel-surface"
       data-dock-surface={surface}
       className={cn("flex h-full w-full min-h-0 min-w-0 flex-col", surface === "elevated" && "bg-surface-elevated")}
@@ -1016,14 +1240,22 @@ function CollapsedBar({ store, zone, panels, snapshot }: { store: DockStore; zon
   )
 }
 
-function DockRail({ store, zone, panels, snapshot }: { store: DockStore; zone: DockZone; panels: string[]; snapshot: DockSnapshot }) {
+function DockRail({ store, zone, laneId, panels, snapshot, label }: {
+  store: DockStore
+  zone: DockZone
+  laneId?: string
+  panels: string[]
+  snapshot: DockSnapshot
+  label: string
+}) {
   const horizontal = zone === "bottom"
   return (
     <div
       data-dock-zone={zone}
+      data-dock-lane={laneId}
       data-dock-rail=""
       role="toolbar"
-      aria-label={`Collapsed ${ZONE_LABEL[zone]} dock`}
+      aria-label={label}
       aria-orientation={horizontal ? "horizontal" : "vertical"}
       className={cn(
         "flex h-full w-full items-center gap-1 bg-surface-elevated p-1",
@@ -1059,6 +1291,7 @@ function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: s
   const meta = snapshot.panels.get(panelId)
   if (!meta) return null
   const zone = findPanel(snapshot.layout, panelId)?.zone ?? null
+  const ownColumn = store.canMoveToOwnLane(panelId)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -1087,6 +1320,12 @@ function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: s
             Move to {ZONE_LABEL[target]}
           </DropdownMenuItem>
         ))}
+        {zone !== "bottom" && (
+          <DropdownMenuItem disabled={!ownColumn} onClick={() => store.moveToOwnLane(panelId)}>
+            <i className="ph-bold ph-columns size-4 text-center" aria-hidden="true" />
+            Move to own column
+          </DropdownMenuItem>
+        )}
         {meta.collapsible && (
           <>
             <DropdownMenuSeparator />
