@@ -40,6 +40,12 @@ export interface DockLane {
   groups: DockGroup[]
   /** Lane thickness in pixels (width for left/right, height for bottom). */
   size?: number
+  /**
+   * Migrated from a v1 zone, which could only stack. Normalized once, when the
+   * affinity of every panel in it is known (see `normalizeLegacyLanes`), then
+   * dropped. Lanes the user builds never carry it.
+   */
+  legacy?: true
 }
 
 export interface DockLayout {
@@ -458,14 +464,76 @@ export function ensurePanel(
 ): DockLayout {
   const affinity = defaults.affinity
   if (findPanel(layout, panelId)) {
-    if (!affinity || layout.affinity[panelId] === affinity) return layout
+    if (!affinity || layout.affinity[panelId] === affinity) return normalizeLegacyLanes(layout)
     const draft = cloneLayout(layout)
     draft.affinity[panelId] = affinity
-    return draft
+    return normalizeLegacyLanes(draft)
   }
   const draft = cloneLayout(layout)
   if (affinity) draft.affinity[panelId] = affinity
   placeInZone(draft, panelId, defaults.zone, affinityOf(draft, panelId), { order: defaults.order, orderOf, size: defaults.size })
+  return normalizeLegacyLanes(draft)
+}
+
+/**
+ * The affinity a panel has declared, or null while it is unknown. Registration
+ * always records one (a panel that declares none is recorded as "tools"), so a
+ * panel is unknown only if it has not registered since its layout was migrated
+ * from v1. `affinityOf` treats unknown panels as tools for placement; legacy
+ * normalization does not guess and waits for them.
+ */
+export function knownAffinity(layout: DockLayout, panelId: string): DockAffinity | null {
+  return layout.affinity[panelId] ?? null
+}
+
+/** A group's kind: all its tabs share one affinity, or it mixes them (an explicit user choice). */
+function groupAffinity(layout: DockLayout, group: DockGroup): DockAffinity | "mixed" {
+  const kinds = new Set(group.panels.map((id) => affinityOf(layout, id)))
+  return kinds.size === 1 ? [...kinds][0]! : "mixed"
+}
+
+/** Rescales group shares so a lane's sizes still add up after groups left it; relative sizes are kept. */
+function rescaleGroups(groups: DockGroup[]) {
+  if (!groups.every((group) => group.size !== undefined)) return
+  const total = groups.reduce((sum, group) => sum + group.size!, 0)
+  if (!(total > 0)) return
+  for (const group of groups) group.size = Math.round((group.size! / total) * 10000) / 100
+}
+
+/**
+ * v1 could only stack, so a v1 zone holding the list and tool panels (the list
+ * docked right, then Settings opened) became one stacked lane. Once the
+ * affinity of every panel in such a legacy lane is known, its whole-tools
+ * groups move, in order and with their tabs, active tab and relative sizes, to
+ * a new lane on its centre side; list groups and groups mixing list and tools
+ * as tabs stay in the original lane, which keeps its width. Either way the
+ * legacy flag is then dropped, so this runs once per lane. A lane with any
+ * panel of unknown affinity is left alone (flag kept). The bottom zone keeps
+ * its single lane. Lanes without the flag (built in v2) are never touched.
+ */
+export function normalizeLegacyLanes(layout: DockLayout): DockLayout {
+  const ready = (lane: DockLane) => lane.legacy
+    && lane.groups.every((group) => group.panels.every((id) => knownAffinity(layout, id) !== null))
+  if (!DOCK_ZONES.some((zone) => layout.zones[zone].some(ready))) return layout
+  const draft = cloneLayout(layout)
+  for (const zone of DOCK_ZONES) {
+    const lanes = draft.zones[zone]
+    for (let index = 0; index < lanes.length; index += 1) {
+      const lane = lanes[index]!
+      if (!ready(lane)) continue
+      delete lane.legacy
+      if (zone === "bottom") continue
+      const kinds = lane.groups.map((group) => groupAffinity(draft, group))
+      const tools = lane.groups.filter((_, at) => kinds[at] === "tools")
+      if (tools.length === 0 || tools.length === lane.groups.length) continue
+      lane.groups = lane.groups.filter((_, at) => kinds[at] !== "tools")
+      rescaleGroups(lane.groups)
+      rescaleGroups(tools)
+      const toolsLane: DockLane = { id: uniqueLaneId(allLaneIds(draft), tools[0]!.panels[0]!), groups: tools }
+      lanes.splice(index, 0, toolsLane)
+      index += 1
+    }
+  }
   return draft
 }
 
@@ -644,7 +712,8 @@ function sanitizeTail(layout: DockLayout, source: Record<string, unknown>, seenP
 /**
  * v1 -> v2: each zone's groups become that zone's one lane and the zone's
  * thickness becomes the lane's size. Nothing is reset; damaged pieces are
- * dropped one by one exactly as v1 loading did.
+ * dropped one by one exactly as v1 loading did. The lane is marked legacy and
+ * normalized once its panels' affinities are known (`normalizeLegacyLanes`).
  */
 function migrateV1(source: Record<string, unknown>): DockLayout {
   const layout = emptyLayout()
@@ -660,7 +729,7 @@ function migrateV1(source: Record<string, unknown>): DockLayout {
       .map((candidate) => sanitizeGroup(candidate, seenPanels, seenGroups))
       .filter((group): group is DockGroup => group !== null)
     if (sanitized.length === 0) continue
-    const lane: DockLane = { id: uniqueLaneId(seenLanes, sanitized[0]!.panels[0]!), groups: sanitized }
+    const lane: DockLane = { id: uniqueLaneId(seenLanes, sanitized[0]!.panels[0]!), groups: sanitized, legacy: true }
     seenLanes.add(lane.id)
     const size = sizes[zone]
     if (isZoneSize(size)) lane.size = Math.round(size)
@@ -690,6 +759,7 @@ function sanitizeV2(source: Record<string, unknown>): DockLayout {
       seenLanes.add(id)
       const sanitized: DockLane = { id, groups }
       if (isZoneSize(lane.size)) sanitized.size = Math.round(lane.size)
+      if (lane.legacy === true) sanitized.legacy = true
       layout.zones[zone].push(sanitized)
     }
   }

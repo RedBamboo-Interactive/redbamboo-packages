@@ -424,6 +424,12 @@ test("sanitizeLayout keeps the valid parts of damaged v2 data", () => {
 
 // --- v1 migration --------------------------------------------------------------
 
+/** Registers panels as the shell does: list (left, list affinity), tools (right). */
+const register = (layout, ...ids) => ids.reduce((next, id) => id === "list"
+  ? ensurePanel(next, "list", { zone: "left", size: 320, affinity: "list" })
+  : ensurePanel(next, id, { zone: "right", order: ORDER[id], affinity: "tools" }, orderOf), layout)
+const reload = (layout) => parseLayout(serializeLayout(layout))
+
 test("v1 migration: the tester's shape (list alone on the right) becomes one right lane, then Settings opens beside it", () => {
   const v1 = {
     version: 1,
@@ -433,13 +439,127 @@ test("v1 migration: the tester's shape (list alone on the right) becomes one rig
   }
   let layout = parseLayout(JSON.stringify(v1))
   assert.equal(layout.version, 2)
-  assert.deepEqual(layout.zones.right, [{ id: "l:list", size: 344, groups: [{ id: "g:list", panels: ["list"], active: "list" }] }])
+  assert.deepEqual(layout.zones.right, [{ id: "l:list", size: 344, legacy: true, groups: [{ id: "g:list", panels: ["list"], active: "list" }] }])
   assert.deepEqual(layout.zones.left, [], "a zone size without groups has nothing to size")
-  layout = ensurePanel(layout, "list", { zone: "left", affinity: "list" })
+  layout = register(layout, "list")
   assert.equal(laneOf(layout, "list"), "l:list", "the saved placement wins over the default zone")
-  layout = ensurePanel(layout, "settings", { zone: "right", order: 40, affinity: "tools" }, orderOf)
+  assert.equal(layout.zones.right[0].legacy, undefined, "a one-kind legacy lane just loses the flag")
+  layout = register(layout, "settings")
   assert.deepEqual(lanesOf(layout, "right"), [[["settings"]], [["list"]]], "centre | Settings | list")
   assert.equal(layout.zones.right[1].size, 344, "the list keeps its width")
+})
+
+test("v1 migration: the reporter's layout (right zone: list group, then Settings group) splits into centre | Settings | list", () => {
+  const v1 = {
+    version: 1,
+    zones: {
+      left: [],
+      right: [
+        { id: "g:list", panels: ["list"], active: "list", size: 60 },
+        { id: "g:settings", panels: ["settings"], active: "settings", size: 40 },
+      ],
+      bottom: [],
+    },
+    zoneSizes: { left: 320, right: 330 },
+    collapsed: [],
+  }
+  let layout = parseLayout(JSON.stringify(v1))
+  assert.deepEqual(lanesOf(layout, "right"), [[["list"], ["settings"]]], "migrated literally first")
+  layout = register(layout, "list")
+  assert.deepEqual(lanesOf(layout, "right"), [[["list"], ["settings"]]], "Settings has not registered: its affinity is unknown, no split")
+  assert.equal(layout.zones.right[0].legacy, true)
+  layout = register(layout, "settings")
+  assert.deepEqual(lanesOf(layout, "right"), [[["settings"]], [["list"]]], "both known: tools move to a new lane on the centre side")
+  const [tools, list] = layout.zones.right
+  assert.deepEqual(tools, { id: "l:settings", groups: [{ id: "g:settings", panels: ["settings"], active: "settings", size: 100 }] },
+    "the moved group keeps its id and active tab; its lane takes the declared width")
+  assert.deepEqual(list, { id: "l:list", size: 330, groups: [{ id: "g:list", panels: ["list"], active: "list", size: 100 }] },
+    "the list keeps the column and its width; no legacy flag remains")
+  assertWellFormed(layout, "reporter")
+  // Idempotent: reloading and registering again changes nothing.
+  const again = register(reload(layout), "list", "settings")
+  assert.deepEqual(again, layout)
+  assert.equal(register(layout, "list", "settings"), layout, "same object once normalized")
+})
+
+test("v1 migration: several tool groups move together, in order, with tabs, active tab and relative sizes", () => {
+  const v1 = {
+    version: 1,
+    zones: {
+      right: [
+        { id: "g:history", panels: ["history", "console"], active: "console", size: 30 },
+        { id: "g:list", panels: ["list"], size: 40 },
+        { id: "g:settings", panels: ["settings"], size: 30 },
+      ],
+    },
+    zoneSizes: { right: 400 },
+  }
+  let layout = register(parseLayout(JSON.stringify(v1)), "list", "history", "console")
+  assert.equal(layout.zones.right.length, 1, "Settings is still unknown")
+  layout = register(layout, "settings")
+  assert.deepEqual(lanesOf(layout, "right"), [[["history", "console"], ["settings"]], [["list"]]])
+  const tools = layout.zones.right[0]
+  assert.equal(tools.groups[0].active, "console")
+  assert.deepEqual(tools.groups.map((group) => group.size), [50, 50], "30:30 kept as a ratio")
+  assert.equal(tools.size, undefined)
+  assert.equal(layout.zones.right[1].size, 400)
+})
+
+test("v1 migration: a group mixing the list and Settings as tabs stays as it is", () => {
+  const v1 = { version: 1, zones: { right: [{ id: "g:list", panels: ["list", "settings"], active: "settings" }] }, zoneSizes: { right: 340 } }
+  const layout = register(parseLayout(JSON.stringify(v1)), "list", "settings")
+  assert.deepEqual(layout.zones.right, [{ id: "l:list", size: 340, groups: [{ id: "g:list", panels: ["list", "settings"], active: "settings" }] }],
+    "tabbed stays tabbed; only the flag is dropped")
+  // A mixed tab group beside a tools group: the tools group moves, the mixed one stays with the list's column.
+  const both = register(parseLayout(JSON.stringify({ version: 1, zones: { right: [
+    { id: "g:list", panels: ["list", "settings"] }, { id: "g:console", panels: ["console"] },
+  ] } })), "list", "settings", "console")
+  assert.deepEqual(lanesOf(both, "right"), [[["console"]], [["list", "settings"]]])
+})
+
+test("v1 migration: one-kind lanes and the bottom zone only lose the flag; unknown panels block normalization", () => {
+  const v1 = {
+    version: 1,
+    zones: {
+      left: [{ id: "g:list", panels: ["list"] }, { id: "g:console", panels: ["console"] }],
+      right: [{ id: "g:settings", panels: ["settings"] }, { id: "g:history", panels: ["history"] }],
+      bottom: [{ id: "g:notes", panels: ["notes"] }, { id: "g:ghost", panels: ["ghost"] }],
+    },
+  }
+  let layout = register(parseLayout(JSON.stringify(v1)), "list", "settings", "history", "console")
+  assert.deepEqual(lanesOf(layout, "right"), [[["settings"], ["history"]]], "tools only: no split")
+  assert.equal(layout.zones.right[0].legacy, undefined)
+  assert.deepEqual(lanesOf(layout, "left"), [[["console"]], [["list"]]], "list | Console | centre")
+  assert.equal(layout.zones.bottom[0].legacy, true, "ghost never registered: unknown, the lane waits")
+  // A panel without a declared affinity registers as a tool: recorded, so known.
+  layout = ensurePanel(layout, "notes", { zone: "bottom" })
+  assert.equal(layout.affinity.notes, undefined, "an ensure without affinity records nothing")
+  layout = ensurePanel(layout, "notes", { zone: "bottom", affinity: "tools" })
+  layout = ensurePanel(layout, "ghost", { zone: "bottom", affinity: "list" })
+  assert.deepEqual(lanesOf(layout, "bottom"), [[["notes"], ["ghost"]]], "the bottom zone keeps one lane")
+  assert.equal(layout.zones.bottom[0].legacy, undefined)
+  assertWellFormed(layout, "flags")
+})
+
+test("a v2 stack the user built is never split, across reloads", () => {
+  let layout = register(emptyLayout(), "list", "settings")
+  layout = moveToZone(layout, "list", "right")
+  layout = movePanel(layout, "settings", { kind: "split", groupId: findPanel(layout, "list").group.id, side: "after" })
+  assert.deepEqual(lanesOf(layout, "right"), [[["list"], ["settings"]]])
+  for (let round = 0; round < 3; round += 1) layout = register(reload(layout), "list", "settings")
+  assert.deepEqual(lanesOf(layout, "right"), [[["list"], ["settings"]]], "deliberate stack survives")
+  assert.equal(layout.zones.right[0].legacy, undefined)
+})
+
+test("the legacy flag is persisted and sanitized", () => {
+  const raw = { version: 2, zones: { right: [
+    { id: "a", legacy: true, groups: [{ id: "g:a", panels: ["a"] }] },
+    { id: "b", legacy: "yes", groups: [{ id: "g:b", panels: ["b"] }] },
+  ] } }
+  const layout = sanitizeLayout(raw)
+  assert.equal(layout.zones.right[0].legacy, true)
+  assert.equal(layout.zones.right[1].legacy, undefined)
+  assert.deepEqual(parseLayout(serializeLayout(layout)), layout)
 })
 
 test("v1 migration: Settings and History tabbed in a right group, sizes, collapse and a bottom zone survive", () => {
@@ -457,22 +577,22 @@ test("v1 migration: Settings and History tabbed in a right group, sizes, collaps
     collapsed: ["list"],
   }
   const layout = sanitizeLayout(v1)
-  assert.deepEqual(layout.zones.left, [{ id: "l:list", size: 288, groups: [{ id: "g:list", panels: ["list"], active: "list" }] }])
+  assert.deepEqual(layout.zones.left, [{ id: "l:list", size: 288, legacy: true, groups: [{ id: "g:list", panels: ["list"], active: "list" }] }])
   assert.deepEqual(layout.zones.right, [{
     id: "l:settings",
     size: 410,
+    legacy: true,
     groups: [
       { id: "g:settings", panels: ["settings", "history"], active: "history", size: 62.5 },
       { id: "g:inspector", panels: ["inspector"], size: 37.5 },
     ],
   }])
-  assert.deepEqual(layout.zones.bottom, [{ id: "l:console", size: 240, groups: [{ id: "g:console", panels: ["console"] }] }])
+  assert.deepEqual(layout.zones.bottom, [{ id: "l:console", size: 240, legacy: true, groups: [{ id: "g:console", panels: ["console"] }] }])
   assert.deepEqual(layout.collapsed, ["list"])
   assert.deepEqual(layout.affinity, {}, "v1 knew no affinities; registration records them")
   assertWellFormed(layout, "migration")
-  // A v1 stack stays a stack: the saved placement wins, "Move to own column" splits it.
-  const reopened = ensurePanel(layout, "settings", { zone: "right", affinity: "tools" })
-  assert.deepEqual(lanesOf(reopened, "right"), lanesOf(layout, "right"))
+  const reopened = register(layout, "list", "settings", "history", "inspector")
+  assert.deepEqual(lanesOf(reopened, "right"), lanesOf(layout, "right"), "a tools-only stack stays a stack")
 })
 
 test("v1 migration is as tolerant as v1 loading was", () => {
@@ -487,7 +607,7 @@ test("v1 migration is as tolerant as v1 loading was", () => {
     zoneSizes: { left: 300.4, right: "wide", bottom: 5, center: 400 },
     collapsed: ["list", "list", "ghost", 3],
   })
-  assert.deepEqual(layout.zones.left, [{ id: "l:list", size: 300, groups: [{ id: "g:list", panels: ["list"] }] }])
+  assert.deepEqual(layout.zones.left, [{ id: "l:list", size: 300, legacy: true, groups: [{ id: "g:list", panels: ["list"] }] }])
   assert.deepEqual(lanesOf(layout, "right"), [[["console"], ["settings"]]])
   assert.equal(layout.zones.right[0].size, undefined)
   assert.notEqual(layout.zones.right[0].groups[0].id, "g:list")

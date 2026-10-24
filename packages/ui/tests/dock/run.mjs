@@ -432,6 +432,34 @@ try {
   assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "migrated: Settings opens beside the list")
   await page.screenshot({ path: path.join(outputDir, "17-migrated-v1.png") })
 
+  // The reporter's v1 layout: Settings already stacked under the list on the right. Once both have
+  // registered, the legacy lane is normalized once: centre | Settings | list. Reloads keep it.
+  await page.evaluate(() => {
+    localStorage.clear()
+    localStorage.setItem("story:dock:a:v1", JSON.stringify({
+      version: 1,
+      zones: { left: [], right: [{ id: "g:list", panels: ["list"], active: "list" }, { id: "g:settings", panels: ["settings"], active: "settings" }], bottom: [] },
+      zoneSizes: { right: 300 },
+      collapsed: [],
+    }))
+  })
+  await page.reload({ waitUntil: "networkidle" })
+  assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem("story:dock:a:v2"))).zones.right[0].legacy, true, "Settings unknown yet: lane stays legacy")
+  await page.getByTestId("toggle-settings").click()
+  await host(page, "settings").waitFor()
+  assert.deepEqual(await lanesOnScreen("right"), [["settings"], ["list"]], "reporter's stack becomes centre | Settings | list")
+  assert.equal(Math.round((await laneBox("list")).width), 300, "the list keeps its column width")
+  await page.screenshot({ path: path.join(outputDir, "18-migrated-reporter-v1.png") })
+  const normalized = await page.evaluate(() => localStorage.getItem("story:dock:a:v2"))
+  assert.ok(!normalized.includes("legacy"), "no legacy flag remains")
+  // A stack built in v2 is left alone across reloads.
+  const stackedAgain = await drag(page, groupOf(page, "settings").locator("[data-dock-group-header]"), await pointIn(groupOf(page, "list"), 0.5, 0.94))
+  assert.match(stackedAgain, /^split:.*:after$/)
+  await page.reload({ waitUntil: "networkidle" })
+  await page.getByTestId("toggle-settings").click()
+  await host(page, "settings").waitFor()
+  assert.deepEqual(await lanesOnScreen("right"), [["list", "settings"]], "a deliberate v2 stack survives reload")
+
   // Reset restores defaults for this app (and forgets the v1 copy too).
   await page.getByTestId("reset").click()
   assert.equal(await zoneOf(page, "list"), "left")
