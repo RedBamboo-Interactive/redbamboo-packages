@@ -492,7 +492,7 @@ function partLabel(part: MessagePart): string {
     case "thinking": return "Thinking"
     case "tool_use": return part.toolName === CONTEXT_COMPACTION_TOOL_NAME
       ? "Context compaction"
-      : part.toolName?.startsWith("event:") ? part.toolName.slice(6) : getEffectiveToolName(part.toolName, part.toolInput) || "Tool"
+      : part.toolName?.startsWith("event:") ? parseEventPart(part)?.label ?? part.toolName.slice(6) : getEffectiveToolName(part.toolName, part.toolInput) || "Tool"
     case "tool_result": return "Result"
     case "error": return "Error"
     default: return part.type
@@ -808,19 +808,22 @@ function PartModalView({ part, pairedResult, open, onClose, navigation, minHeigh
         <DialogContent motion="snappy" onKeyDown={onKeyDown} className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0" style={{ minHeight: heldHeight("70vh") }}>
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
             <div
-              className="w-3 h-3 rounded-full"
+              className="w-3 h-3 rounded-full shrink-0"
               style={{ backgroundColor: getPartColor(part) }}
             />
-            {event.icon && <i className={`${event.icon} text-sm`} style={{ color: event.color ?? undefined }} />}
-            <DialogTitle className="text-sm capitalize">{event.key}</DialogTitle>
-            {(event.timestamp || navigation) && (
-              <div className="ml-auto mr-7 flex items-center gap-2">
-                {event.timestamp && (
-                  <span className="text-[10px] font-mono text-text-disabled">
-                    {formatTimestamp(event.timestamp)}
-                  </span>
-                )}
-                {navigation && <PartNavigationControls navigation={navigation} />}
+            {event.icon && <i className={`${event.icon} text-sm shrink-0`} style={{ color: event.color ?? undefined }} />}
+            {/* Title and time stack so neither wraps beside the pager on a phone. */}
+            <div className={`min-w-0 flex-1 space-y-0.5${navigation ? "" : " mr-7"}`}>
+              <DialogTitle className={`text-sm truncate${event.label ? "" : " capitalize"}`}>{event.label ?? event.key}</DialogTitle>
+              {event.timestamp && (
+                <p className="text-[10px] font-mono text-text-disabled truncate">
+                  {formatEventTime(event.timestamp)}
+                </p>
+              )}
+            </div>
+            {navigation && (
+              <div className="mr-7 shrink-0">
+                <PartNavigationControls navigation={navigation} />
               </div>
             )}
           </DialogHeader>
@@ -1424,6 +1427,16 @@ function formatTimestamp(iso: string): string {
       hour: "2-digit", minute: "2-digit", second: "2-digit",
     })
   } catch { return iso }
+}
+
+/** Event header subtitle: the year only when it isn't this one, so it fits beside the pager on a phone. */
+function formatEventTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString(undefined, {
+    month: "short", day: "numeric", ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  })
 }
 
 const novaContextKeys = new Set(["timestamp", "day", "device", "input", "discussion", "agent", "outfit", "activeDiscussionCount", "archivedDiscussionCount", "otherAgentDiscussionCount"])

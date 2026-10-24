@@ -3,6 +3,7 @@ import { eventImage, type EventImage } from "../lib/event-image"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseStructuredJson } from "../lib/structured-data"
 import { StructuredDataView } from "./structured-data-view"
+import { MarkdownRenderer } from "./streaming-text"
 import type { MessagePart } from "../types"
 
 /** A frieze event part decoded from its tool_use carrier. */
@@ -11,6 +12,8 @@ export interface ParsedEvent {
   key: string
   /** Cleaned human-readable event text. */
   text: string
+  /** Display title the host resolved for the event, e.g. "Philips Hue"; null falls back to the key. */
+  label: string | null
   /** FontAwesome class from the resolved EventType, when known. */
   icon: string | null
   /** CSS color from the resolved EventType, when known. */
@@ -31,6 +34,7 @@ export function parseEventPart(part: MessagePart): ParsedEvent | null {
   return {
     key: part.toolName.slice(6),
     text: typeof payload.event === "string" && payload.event ? payload.event : part.content || "",
+    label: typeof payload.label === "string" && payload.label ? payload.label : null,
     icon: typeof payload.icon === "string" ? payload.icon : null,
     color: typeof payload.color === "string" ? payload.color : null,
     data: data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null,
@@ -79,6 +83,8 @@ function EventBody({ event, resolveImageSrc, resolveEventLink, onNavigate }: Eve
         return <DiscussionEventView event={event} resolveEventLink={resolveEventLink} onNavigate={onNavigate} />
       case "delegation":
         return <DelegationEventView event={event} resolveEventLink={resolveEventLink} onNavigate={onNavigate} />
+      case "agent-note":
+        return <AgentNoteEventView event={event} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} onNavigate={onNavigate} />
       case "outfit":
         return <OutfitEventView event={event} resolveImageSrc={resolveImageSrc} />
       case "hue":
@@ -437,6 +443,36 @@ function DelegationEventView({ event, resolveEventLink, onNavigate }: {
           )}
         </div>
       </EventCard>
+    </div>
+  )
+}
+
+/**
+ * A note one Agent instance posted into another's discussion. These are long,
+ * dense coordination messages, so they read as prose rather than a payload,
+ * with a way back to the sender's discussion where replies belong.
+ */
+function AgentNoteEventView({ event, resolveImageSrc, resolveEventLink, onNavigate }: EventViewProps) {
+  const topic = str(event.data!, "topic")
+  const openSender = resolveEventLink?.(event)
+
+  return (
+    <div data-slot="agent-note-event-view" className="space-y-3">
+      {topic && <p className="text-xs font-medium text-text-muted">{topic}</p>}
+      <div className="text-sm leading-relaxed font-serif text-text-primary markdown-body break-words">
+        <MarkdownRenderer content={event.text || "No content"} resolveImageSrc={resolveImageSrc} />
+      </div>
+      {openSender && (
+        <button
+          type="button"
+          onClick={() => { onNavigate?.(); openSender() }}
+          className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-overlay-10 hover:text-contrast"
+          title="Open the sender's discussion"
+        >
+          <i className="ph-bold ph-arrow-square-out text-[11px]" />
+          Open discussion
+        </button>
+      )}
     </div>
   )
 }
