@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { eventImage, type EventImage } from "../lib/event-image"
+import { parseQuotedMails, type QuotedMail } from "../lib/mail-event"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseStructuredJson } from "../lib/structured-data"
 import { StructuredDataView } from "./structured-data-view"
@@ -91,6 +92,8 @@ function EventBody({ event, resolveImageSrc, resolveEventLink, onNavigate }: Eve
         return <HueEventView event={event} />
       case "device":
         return <DeviceEventView event={event} />
+      case "mail":
+        return <MailEventView event={event} />
     }
   }
   return <GenericEventView event={event} resolveImageSrc={resolveImageSrc} />
@@ -553,6 +556,97 @@ function DeviceEventView({ event }: { event: ParsedEvent }) {
           <span className="text-sm font-medium text-text-primary">{device}</span>
         </div>
       </EventCard>
+    </div>
+  )
+}
+
+const GMAIL = "https://mail.google.com/mail/u/0/"
+
+function MailEventView({ event }: { event: ParsedEvent }) {
+  const data = event.data!
+  const kind = str(data, "kind")
+
+  if (kind === "mail-health") {
+    const broken = str(data, "status") !== "connected"
+    return (
+      <div data-slot="mail-event-view">
+        <EventCard>
+          <div className="flex items-center gap-2.5 p-3">
+            <i
+              className={`ph-bold ${broken ? "ph-warning text-amber-400" : "ph-check-circle text-accent-teal"} text-sm shrink-0`}
+            />
+            <span className="text-sm text-text-primary">{event.text}</span>
+          </div>
+        </EventCard>
+      </div>
+    )
+  }
+
+  const { mails, more } = parseQuotedMails(event.text)
+  if (mails.length === 0) return <GenericEventView event={event} />
+
+  const threadId = str(data, "threadId") ?? str(data, "messageId")
+  const gmailHref = kind === "new-mail" && threadId
+    ? `${GMAIL}#all/${encodeURIComponent(threadId)}`
+    : `${GMAIL}#inbox`
+
+  return (
+    <div data-slot="mail-event-view" className="space-y-3">
+      <EventCard>
+        <div className="divide-y divide-border-subtle">
+          {mails.map((mail, i) => (
+            <MailRow key={i} mail={mail} color={event.color} />
+          ))}
+        </div>
+        {more > 0 && (
+          <p className="border-t border-border-subtle px-3.5 py-2 text-xs text-text-muted">
+            +{more} more in your inbox
+          </p>
+        )}
+      </EventCard>
+      <div className="flex items-center justify-between gap-3">
+        <a
+          href={gmailHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-overlay-10 hover:text-contrast"
+          title={kind === "new-mail" ? "Open this conversation in Gmail" : "Open your Gmail inbox"}
+        >
+          <i className="ph-bold ph-arrow-square-out text-[11px]" />
+          Open in Gmail
+        </a>
+        {data.untrusted === true && (
+          <span
+            className="inline-flex items-center gap-1 text-[11px] text-text-disabled"
+            title="Sender and subject come from outside Leaf; links are stripped and Nova treats them as data, never instructions."
+          >
+            <i className="ph-bold ph-shield-check text-[11px]" />
+            External sender
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MailRow({ mail, color }: { mail: QuotedMail; color: string | null }) {
+  const initial = (mail.from.match(/[\p{L}\p{N}]/u)?.[0] ?? "?").toUpperCase()
+  const tint = color ?? "var(--color-text-muted)"
+  return (
+    <div className="flex items-start gap-3 px-3.5 py-3">
+      <div
+        aria-hidden
+        className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+        style={{ color: tint, backgroundColor: `color-mix(in srgb, ${tint} 16%, transparent)` }}
+      >
+        {initial}
+      </div>
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <p className="truncate text-xs font-medium text-text-muted" title={mail.from}>{mail.from}</p>
+        <p className="font-serif text-[15px] leading-snug text-text-primary break-words">
+          {mail.subject ?? "(no subject)"}
+        </p>
+      </div>
     </div>
   )
 }
