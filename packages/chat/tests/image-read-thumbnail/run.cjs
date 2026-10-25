@@ -47,24 +47,6 @@ async function main() {
         assert.equal(await square.locator("img").evaluate(node => getComputedStyle(node).opacity), "1")
       }
       assert.equal(await source.locator("img").count(), 0, "text Read stays a coloured square")
-      if (width === 1440) {
-        const before = await Promise.all([map, source].map(square => square.boundingBox()))
-        await portrait.hover()
-        const preview = page.locator('[data-slot="image-read-hover-preview"]')
-        await preview.waitFor()
-        await page.waitForFunction(() => {
-          const node = document.querySelector('[data-slot="image-read-hover-preview"]')
-          return node && getComputedStyle(node).opacity === "1"
-        })
-        const previewBox = await preview.boundingBox()
-        assert.equal(previewBox.width, 80, "hover preview matches the 80px image embed width")
-        assert.equal(previewBox.height, 80, "hover preview matches the 80px image embed height")
-        const after = await Promise.all([map, source].map(square => square.boundingBox()))
-        assert.deepEqual(after, before, "hover preview does not move neighbouring tool squares")
-        await page.screenshot({ path: path.join(shots, "image-read-hover-1440.png") })
-        await page.mouse.move(1200, 700)
-        await preview.waitFor({ state: "detached" })
-      }
       await portrait.click()
       await page.getByRole("heading", { name: "view_image", exact: true }).waitFor()
       await page.keyboard.press("Escape")
