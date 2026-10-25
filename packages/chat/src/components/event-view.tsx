@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { eventImage, type EventImage } from "../lib/event-image"
+import { delegationPlacement } from "../lib/delegation-placement"
 import { parseQuotedMails, type QuotedMail } from "../lib/mail-event"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseStructuredJson } from "../lib/structured-data"
@@ -405,7 +406,7 @@ function DelegationEventView({ event, resolveEventLink, onNavigate }: {
 }) {
   const data = event.data!
   const sessionId = str(data, "sessionId")
-  const repository = str(data, "repository")
+  const placement = delegationPlacement(data)
   const agent = str(data, "agent")
   const status = str(data, "status")
   const continued = data.continued === true
@@ -427,9 +428,10 @@ function DelegationEventView({ event, resolveEventLink, onNavigate }: {
             </div>
             {status && <Tag>{status}</Tag>}
           </div>
-          {(repository || agent) && (
+          {(placement || agent) && (
             <div className="flex gap-2 flex-wrap">
-              {repository && <Tag>{repository}</Tag>}
+              {placement && <Tag>{placement.label}</Tag>}
+              {placement?.worktree && <Tag>worktree</Tag>}
               {agent && <Tag>{agent}</Tag>}
             </div>
           )}
