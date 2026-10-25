@@ -208,7 +208,52 @@ public sealed class JwtService
     public ClaimsPrincipal? ValidateToken(string token)
         => _vault is null ? ValidateLegacy(token) : ValidateVault(token);
 
+    /// <summary>
+    /// Why <see cref="ValidateToken"/> refuses <paramref name="token"/>, for the log: the header's alg and
+    /// kid, the net/sub/exp claims read without trusting them, and the validator's failure. Never the
+    /// token or its signature. Null when the token is valid.
+    /// </summary>
+    public string? DescribeRejection(string token)
+    {
+        string shape;
+        try
+        {
+            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+            var exp = jwt.Payload.Expiration is long e ? DateTimeOffset.FromUnixTimeSeconds(e).ToString("u") : "none";
+            shape = $"alg={jwt.Header.Alg} kid={jwt.Header.Kid ?? "none"} net={(jwt.Payload.TryGetValue(BadgeNet.Claim, out var n) ? n : "none")} "
+                + $"sub={jwt.Subject ?? "none"} exp={exp} now={DateTimeOffset.UtcNow:u}";
+        }
+        catch (Exception e)
+        {
+            return $"unreadable ({e.GetType().Name}, {token.Length} chars)";
+        }
+
+        if (_vault is null) return ValidateLegacy(token) is null ? $"{shape}: legacy validation failed" : null;
+        try
+        {
+            ValidateVaultCore(token);
+            return null;
+        }
+        catch (Exception e)
+        {
+            var trusted = string.Join(",", _vault.TrustedKids);
+            return $"{shape} trustedKids=[{trusted}]: {e.GetType().Name}: {e.Message}";
+        }
+    }
+
     private ClaimsPrincipal? ValidateVault(string token)
+    {
+        try
+        {
+            return ValidateVaultCore(token);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private ClaimsPrincipal ValidateVaultCore(string token)
     {
         var handler = new JwtSecurityTokenHandler();
         handler.InboundClaimTypeMap.Clear();
@@ -228,16 +273,11 @@ public sealed class JwtService
             ClockSkew = _options.ClockSkew,
         };
 
-        try
-        {
-            var principal = handler.ValidateToken(token, parameters, out _);
-            // The vault stamps net on every badge it signs; one without it is not one of ours.
-            return BadgeNet.IsValid(principal.FindFirst(BadgeNet.Claim)?.Value) ? principal : null;
-        }
-        catch
-        {
-            return null;
-        }
+        var principal = handler.ValidateToken(token, parameters, out _);
+        // The vault stamps net on every badge it signs; one without it is not one of ours.
+        if (!BadgeNet.IsValid(principal.FindFirst(BadgeNet.Claim)?.Value))
+            throw new SecurityTokenValidationException("the badge has no valid net claim");
+        return principal;
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace RedBamboo.AppHost.Auth;
 
@@ -9,12 +10,15 @@ public sealed class AuthMiddleware
     private readonly RequestDelegate _next;
     private readonly AuthOptions _options;
     private readonly JwtService _jwtService;
+    private readonly ILogger? _logger;
 
-    public AuthMiddleware(RequestDelegate next, AuthOptions options, JwtService jwtService)
+    public AuthMiddleware(RequestDelegate next, AuthOptions options, JwtService jwtService,
+        ILogger<AuthMiddleware>? logger = null)
     {
         _next = next;
         _options = options;
         _jwtService = jwtService;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -56,9 +60,13 @@ public sealed class AuthMiddleware
         if (authHeader != null && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             headerToken = authHeader["Bearer ".Length..];
 
-        var cookieToken = context.Request.Cookies[_options.CookieName];
+        // Every cookie of that name, not only the first: a browser can hold more than one (different
+        // path or domain), it sends the oldest first, and Request.Cookies keeps only that one. An old
+        // badge from a retired key must not hide the one a fresh sign-in just set.
+        var cookieTokens = CookieValues(context.Request, _options.CookieName);
+        var cookieToken = cookieTokens.FirstOrDefault();
 
-        foreach (var token in new[] { headerToken, cookieToken })
+        foreach (var token in cookieTokens.Prepend(headerToken))
         {
             if (token is null) continue;
             var principal = _jwtService.ValidateToken(token);
@@ -75,7 +83,17 @@ public sealed class AuthMiddleware
         }
 
         if (cookieToken is not null)
+        {
+            if (_logger?.IsEnabled(LogLevel.Warning) == true)
+            {
+                var reasons = cookieTokens.Select((t, i) =>
+                    $"#{i + 1}: {_jwtService.DescribeRejection(t) ?? "valid, but refused for this request's reach"}");
+                _logger.LogWarning("Sign-in cookie refused on {Method} {Path} (tunnel={Tunnel}, cookies={Count}). {Reasons}",
+                    context.Request.Method, path, RequestOrigin.ArrivedThroughTunnel(context), cookieTokens.Count,
+                    string.Join(" | ", reasons));
+            }
             context.Response.Cookies.Delete(_options.CookieName);
+        }
 
         if (IsLocalRequest(context))
         {
@@ -156,4 +174,21 @@ public sealed class AuthMiddleware
     }
 
     private static bool IsLocalRequest(HttpContext context) => RequestOrigin.IsLocal(context);
+
+    internal static List<string> CookieValues(HttpRequest request, string name)
+    {
+        var values = new List<string>();
+        foreach (var header in request.Headers.Cookie)
+        {
+            if (header is null) continue;
+            foreach (var pair in header.Split(';'))
+            {
+                var eq = pair.IndexOf('=');
+                if (eq <= 0 || !pair.AsSpan(0, eq).Trim().SequenceEqual(name)) continue;
+                var value = Uri.UnescapeDataString(pair[(eq + 1)..].Trim().Trim('"'));
+                if (value.Length > 0 && !values.Contains(value)) values.Add(value);
+            }
+        }
+        return values;
+    }
 }

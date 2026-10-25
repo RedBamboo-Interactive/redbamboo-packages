@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using RedBamboo.AppHost.Discovery;
 
 namespace RedBamboo.AppHost.Auth;
@@ -132,6 +133,9 @@ public static class AuthEndpoints
                 context.Response.Cookies.Delete("redsuite_auth_return");
 
                 var returnUrl = SanitizeReturnUrl(context.Request.Cookies["redsuite_auth_return"]);
+                sp.GetService<ILoggerFactory>()?.CreateLogger("auth").LogInformation(
+                    "Google sign-in issued a session for {Sub} on {Host} (https={Https}, tunnel={Tunnel}, return={Return})",
+                    userId, host, isSecure, RequestOrigin.ArrivedThroughTunnel(context), returnUrl);
                 return Results.Redirect(returnUrl);
             });
 
@@ -264,14 +268,20 @@ public static class AuthEndpoints
     internal static async Task<IResult> RefreshAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
         IUserStore userStore, JwtService jwtService, AuthOptions options)
     {
-        var refreshToken = context.Request.Cookies[options.RefreshCookieName];
-        if (string.IsNullOrEmpty(refreshToken))
+        // Every refresh cookie the browser sent, not only the first (see AuthMiddleware.CookieValues).
+        var refreshTokens = AuthMiddleware.CookieValues(context.Request, options.RefreshCookieName);
+        if (refreshTokens.Count == 0)
         {
             context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
             return Results.Json(new { error = "no_token" }, statusCode: 401);
         }
 
-        var validation = await refreshTokenStore.ValidateAsync(refreshToken);
+        RefreshTokenValidation? validation = null;
+        foreach (var candidate in refreshTokens)
+        {
+            validation = await refreshTokenStore.ValidateAsync(candidate);
+            if (validation is not null) break;
+        }
         if (validation is null)
         {
             context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });

@@ -151,6 +151,38 @@ public class BadgeReachAndRefreshTests
         Assert.Equal(200, (await Send(jwt, options, ctx)).Status);
     }
 
+    [Fact]
+    public async Task A_stale_sign_in_cookie_sent_first_does_not_hide_the_fresh_one()
+    {
+        // A browser holding two sign-in cookies sends the oldest first; the old one was signed with the
+        // retired shared key. The fresh vault badge behind it is the one that counts.
+        var (jwt, _, options) = Setup();
+        var stale = new JwtService(new JwtOptions { SigningKey = new string('k', 64) })
+            .GenerateAccessToken("user-1", "u@example.test", "U", ["user"]);
+        var ctx = Request(null, headers: [("Cf-Ray", "x"), ("Cf-Connecting-Ip", "203.0.113.9")]);
+        ctx.Request.Headers.Cookie = $"{options.CookieName}={stale}; other=1; {options.CookieName}={RemoteBadge(jwt)}";
+
+        var (status, sub) = await Send(jwt, options, ctx);
+
+        Assert.Equal(200, status);
+        Assert.Equal("user-1", sub);
+    }
+
+    [Fact]
+    public void A_rejected_badge_is_described_without_its_signature()
+    {
+        var (jwt, _, _) = Setup();
+        var stale = new JwtService(new JwtOptions { SigningKey = new string('k', 64) })
+            .GenerateAccessToken("user-1", "u@example.test", "U", ["user"]);
+
+        var reason = jwt.DescribeRejection(stale)!;
+
+        Assert.Contains("alg=HS256", reason);
+        Assert.Contains("sub=user-1", reason);
+        Assert.DoesNotContain(stale.Split('.')[2], reason);
+        Assert.Null(jwt.DescribeRejection(RemoteBadge(jwt)));
+    }
+
     // ----- /auth/refresh -----
 
     private sealed class Fixture
@@ -215,6 +247,18 @@ public class BadgeReachAndRefreshTests
         Assert.Equal(f.UserId, principal.FindFirstValue("sub"));
         Assert.Equal(3600, long.Parse(principal.FindFirstValue("exp")!) - long.Parse(principal.FindFirstValue("iat")!));
         Assert.Contains("max-age=3600", string.Join(';', ctx.Response.Headers.SetCookie.ToArray()).ToLowerInvariant());
+    }
+
+    [Fact]
+    public async Task A_dead_refresh_cookie_sent_first_does_not_hide_the_live_one()
+    {
+        var f = await RefreshFixture();
+        var live = await Login(f);
+
+        var (status, ctx) = await Refresh(f, $"revoked-long-ago; {f.Options.RefreshCookieName}={live}");
+
+        Assert.Equal(200, status);
+        Assert.NotNull(SetCookieValue(ctx, f.Options.CookieName));
     }
 
     [Fact]
