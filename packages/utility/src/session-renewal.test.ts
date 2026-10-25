@@ -156,8 +156,18 @@ test("401 on refresh and LocalDefault fallback ends the prior user session", asy
     ? json(401, { error: "invalid_token" })
     : json(200, { id: "local-user" }))
 
+  s.r.start()
   assert.equal(await s.r.renewSession(), "gone")
   assert.equal(s.lost.length, 1)
+})
+
+test("inactive LocalDefault refresh probe does not report a lost user session", async () => {
+  const s = setup((url) => url === "/auth/refresh"
+    ? json(401, { error: "no_token" })
+    : json(200, { id: "local-user" }))
+
+  assert.equal(await s.r.renewSession(), "gone")
+  assert.equal(s.lost.length, 0)
 })
 
 test("local-user: renewal is never started, so nothing refreshes", async () => {

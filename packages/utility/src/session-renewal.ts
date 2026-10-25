@@ -169,7 +169,18 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
           }
           return attempt()
         })
-        if (result === "gone") loseSession()
+        if (result === "gone") {
+          // Bootstrap also probes once for a refresh cookie when LocalDefault masks an
+          // unauthenticated loopback request. That anonymous probe must not redirect a
+          // genuine local user to /login; only an actively tracked user session can be lost.
+          if (active) loseSession()
+          else {
+            try {
+              deps.storage?.removeItem(STAMP_KEY)
+            } catch {}
+            memoryStamp = null
+          }
+        }
         else if (active) schedule(result === "transient" ? TRANSIENT_RETRY_MS : undefined)
         return result
       } finally {
