@@ -24,6 +24,18 @@ public static class AuthEndpoints
                 return Results.Content(LoginPage.Render(), "text/html");
             });
 
+        registry.MapGet("/auth/pwa-complete", "Complete sign-in started by an installed PWA",
+            () => Results.Content("""
+                <!doctype html>
+                <html lang="en">
+                <head><meta charset="utf-8"><title>Signed in</title></head>
+                <body style="font-family:system-ui;background:#262830;color:#eee;display:grid;place-items:center;min-height:100vh;margin:0">
+                  <p>Signed in. You can return to RedLeaf.</p>
+                  <script>window.close()</script>
+                </body>
+                </html>
+                """, "text/html"));
+
         registry.MapGet("/auth/login", "Initiate OAuth login flow",
             (HttpContext context, IServiceProvider sp, AuthOptions options) =>
             {
