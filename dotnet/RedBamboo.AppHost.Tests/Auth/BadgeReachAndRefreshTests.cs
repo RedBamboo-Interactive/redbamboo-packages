@@ -135,6 +135,22 @@ public class BadgeReachAndRefreshTests
         Assert.Equal(200, (await Send(legacy, options, Request(token, peer: "203.0.113.9"))).Status);
     }
 
+    [Theory]
+    [InlineData("/auth/refresh")]
+    [InlineData("/auth/logout")]
+    public async Task Refresh_and_logout_reach_their_handler_through_the_tunnel_without_a_valid_badge(string path)
+    {
+        // The browser badge has expired (or was signed by a retired key): that is exactly when the client
+        // renews. The refresh cookie is the credential here, so the middleware must not answer first.
+        var (jwt, _, options) = Setup();
+        var ctx = Request(null, headers: [("Cf-Ray", "x"), ("Cf-Connecting-Ip", "203.0.113.9")]);
+        ctx.Request.Method = "POST";
+        ctx.Request.Path = path;
+        ctx.Request.Headers.Cookie = $"{options.CookieName}=expired.or.forged; {options.RefreshCookieName}=opaque";
+
+        Assert.Equal(200, (await Send(jwt, options, ctx)).Status);
+    }
+
     // ----- /auth/refresh -----
 
     private sealed class Fixture
