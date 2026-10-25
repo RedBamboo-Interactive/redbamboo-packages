@@ -25,26 +25,20 @@ export async function bootstrapAuthUser(
     cache: "no-store",
   })
   let user = response.ok ? (await response.json()) as AuthUser : null
-  const localFallback = user?.id === LOCAL_IDENTITY_ID
-  const needsRecovery = response.status === 401 || localFallback
+  const needsRecovery = hadUserSession
+    && (response.status === 401 || user?.id === LOCAL_IDENTITY_ID)
 
   if (needsRecovery) {
-    // LocalDefault deliberately turns a missing/invalid access badge into a successful
-    // local-user response on loopback. Probe the refresh cookie even when there is no
-    // renewal stamp: a fresh OAuth callback can set HttpOnly cookies, but cannot write
-    // localStorage. Without this probe, the valid refresh session is never discovered.
+    // A recent stamp can otherwise make renewal incorrectly skip the network
+    // call even though /auth/me has already proved the access badge unusable.
     dependencies.clearRenewalStamp()
-    const renewal = await dependencies.renewSession()
-    if (renewal === "renewed") {
-      response = await dependencies.fetch("/auth/me", {
-        credentials: "include",
-        cache: "no-store",
-      })
-      user = response.ok ? (await response.json()) as AuthUser : null
-      if (user?.id === LOCAL_IDENTITY_ID) return null
-    } else if (response.status === 401 || hadUserSession || renewal === "transient") {
-      return null
-    }
+    if ((await dependencies.renewSession()) !== "renewed") return null
+    response = await dependencies.fetch("/auth/me", {
+      credentials: "include",
+      cache: "no-store",
+    })
+    user = response.ok ? (await response.json()) as AuthUser : null
+    if (user?.id === LOCAL_IDENTITY_ID) return null
   }
 
   return user

@@ -20,7 +20,6 @@ function dependencies(
   const calls: string[] = []
   const requests: RequestInit[] = []
   let cleared = 0
-  let renewals = 0
   const deps: AuthBootstrapDependencies = {
     fetch: async (url, init) => {
       calls.push(url)
@@ -29,12 +28,9 @@ function dependencies(
     },
     hasRenewalStamp: () => stamped,
     clearRenewalStamp: () => void cleared++,
-    renewSession: async () => {
-      renewals++
-      return renewal
-    },
+    renewSession: async () => renewal,
   }
-  return { deps, calls, requests, cleared: () => cleared, renewals: () => renewals }
+  return { deps, calls, requests, cleared: () => cleared }
 }
 
 test("LocalDefault fallback restores the prior durable user session", async () => {
@@ -56,18 +52,7 @@ test("LocalDefault remains available when this browser had no user session", asy
   assert.deepEqual(user, local)
   assert.deepEqual(fixture.calls, ["/auth/me"])
   assert.equal(fixture.requests[0]?.cache, "no-store")
-  assert.equal(fixture.cleared(), 1)
-  assert.equal(fixture.renewals(), 1)
-})
-
-test("fresh OAuth cookies recover from LocalDefault without a renewal stamp", async () => {
-  const fixture = dependencies([json(200, local), json(200, owner)], "renewed", false)
-
-  const user = await bootstrapAuthUser(fixture.deps)
-
-  assert.deepEqual(user, owner)
-  assert.deepEqual(fixture.calls, ["/auth/me", "/auth/me"])
-  assert.equal(fixture.renewals(), 1)
+  assert.equal(fixture.cleared(), 0)
 })
 
 test("failed recovery never silently downgrades a prior user to LocalDefault", async () => {
