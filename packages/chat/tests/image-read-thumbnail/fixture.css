@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import "../../../ui/src/tokens.css";
+@import "../../src/chat.css";
+@source "../../src";
+@source "../../../ui/src";
+@source "./";

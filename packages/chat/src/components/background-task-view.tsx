@@ -3,6 +3,7 @@ import { Button } from "@redbamboo/ui"
 import type { BackgroundTaskInfo, BackgroundTaskState, MessagePart, TurnOrigin } from "../types"
 import { PART_COLOR, getPartColor, isBackgroundRunning } from "../lib/part-colors"
 import { getEffectiveToolName } from "../lib/tool-semantics"
+import { ImageReadThumbnail } from "./image-read-thumbnail"
 
 /**
  * Panel-wide background work state shared with every message row without
@@ -140,10 +141,11 @@ export function childLabel(part: MessagePart): string {
 }
 
 /** The squares of the work a background agent did, inside its launching square's details. */
-export function ChildFrieze({ parts, selected, onSelect }: {
+export function ChildFrieze({ parts, selected, onSelect, resolveImageSrc }: {
   parts: readonly MessagePart[]
   selected?: MessagePart
   onSelect: (part: MessagePart) => void
+  resolveImageSrc?: (src: string) => string | undefined
 }) {
   const squares = parts.filter(part => part.type !== "tool_result")
   if (squares.length === 0) return null
@@ -156,13 +158,15 @@ export function ChildFrieze({ parts, selected, onSelect }: {
             key={part.toolUseId ?? `${part.type}:${index}`}
             type="button"
             onClick={() => onSelect(part)}
-            className={`w-2.5 h-2.5 rounded-[2px] transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${isBackgroundRunning(part) ? " square-jiggle" : ""}${part === selected ? " ring-1 ring-contrast" : ""}`}
+            className={`relative w-2.5 h-2.5 overflow-hidden rounded-[2px] transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${isBackgroundRunning(part) ? " square-jiggle" : ""}${part === selected ? " ring-1 ring-contrast" : ""}`}
             style={{ backgroundColor: getPartColor(part) }}
             title={childLabel(part)}
             aria-label={childLabel(part)}
             data-tool-use-id={part.toolUseId}
             data-task-status={part.task?.status}
-          />
+          >
+            <ImageReadThumbnail part={part} resolveImageSrc={resolveImageSrc} />
+          </button>
         ))}
       </div>
     </div>

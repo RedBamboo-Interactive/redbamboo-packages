@@ -2,8 +2,7 @@ import { useState } from "react"
 import { JsonHighlight } from "@redbamboo/utility"
 import { parseStructuredJson, type StructuredJson } from "../lib/structured-data"
 import { StructuredDataView } from "./structured-data-view"
-
-const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i
+import { IMAGE_FILE_EXTENSION } from "../lib/image-read"
 
 interface Props {
   toolName: string
@@ -78,7 +77,7 @@ function ReadView({ p, onOpen, resolveImageSrc }: { p: Record<string, unknown>; 
   const path = p.file_path as string | undefined
   const offset = p.offset as number | undefined
   const limit = p.limit as number | undefined
-  const isImage = path && IMAGE_EXT.test(path)
+  const isImage = path && IMAGE_FILE_EXTENSION.test(path)
   const imageSrc = isImage && resolveImageSrc ? resolveImageSrc(path) : undefined
   const [imgFailed, setImgFailed] = useState(false)
 
