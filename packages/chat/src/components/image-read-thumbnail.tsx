@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react"
+import { useState, type MouseEvent } from "react"
 import { createPortal } from "react-dom"
 import { useUiEnvironment } from "@redbamboo/ui"
 import type { MessagePart } from "../types"
@@ -24,15 +24,6 @@ export function ImageReadThumbnail({ part, resolveImageSrc }: {
   const src = resolveChatMediaSrc(path, resolveImageSrc)
   const [loadedSrc, setLoadedSrc] = useState<string>()
   const [preview, setPreview] = useState<{ left: number; top: number }>()
-  const [previewExpanded, setPreviewExpanded] = useState(false)
-  useEffect(() => {
-    if (!preview) {
-      setPreviewExpanded(false)
-      return
-    }
-    const frame = environment.window.requestAnimationFrame(() => setPreviewExpanded(true))
-    return () => environment.window.cancelAnimationFrame(frame)
-  }, [environment.window, preview])
   if (!src) return null
 
   const loaded = loadedSrc === src
@@ -77,10 +68,10 @@ export function ImageReadThumbnail({ part, resolveImageSrc }: {
         <span
           aria-hidden="true"
           data-slot="image-read-hover-preview"
-          className={`pointer-events-none fixed z-[80] size-20 origin-center -translate-x-1/2 -translate-y-1/2 overflow-hidden border border-white/40 bg-black/95 shadow-[0_14px_34px_rgb(0_0_0/0.52),0_2px_8px_rgb(0_0_0/0.42)] transition-[transform,opacity,border-radius] duration-200 ease-out [@media(hover:none)]:hidden [@media(pointer:coarse)]:hidden ${previewExpanded ? "scale-100 rounded-lg opacity-100" : "scale-[0.125] rounded-[2px] opacity-20"}`}
+          className="image-read-hover-preview"
           style={{ left: preview.left, top: preview.top }}
         >
-          <img src={src} alt="" draggable={false} className="size-full object-cover" />
+          <img src={src} alt="" draggable={false} />
         </span>,
         environment.portalContainer,
       )}
