@@ -2,7 +2,15 @@ namespace RedBamboo.AppHost.Auth;
 
 public class JwtOptions
 {
-    public required string SigningKey { get; init; }
+    /// <summary>The shared HS256 key. Legacy mode only; empty and unused when <see cref="Vault"/> is set.</summary>
+    public string SigningKey { get; init; } = "";
+    /// <summary>
+    /// Set on a machine in vault mode: Leaf Vault signs and this process verifies against its public
+    /// keys. Null means legacy mode (shared-key HS256), exactly as before the vault existed.
+    /// </summary>
+    public Vault.VaultBadgeAuthority? Vault { get; init; }
+    /// <summary>Browser login badge lifetime in vault mode (the vault caps remote badges at one hour).</summary>
+    public TimeSpan BrowserAccessTokenLifetime { get; init; } = TimeSpan.FromHours(1);
     public string Issuer { get; init; } = "redsuite";
     public string Audience { get; init; } = "redsuite";
     public TimeSpan AccessTokenLifetime { get; init; } = TimeSpan.FromDays(365);
