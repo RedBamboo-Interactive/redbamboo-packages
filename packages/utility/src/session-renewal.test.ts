@@ -145,6 +145,15 @@ test("401 on refresh and /auth/me 401 ends the session exactly once", async () =
   assert.equal(s.lost.length, 1)
 })
 
+test("401 on refresh and LocalDefault fallback ends the prior user session", async () => {
+  const s = setup((url) => url === "/auth/refresh"
+    ? json(401, { error: "invalid_token" })
+    : json(200, { id: "local-user" }))
+
+  assert.equal(await s.r.renewSession(), "gone")
+  assert.equal(s.lost.length, 1)
+})
+
 test("local-user: renewal is never started, so nothing refreshes", async () => {
   const s = setup(refreshOk)
   // AuthProvider does not call start() for local-user.

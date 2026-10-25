@@ -94,6 +94,12 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
           try {
             const me = await deps.fetch("/auth/me", { credentials: "include" })
             if (me.status === 401) return "gone"
+            if (me.ok) {
+              const user = (await me.json().catch(() => null)) as { id?: string } | null
+              // LocalDefault is a successful anonymous loopback fallback, not proof
+              // that the prior durable user session still exists.
+              if (user?.id === "local-user") return "gone"
+            }
           } catch {}
           // Session still valid (or unknown) but refresh did not work: try again later, don't stamp.
           return "transient"

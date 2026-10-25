@@ -7,6 +7,7 @@ import {
   stopSessionRenewal,
 } from "./session-renewal"
 import type { AuthUser, AuthContextValue } from "./auth-types"
+import { bootstrapAuthUser } from "./auth-bootstrap"
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -21,20 +22,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = useCallback(async (): Promise<AuthUser | null> => {
     try {
-      let res = await fetch("/auth/me", { credentials: "include" })
-      // A returning visitor whose short-lived badge expired while the tab was closed still
-      // holds a valid refresh cookie. The stamp proves this browser had a session, so renew
-      // before concluding they are logged out (anonymous visitors skip the extra request).
-      if (res.status === 401 && hasSessionRenewalStamp()) {
-        if ((await renewSession()) === "renewed") res = await fetch("/auth/me", { credentials: "include" })
-      }
-      if (res.ok) {
-        const data = (await res.json()) as AuthUser
-        setUser(data)
-        return data
-      }
-      setUser(null)
-      return null
+      const current = await bootstrapAuthUser({
+        fetch,
+        hasRenewalStamp: hasSessionRenewalStamp,
+        clearRenewalStamp: clearSessionRenewalStamp,
+        renewSession,
+      })
+      setUser(current)
+      return current
     } catch {
       setUser(null)
       return null
