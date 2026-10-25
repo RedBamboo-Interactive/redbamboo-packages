@@ -16,8 +16,9 @@ public static class SigningKeyPersistence
     /// </summary>
     public static string EnsureSigningKey(string configDir, Func<bool>? serviceRegistered = null)
     {
-        if (Vault.BadgeSigningBootstrap.HasVaultModeMarker(configDir)
-            || (serviceRegistered ?? Vault.BadgeSigningBootstrap.IsVaultServiceRegistered)())
+        if (!Vault.BadgeSigningBootstrap.IsBypassed(configDir)
+            && (Vault.BadgeSigningBootstrap.HasVaultModeMarker(configDir)
+                || (serviceRegistered ?? Vault.BadgeSigningBootstrap.IsVaultServiceRegistered)()))
             throw new InvalidOperationException(
                 "The shared badge key is retired on this machine: Leaf Vault signs badges. Start Leaf Vault instead of creating a key.");
 

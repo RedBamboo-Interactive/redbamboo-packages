@@ -40,6 +40,22 @@ public sealed class BadgeSigningBootstrapTests : IDisposable
     }
 
     [Fact]
+    public void The_owners_bypass_file_means_legacy_mode_even_on_a_vault_machine()
+    {
+        Resolve("redleaf", new FakeBadgeVault()); // the machine has run in vault mode: marker written
+        File.WriteAllText(Path.Combine(_dir, BadgeSigningBootstrap.BypassFile), "{}");
+
+        var leaf = Resolve("redleaf", new FakeBadgeVault(), registered: true);
+        var compute = Resolve("redcompute", new FakeBadgeVault(), registered: true);
+
+        Assert.Equal(BadgeSigningMode.Legacy, leaf.Mode);
+        Assert.Equal(leaf.LegacySigningKey, compute.LegacySigningKey);
+        Assert.False(BadgeSigningBootstrap.IsHeldInVaultMode(_dir));
+        Assert.Equal(LegacyKeyRetirementResult.NotYet, LegacySigningKeyRetirement.TryRetire(_dir));
+        Assert.True(SharedKeyExists());
+    }
+
+    [Fact]
     public void Reachable_vault_means_vault_mode_and_records_the_marker_without_creating_a_key()
     {
         var setup = Resolve("redleaf", new FakeBadgeVault());

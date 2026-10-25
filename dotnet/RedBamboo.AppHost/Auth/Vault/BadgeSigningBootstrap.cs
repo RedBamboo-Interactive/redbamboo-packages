@@ -42,6 +42,12 @@ public static class BadgeSigningBootstrap
     public const string ModeMarkerFile = "auth-mode.json";
     public const string ConfirmedMarkerPrefix = "auth-vault-confirmed.";
     public const string LegacyKeyFile = "auth-signing-key.json";
+    /// <summary>
+    /// The owner's explicit way out: while this file exists in the config directory every service runs
+    /// in legacy mode (shared HS256 key) even though the vault is installed or was used, and no shared
+    /// key is retired. Deleting it returns the machine to vault mode at the next boot.
+    /// </summary>
+    public const string BypassFile = "auth-vault-bypass.json";
     private static readonly string[] ConfirmingServices = ["redleaf", "redcompute"];
 
     public static BadgeSigningSetup Resolve(string configDir, string serviceId, IBadgeVault? vault = null,
@@ -50,6 +56,13 @@ public static class BadgeSigningBootstrap
         vault ??= new VaultPipeClient();
         serviceRegistered ??= IsVaultServiceRegistered;
         log ??= _ => { };
+
+        if (IsBypassed(configDir))
+        {
+            log($"{serviceId}: Leaf Vault is BYPASSED ({BypassFile} exists); badges use the shared key. Delete the file and restart to return to the vault.");
+            return new BadgeSigningSetup(BadgeSigningMode.Legacy, SigningKeyPersistence.EnsureSigningKey(configDir, () => false), null,
+                "vault bypassed by the owner");
+        }
 
         var markerPresent = HasVaultModeMarker(configDir);
         var registered = serviceRegistered();
@@ -117,9 +130,14 @@ public static class BadgeSigningBootstrap
     /// True once any service on this machine has run in vault mode, or the LeafVault service is
     /// registered. Either one forbids reading, creating or regenerating the shared key.
     /// </summary>
-    public static bool IsHeldInVaultMode(string configDir) => HasVaultModeMarker(configDir) || IsVaultServiceRegistered();
+    public static bool IsHeldInVaultMode(string configDir)
+        => !IsBypassed(configDir) && (HasVaultModeMarker(configDir) || IsVaultServiceRegistered());
 
-    public static bool HasVaultModeMarker(string configDir) => File.Exists(Path.Combine(configDir, ModeMarkerFile));
+    /// <summary>The vault-mode marker, read as absent while the owner's bypass file exists.</summary>
+    public static bool HasVaultModeMarker(string configDir)
+        => !IsBypassed(configDir) && File.Exists(Path.Combine(configDir, ModeMarkerFile));
+
+    public static bool IsBypassed(string configDir) => File.Exists(Path.Combine(configDir, BypassFile));
 
     /// <summary>Whether the Windows service LeafVault exists (its registry key is readable by every user).</summary>
     public static bool IsVaultServiceRegistered()
