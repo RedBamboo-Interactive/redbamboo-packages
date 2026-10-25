@@ -113,6 +113,13 @@ const LANE_EDGE_RATIO = 0.2
 const LANE_EDGE_MAX = 56
 const FALLBACK_ZONE_SIZE: Record<DockZone, number> = { left: 320, right: 360, bottom: 260 }
 
+/** A host no group shows: never painted, never hit, never focusable. Its group restores it on attach. */
+function hideHost(host: HTMLElement) {
+  host.style.visibility = "hidden"
+  host.inert = true
+  host.setAttribute("aria-hidden", "true")
+}
+
 export class DockStore {
   readonly ownerDocument: Document
   private listeners = new Set<() => void>()
@@ -128,6 +135,8 @@ export class DockStore {
   private snapshot: DockSnapshot
   private drag: DockDragState | null = null
   private frame: HTMLElement | null = null
+  /** The frame's hidden parking element, where hosts wait while no group shows them. */
+  private parking: HTMLElement | null = null
   private pendingScroll: ScrollRecord[] | null = null
   private pendingFocus: HTMLElement | null = null
   /** Side zones the frame currently renders as one stacked column (render-time only). */
@@ -330,7 +339,25 @@ export class DockStore {
     this.registrations.delete(id)
     if (this.drag?.panelId === id) this.cancelDrag()
     if (this.config.enabled) this.captureMoveState()
+    this.stow(id)
     this.emit()
+  }
+
+  /**
+   * Takes a released panel's host out of its group body at once. Its content is
+   * unmounting, and an empty host left there (absolute, inset 0) would cover the
+   * panels beneath it and take their clicks. The host itself is kept: a reopen
+   * renders into it again and its group re-attaches it.
+   */
+  private stow(id: string) {
+    const host = this.hosts.get(id)
+    if (!host) return
+    hideHost(host)
+    if (this.parking?.isConnected) {
+      if (host.parentElement !== this.parking) this.parking.appendChild(host)
+    } else {
+      host.remove()
+    }
   }
 
   update(id: string, token: object, meta: DockPanelMeta, onClose?: () => void) {
@@ -466,16 +493,46 @@ export class DockStore {
 
   // --- re-parenting -------------------------------------------------------
 
-  /** Moves a panel's host element into a group body. React content inside is untouched. */
-  attach(panelId: string, container: HTMLElement) {
+  /**
+   * Moves a panel's host element into a group body. React content inside is untouched.
+   * Returns false for a panel that is not registered: a group rendered from a
+   * snapshot older than its release must not pull the emptied host back in.
+   */
+  attach(panelId: string, container: HTMLElement): boolean {
+    if (!this.registrations.has(panelId)) return false
     const host = this.hostElement(panelId)
     if (host.parentElement !== container) container.appendChild(host)
+    return true
   }
 
+  /**
+   * Runs after every frame commit, once groups have attached their panels. A host
+   * inside a group body that the group does not show (a collapsed tab, or a panel
+   * released while a stale group re-attached it) is hidden and made inert: the
+   * group keeps all but its active panel that way too, so only the active panel
+   * of a group can ever take a pointer event. A released host also goes to the
+   * hidden parking element; a registered one stays put to keep its scroll.
+   */
   park(container: HTMLElement) {
+    this.parking = container
+    const shownIn = new Map<string, string>()
+    for (const zone of DOCK_ZONES) {
+      for (const lane of this.snapshot.visible.zones[zone]) {
+        for (const group of lane.groups) for (const id of group.panels) shownIn.set(id, group.id)
+      }
+    }
     for (const [id, host] of this.hosts) {
-      if (!this.registrations.has(id)) continue
-      if (host.parentElement?.hasAttribute("data-dock-group-body")) continue
+      const body = host.parentElement?.hasAttribute("data-dock-group-body") ? host.parentElement : null
+      if (body) {
+        const groupId = body.closest("[data-dock-group]")?.getAttribute("data-dock-group")
+        const registered = this.registrations.has(id)
+        if (registered && groupId != null && shownIn.get(id) === groupId) continue
+        hideHost(host)
+        if (registered) continue
+      } else if (!this.registrations.has(id)) {
+        // Released hosts already left; one never shown stays wherever it is.
+        continue
+      }
       if (host.parentElement !== container) container.appendChild(host)
     }
   }

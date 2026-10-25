@@ -465,6 +465,104 @@ try {
   assert.equal(await zoneOf(page, "list"), "left")
   assert.equal(await page.evaluate(() => localStorage.getItem("story:dock:a:v1")), null)
 
+  // --- a closed panel's host never covers the panels beneath it -------------
+  // Tester's report: an inspector tabbed over Discussions closes; its emptied host
+  // stayed in the group body (absolute, inset 0, visible) and swallowed every click.
+  /** What the user hits at the centre of a row: "ok", or the dock panel host (or tag) that intercepts it. */
+  const hitRow = (index) => page.getByTestId(`row-${index}`).evaluate((row) => {
+    row.scrollIntoView({ block: "center" })
+    const rect = row.getBoundingClientRect()
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+    if (hit && row.contains(hit)) return "ok"
+    return hit?.closest("[data-dock-panel]")?.getAttribute("data-dock-panel") ?? hit?.tagName ?? "nothing"
+  })
+  const inBody = (panelId) => page.evaluate((id) => !!document.querySelector(`[data-dock-group-body] > [data-dock-panel="${id}"]`), panelId)
+  const assertListUsable = async (step, row) => {
+    assert.equal(await hitRow(row), "ok", `${step}: the row receives the hit, not an empty host`)
+    await page.getByTestId(`row-${row}`).click({ timeout: 2000 })
+    assert.equal(await page.getByTestId(`row-${row}`).getAttribute("aria-selected"), "true", `${step}: the click selects the row`)
+    const before = await page.getByTestId("list-scroll").evaluate((el) => el.scrollTop)
+    const rowBox = await box(page.getByTestId(`row-${row}`))
+    await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2)
+    await page.mouse.wheel(0, 240)
+    await page.waitForFunction((top) => document.querySelector('[data-testid="list-scroll"]').scrollTop !== top, before, { timeout: 2000 })
+    await page.mouse.wheel(0, -240)
+  }
+  assert.equal(await zoneOf(page, "settings"), "right")
+  // Settings, the stand-in for the inspector, goes over Discussions as a tab and is the active one.
+  const overList = await drag(page, groupOf(page, "settings").locator("[data-dock-group-header]"), await pointIn(groupOf(page, "list"), 0.5, 0.5))
+  assert.match(overList, /^tab:/)
+  assert.deepEqual(await groupOf(page, "list").getByRole("tab").allTextContents(), ["Discussions", "Settings"])
+  assert.equal(await groupOf(page, "list").getByRole("tab", { name: "Settings" }).getAttribute("aria-selected"), "true")
+  // Close it while it is the active tab: Discussions shows again and must take clicks and scroll.
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor({ state: "detached" })
+  await assertListUsable("active tab closed", 3)
+  assert.equal(await inBody("settings"), false, "the released host left the group body")
+  await page.screenshot({ path: path.join(outputDir, "19-closed-tab-list-clickable.png") })
+  // Reopen: it comes back in its saved place, with its content, and closing it again stays harmless.
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor()
+  assert.deepEqual(await groupOf(page, "list").getByRole("tab").allTextContents(), ["Discussions", "Settings"], "reopens as the same tab")
+  assert.equal(await groupOf(page, "list").getByRole("tab", { name: "Settings" }).getAttribute("aria-selected"), "true")
+  assert.ok(await page.getByTestId("settings-panel").isVisible(), "reopened content is back")
+  assert.equal(await page.getByTestId("settings-scroll").locator("p").count(), 80)
+  // Switch to Discussions with Settings still open (switching discussion), then close the inactive tab.
+  await groupOf(page, "list").getByRole("tab", { name: "Discussions" }).click()
+  await assertListUsable("inactive tab open", 7)
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor({ state: "detached" })
+  assert.equal(await inBody("settings"), false, "an inactive released host leaves too")
+  await assertListUsable("inactive tab closed", 9)
+  // Move and regroup: reopen, pull Settings out to its own column, close it there, reopen,
+  // tab it back over Discussions, close it once more.
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor({ state: "attached" })
+  assert.equal(await groupOf(page, "list").getByRole("tab", { name: "Discussions" }).getAttribute("aria-selected"), "true",
+    "a reopened tab keeps the group's last active tab")
+  await assertListUsable("reopened behind Discussions", 10)
+  await groupOf(page, "list").getByRole("tab", { name: "Settings" }).click()
+  await page.getByTestId("settings-panel").waitFor()
+  await groupOf(page, "settings").getByRole("button", { name: "Settings panel options" }).click()
+  await page.getByRole("menuitem", { name: "Move to own column" }).click()
+  assert.notEqual(await groupOf(page, "settings").getAttribute("data-dock-group-lane"), await groupOf(page, "list").getAttribute("data-dock-group-lane"),
+    "Settings has its own column")
+  await assertListUsable("moved out", 11)
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor({ state: "detached" })
+  await assertListUsable("closed in its own column", 13)
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor()
+  const regrouped = await drag(page, groupOf(page, "settings").locator("[data-dock-group-header]"), await pointIn(groupOf(page, "list"), 0.5, 0.5))
+  assert.match(regrouped, /^tab:/)
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor({ state: "detached" })
+  assert.equal(await inBody("settings"), false)
+  await assertListUsable("regrouped then closed", 15)
+  assert.deepEqual(await page.evaluate(() => [...document.querySelectorAll("[data-dock-group-body] > [data-dock-panel]")].map((el) => el.dataset.dockPanel)), ["list"],
+    "only shown panels sit in group bodies")
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("settings-panel").waitFor()
+  assert.ok(await page.getByTestId("settings-panel").isVisible(), "content comes back after every close")
+  await page.screenshot({ path: path.join(outputDir, "20-reopened-after-regroup.png") })
+  // Collapsing the active tab follows the same rule: its host keeps its content but cannot be hit.
+  await groupOf(page, "settings").getByRole("tab", { name: "Discussions" }).click()
+  await groupOf(page, "settings").getByRole("button", { name: "Discussions panel options" }).click()
+  await page.getByRole("menuitem", { name: "Collapse" }).click()
+  await page.getByRole("button", { name: "Expand Discussions" }).waitFor()
+  assert.ok(await page.getByTestId("settings-panel").isVisible(), "Settings shows once Discussions collapses")
+  assert.equal(await page.getByTestId("settings-scroll").evaluate((scroller) => {
+    const rect = scroller.getBoundingClientRect()
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+    return hit && scroller.contains(hit) ? "ok" : hit?.closest("[data-dock-panel]")?.getAttribute("data-dock-panel") ?? "nothing"
+  }), "ok", "the collapsed list's host does not cover Settings")
+  await page.getByRole("button", { name: "Expand Discussions" }).click()
+  await host(page, "list").getByTestId("list-scroll").waitFor()
+  await groupOf(page, "settings").getByRole("tab", { name: "Discussions" }).click()
+  await assertListUsable("expanded again", 17)
+  await page.getByTestId("toggle-settings").click()
+  await page.getByTestId("reset").click()
+
 
   // --- narrow: docking is off and the inline layout is unchanged ----------
   await page.evaluate(() => localStorage.clear())

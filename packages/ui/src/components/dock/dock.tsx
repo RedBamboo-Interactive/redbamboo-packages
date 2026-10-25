@@ -1041,7 +1041,7 @@ function DockGroupView({ store, group, snapshot }: { store: DockStore; group: Vi
     const body = bodyRef.current
     if (!body) return
     for (const id of group.panels) {
-      store.attach(id, body)
+      if (!store.attach(id, body)) continue
       const host = store.hostElement(id)
       const isActive = id === group.active
       host.style.visibility = isActive ? "" : "hidden"
