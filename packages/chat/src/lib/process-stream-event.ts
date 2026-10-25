@@ -33,9 +33,19 @@ export function finalizeStreamBlock(messages: MessageBlock[]): MessageBlock[] {
   return changed ? finalized : messages
 }
 
-export function parseStructuredQuestions(raw: Record<string, unknown>): StructuredQuestion[] | undefined {
-  if (!("questions" in raw) || !Array.isArray(raw.questions) || raw.questions.length === 0) return undefined
-  return (raw.questions as Record<string, unknown>[]).map((q) => ({
+/**
+ * Read structured questions from a question payload. Claude Code sends its
+ * AskUserQuestion input (`{questions: [...]}`); Codex's requestUserInput sends
+ * the bare questions array. Both carry the same per-question fields.
+ */
+export function parseStructuredQuestions(raw: unknown): StructuredQuestion[] | undefined {
+  const list = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object" && Array.isArray((raw as { questions?: unknown }).questions)
+      ? (raw as { questions: unknown[] }).questions
+      : undefined
+  if (!list?.length) return undefined
+  return (list as Record<string, unknown>[]).map((q) => ({
     question: typeof q.question === "string" ? q.question : "",
     header: typeof q.header === "string" ? q.header : undefined,
     multiSelect: !!q.multiSelect,
@@ -48,14 +58,14 @@ export function parseStructuredQuestions(raw: Record<string, unknown>): Structur
   }))
 }
 
-/** Read `{question, questions}` out of an AskUserQuestion tool input blob. */
+/** Read `{question, questions}` out of a question payload (see parseStructuredQuestions). */
 function readQuestion(toolInput: string | null | undefined): PendingQuestion {
-  let question = "Claude is asking a question..."
+  let question = "The assistant is asking a question..."
   let questions: StructuredQuestion[] | undefined
   try {
     const raw = typeof toolInput === "string" ? JSON.parse(toolInput) : toolInput
     if (raw && typeof raw === "object") {
-      questions = parseStructuredQuestions(raw as Record<string, unknown>)
+      questions = parseStructuredQuestions(raw)
       if (questions) {
         question = questions[0].question || question
       } else if ("question" in raw && typeof (raw as Record<string, unknown>).question === "string") {
@@ -110,7 +120,8 @@ function toOutcome(content: string | null | undefined): QuestionOutcome {
 function nextQuestion(prev: QuestionState, msgs: MessageBlock[], event: ChatEvent): QuestionState {
   if (event.type === "question") {
     return {
-      pending: { ...readQuestion(event.toolInput), requestId: event.requestId ?? null },
+      // Claude carries the questions in toolInput; Codex carries them in content.
+      pending: { ...readQuestion(event.toolInput ?? event.content), requestId: event.requestId ?? null },
       outcome: null,
     }
   }

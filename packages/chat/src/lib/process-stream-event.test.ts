@@ -413,3 +413,31 @@ test("backends that never send question events keep the old inferred behaviour",
   assert.equal(r.pendingQuestion, null)
   assert.equal(r.question.outcome, null, "an inferred question has no reportable outcome")
 })
+
+test("a Codex question (bare questions array in content) opens a structured card", () => {
+  const codexQuestions = [{
+    id: "db", header: "Database", question: "Which database?", isOther: true,
+    options: [{ label: "Postgres", description: "Relational" }, { label: "SQLite", description: "Embedded" }],
+  }]
+  const event: ChatEvent = {
+    type: "question", content: JSON.stringify(codexQuestions), toolName: null, toolInput: null,
+    toolResult: null, messageId: "item-1", messageUid: null, requestId: "item-1",
+  }
+  const result = processStreamEvent([], true, event, false, { pending: null, outcome: null })
+  assert.equal(result.question.pending?.requestId, "item-1")
+  assert.equal(result.question.pending?.question, "Which database?")
+  assert.deepEqual(result.question.pending?.questions, [{
+    question: "Which database?", header: "Database", multiSelect: false,
+    options: [{ label: "Postgres", description: "Relational" }, { label: "SQLite", description: "Embedded" }],
+  }])
+})
+
+test("a Codex question with no options still opens a card with the question text", () => {
+  const event: ChatEvent = {
+    type: "question", content: JSON.stringify([{ id: "name", header: "Name", question: "What should we call it?", options: null }]),
+    toolName: null, toolInput: null, toolResult: null, messageId: "item-2", messageUid: null, requestId: "item-2",
+  }
+  const result = processStreamEvent([], true, event, false, { pending: null, outcome: null })
+  assert.equal(result.question.pending?.question, "What should we call it?")
+  assert.deepEqual(result.question.pending?.questions?.[0].options, [])
+})

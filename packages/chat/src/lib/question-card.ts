@@ -25,7 +25,7 @@ export function resolveQuestionCardContent(
 ): QuestionCardContent | null {
   if (pendingQuestion) {
     return {
-      question: pendingQuestion.question || "Claude is asking a question...",
+      question: pendingQuestion.question || "The assistant is asking a question...",
       questions: pendingQuestion.questions ?? null,
     }
   }
@@ -37,7 +37,7 @@ export function resolveQuestionCardContent(
     const questions = parseStructuredQuestions(parsed)
     if (questions) {
       return {
-        question: questions[0].question || "Claude is asking a question...",
+        question: questions[0].question || "The assistant is asking a question...",
         questions,
       }
     }
