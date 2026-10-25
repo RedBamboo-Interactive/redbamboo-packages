@@ -19,8 +19,11 @@ export interface AuthBootstrapDependencies {
 export async function bootstrapAuthUser(
   dependencies: AuthBootstrapDependencies,
 ): Promise<AuthUser | null> {
+  // Called unbound, never as dependencies.fetch(...): the browser's fetch throws
+  // "Illegal invocation" when `this` is anything but the window (or undefined).
+  const { fetch } = dependencies
   const hadUserSession = dependencies.hasRenewalStamp()
-  let response = await dependencies.fetch("/auth/me", {
+  let response = await fetch("/auth/me", {
     credentials: "include",
     cache: "no-store",
   })
@@ -33,7 +36,7 @@ export async function bootstrapAuthUser(
     // call even though /auth/me has already proved the access badge unusable.
     dependencies.clearRenewalStamp()
     if ((await dependencies.renewSession()) !== "renewed") return null
-    response = await dependencies.fetch("/auth/me", {
+    response = await fetch("/auth/me", {
       credentials: "include",
       cache: "no-store",
     })

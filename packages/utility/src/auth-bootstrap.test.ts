@@ -64,6 +64,20 @@ test("failed recovery never silently downgrades a prior user to LocalDefault", a
   assert.equal(fixture.cleared(), 1)
 })
 
+test("fetch is called unbound, as the browser's window.fetch requires", async () => {
+  // window.fetch throws "Illegal invocation" when called as a method of another object.
+  const fixture = dependencies([json(200, owner)], "gone", false)
+  const unbound = fixture.deps.fetch
+  fixture.deps.fetch = function (this: unknown, url: string, init?: RequestInit) {
+    if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation")
+    return unbound(url, init)
+  }
+
+  const user = await bootstrapAuthUser(fixture.deps)
+
+  assert.deepEqual(user, owner)
+})
+
 test("an invalid access badge also forces refresh despite a recent stamp", async () => {
   const fixture = dependencies([json(401), json(200, owner)], "renewed")
 

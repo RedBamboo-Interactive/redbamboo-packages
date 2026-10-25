@@ -23,7 +23,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchUser = useCallback(async (): Promise<AuthUser | null> => {
     try {
       const current = await bootstrapAuthUser({
-        fetch,
+        fetch: (input, init) => fetch(input, init),
         hasRenewalStamp: hasSessionRenewalStamp,
         clearRenewalStamp: clearSessionRenewalStamp,
         renewSession,
