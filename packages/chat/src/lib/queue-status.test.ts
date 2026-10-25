@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { queuedMessageStatusLabel, maintenanceBlocksQueuedMessage } from "./queue-status.ts"
+import { queuedMessageStatusLabel, maintenanceBlocksQueuedMessage, queuedMessageHasNothingToShow } from "./queue-status.ts"
 import { acknowledgeRemoteMessage } from "./message-queue.ts"
 import type { QueuedMessage } from "./message-queue.ts"
 
@@ -34,4 +34,17 @@ test("delivered input cannot reacquire a maintenance blocker from late admission
   assert.equal(next.appearance, "message")
   assert.equal(next.blockedReason, undefined)
   assert.equal(next.id, pending.id)
+})
+
+test("an envelope-only internal note has nothing to show; anything a person wrote or attached does", () => {
+  const note = `<nova-context timestamp="t" input="reaction" discussion="d">
+Reactions since your last message:
+- Laurent reacted to your latest message
+</nova-context>`
+  assert.equal(queuedMessageHasNothingToShow({ text: note }), true)
+  assert.equal(queuedMessageHasNothingToShow({ text: `${note}
+And thanks!` }), false)
+  assert.equal(queuedMessageHasNothingToShow({ text: '<nova-context source="browser"><app>Nova</app><url>/x</url></nova-context>' }), false)
+  assert.equal(queuedMessageHasNothingToShow({ text: '<nova-event source="callback">done</nova-event>' }), false)
+  assert.equal(queuedMessageHasNothingToShow({ text: "", attachments: [{ id: "a", kind: "file", name: "f.txt", mediaType: "text/plain", size: 1, downloadUrl: "/f" }] }), false)
 })

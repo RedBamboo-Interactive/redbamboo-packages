@@ -1,5 +1,5 @@
 import type { QueuedMessage } from "../lib/message-queue"
-import { maintenanceBlocksQueuedMessage, queuedMessageStatusLabel } from "../lib/queue-status"
+import { maintenanceBlocksQueuedMessage, queuedMessageHasNothingToShow, queuedMessageStatusLabel } from "../lib/queue-status"
 import type { ImageAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
@@ -42,6 +42,9 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
       </div>
     )
   }
+
+  // An Agent's internal note (hidden envelope only) never was a person's message to show.
+  if (queuedMessageHasNothingToShow(item)) return null
 
   const contextData = parseContextFromMessage(item.text)
   const contextXml = contextData ? extractRawContextXml(item.text) : undefined
