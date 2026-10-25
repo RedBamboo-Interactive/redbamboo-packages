@@ -131,8 +131,14 @@ test("network error on refresh is transient", async () => {
 })
 
 test("401 on refresh but /auth/me ok does not log out", async () => {
-  const s = setup((url) => (url === "/auth/refresh" ? json(401, { error: "invalid_token" }) : json(200, { id: "u1" })))
+  let meRequest: RequestInit | undefined
+  const s = setup((url, init) => {
+    if (url === "/auth/refresh") return json(401, { error: "invalid_token" })
+    meRequest = init
+    return json(200, { id: "u1" })
+  })
   assert.equal(await s.r.renewSession(), "transient")
+  assert.equal(meRequest?.cache, "no-store")
   assert.equal(s.lost.length, 0)
 })
 

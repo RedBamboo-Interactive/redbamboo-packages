@@ -20,7 +20,10 @@ export async function bootstrapAuthUser(
   dependencies: AuthBootstrapDependencies,
 ): Promise<AuthUser | null> {
   const hadUserSession = dependencies.hasRenewalStamp()
-  let response = await dependencies.fetch("/auth/me", { credentials: "include" })
+  let response = await dependencies.fetch("/auth/me", {
+    credentials: "include",
+    cache: "no-store",
+  })
   let user = response.ok ? (await response.json()) as AuthUser : null
   const needsRecovery = hadUserSession
     && (response.status === 401 || user?.id === LOCAL_IDENTITY_ID)
@@ -30,7 +33,10 @@ export async function bootstrapAuthUser(
     // call even though /auth/me has already proved the access badge unusable.
     dependencies.clearRenewalStamp()
     if ((await dependencies.renewSession()) !== "renewed") return null
-    response = await dependencies.fetch("/auth/me", { credentials: "include" })
+    response = await dependencies.fetch("/auth/me", {
+      credentials: "include",
+      cache: "no-store",
+    })
     user = response.ok ? (await response.json()) as AuthUser : null
     if (user?.id === LOCAL_IDENTITY_ID) return null
   }

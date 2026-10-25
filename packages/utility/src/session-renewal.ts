@@ -92,7 +92,10 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
         if (res.status === 401) {
           // Another tab may have rotated the cookie; only /auth/me knows whether we are still in.
           try {
-            const me = await deps.fetch("/auth/me", { credentials: "include" })
+            const me = await deps.fetch("/auth/me", {
+              credentials: "include",
+              cache: "no-store",
+            })
             if (me.status === 401) return "gone"
             if (me.ok) {
               const user = (await me.json().catch(() => null)) as { id?: string } | null

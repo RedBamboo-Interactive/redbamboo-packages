@@ -21,6 +21,15 @@ public sealed class AuthMiddleware
     {
         var path = context.Request.Path.Value ?? "";
 
+        // Authentication state is cookie-dependent and changes during login, refresh, logout,
+        // and key rotation. A cached /auth/me response can otherwise keep an installed PWA on
+        // its pre-login LocalDefault identity after OAuth has successfully replaced the cookies.
+        if (path.StartsWith("/auth/", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers.Pragma = "no-cache";
+        }
+
         foreach (var bypass in _options.BypassPaths)
         {
             if (path.StartsWith(bypass, StringComparison.OrdinalIgnoreCase))

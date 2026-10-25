@@ -18,17 +18,19 @@ function dependencies(
   stamped = true,
 ) {
   const calls: string[] = []
+  const requests: RequestInit[] = []
   let cleared = 0
   const deps: AuthBootstrapDependencies = {
-    fetch: async (url) => {
+    fetch: async (url, init) => {
       calls.push(url)
+      requests.push(init ?? {})
       return responses.shift() ?? json(500)
     },
     hasRenewalStamp: () => stamped,
     clearRenewalStamp: () => void cleared++,
     renewSession: async () => renewal,
   }
-  return { deps, calls, cleared: () => cleared }
+  return { deps, calls, requests, cleared: () => cleared }
 }
 
 test("LocalDefault fallback restores the prior durable user session", async () => {
@@ -38,6 +40,7 @@ test("LocalDefault fallback restores the prior durable user session", async () =
 
   assert.deepEqual(user, owner)
   assert.deepEqual(fixture.calls, ["/auth/me", "/auth/me"])
+  assert.deepEqual(fixture.requests.map((request) => request.cache), ["no-store", "no-store"])
   assert.equal(fixture.cleared(), 1)
 })
 
@@ -48,6 +51,7 @@ test("LocalDefault remains available when this browser had no user session", asy
 
   assert.deepEqual(user, local)
   assert.deepEqual(fixture.calls, ["/auth/me"])
+  assert.equal(fixture.requests[0]?.cache, "no-store")
   assert.equal(fixture.cleared(), 0)
 })
 

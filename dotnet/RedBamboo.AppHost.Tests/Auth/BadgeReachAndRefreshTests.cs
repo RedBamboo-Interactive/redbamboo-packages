@@ -111,6 +111,19 @@ public class BadgeReachAndRefreshTests
     }
 
     [Fact]
+    public async Task Authentication_responses_are_never_browser_cached()
+    {
+        var (jwt, _, options) = Setup();
+        var ctx = Request(null);
+        ctx.Request.Path = "/auth/me";
+
+        await Send(jwt, options, ctx);
+
+        Assert.Equal("no-store", ctx.Response.Headers.CacheControl);
+        Assert.Equal("no-cache", ctx.Response.Headers.Pragma);
+    }
+
+    [Fact]
     public async Task Legacy_badges_without_net_keep_todays_behaviour_on_every_path()
     {
         var legacy = new JwtService(new JwtOptions { SigningKey = new string('k', 64) });
