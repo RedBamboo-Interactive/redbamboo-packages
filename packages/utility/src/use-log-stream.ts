@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import type { RemoteConnectionStore } from "./remote-connection"
 import type { LogEntry, LogFilter, LogsResponse } from "./log-types"
 import { createWebSocket } from "./create-websocket"
+import { ensureFreshSession } from "./session-renewal"
 
 export interface UseLogStreamOptions {
   store?: RemoteConnectionStore
@@ -115,6 +116,7 @@ export function useLogStream(opts?: UseLogStreamOptions): UseLogStreamReturn {
 
     const handle = createWebSocket({
       url: wsUrl,
+      beforeReconnect: ensureFreshSession,
       onEvent: (event) => {
         if (pausedRef.current || !activeRef.current) return
         if (event.type === "log.entry" && event.data) {

@@ -104,6 +104,17 @@ export { buildAppReloadUrl, reloadApp } from "./reload-app"
 export { AuthProvider, useAuth } from "./auth-provider"
 export type { AuthUser, AuthContextValue } from "./auth-types"
 
+export {
+  createSessionRenewal,
+  renewSession,
+  startSessionRenewal,
+  stopSessionRenewal,
+  ensureFreshSession,
+  installSessionFetchInterceptor,
+  uninstallSessionFetchInterceptor,
+} from "./session-renewal"
+export type { RenewalResult, SessionRenewal, SessionRenewalDeps } from "./session-renewal"
+
 export { useServiceDiscovery } from "./use-service-discovery"
 export type { ServiceManifest, CapabilityInfo, EndpointInfo, ParameterInfo, ProxyInfo } from "./use-service-discovery"
 

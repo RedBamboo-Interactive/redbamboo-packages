@@ -11,6 +11,11 @@ export interface CreateWebSocketOptions {
   onReconnect?: () => void
   onVisibilityChange?: () => void
   reconnectMs?: number
+  /**
+   * Awaited before every reconnect (not the first connect). Used to renew an expired
+   * session badge so the upgrade is not rejected. May return undefined to reconnect now.
+   */
+  beforeReconnect?: () => Promise<unknown> | undefined | void
 }
 
 export interface WebSocketHandle {
@@ -24,6 +29,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   let closed = false
   let hasConnected = false
   let lastResumeReconnectAt = 0
+  let reconnectEpoch = 0
 
   function cleanup() {
     if (ws) {
@@ -64,13 +70,31 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
     ws.onclose = () => {
       opts.onDisconnect?.()
       if (!closed) {
-        reconnectTimeout = setTimeout(connect, reconnectMs)
+        reconnectTimeout = setTimeout(reconnect, reconnectMs)
       }
     }
 
     ws.onerror = () => {
       ws?.close()
     }
+  }
+
+  function reconnect() {
+    const epoch = ++reconnectEpoch
+    let pending: Promise<unknown> | undefined | void
+    try {
+      pending = opts.beforeReconnect?.()
+    } catch {
+      pending = undefined
+    }
+    if (!pending || typeof (pending as Promise<unknown>).then !== "function") {
+      connect()
+      return
+    }
+    const go = () => {
+      if (epoch === reconnectEpoch) connect()
+    }
+    ;(pending as Promise<unknown>).then(go, go)
   }
 
   function handleVisibilityChange() {
@@ -90,7 +114,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
     const now = Date.now()
     if (now - lastResumeReconnectAt < 250) return
     lastResumeReconnectAt = now
-    connect()
+    reconnect()
   }
 
   if (typeof document !== "undefined") {
