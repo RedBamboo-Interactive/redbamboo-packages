@@ -31,7 +31,11 @@ public static class AuthEndpoints
                 <head><meta charset="utf-8"><title>Signed in</title></head>
                 <body style="font-family:system-ui;background:#262830;color:#eee;display:grid;place-items:center;min-height:100vh;margin:0">
                   <p>Signed in. You can return to RedLeaf.</p>
-                  <script>window.close()</script>
+                  <script>
+                    try { new BroadcastChannel("redsuite-auth").postMessage("complete") } catch {}
+                    try { window.opener?.postMessage("redsuite-auth-complete", window.location.origin) } catch {}
+                    window.close()
+                  </script>
                 </body>
                 </html>
                 """, "text/html"));
