@@ -9,8 +9,18 @@ public static class SigningKeyPersistence
     private static readonly SecretAddress SigningKeyAddress = SecretAddress.Bootstrap("auth", "jwt-signing-key");
     private static readonly SecretAddress GoogleSecretAddress = SecretAddress.Bootstrap("google-oauth", "client-secret");
 
-    public static string EnsureSigningKey(string configDir)
+    /// <summary>
+    /// Legacy mode only. On a machine that has run in vault mode, or where the LeafVault service is
+    /// installed, the shared key is retired for good: this refuses rather than read or regenerate it, so
+    /// a vault outage can never turn into a silent new HS256 key.
+    /// </summary>
+    public static string EnsureSigningKey(string configDir, Func<bool>? serviceRegistered = null)
     {
+        if (Vault.BadgeSigningBootstrap.HasVaultModeMarker(configDir)
+            || (serviceRegistered ?? Vault.BadgeSigningBootstrap.IsVaultServiceRegistered)())
+            throw new InvalidOperationException(
+                "The shared badge key is retired on this machine: Leaf Vault signs badges. Start Leaf Vault instead of creating a key.");
+
         var existing = LoadSigningKey(configDir);
         if (existing is not null)
             return existing;
@@ -21,8 +31,10 @@ public static class SigningKeyPersistence
         return key;
     }
 
+    /// <summary>The shared key, or null when there is none or this machine has moved to vault mode.</summary>
     public static string? LoadSigningKey(string configDir)
     {
+        if (Vault.BadgeSigningBootstrap.HasVaultModeMarker(configDir)) return null;
         var store = PortableSecretStores.ForDirectory(configDir);
         var protectedValue = store.Read(SigningKeyAddress);
         if (protectedValue is not null) return protectedValue;
