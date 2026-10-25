@@ -38,7 +38,6 @@ import { getAgentJobHref } from "../lib/session-resource-links"
 import { squarePosition, squareSequence, stepSquare, type SquareRef, type SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
-import { ImageReadThumbnail } from "./image-read-thumbnail"
 
 interface TaskNotification {
   taskId: string
@@ -612,16 +611,14 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
             <button
               key={`part:${i}`}
               onClick={() => handleClick(part)}
-              className={`relative w-2.5 h-2.5 overflow-hidden ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
+              className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
               style={{ backgroundColor: queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part) }}
               title={part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
               aria-label={queueStatus ? `${partLabel(part)}: ${queueStatus.label}` : part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
               data-input-message-uid={event ? part.messageUid : undefined}
               data-tool-use-id={part.toolUseId}
               data-task-status={part.task?.status}
-            >
-              <ImageReadThumbnail part={part} resolveImageSrc={resolveImageSrc} />
-            </button>,
+            />,
           ]
         })}
         {trailingOrigins.map(entry =>
@@ -779,7 +776,7 @@ export function PartModal(props: PartModalProps) {
   const background = current.task || current.children?.length ? (
     <>
       {current.task && <BackgroundTaskPanel part={current} />}
-      {!!current.children?.length && <ChildFrieze parts={current.children} onSelect={enter} resolveImageSrc={props.resolveImageSrc} />}
+      {!!current.children?.length && <ChildFrieze parts={current.children} onSelect={enter} />}
     </>
   ) : undefined
 
