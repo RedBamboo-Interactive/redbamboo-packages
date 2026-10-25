@@ -96,16 +96,5 @@ public sealed class BearerAuthMiddleware
         return !string.IsNullOrEmpty(ext);
     }
 
-    private static bool IsLocalRequest(HttpContext context)
-    {
-        if (context.Request.Headers.ContainsKey("Cf-Connecting-Ip") ||
-            context.Request.Headers.ContainsKey("Cf-Ray"))
-            return false;
-
-        var remote = context.Connection.RemoteIpAddress;
-        if (remote == null) return true;
-        if (IPAddress.IsLoopback(remote)) return true;
-        if (remote.Equals(context.Connection.LocalIpAddress)) return true;
-        return false;
-    }
+    private static bool IsLocalRequest(HttpContext context) => RequestOrigin.IsLocal(context);
 }

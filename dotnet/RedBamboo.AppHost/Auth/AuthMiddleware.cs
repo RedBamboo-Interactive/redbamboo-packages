@@ -53,6 +53,10 @@ public sealed class AuthMiddleware
         {
             if (token is null) continue;
             var principal = _jwtService.ValidateToken(token);
+            // Vault mode: a local badge (agent, service, plugin, execution) is no good on a request that came
+            // through the tunnel or from a non-loopback peer. Treated exactly like an invalid badge.
+            if (principal is not null && !RequestOrigin.BadgeReachAllows(principal, context))
+                principal = null;
             if (principal is not null)
             {
                 context.User = principal;
@@ -142,16 +146,5 @@ public sealed class AuthMiddleware
         return !string.IsNullOrEmpty(ext);
     }
 
-    private static bool IsLocalRequest(HttpContext context)
-    {
-        if (context.Request.Headers.ContainsKey("Cf-Connecting-Ip") ||
-            context.Request.Headers.ContainsKey("Cf-Ray"))
-            return false;
-
-        var remote = context.Connection.RemoteIpAddress;
-        if (remote == null) return true;
-        if (IPAddress.IsLoopback(remote)) return true;
-        if (remote.Equals(context.Connection.LocalIpAddress)) return true;
-        return false;
-    }
+    private static bool IsLocalRequest(HttpContext context) => RequestOrigin.IsLocal(context);
 }

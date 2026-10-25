@@ -38,8 +38,19 @@ public sealed class AuthenticatedHttpClientFactory
         lock (_lock)
         {
             if (userId == _currentUserId) return;
+            string token;
+            try
+            {
+                // Vault mode: a signing outage must not fail the request that merely noticed a user. Nothing
+                // is recorded, so the next authenticated request tries again.
+                token = _jwtService.GenerateAccessToken(userId, email, name, ["admin"]);
+            }
+            catch (Vault.VaultUnavailableException)
+            {
+                return;
+            }
             _currentUserId = userId;
-            _currentToken = _jwtService.GenerateAccessToken(userId, email, name, ["admin"]);
+            _currentToken = token;
             foreach (var client in _clients)
                 ApplyToken(client, _currentToken);
         }

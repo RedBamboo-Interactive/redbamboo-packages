@@ -99,7 +99,9 @@ public static class AuthEndpoints
                 var roles = user?.Roles ?? ["admin"];
                 var avatarUrl = user?.AvatarUrl ?? identity.AvatarUrl;
 
-                var accessToken = jwtService.GenerateAccessToken(userId, email, name, roles, avatarUrl);
+                string accessToken;
+                try { accessToken = jwtService.GenerateBrowserAccessToken(userId, email, name, roles, avatarUrl); }
+                catch (Vault.VaultUnavailableException) { return VaultUnavailable(); }
                 var refreshToken = jwtService.GenerateRefreshToken();
 
                 var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
@@ -114,7 +116,7 @@ public static class AuthEndpoints
                     Secure = isSecure,
                     SameSite = isSecure ? SameSiteMode.Lax : SameSiteMode.Lax,
                     Path = "/",
-                    MaxAge = options.Jwt.AccessTokenLifetime
+                    MaxAge = jwtService.BrowserAccessTokenLifetime
                 });
 
                 context.Response.Cookies.Append(options.RefreshCookieName, refreshToken, new CookieOptions
@@ -134,63 +136,9 @@ public static class AuthEndpoints
             });
 
         registry.MapPost("/auth/refresh", "Refresh access token",
-            async (HttpContext context, IRefreshTokenStore refreshTokenStore,
+            (HttpContext context, IRefreshTokenStore refreshTokenStore,
                 IUserStore userStore, JwtService jwtService, AuthOptions options) =>
-            {
-                var refreshToken = context.Request.Cookies[options.RefreshCookieName];
-                if (string.IsNullOrEmpty(refreshToken))
-                {
-                    context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
-                    return Results.Json(new { error = "no_token" }, statusCode: 401);
-                }
-
-                var validation = await refreshTokenStore.ValidateAsync(refreshToken);
-                if (validation is null)
-                {
-                    context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
-                    return Results.Json(new { error = "invalid_token" }, statusCode: 401);
-                }
-
-                var user = await userStore.FindByIdAsync(validation.UserId);
-                if (user is null)
-                {
-                    return ClearAuthCookiesAndReturn(context, options,
-                        Results.Json(new { error = "user_not_found" }, statusCode: 401));
-                }
-
-                var newAccessToken = jwtService.GenerateAccessToken(user.Id, user.Email, user.Name, user.Roles, user.AvatarUrl);
-                var newRefreshToken = jwtService.GenerateRefreshToken();
-
-                // Store the replacement before revoking the token it replaces. Revoking
-                // first means any failure past that point — a store that throws, a dropped
-                // response — leaves the client holding a cookie whose token no longer
-                // exists, and the session is dead with no way back but a re-login.
-                var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
-                await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry);
-                await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
-
-                var isSecure = context.Request.IsHttps;
-
-                context.Response.Cookies.Append(options.CookieName, newAccessToken, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = isSecure,
-                    SameSite = isSecure ? SameSiteMode.Lax : SameSiteMode.Lax,
-                    Path = "/",
-                    MaxAge = options.Jwt.AccessTokenLifetime
-                });
-
-                context.Response.Cookies.Append(options.RefreshCookieName, newRefreshToken, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = isSecure,
-                    SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
-                    Path = "/auth/refresh",
-                    MaxAge = options.Jwt.RefreshTokenLifetime
-                });
-
-                return Results.Ok(new { expiresIn = options.Jwt.AccessTokenLifetime.TotalSeconds });
-            });
+                RefreshAsync(context, refreshTokenStore, userStore, jwtService, options));
 
         registry.MapPost("/auth/logout", "Log out and clear tokens",
             async (HttpContext context, IRefreshTokenStore refreshTokenStore, AuthOptions options) =>
@@ -306,6 +254,83 @@ public static class AuthEndpoints
             })
             .WithParam("date", "string", description: "Date in YYYY-MM-DD format (defaults to today)");
     }
+
+    /// <summary>
+    /// Rotating refresh: a valid refresh cookie is swapped for a new one and a fresh browser access badge
+    /// (one hour in vault mode). The replacement is stored before the old token is revoked, so a failure
+    /// in between never leaves the browser holding a dead cookie. A revoked, expired or unknown token is
+    /// a 401 and the cookies are cleared.
+    /// </summary>
+    internal static async Task<IResult> RefreshAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
+        IUserStore userStore, JwtService jwtService, AuthOptions options)
+    {
+        var refreshToken = context.Request.Cookies[options.RefreshCookieName];
+        if (string.IsNullOrEmpty(refreshToken))
+        {
+            context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+            return Results.Json(new { error = "no_token" }, statusCode: 401);
+        }
+
+        var validation = await refreshTokenStore.ValidateAsync(refreshToken);
+        if (validation is null)
+        {
+            context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+            return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+        }
+
+        var user = await userStore.FindByIdAsync(validation.UserId);
+        if (user is null)
+        {
+            return ClearAuthCookiesAndReturn(context, options,
+                Results.Json(new { error = "user_not_found" }, statusCode: 401));
+        }
+
+        string newAccessToken;
+        try
+        {
+            // Signed before anything is stored or revoked: a vault outage leaves the session exactly as it was.
+            newAccessToken = jwtService.GenerateBrowserAccessToken(user.Id, user.Email, user.Name, user.Roles, user.AvatarUrl);
+        }
+        catch (Vault.VaultUnavailableException)
+        {
+            return VaultUnavailable();
+        }
+        var newRefreshToken = jwtService.GenerateRefreshToken();
+
+        // Store the replacement before revoking the token it replaces. Revoking
+        // first means any failure past that point — a store that throws, a dropped
+        // response — leaves the client holding a cookie whose token no longer
+        // exists, and the session is dead with no way back but a re-login.
+        var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
+        await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry);
+        await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
+
+        var isSecure = context.Request.IsHttps;
+
+        context.Response.Cookies.Append(options.CookieName, newAccessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = isSecure,
+            SameSite = isSecure ? SameSiteMode.Lax : SameSiteMode.Lax,
+            Path = "/",
+            MaxAge = jwtService.BrowserAccessTokenLifetime
+        });
+
+        context.Response.Cookies.Append(options.RefreshCookieName, newRefreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = isSecure,
+            SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
+            Path = "/auth/refresh",
+            MaxAge = options.Jwt.RefreshTokenLifetime
+        });
+
+        return Results.Ok(new { expiresIn = jwtService.BrowserAccessTokenLifetime.TotalSeconds });
+    }
+
+    /// <summary>Plain words, and a 5xx so the web client treats it as transient rather than as a logout.</summary>
+    private static IResult VaultUnavailable()
+        => Results.Json(new { error = "vault_unavailable", message = "Leaf Vault unavailable. Sign-in works again as soon as it is back." }, statusCode: 503);
 
     private static IResult ClearAuthCookiesAndReturn(HttpContext context, AuthOptions options, IResult result)
     {

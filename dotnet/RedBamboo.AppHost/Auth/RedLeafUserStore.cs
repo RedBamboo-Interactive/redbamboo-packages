@@ -12,9 +12,10 @@ public sealed class RedLeafUserStore : IUserStore
 
     public RedLeafUserStore(JwtService jwtService, PermissionDataSourceOptions options)
     {
-        var token = jwtService.GenerateAccessToken("system", "system@redsuite", "System", ["admin"]);
-        _http = new HttpClient { BaseAddress = new Uri(options.RedLeafBaseUrl.TrimEnd('/') + "/") };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+        _http = new HttpClient(new SystemAccessTokenHandler(jwtService))
+        {
+            BaseAddress = new Uri(options.RedLeafBaseUrl.TrimEnd('/') + "/"),
+        };
     }
 
     public async Task<AuthUser?> FindByProviderAsync(string provider, string providerId)

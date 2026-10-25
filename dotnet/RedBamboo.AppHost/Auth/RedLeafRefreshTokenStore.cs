@@ -14,9 +14,10 @@ public sealed class RedLeafRefreshTokenStore : IRefreshTokenStore
 
     public RedLeafRefreshTokenStore(JwtService jwtService, PermissionDataSourceOptions options)
     {
-        var token = jwtService.GenerateAccessToken("system", "system@redsuite", "System", ["admin"]);
-        _http = new HttpClient { BaseAddress = new Uri(options.RedLeafBaseUrl.TrimEnd('/') + "/") };
-        _http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+        _http = new HttpClient(new SystemAccessTokenHandler(jwtService))
+        {
+            BaseAddress = new Uri(options.RedLeafBaseUrl.TrimEnd('/') + "/"),
+        };
     }
 
     public async Task StoreAsync(string token, string userId, DateTimeOffset expiresAt)
