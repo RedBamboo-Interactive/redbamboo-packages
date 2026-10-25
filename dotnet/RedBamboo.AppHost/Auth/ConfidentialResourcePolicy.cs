@@ -6,6 +6,8 @@ namespace RedBamboo.AppHost.Auth;
 /// <summary>
 /// The small, suite-wide read boundary for resources marked confidential.
 /// Ordinary resources continue to use each application's existing permission model.
+/// A confidential resource needs a human owner; its owning agent is optional. Without one it is
+/// owner-only: its owner reads it, and no agent does.
 /// </summary>
 public sealed record ConfidentialResource(
     string? OwnerUserId,
@@ -26,14 +28,15 @@ public static class ConfidentialResourcePolicy
         ConfidentialResource resource)
     {
         if (!resource.Confidential) return true;
-        if (string.IsNullOrWhiteSpace(resource.OwnerUserId)
-            || string.IsNullOrWhiteSpace(resource.OwnerAgentId))
-            return false;
+        // No owner: nobody reads it here (only trusted infrastructure, outside this policy).
+        if (string.IsNullOrWhiteSpace(resource.OwnerUserId)) return false;
 
         if (execution is not null)
         {
             var actorId = execution.Actor.EntityId ?? execution.Actor.Id;
-            var owningAgent = execution.Actor.Kind.Equals("agent", StringComparison.OrdinalIgnoreCase)
+            // Only the owning agent, working for the owner. Without an owning agent, no agent at all.
+            var owningAgent = !string.IsNullOrWhiteSpace(resource.OwnerAgentId)
+                && execution.Actor.Kind.Equals("agent", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(actorId, resource.OwnerAgentId, StringComparison.OrdinalIgnoreCase)
                 && execution.Beneficiary.Kind.Equals("user", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(execution.Beneficiary.Id, resource.OwnerUserId,
@@ -46,6 +49,10 @@ public static class ConfidentialResourcePolicy
             StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The owner acting through the owning app's own browser token: the owner, not an agent, so it
+    /// reads an owner-only resource as the explicit owner does.
+    /// </summary>
     private static bool IsOwnerOperatedBrowserExecution(
         ExecutionIdentity execution,
         ConfidentialResource resource)
