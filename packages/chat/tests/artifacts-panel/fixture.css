@@ -1,0 +1,7 @@
+@import "tailwindcss";
+@import "../../../ui/src/tokens.css";
+@source "../../src";
+@source "../../../ui/src";
+@source "./";
+/* No chat.css on purpose: hosts such as Nova do not load it, so the panel must stand on utility classes and tokens. */
+:root[data-accent="pink"], :root.dark[data-accent="pink"] { --brand: var(--color-domain-presence); }

@@ -171,3 +171,36 @@ export { ShareDialog } from "./components/share-dialog"
 export type { ShareDialogProps } from "./components/share-dialog"
 
 export { parseMaintenanceStatus } from "./lib/maintenance-status"
+
+export { ArtifactsPanel } from "./components/artifacts-panel"
+export type { ArtifactsPanelProps } from "./components/artifacts-panel"
+export { useArtifacts } from "./hooks/use-artifacts"
+export type { ArtifactsState, UseArtifactsOptions } from "./hooks/use-artifacts"
+export { ArtifactsStore } from "./lib/artifacts-store"
+export type { ArtifactsSnapshot, ArtifactsStatus } from "./lib/artifacts-store"
+export {
+  ARTIFACT_KINDS,
+  ARTIFACT_ORIGINS,
+  ARTIFACT_TABS,
+  artifactDisplayName,
+  artifactOriginLabel,
+  compareArtifacts,
+  defaultResolveArtifactTarget,
+  groupArtifacts,
+  mergeArtifacts,
+  sortArtifacts,
+  visibleArtifacts,
+} from "./lib/artifacts"
+export type {
+  Artifact,
+  ArtifactEntityRef,
+  ArtifactFileRef,
+  ArtifactGroups,
+  ArtifactKind,
+  ArtifactLoadParams,
+  ArtifactLoader,
+  ArtifactOccurrence,
+  ArtifactOrigin,
+  ArtifactPage,
+  ArtifactTab,
+} from "./lib/artifacts"

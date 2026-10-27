@@ -21,6 +21,7 @@ import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
 import { MediaLightbox } from "./streaming-text"
+import { findFocusBlockIndex, pulseMessageHighlight } from "../lib/focus-message"
 
 // Windowed rendering: long conversations are read from the tail, so only the
 // last WINDOW blocks are mounted. Scrolling up (or the "earlier messages"
@@ -54,6 +55,7 @@ export function ChatPanel(props: ChatPanelProps) {
     isReconnecting = false,
     maintenanceStatus, maintenanceStatusUnavailable = false, hasServerSession = Boolean(sessionId),
     hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
+    focusMessageRequest, onFocusMessageResult,
     placeholder, className, header, footer,
     resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadMediaUrl, getTranscriptPayloadDownloadUrl,
     permissionMode, onTogglePlanMode, onExecutePlan,
@@ -265,6 +267,77 @@ export function ChatPanel(props: ChatPanelProps) {
     }
   }, [startIndex, sessionKey, messages.length, hasEarlierMessages])
 
+  // --- Go to message -------------------------------------------------------
+  // A controlled request: widen the render window to the block, release bottom
+  // pinning (so streaming never pulls the viewport back), centre it, pulse it.
+  // The window is only ever widened (never slid), exactly like `requestOpen`,
+  // and `snapToBottomRef` / `expandAnchorRef` are cleared because a focus is
+  // the later intent over any queued snap or anchor restore.
+  const timelineRowsRef = useRef<ReturnType<typeof projectActivityTimeline>>([])
+  const focusResultRef = useRef(onFocusMessageResult)
+  focusResultRef.current = onFocusMessageResult
+  const handledFocusRef = useRef<{ uid: string; nonce: number } | null>(null)
+  const pendingFocusRef = useRef<{ uid: string; nonce: number; index: number } | null>(null)
+  const focusSettleRef = useRef<{ index: number; until: number } | null>(null)
+
+  const centreBlock = useCallback((index: number, highlight: boolean): boolean => {
+    const scroller = scrollRef.current
+    if (!scroller) return false
+    // The block may share a rendered row (an activity frieze) with others.
+    const row = timelineRowsRef.current.find(candidate => candidate.sourceIndices.includes(index))
+    if (!row) return false
+    const nodes = scroller.querySelectorAll<HTMLElement>("[data-message-uid]")
+    const element = Array.from(nodes).find(node => node.dataset.messageUid === row.block.id)
+    if (!element) return false
+    const bounds = scroller.getBoundingClientRect()
+    const rect = element.getBoundingClientRect()
+    const delta = rect.height > bounds.height
+      ? rect.top - bounds.top - 16
+      : rect.top + rect.height / 2 - (bounds.top + bounds.height / 2)
+    scroller.scrollTop += delta
+    if (highlight) pulseMessageHighlight(element)
+    return true
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!focusMessageRequest) return
+    const handled = handledFocusRef.current
+    if (handled && handled.uid === focusMessageRequest.uid && handled.nonce === focusMessageRequest.nonce) return
+    handledFocusRef.current = { uid: focusMessageRequest.uid, nonce: focusMessageRequest.nonce }
+    pendingFocusRef.current = null
+    focusSettleRef.current = null
+
+    const { uid, nonce } = focusMessageRequest
+    const index = findFocusBlockIndex(messagesRef.current, uid)
+    if (index < 0) {
+      focusResultRef.current?.({ uid, nonce, found: false })
+      return
+    }
+    shouldAutoScroll.current = false
+    snapToBottomRef.current = false
+    expandAnchorRef.current = null
+    setShowScrollBtn(true)
+    if (index < startIndexRef.current) {
+      pendingFocusRef.current = { uid, nonce, index }
+      setStartIndex(index)
+      return
+    }
+    centreBlock(index, true)
+    focusSettleRef.current = { index, until: Date.now() + 600 }
+    focusResultRef.current?.({ uid, nonce, found: true })
+  }, [focusMessageRequest, centreBlock])
+
+  // The widened window has rendered: now the block exists in the DOM.
+  useLayoutEffect(() => {
+    const pending = pendingFocusRef.current
+    if (!pending || pending.index < startIndex) return
+    pendingFocusRef.current = null
+    shouldAutoScroll.current = false
+    centreBlock(pending.index, true)
+    focusSettleRef.current = { index: pending.index, until: Date.now() + 600 }
+    focusResultRef.current?.({ uid: pending.uid, nonce: pending.nonce, found: true })
+  }, [startIndex, centreBlock])
+
   const lastAssistantIndex = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       // Skip ambient event groups: a host can append one while a response is
@@ -301,11 +374,20 @@ export function ChatPanel(props: ChatPanelProps) {
     const scroller = scrollRef.current
     if (!content) return
 
-    const observer = new ResizeObserver(() => { scrollToEnd() })
+    const observer = new ResizeObserver(() => {
+      scrollToEnd()
+      // Late layout (images, markdown) above a freshly focused block moves it;
+      // keep it centred for a moment, until the user scrolls away.
+      const settle = focusSettleRef.current
+      if (settle && !shouldAutoScroll.current) {
+        if (Date.now() > settle.until) focusSettleRef.current = null
+        else centreBlock(settle.index, false)
+      }
+    })
     observer.observe(content)
     if (scroller) observer.observe(scroller)
     return () => observer.disconnect()
-  }, [scrollToEnd])
+  }, [scrollToEnd, centreBlock])
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
@@ -566,6 +648,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
   const timelineRows = projectActivityTimeline(visibleMessages, startIndex)
+  timelineRowsRef.current = timelineRows
   activityRowsRef.current = timelineRows
     .filter(row => row.kind === "activity")
     .map(row => ({ id: row.block.id, parts: row.block.parts }))

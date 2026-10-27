@@ -1,3 +1,12 @@
+export interface FocusMessageRequest {
+  uid: string
+  nonce: number
+}
+
+export interface FocusMessageResult extends FocusMessageRequest {
+  found: boolean
+}
+
 export interface MessageBlock {
   id: string
   role: "user" | "assistant"
@@ -644,6 +653,16 @@ export interface ChatPanelProps {
   onLoadEarlier?: () => void | Promise<void>
   /** True while an older history page is being fetched. */
   isLoadingEarlier?: boolean
+  /**
+   * Controlled "go to message" request. Each distinct `nonce` is handled once:
+   * the block whose `id` (or one of whose `inputMessageUids`) equals `uid` is
+   * rendered, scrolled to the vertical centre and briefly highlighted, and
+   * bottom pinning is released. An unloaded uid is reported through
+   * `onFocusMessageResult` with `found: false` so the host can page earlier
+   * history and request again with a new nonce.
+   */
+  focusMessageRequest?: FocusMessageRequest | null
+  onFocusMessageResult?: (result: FocusMessageResult) => void
   placeholder?: string
   className?: string
   header?: React.ReactNode

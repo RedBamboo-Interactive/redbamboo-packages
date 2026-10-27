@@ -185,6 +185,7 @@ export const ChatMessage = memo(function ChatMessage({
   const animateOnMount = useRef(animateEntrance).current
   const entranceStyle = useRef({ "--msg-enter-delay": "0ms" } as React.CSSProperties).current
   const entranceRowProps = {
+    "data-message-uid": block.id,
     "data-chat-entrance-row": animateOnMount ? "" : undefined,
     style: entranceStyle,
   }

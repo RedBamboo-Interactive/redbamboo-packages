@@ -26,6 +26,11 @@ function normalizeLocalMediaSrc(src: string): string {
   }
 }
 
+/** True for a RedLeaf asset path (`/api/assets/...` or its `/api/redleaf-asset/...` alias). */
+export function isRedLeafAssetPath(pathname: string): boolean {
+  return REDLEAF_ASSET_PATH.test(pathname)
+}
+
 export function isLoopbackHost(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, "").toLowerCase()
   return host === "localhost"

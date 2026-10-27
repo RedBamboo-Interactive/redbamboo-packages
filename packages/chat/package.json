@@ -47,6 +47,7 @@
     "test:queue-ui": "node tests/queue-presentation/run.cjs",
     "test:part-navigation": "node tests/part-navigation/run.cjs",
     "test:background-work": "node tests/background-work/run.cjs",
+    "test:artifacts-panel": "node tests/artifacts-panel/run.cjs",
     "clean": "rimraf dist"
   },
   "peerDependencies": {

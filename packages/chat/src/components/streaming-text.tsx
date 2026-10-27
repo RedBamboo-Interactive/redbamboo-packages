@@ -20,6 +20,8 @@ import { isImageUrl } from "../lib/event-image"
 import { canonicalizeLeafLinkHref, isExternalWebLink, isInternalLeafLink } from "../lib/external-web-link"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { parseLocalFileLink } from "../lib/local-file-link"
+import { isVideoSrc } from "../lib/media-kind"
+import { useVideoPoster } from "../lib/use-video-poster"
 import { isUnsafeLinkHref, remarkUserText } from "../lib/user-markdown"
 import { rehypeColorSwatches } from "../lib/color-swatch"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
@@ -32,9 +34,6 @@ type FileLinkResolver = (
 const AUTHORED_LINK_CLASS_NAME = "inline-flex max-w-full items-center gap-1 rounded-md border border-overlay-10 bg-overlay-4 px-1.5 py-0.5 font-sans text-[0.85em] text-text-secondary no-underline align-baseline transition-colors hover:border-overlay-30 hover:bg-overlay-6"
 
 // Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
-const VIDEO_EXTENSIONS = /\.(webm|mp4|mov|avi|mkv|ogg)(\?.*)?$/i
-function isVideoSrc(src?: string): boolean { return !!src && VIDEO_EXTENSIONS.test(src) }
-
 let lightboxState: { src: string; alt: string; type: "image" | "video" } | null = null
 const listeners = new Set<() => void>()
 function setLightbox(s: typeof lightboxState) { lightboxState = s; listeners.forEach(fn => fn()) }
@@ -181,49 +180,7 @@ function MarkdownLink({
 
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
   const resolved = resolveChatMediaSrc(src, resolve)
-  const [poster, setPoster] = useState<string | null>(null)
-  const environment = useUiEnvironment()
-
-  useEffect(() => {
-    if (!resolved) return
-    const video = environment.document.createElement("video")
-    video.muted = true
-    video.preload = "auto"
-    let disposed = false
-
-    const capture = () => {
-      if (disposed) return
-      try {
-        const canvas = environment.document.createElement("canvas")
-        canvas.width = 160
-        canvas.height = 160
-        const ctx = canvas.getContext("2d")
-        if (ctx) {
-          const vw = video.videoWidth || 160
-          const vh = video.videoHeight || 160
-          const scale = Math.max(160 / vw, 160 / vh)
-          const dw = vw * scale
-          const dh = vh * scale
-          ctx.drawImage(video, (160 - dw) / 2, (160 - dh) / 2, dw, dh)
-          setPoster(canvas.toDataURL("image/jpeg", 0.7))
-        }
-      } catch {}
-      video.pause()
-      video.removeAttribute("src")
-      video.load()
-    }
-
-    video.addEventListener("seeked", capture, { once: true })
-    video.addEventListener("loadeddata", () => { if (!disposed) video.currentTime = 0.1 }, { once: true })
-    video.src = resolved
-
-    return () => {
-      disposed = true
-      video.pause()
-      video.removeAttribute("src")
-      video.load()
-    }
-  }, [environment.document, resolved])
+  const poster = useVideoPoster(resolved)
 
   return (
     <button
