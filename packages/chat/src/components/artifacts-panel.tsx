@@ -152,6 +152,11 @@ function GoToMessageButton({ artifact, onJump, className }: { artifact: Artifact
 }
 
 /** Visibility of a tile's overlay action: always on touch, on hover or focus with a mouse. */
+// Hover zooms the picture slightly. The image keeps its own compositor layer at rest
+// (will-change), so starting or ending the hover never re-rasterizes it: a tile at a
+// fractional position would otherwise jump by a pixel each time the layer appeared.
+const TILE_MEDIA_CLASS = "size-full object-cover will-change-transform transition-transform duration-300 ease-out group-hover/tile:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover/tile:scale-100"
+
 const TILE_ACTION_CLASS = "absolute right-1 top-1 z-10 rounded-full bg-background/80 shadow-sm backdrop-blur-sm [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/tile:opacity-100 [@media(hover:hover)]:group-focus-within/tile:opacity-100"
 
 function UnavailableTile({ label }: { label?: string }) {
@@ -180,14 +185,14 @@ const ImageTile = memo(function ImageTile({ artifact, actions }: { artifact: Art
       data-slot="artifact-tile"
       data-kind="image"
       data-artifact-key={artifact.key}
-      className="group/tile relative aspect-square overflow-hidden rounded-lg border border-overlay-10 bg-overlay-6"
+      className="group/tile relative aspect-square overflow-hidden rounded-lg border border-overlay-10 bg-overlay-6 transition-colors duration-200 hover:border-overlay-30"
     >
       {src ? (
         <button
           type="button"
           onClick={() => actions.onOpenMedia(artifact)}
           aria-label={`Open image ${name}`}
-          className="absolute inset-0 cursor-zoom-in outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+          className="absolute inset-0 cursor-zoom-in outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <img
             src={src}
@@ -195,7 +200,7 @@ const ImageTile = memo(function ImageTile({ artifact, actions }: { artifact: Art
             loading="lazy"
             decoding="async"
             onError={() => setAttempt(current => current + 1)}
-            className="size-full object-cover"
+            className={TILE_MEDIA_CLASS}
           />
         </button>
       ) : (
@@ -218,16 +223,16 @@ const VideoTile = memo(function VideoTile({ artifact, actions }: { artifact: Art
       data-slot="artifact-tile"
       data-kind="video"
       data-artifact-key={artifact.key}
-      className="group/tile relative aspect-square overflow-hidden rounded-lg border border-overlay-10 bg-overlay-6"
+      className="group/tile relative aspect-square overflow-hidden rounded-lg border border-overlay-10 bg-overlay-6 transition-colors duration-200 hover:border-overlay-30"
     >
       {src ? (
         <button
           type="button"
           onClick={() => actions.onOpenMedia(artifact)}
           aria-label={`Play video ${name}`}
-          className="absolute inset-0 cursor-pointer outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring"
+          className="absolute inset-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
-          {poster && <img src={poster} alt="" className="size-full object-cover" />}
+          {poster && <img src={poster} alt="" className={TILE_MEDIA_CLASS} />}
           <span className="absolute inset-0 flex items-center justify-center">
             <span className="flex size-8 items-center justify-center rounded-full bg-background/70 text-contrast shadow-sm backdrop-blur-sm">
               <i className="ph-bold ph-play" aria-hidden="true" />
