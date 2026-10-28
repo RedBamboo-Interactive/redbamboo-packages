@@ -21,8 +21,8 @@ public static class OpenApiGenerator
 
         if (OperatingSystem.IsWindows())
         {
-            AddPath(paths, "/api/autostart", "get", "AutoStartGet", "Verified Windows startup registration state");
-            AddPath(paths, "/api/autostart", "put", "AutoStartSet", "Create, repair, or remove the verified Windows startup registration",
+            AddPath(paths, "/api/autostart", "get", "AutoStartGet", "Verified sign-in startup registration state; replaces a legacy boot task when that needs no approval");
+            AddPath(paths, "/api/autostart", "put", "AutoStartSet", "Create, repair, or remove the per-user sign-in startup task; removing a legacy boot task may ask for one Windows approval",
                 [new ParameterDescriptor("enabled", "boolean", Required: true, Location: ParamLocation.Body)]);
         }
 
