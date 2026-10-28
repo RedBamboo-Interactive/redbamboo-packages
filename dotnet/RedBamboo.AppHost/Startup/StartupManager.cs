@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using Microsoft.Win32;
 
@@ -13,15 +14,17 @@ namespace RedBamboo.AppHost.Startup;
 /// <summary>
 /// "Start with Windows": a per-user Task Scheduler task that starts the app when the
 /// user signs in, in their own desktop session, with their standard (non-elevated)
-/// token. A task rather than the HKCU Run key because its last run result proves the
-/// launch actually worked, and the user can create and remove it without elevation.
+/// token. A task rather than the HKCU Run key because its last run result shows when the
+/// launcher failed, and the user can create and remove it without elevation. The task
+/// passes <see cref="SignInArguments"/>, and the status is only verified once the app
+/// has recorded that a start from it finished (see StartupManager.SignInStart.cs).
 ///
 /// Earlier versions registered an S4U boot task named after the app. It ran the app
 /// in session 0, where an administrator's token is never filtered, so the launcher's
 /// restricted relaunch ran and every child process the app started was denied. That
 /// task is replaced whenever it is found.
 /// </summary>
-public static class StartupManager
+public static partial class StartupManager
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string TaskSchema = "http://schemas.microsoft.com/windows/2004/02/mit/task";
@@ -65,7 +68,7 @@ public static class StartupManager
         try
         {
             command ??= Environment.ProcessPath is { } path
-                ? new StartupLaunchCommand(path, []) : null;
+                ? new StartupLaunchCommand(path, SignInArguments) : null;
             if (command is null)
                 return StartupRegistrationStatus.Unavailable(
                     "RedLeaf could not resolve its startup executable.");
@@ -103,7 +106,7 @@ public static class StartupManager
         StartupLaunchCommand? launchCommand = null)
     {
         launchCommand ??= Environment.ProcessPath is { } processPath
-            ? new StartupLaunchCommand(processPath, [])
+            ? new StartupLaunchCommand(processPath, SignInArguments)
             : null;
         if (launchCommand is null)
             throw new InvalidOperationException(
@@ -126,13 +129,19 @@ public static class StartupManager
         string appName,
         StartupLaunchCommand command,
         string userSid)
-        => Evaluate(
+    {
+        var lastSignInStart = store.ReadSignInRecord(appName);
+        return Evaluate(
             store.Query(SignInTaskName(appName, userSid)),
             command,
             store.ExecutableExists(command.ExecutablePath),
             store.ReadRunEntry(appName),
             userSid,
-            store.Query(LegacyTaskName(appName)));
+            store.Query(LegacyTaskName(appName)),
+            lastSignInStart,
+            lastSignInStart is { Outcome: StartupSignInRecord.Starting }
+                && store.IsProcessRunning(lastSignInStart.ProcessId, lastSignInStart.ProcessStartedAt));
+    }
 
     /// <summary>
     /// Replaces a legacy boot task, or an HKCU Run entry, with the sign-in task when the
@@ -161,6 +170,7 @@ public static class StartupManager
             if (!store.ExecutableExists(command.ExecutablePath))
                 return true;
             store.Register(signInName, BuildTaskXml(appName, command, userSid));
+            store.DeleteSignInRecord(appName);
             registered = true;
         }
 
@@ -194,6 +204,8 @@ public static class StartupManager
         {
             var hadSignInTask = store.Query(signInName) is not null;
             store.Register(signInName, BuildTaskXml(appName, command, userSid));
+            // Starts of an earlier definition prove nothing about this one.
+            store.DeleteSignInRecord(appName);
 
             // Add the sign-in task first, so a refused approval never leaves the user
             // with neither registration; roll it back so both never start RedLeaf.
@@ -237,6 +249,7 @@ public static class StartupManager
             throw new InvalidOperationException(
                 "Windows did not allow RedLeaf to remove its sign-in task.");
         store.DeleteRunEntry(appName);
+        store.DeleteSignInRecord(appName);
 
         var status = Inspect(store, appName, command, userSid);
         if (status.State != "disabled")
@@ -250,7 +263,9 @@ public static class StartupManager
         bool executableExists,
         string? legacyRegistration,
         string expectedUserSid,
-        ScheduledStartupRegistration? legacyBootTask = null)
+        ScheduledStartupRegistration? legacyBootTask = null,
+        StartupSignInRecord? lastSignInStart = null,
+        bool lastSignInStartRunning = false)
     {
         if (legacyBootTask is not null)
             return legacyBootTask.Enabled
@@ -359,25 +374,41 @@ public static class StartupManager
                 "command_mismatch",
                 "The RedLeaf sign-in task points to an outdated RedLeaf launcher.");
 
-        // The task definition can be correct while the launch itself fails. Only the
-        // last real run proves that Windows actually started RedLeaf.
+        // The task definition can be correct while the start itself fails. Only a start
+        // from sign-in that the app reported as finished proves that RedLeaf works.
+        StartupRegistrationStatus Registered(bool verified, string state, string message)
+            => new(true, true, verified, state, message, lastSignInStart);
+
+        if (lastSignInStart is { Outcome: StartupSignInRecord.Failed })
+            return Registered(
+                false,
+                "last_start_failed",
+                $"RedLeaf started when you signed in to Windows, but it did not finish starting: {lastSignInStart.Reason ?? "no reason was recorded."}");
         if (registration.LastResult is { } lastResult
             && !NonFailureTaskResults.Contains(lastResult))
-            return new(
-                true,
-                true,
+            return Registered(
                 false,
                 "last_start_failed",
                 $"Windows tried to start RedLeaf when you signed in, but the startup launcher failed (result 0x{lastResult:X8}). RedLeaf is not verified to start with Windows.");
-
-        return new(
-            true,
-            true,
-            true,
-            "ready",
-            registration.LastResult is null or NeverRunTaskResult
-                ? "RedLeaf will start the next time you sign in to Windows."
-                : "RedLeaf is verified to start when you sign in to Windows.");
+        if (lastSignInStart is { Outcome: StartupSignInRecord.Starting })
+            return lastSignInStartRunning
+                ? Registered(
+                    false,
+                    "starting",
+                    "RedLeaf is starting after your Windows sign-in. It is verified once it has finished.")
+                : Registered(
+                    false,
+                    "last_start_failed",
+                    "RedLeaf started when you signed in to Windows, but it stopped before it finished starting.");
+        if (lastSignInStart is { Outcome: StartupSignInRecord.Succeeded })
+            return Registered(
+                true,
+                "ready",
+                "RedLeaf is verified: it finished starting the last time you signed in to Windows.");
+        return Registered(
+            false,
+            "not_yet_proven",
+            "RedLeaf will start the next time you sign in to Windows. It is verified once a start from sign-in has finished.");
     }
 
     internal static string BuildTaskXml(
@@ -645,6 +676,63 @@ public static class StartupManager
             key?.DeleteValue(appName, throwOnMissingValue: false);
         }
 
+        public StartupSignInRecord? ReadSignInRecord(string appName)
+        {
+            try
+            {
+                return JsonSerializer.Deserialize<StartupSignInRecord>(
+                    File.ReadAllText(SignInRecordPath(appName)), RecordJson);
+            }
+            catch (Exception error) when (error is FileNotFoundException
+                                           or DirectoryNotFoundException
+                                           or JsonException)
+            {
+                // A damaged record proves nothing; the next start from sign-in rewrites it.
+                return null;
+            }
+        }
+
+        public void WriteSignInRecord(string appName, StartupSignInRecord record)
+        {
+            var path = SignInRecordPath(appName);
+            var pending = $"{path}.{Guid.NewGuid():N}.tmp";
+            try
+            {
+                File.WriteAllText(pending, JsonSerializer.Serialize(record, RecordJson));
+                File.Move(pending, path, overwrite: true);
+            }
+            finally
+            {
+                try { File.Delete(pending); } catch { }
+            }
+        }
+
+        public void DeleteSignInRecord(string appName)
+            => File.Delete(SignInRecordPath(appName));
+
+        public bool IsProcessRunning(int processId, DateTimeOffset startedAt)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(processId);
+                return !process.HasExited
+                    && (process.StartTime.ToUniversalTime() - startedAt.UtcDateTime).Duration()
+                        < TimeSpan.FromSeconds(1);
+            }
+            catch (Exception error) when (error is ArgumentException
+                                           or InvalidOperationException
+                                           or Win32Exception)
+            {
+                return false;
+            }
+        }
+
+        private static readonly JsonSerializerOptions RecordJson =
+            new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
+        private static string SignInRecordPath(string appName)
+            => Path.Combine(ExchangeDirectory(), $"{appName}-sign-in-start.json");
+
         /// <summary>Task Scheduler may report the principal as a name instead of a SID.</summary>
         private static string? ToSid(string? value)
         {
@@ -790,6 +878,16 @@ internal interface IStartupTaskStore
     string? ReadRunEntry(string appName);
 
     void DeleteRunEntry(string appName);
+
+    StartupSignInRecord? ReadSignInRecord(string appName);
+
+    /// <summary>Replaces the record atomically, so a reader never sees half of it.</summary>
+    void WriteSignInRecord(string appName, StartupSignInRecord record);
+
+    void DeleteSignInRecord(string appName);
+
+    /// <summary>Whether that exact process (not a later one reusing its id) still runs.</summary>
+    bool IsProcessRunning(int processId, DateTimeOffset startedAt);
 }
 
 internal sealed record ScheduledStartupRegistration(
@@ -810,7 +908,8 @@ public sealed record StartupRegistrationStatus(
     bool Registered,
     bool Verified,
     string State,
-    string Message)
+    string Message,
+    StartupSignInRecord? LastSignInStart = null)
 {
     public static StartupRegistrationStatus Unavailable(
         string message)

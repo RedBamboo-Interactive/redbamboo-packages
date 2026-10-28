@@ -63,16 +63,25 @@ public sealed class StartupRegistrationTests
     }
 
     [Fact]
-    public void TaskXml_RoundTripsToAVerifiedRegistration()
+    public void TaskXml_RoundTripsToARegistrationThatStillNeedsProof()
     {
         var registration = StartupManager.ParseTaskXml(
-            StartupManager.BuildTaskXml("RedLeaf", Command, UserSid), lastResult: 0);
+            StartupManager.BuildTaskXml("RedLeaf", Command, UserSid), lastResult: 0x00041303);
 
         var status = Evaluate(registration);
 
-        Assert.Equal("ready", status.State);
-        Assert.True(status.Verified);
-        Assert.Equal("RedLeaf is verified to start when you sign in to Windows.", status.Message);
+        Assert.True(status.Enabled);
+        Assert.False(status.Verified);
+        Assert.Equal("not_yet_proven", status.State);
+    }
+
+    [Fact]
+    public void DefaultCommand_TellsTheAppItWasStartedBySignIn()
+    {
+        Assert.Equal(["--started-by", "windows-sign-in"], StartupManager.SignInArguments);
+        Assert.True(StartupManager.IsSignInStart(["launch", "--started-by", "windows-sign-in"]));
+        Assert.False(StartupManager.IsSignInStart(["launch", "--background", "true"]));
+        Assert.False(StartupManager.IsSignInStart(["--started-by"]));
     }
 
     [Fact]
@@ -83,43 +92,127 @@ public sealed class StartupRegistrationTests
         Assert.Throws<ArgumentException>(() => StartupManager.SignInTaskName(@"Red\Leaf", UserSid));
     }
 
-    [Fact]
-    public void Ready_SaysWhenTheTaskHasNotRunYet()
-    {
-        var status = Evaluate(Ready() with { LastResult = 0x00041303 });
-
-        Assert.True(status.Enabled);
-        Assert.True(status.Verified);
-        Assert.Equal("ready", status.State);
-        Assert.Equal("RedLeaf will start the next time you sign in to Windows.", status.Message);
-    }
-
     [Theory]
+    [InlineData(null)]
+    [InlineData(0x00041303)]
     [InlineData(0)]
     [InlineData(0x00041301)]
     [InlineData(0x00041325)]
     [InlineData(unchecked((int)0x8004131F))]
-    public void Ready_StaysVerifiedForNonFailureResults(int lastResult)
+    public void NoRecordedStart_IsNotYetProven(int? lastResult)
     {
+        // A launcher that exited 0 has not shown that RedLeaf finished starting.
         var status = Evaluate(Ready() with { LastResult = lastResult });
 
+        Assert.True(status.Enabled);
+        Assert.True(status.Registered);
+        Assert.False(status.Verified);
+        Assert.Equal("not_yet_proven", status.State);
+        Assert.Equal(
+            "RedLeaf will start the next time you sign in to Windows. It is verified once a start from sign-in has finished.",
+            status.Message);
+        Assert.Null(status.LastSignInStart);
+    }
+
+    [Fact]
+    public void RecordedSuccessfulStart_IsReady()
+    {
+        var record = Recorded(StartupSignInRecord.Succeeded);
+
+        var status = Evaluate(Ready(), lastSignInStart: record);
+
+        Assert.True(status.Enabled);
         Assert.True(status.Verified);
         Assert.Equal("ready", status.State);
+        Assert.Equal(
+            "RedLeaf is verified: it finished starting the last time you signed in to Windows.",
+            status.Message);
+        Assert.Equal(record, status.LastSignInStart);
+    }
+
+    [Fact]
+    public void RecordedFailedStart_IsLastStartFailedWithTheReason()
+    {
+        var record = Recorded(
+            StartupSignInRecord.Failed,
+            "PostgreSQL did not start: RedLeaf is running elevated (as administrator).");
+
+        var status = Evaluate(Ready(), lastSignInStart: record);
+
+        Assert.True(status.Enabled);
+        Assert.False(status.Verified);
+        Assert.Equal("last_start_failed", status.State);
+        Assert.Equal(
+            "RedLeaf started when you signed in to Windows, but it did not finish starting: PostgreSQL did not start: RedLeaf is running elevated (as administrator).",
+            status.Message);
+        Assert.Equal(record, status.LastSignInStart);
+    }
+
+    [Fact]
+    public void RecordedFailure_ExplainsMoreThanTheLauncherResult()
+    {
+        var status = Evaluate(
+            Ready() with { LastResult = 1 },
+            lastSignInStart: Recorded(StartupSignInRecord.Failed, "the database did not start."));
+
+        Assert.Equal("last_start_failed", status.State);
+        Assert.EndsWith("the database did not start.", status.Message);
     }
 
     [Theory]
     [InlineData(2)]
     [InlineData(unchecked((int)0xE0434352))]
     [InlineData(unchecked((int)0x800710E0))]
-    public void LastRunFailed_IsEnabledButNotVerified(int lastResult)
+    public void LauncherFailed_IsLastStartFailedEvenAfterAnEarlierSuccess(int lastResult)
     {
-        var status = Evaluate(Ready() with { LastResult = lastResult });
+        // The launcher failed before RedLeaf could record anything about this sign-in.
+        var status = Evaluate(
+            Ready() with { LastResult = lastResult },
+            lastSignInStart: Recorded(StartupSignInRecord.Succeeded));
 
         Assert.True(status.Enabled);
         Assert.True(status.Registered);
         Assert.False(status.Verified);
         Assert.Equal("last_start_failed", status.State);
         Assert.Contains($"0x{lastResult:X8}", status.Message);
+    }
+
+    [Fact]
+    public void StartStillInProgress_IsStarting()
+    {
+        var status = Evaluate(
+            Ready() with { LastResult = 0x00041301 },
+            lastSignInStart: Recorded(StartupSignInRecord.Starting),
+            lastSignInStartRunning: true);
+
+        Assert.True(status.Enabled);
+        Assert.False(status.Verified);
+        Assert.Equal("starting", status.State);
+    }
+
+    [Fact]
+    public void StartWhoseProcessEndedUnfinished_IsLastStartFailed()
+    {
+        var status = Evaluate(
+            Ready(),
+            lastSignInStart: Recorded(StartupSignInRecord.Starting),
+            lastSignInStartRunning: false);
+
+        Assert.False(status.Verified);
+        Assert.Equal("last_start_failed", status.State);
+        Assert.Contains("stopped before it finished starting", status.Message);
+    }
+
+    [Fact]
+    public void BrokenTaskContract_OutranksARecordedSuccess()
+    {
+        var status = Evaluate(
+            Ready() with { Arguments = "launch" },
+            lastSignInStart: Recorded(StartupSignInRecord.Succeeded));
+
+        Assert.False(status.Enabled);
+        Assert.False(status.Verified);
+        Assert.Equal("command_mismatch", status.State);
     }
 
     [Fact]
@@ -238,14 +331,30 @@ public sealed class StartupRegistrationTests
         ScheduledStartupRegistration? registration,
         bool executableExists = true,
         string? legacyRunEntry = null,
-        ScheduledStartupRegistration? legacyBootTask = null)
+        ScheduledStartupRegistration? legacyBootTask = null,
+        StartupSignInRecord? lastSignInStart = null,
+        bool lastSignInStartRunning = false)
         => StartupManager.Evaluate(
             registration,
             Command,
             executableExists,
             legacyRunEntry,
             UserSid,
-            legacyBootTask);
+            legacyBootTask,
+            lastSignInStart,
+            lastSignInStartRunning);
+
+    internal static StartupSignInRecord Recorded(string outcome, string? reason = null)
+    {
+        var startedAt = new DateTimeOffset(2026, 10, 28, 8, 0, 12, TimeSpan.Zero);
+        return new(
+            startedAt,
+            outcome,
+            outcome == StartupSignInRecord.Starting ? null : startedAt.AddSeconds(40),
+            reason,
+            4242,
+            startedAt.AddSeconds(-1));
+    }
 
     internal static ScheduledStartupRegistration Ready()
         => new(

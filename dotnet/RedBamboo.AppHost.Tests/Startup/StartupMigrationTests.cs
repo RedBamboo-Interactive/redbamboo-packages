@@ -20,7 +20,7 @@ public sealed class StartupMigrationTests
 
         var status = StartupManager.Enable(store, App, Command, UserSid);
 
-        Assert.Equal("ready", status.State);
+        Assert.Equal("not_yet_proven", status.State);
         Assert.True(store.Has(SignInTask));
         Assert.False(store.Has(App));
         Assert.Equal(1, store.ApprovalPrompts);
@@ -36,7 +36,7 @@ public sealed class StartupMigrationTests
 
         var status = StartupManager.Enable(store, App, Command, UserSid);
 
-        Assert.Equal("ready", status.State);
+        Assert.Equal("not_yet_proven", status.State);
         Assert.False(store.Has(App));
         Assert.Equal(0, store.ApprovalPrompts);
     }
@@ -72,15 +72,35 @@ public sealed class StartupMigrationTests
     }
 
     [Fact]
-    public void Enable_KeepsAWorkingTaskSoItsLastRunSurvives()
+    public void Enable_KeepsAWorkingTaskSoItsProofSurvives()
     {
-        var store = new FakeStartupTaskStore();
+        var store = new FakeStartupTaskStore
+        {
+            SignInRecord = StartupRegistrationTests.Recorded(StartupSignInRecord.Succeeded),
+        };
         store.AddTask(SignInTask, StartupRegistrationTests.Ready());
 
         var status = StartupManager.Enable(store, App, Command, UserSid);
 
-        Assert.Equal("RedLeaf is verified to start when you sign in to Windows.", status.Message);
+        Assert.Equal("ready", status.State);
+        Assert.True(status.Verified);
         Assert.Empty(store.Operations);
+    }
+
+    [Fact]
+    public void Enable_ForgetsStartsOfTheDefinitionItReplaces()
+    {
+        var store = new FakeStartupTaskStore
+        {
+            SignInRecord = StartupRegistrationTests.Recorded(StartupSignInRecord.Succeeded),
+        };
+        store.AddTask(SignInTask, StartupRegistrationTests.Ready() with { Arguments = "launch" });
+
+        var status = StartupManager.Enable(store, App, Command, UserSid);
+
+        Assert.Equal("not_yet_proven", status.State);
+        Assert.Null(store.SignInRecord);
+        Assert.Equal([$"register {SignInTask}", "delete sign-in record"], store.Operations);
     }
 
     [Fact]
@@ -91,7 +111,7 @@ public sealed class StartupMigrationTests
 
         var status = StartupManager.Enable(store, App, Command, UserSid);
 
-        Assert.Equal("ready", status.State);
+        Assert.Equal("not_yet_proven", status.State);
         Assert.Equal([$"register {SignInTask}"], store.Operations);
     }
 
@@ -102,7 +122,7 @@ public sealed class StartupMigrationTests
 
         var status = StartupManager.Enable(store, App, Command, UserSid);
 
-        Assert.Equal("ready", status.State);
+        Assert.Equal("not_yet_proven", status.State);
         Assert.Null(store.RunEntry);
     }
 
@@ -126,7 +146,7 @@ public sealed class StartupMigrationTests
         Assert.True(store.Has(SignInTask));
         Assert.False(store.Has(App));
         Assert.Equal(0, store.ApprovalPrompts);
-        Assert.Equal("ready", StartupManager.Inspect(store, App, Command, UserSid).State);
+        Assert.Equal("not_yet_proven", StartupManager.Inspect(store, App, Command, UserSid).State);
     }
 
     [Fact]
@@ -175,7 +195,7 @@ public sealed class StartupMigrationTests
         Assert.True(StartupManager.MigrateWithoutApproval(store, App, Command, UserSid));
 
         Assert.Null(store.RunEntry);
-        Assert.Equal("ready", StartupManager.Inspect(store, App, Command, UserSid).State);
+        Assert.Equal("not_yet_proven", StartupManager.Inspect(store, App, Command, UserSid).State);
     }
 
     [Fact]
@@ -226,6 +246,96 @@ public sealed class StartupMigrationTests
 
         Assert.True(store.Has(App));
         Assert.True(store.Has(SignInTask));
+    }
+
+    [Fact]
+    public void Disable_ForgetsTheLastStart()
+    {
+        var store = new FakeStartupTaskStore
+        {
+            SignInRecord = StartupRegistrationTests.Recorded(StartupSignInRecord.Succeeded),
+        };
+        store.AddTask(SignInTask, StartupRegistrationTests.Ready());
+
+        StartupManager.Disable(store, App, Command, UserSid);
+
+        Assert.Null(store.SignInRecord);
+    }
+
+    [Fact]
+    public void SignInStart_IsStartingUntilItReportsThenReadyOnSuccess()
+    {
+        var store = Registered();
+        var attempt = Begin(store, out var process);
+        store.RunningProcesses.Add(process);
+
+        Assert.Equal("starting", StartupManager.Inspect(store, App, Command, UserSid).State);
+
+        attempt.Succeeded();
+
+        var status = StartupManager.Inspect(store, App, Command, UserSid);
+        Assert.Equal("ready", status.State);
+        Assert.True(status.Verified);
+        Assert.Equal(StartupSignInRecord.Succeeded, status.LastSignInStart?.Outcome);
+        Assert.NotNull(status.LastSignInStart?.CompletedAt);
+    }
+
+    [Fact]
+    public void SignInStart_KeepsTheFirstOutcomeItReports()
+    {
+        var store = Registered();
+        var attempt = Begin(store, out _);
+
+        attempt.Failed("PostgreSQL did not start: RedLeaf is running elevated (as administrator).");
+        // Setup completed by hand later in the same process is not a start from sign-in.
+        attempt.Succeeded();
+
+        var status = StartupManager.Inspect(store, App, Command, UserSid);
+        Assert.Equal("last_start_failed", status.State);
+        Assert.Contains("running elevated", status.Message);
+        Assert.Equal(
+            "PostgreSQL did not start: RedLeaf is running elevated (as administrator).",
+            store.SignInRecord?.Reason);
+    }
+
+    [Fact]
+    public void SignInStart_ThatNeverReports_FailsOnceItsProcessIsGone()
+    {
+        var store = Registered();
+        Begin(store, out _);
+
+        var status = StartupManager.Inspect(store, App, Command, UserSid);
+
+        Assert.Equal("last_start_failed", status.State);
+        Assert.Contains("stopped before it finished starting", status.Message);
+    }
+
+    [Fact]
+    public void SignInStart_DoesNotProveADefinitionRegisteredWhileItRan()
+    {
+        var store = Registered();
+        var attempt = Begin(store, out _);
+        store.DeleteSignInRecord(App);
+
+        attempt.Succeeded();
+
+        Assert.Null(store.SignInRecord);
+        Assert.Equal("not_yet_proven", StartupManager.Inspect(store, App, Command, UserSid).State);
+    }
+
+    private static FakeStartupTaskStore Registered()
+    {
+        var store = new FakeStartupTaskStore();
+        store.AddTask(SignInTask, StartupRegistrationTests.Ready());
+        return store;
+    }
+
+    private static StartupSignInAttempt Begin(
+        FakeStartupTaskStore store, out (int Id, DateTimeOffset StartedAt) process)
+    {
+        process = (4242, new DateTimeOffset(2026, 10, 28, 8, 0, 11, TimeSpan.Zero));
+        return StartupManager.BeginSignInStart(
+            store, App, process.Id, process.StartedAt, process.StartedAt.AddSeconds(1));
     }
 
     private static FakeStartupTaskStore WithLegacy(bool enabled, bool needsApproval)

@@ -60,4 +60,23 @@ internal sealed class FakeStartupTaskStore : IStartupTaskStore
         if (RunEntry is not null) Operations.Add("delete run entry");
         RunEntry = null;
     }
+
+    public StartupSignInRecord? SignInRecord { get; set; }
+
+    /// <summary>Processes still running, by id and start time.</summary>
+    public HashSet<(int Id, DateTimeOffset StartedAt)> RunningProcesses { get; } = [];
+
+    public StartupSignInRecord? ReadSignInRecord(string appName) => SignInRecord;
+
+    public void WriteSignInRecord(string appName, StartupSignInRecord record)
+        => SignInRecord = record;
+
+    public void DeleteSignInRecord(string appName)
+    {
+        if (SignInRecord is not null) Operations.Add("delete sign-in record");
+        SignInRecord = null;
+    }
+
+    public bool IsProcessRunning(int processId, DateTimeOffset startedAt)
+        => RunningProcesses.Contains((processId, startedAt));
 }
