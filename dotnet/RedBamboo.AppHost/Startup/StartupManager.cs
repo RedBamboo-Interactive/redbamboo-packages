@@ -10,12 +10,25 @@ using Microsoft.Win32;
 
 namespace RedBamboo.AppHost.Startup;
 
+/// <summary>
+/// "Start with Windows": a per-user Task Scheduler task that starts the app when the
+/// user signs in, in their own desktop session, with their standard (non-elevated)
+/// token. A task rather than the HKCU Run key because its last run result proves the
+/// launch actually worked, and the user can create and remove it without elevation.
+///
+/// Earlier versions registered an S4U boot task named after the app. It ran the app
+/// in session 0, where an administrator's token is never filtered, so the launcher's
+/// restricted relaunch ran and every child process the app started was denied. That
+/// task is replaced whenever it is found.
+/// </summary>
 public static class StartupManager
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string TaskSchema = "http://schemas.microsoft.com/windows/2004/02/mit/task";
     private const int FileNotFoundHResult = unchecked((int)0x80070002);
     private const int TaskNotFoundHResult = unchecked((int)0x8004130F);
+    private const int AccessDeniedHResult = unchecked((int)0x80070005);
+    private const int NeverRunTaskResult = 0x00041303;
 
     // Task Scheduler results that do not mean the launcher failed: running, never run,
     // queued, ended by the user, or a trigger ignored because an instance was running.
@@ -23,18 +36,29 @@ public static class StartupManager
     [
         0,
         0x00041301,
-        0x00041303,
+        NeverRunTaskResult,
         0x00041325,
         0x00041306,
         unchecked((int)0x8004131F),
     ];
 
+    private static readonly Lock Gate = new();
+
+    // Apps whose legacy registration a status read could not replace without approval,
+    // so later reads do not retry (and churn the sign-in task) on every refresh.
+    private static readonly HashSet<string> LegacyMigrationDeferred =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public static bool IsEnabled(string appName)
         => GetStatus(appName).Enabled;
 
     public static void RemoveLegacySignInRegistration(string appName)
-        => RemoveLegacyRegistration(appName);
+        => new WindowsStartupTaskStore().DeleteRunEntry(appName);
 
+    /// <summary>
+    /// Reads the registration. A legacy boot task is replaced on the way when that needs
+    /// no administrator approval; otherwise the status says it is still there.
+    /// </summary>
     public static StartupRegistrationStatus GetStatus(
         string appName, StartupLaunchCommand? command = null)
     {
@@ -46,15 +70,25 @@ public static class StartupManager
                 return StartupRegistrationStatus.Unavailable(
                     "RedLeaf could not resolve its startup executable.");
 
-            var userSid = WindowsIdentity.GetCurrent().User?.Value
-                ?? throw new InvalidOperationException(
-                    "RedLeaf could not resolve the current Windows user.");
-            return Evaluate(
-                QueryTask(appName),
-                command,
-                File.Exists(command.ExecutablePath),
-                GetLegacyRegistration(appName),
-                userSid);
+            var store = new WindowsStartupTaskStore();
+            var userSid = CurrentUserSid();
+            lock (Gate)
+            {
+                if (!LegacyMigrationDeferred.Contains(appName))
+                {
+                    try
+                    {
+                        if (!MigrateWithoutApproval(store, appName, command, userSid))
+                            LegacyMigrationDeferred.Add(appName);
+                    }
+                    catch (Exception)
+                    {
+                        // The status below still reports what is registered.
+                        LegacyMigrationDeferred.Add(appName);
+                    }
+                }
+                return Inspect(store, appName, command, userSid);
+            }
         }
         catch (Exception error)
         {
@@ -75,54 +109,139 @@ public static class StartupManager
             throw new InvalidOperationException(
                 "RedLeaf could not resolve its startup executable.");
 
-        if (enabled)
+        var store = new WindowsStartupTaskStore();
+        var userSid = CurrentUserSid();
+        lock (Gate)
         {
-            if (!File.Exists(launchCommand.ExecutablePath))
-                throw new FileNotFoundException(
-                    "The RedLeaf startup launcher is missing.",
-                    launchCommand.ExecutablePath);
-
-            var current = GetStatus(appName, launchCommand);
-            if (current.Enabled)
-            {
-                RemoveLegacyRegistration(appName);
-                return current;
-            }
-
-            var taskFile = Path.Combine(
-                ElevationExchangeDirectory(),
-                $"redleaf-startup-{Guid.NewGuid():N}.xml");
-            try
-            {
-                File.WriteAllText(
-                    taskFile,
-                    BuildTaskXml(appName, launchCommand),
-                    Encoding.Unicode);
-                RunElevatedSchtasks(
-                    "/Create", "/TN", TaskName(appName),
-                    "/XML", taskFile, "/F");
-            }
-            finally
-            {
-                try { File.Delete(taskFile); } catch { }
-            }
-
-            var status = GetStatus(appName, launchCommand);
-            if (!status.Enabled)
-                throw new InvalidOperationException(status.Message);
-            RemoveLegacyRegistration(appName);
+            var status = enabled
+                ? Enable(store, appName, launchCommand, userSid)
+                : Disable(store, appName, launchCommand, userSid);
+            LegacyMigrationDeferred.Remove(appName);
             return status;
         }
+    }
 
-        if (QueryTask(appName) is not null)
-            RunElevatedSchtasks(
-                "/Delete", "/TN", TaskName(appName), "/F");
-        RemoveLegacyRegistration(appName);
+    internal static StartupRegistrationStatus Inspect(
+        IStartupTaskStore store,
+        string appName,
+        StartupLaunchCommand command,
+        string userSid)
+        => Evaluate(
+            store.Query(SignInTaskName(appName, userSid)),
+            command,
+            store.ExecutableExists(command.ExecutablePath),
+            store.ReadRunEntry(appName),
+            userSid,
+            store.Query(LegacyTaskName(appName)));
 
-        var disabled = GetStatus(appName, launchCommand);
-        if (disabled.State != "disabled")
-            throw new InvalidOperationException(disabled.Message);
-        return disabled;
+    /// <summary>
+    /// Replaces a legacy boot task, or an HKCU Run entry, with the sign-in task when the
+    /// user's own token is allowed to remove it. An enabled legacy registration becomes an
+    /// enabled sign-in task; a disabled one is only removed. Returns false when removing the
+    /// boot task needs administrator approval; nothing is changed then.
+    /// </summary>
+    internal static bool MigrateWithoutApproval(
+        IStartupTaskStore store,
+        string appName,
+        StartupLaunchCommand command,
+        string userSid)
+    {
+        var signInName = SignInTaskName(appName, userSid);
+        var legacy = store.Query(LegacyTaskName(appName));
+        var runEntry = store.ReadRunEntry(appName);
+        if (legacy is null && runEntry is null)
+            return true;
+
+        var startsWithWindows = legacy?.Enabled == true || runEntry is not null;
+        var hadSignInTask = store.Query(signInName) is not null;
+        var registered = false;
+        if (startsWithWindows && !hadSignInTask)
+        {
+            // Without the launcher there is nothing to register; keep what starts today.
+            if (!store.ExecutableExists(command.ExecutablePath))
+                return true;
+            store.Register(signInName, BuildTaskXml(appName, command, userSid));
+            registered = true;
+        }
+
+        if (legacy is not null && !store.TryDelete(LegacyTaskName(appName)))
+        {
+            if (registered)
+                store.TryDelete(signInName);
+            return false;
+        }
+
+        store.DeleteRunEntry(appName);
+        return true;
+    }
+
+    internal static StartupRegistrationStatus Enable(
+        IStartupTaskStore store,
+        string appName,
+        StartupLaunchCommand command,
+        string userSid)
+    {
+        if (!store.ExecutableExists(command.ExecutablePath))
+            throw new FileNotFoundException(
+                "The RedLeaf startup launcher is missing.",
+                command.ExecutablePath);
+
+        var legacyName = LegacyTaskName(appName);
+        var signInName = SignInTaskName(appName, userSid);
+        var current = Inspect(store, appName, command, userSid);
+        // Re-registering a working task would erase its last run result.
+        if (!current.Enabled)
+        {
+            var hadSignInTask = store.Query(signInName) is not null;
+            store.Register(signInName, BuildTaskXml(appName, command, userSid));
+
+            // Add the sign-in task first, so a refused approval never leaves the user
+            // with neither registration; roll it back so both never start RedLeaf.
+            if (store.Query(legacyName) is not null && !store.TryDelete(legacyName))
+            {
+                try
+                {
+                    store.DeleteWithApproval(legacyName);
+                }
+                catch (Exception error)
+                {
+                    if (!hadSignInTask)
+                        store.TryDelete(signInName);
+                    throw new InvalidOperationException(
+                        $"RedLeaf kept its old boot task because Windows did not remove it: {error.Message}",
+                        error);
+                }
+            }
+        }
+
+        store.DeleteRunEntry(appName);
+        var status = Inspect(store, appName, command, userSid);
+        if (!status.Enabled)
+            throw new InvalidOperationException(status.Message);
+        return status;
+    }
+
+    internal static StartupRegistrationStatus Disable(
+        IStartupTaskStore store,
+        string appName,
+        StartupLaunchCommand command,
+        string userSid)
+    {
+        // The boot task first: if its approval is refused, nothing has changed yet.
+        var legacyName = LegacyTaskName(appName);
+        if (store.Query(legacyName) is not null && !store.TryDelete(legacyName))
+            store.DeleteWithApproval(legacyName);
+
+        var signInName = SignInTaskName(appName, userSid);
+        if (store.Query(signInName) is not null && !store.TryDelete(signInName))
+            throw new InvalidOperationException(
+                "Windows did not allow RedLeaf to remove its sign-in task.");
+        store.DeleteRunEntry(appName);
+
+        var status = Inspect(store, appName, command, userSid);
+        if (status.State != "disabled")
+            throw new InvalidOperationException(status.Message);
+        return status;
     }
 
     internal static StartupRegistrationStatus Evaluate(
@@ -130,8 +249,24 @@ public static class StartupManager
         StartupLaunchCommand expected,
         bool executableExists,
         string? legacyRegistration,
-        string expectedUserSid)
+        string expectedUserSid,
+        ScheduledStartupRegistration? legacyBootTask = null)
     {
+        if (legacyBootTask is not null)
+            return legacyBootTask.Enabled
+                ? new(
+                    false,
+                    true,
+                    false,
+                    "legacy_boot_task",
+                    "RedLeaf still has its old boot task, which starts it before you sign in, where it cannot start its database or tools. Turn this setting on to start RedLeaf when you sign in instead. Windows asks once for administrator approval to remove the old task.")
+                : new(
+                    false,
+                    true,
+                    false,
+                    "legacy_boot_task_disabled",
+                    "RedLeaf's old boot task is turned off, so RedLeaf does not start with Windows. Turn this setting on to start RedLeaf when you sign in instead. Windows asks once for administrator approval to remove the old task.");
+
         if (registration is null)
         {
             return string.IsNullOrWhiteSpace(legacyRegistration)
@@ -140,13 +275,13 @@ public static class StartupManager
                     false,
                     false,
                     "disabled",
-                    "RedLeaf will not start automatically with Windows.")
+                    "RedLeaf will not start automatically when you sign in to Windows.")
                 : new(
                     false,
                     true,
                     false,
-                    "legacy_sign_in_only",
-                    "RedLeaf is registered only for the next sign-in, not for Windows boot. Turn this setting on again to repair it.");
+                    "legacy_run_entry",
+                    "RedLeaf is registered through an older Windows startup entry that cannot be verified. Turn this setting on again to repair it.");
         }
 
         if (!registration.Enabled)
@@ -155,7 +290,7 @@ public static class StartupManager
                 true,
                 false,
                 "disabled_by_windows",
-                "Windows disabled the RedLeaf boot task. Turn this setting on again to repair it.");
+                "The RedLeaf sign-in task is turned off in Windows Task Scheduler. Turn this setting on again to repair it.");
         if (!executableExists)
             return new(
                 false,
@@ -163,34 +298,32 @@ public static class StartupManager
                 false,
                 "executable_missing",
                 "The registered RedLeaf startup launcher is missing.");
-        if (!registration.HasBootTrigger)
+        if (registration.HasBootTrigger)
             return new(
                 false,
                 true,
                 false,
-                "boot_trigger_missing",
-                "The RedLeaf startup task does not run when Windows boots.");
-        if (!registration.HasLogonTrigger)
+                "boot_trigger_present",
+                "The RedLeaf startup task also runs when Windows boots, before sign-in. Turn this setting on again to repair it.");
+        if (!registration.HasLogonTrigger
+            || !SidEquals(registration.LogonTriggerUserId, expectedUserSid))
             return new(
                 false,
                 true,
                 false,
-                "logon_fallback_missing",
-                "The RedLeaf startup task has no sign-in recovery trigger.");
+                "logon_trigger_missing",
+                "The RedLeaf startup task does not run when you sign in. Turn this setting on again to repair it.");
         if (!string.Equals(
                 registration.LogonType,
-                "S4U",
+                "InteractiveToken",
                 StringComparison.OrdinalIgnoreCase))
             return new(
                 false,
                 true,
                 false,
-                "interactive_only",
-                "The RedLeaf startup task still requires an interactive sign-in.");
-        if (!string.Equals(
-                registration.UserId,
-                expectedUserSid,
-                StringComparison.OrdinalIgnoreCase))
+                "not_interactive",
+                "The RedLeaf startup task does not run in your Windows session. Turn this setting on again to repair it.");
+        if (!SidEquals(registration.UserId, expectedUserSid))
             return new(
                 false,
                 true,
@@ -224,7 +357,7 @@ public static class StartupManager
                 true,
                 false,
                 "command_mismatch",
-                "The Windows boot task points to an outdated RedLeaf launcher.");
+                "The RedLeaf sign-in task points to an outdated RedLeaf launcher.");
 
         // The task definition can be correct while the launch itself fails. Only the
         // last real run proves that Windows actually started RedLeaf.
@@ -235,14 +368,16 @@ public static class StartupManager
                 true,
                 false,
                 "last_start_failed",
-                $"Windows tried to start RedLeaf, but the startup launcher failed (result 0x{lastResult:X8}). RedLeaf is not verified to start with Windows.");
+                $"Windows tried to start RedLeaf when you signed in, but the startup launcher failed (result 0x{lastResult:X8}). RedLeaf is not verified to start with Windows.");
 
         return new(
             true,
             true,
             true,
             "ready",
-            "RedLeaf is verified to start after Windows boots, before sign-in.");
+            registration.LastResult is null or NeverRunTaskResult
+                ? "RedLeaf will start the next time you sign in to Windows."
+                : "RedLeaf is verified to start when you sign in to Windows.");
     }
 
     internal static string BuildTaskXml(
@@ -250,10 +385,8 @@ public static class StartupManager
         StartupLaunchCommand command,
         string? userSid = null)
     {
-        _ = TaskName(appName);
-        userSid ??= WindowsIdentity.GetCurrent().User?.Value
-            ?? throw new InvalidOperationException(
-                "RedLeaf could not resolve the current Windows user.");
+        _ = LegacyTaskName(appName);
+        userSid ??= CurrentUserSid();
         var workingDirectory = Path.GetDirectoryName(command.ExecutablePath)
             ?? throw new InvalidOperationException(
                 "RedLeaf could not resolve its startup directory.");
@@ -277,25 +410,22 @@ public static class StartupManager
                     ns + "RegistrationInfo",
                     new XElement(
                         ns + "Description",
-                        $"Starts {appName} after Windows boots, before interactive sign-in, with a sign-in fallback.")),
+                        $"Starts {appName} when you sign in to Windows, in your desktop session, without administrator rights.")),
                 new XElement(
                     ns + "Triggers",
-                    new XElement(
-                        ns + "BootTrigger",
-                        new XElement(ns + "Enabled", true),
-                        new XElement(ns + "Delay", "PT30S")),
                     new XElement(
                         ns + "LogonTrigger",
                         new XElement(ns + "Enabled", true),
                         new XElement(ns + "UserId", userSid),
-                        new XElement(ns + "Delay", "PT5S"))),
+                        // Let Explorer bring up the notification area for the tray icon.
+                        new XElement(ns + "Delay", "PT10S"))),
                 new XElement(
                     ns + "Principals",
                     new XElement(
                         ns + "Principal",
                         new XAttribute("id", "Author"),
                         new XElement(ns + "UserId", userSid),
-                        new XElement(ns + "LogonType", "S4U"),
+                        new XElement(ns + "LogonType", "InteractiveToken"),
                         new XElement(ns + "RunLevel", "LeastPrivilege"))),
                 new XElement(
                     ns + "Settings",
@@ -309,21 +439,22 @@ public static class StartupManager
                         ns + "StopIfGoingOnBatteries",
                         false),
                     new XElement(ns + "AllowHardTerminate", true),
-                    new XElement(ns + "StartWhenAvailable", true),
                     new XElement(
                         ns + "RunOnlyIfNetworkAvailable",
                         false),
                     new XElement(ns + "AllowStartOnDemand", true),
                     new XElement(ns + "Enabled", true),
-                    new XElement(ns + "Hidden", true),
+                    new XElement(ns + "Hidden", false),
                     new XElement(
                         ns + "ExecutionTimeLimit",
                         "PT0S"),
-                    new XElement(ns + "Priority", 7),
+                    // The default 7 is below normal, which RedLeaf and its database
+                    // would inherit; 5 matches an app started from the desktop.
+                    new XElement(ns + "Priority", 5),
                     new XElement(
                         ns + "RestartOnFailure",
                         new XElement(ns + "Interval", "PT1M"),
-                        new XElement(ns + "Count", 5))),
+                        new XElement(ns + "Count", 3))),
                 new XElement(
                     ns + "Actions",
                     new XAttribute("Context", "Author"),
@@ -331,38 +462,11 @@ public static class StartupManager
             .ToString(SaveOptions.DisableFormatting);
     }
 
-    private static string? GetLegacyRegistration(string appName)
+    internal static ScheduledStartupRegistration ParseTaskXml(
+        string taskXml,
+        int? lastResult = null)
     {
-        using var key = Registry.CurrentUser.OpenSubKey(
-            RunKey,
-            false);
-        var value = key?.GetValue(
-            appName,
-            null,
-            RegistryValueOptions.DoNotExpandEnvironmentNames);
-        return value as string;
-    }
-
-    private static void RemoveLegacyRegistration(string appName)
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(
-            RunKey,
-            true);
-        key?.DeleteValue(appName, throwOnMissingValue: false);
-    }
-
-    private static ScheduledStartupRegistration? QueryTask(
-        string appName)
-    {
-        var result = RunSchtasks(
-            "/Query", "/TN", TaskName(appName), "/XML", "/HRESULT");
-        if (result.ExitCode is FileNotFoundHResult or TaskNotFoundHResult)
-            return null;
-        if (result.ExitCode != 0)
-            throw new InvalidOperationException(
-                $"Windows could not query the RedLeaf startup task (exit code {result.ExitCode}).");
-
-        var document = XDocument.Parse(result.StandardOutput);
+        var document = XDocument.Parse(taskXml);
         XNamespace ns = TaskSchema;
         var root = document.Root
             ?? throw new InvalidDataException(
@@ -373,6 +477,7 @@ public static class StartupManager
             ?? throw new InvalidDataException(
                 "The RedLeaf startup task has no executable action.");
         var triggers = root.Element(ns + "Triggers");
+        var logonTrigger = triggers?.Elements(ns + "LogonTrigger").FirstOrDefault();
         var principal = root
             .Element(ns + "Principals")
             ?.Elements(ns + "Principal")
@@ -389,207 +494,22 @@ public static class StartupManager
                 "false",
                 StringComparison.OrdinalIgnoreCase),
             triggers?.Elements(ns + "BootTrigger").Any() == true,
-            triggers?.Elements(ns + "LogonTrigger").Any() == true,
+            logonTrigger is not null,
             principal?.Element(ns + "UserId")?.Value,
             principal?.Element(ns + "LogonType")?.Value,
             principal?.Element(ns + "RunLevel")?.Value,
-            QueryLastTaskResult(appName));
+            lastResult,
+            logonTrigger?.Element(ns + "UserId")?.Value);
     }
 
     /// <summary>
-    /// Reads the last run result through the Task Scheduler COM API. schtasks only
-    /// exposes it in localized text, so a parse there would break on non-English Windows.
-    /// Returns null when the result cannot be read; the definition checks still apply.
+    /// One task per Windows user, so two accounts on one PC never overwrite each other's.
     /// </summary>
-    private static int? QueryLastTaskResult(string appName)
-    {
-        object? service = null;
-        object? folder = null;
-        object? task = null;
-        try
-        {
-            var serviceType = Type.GetTypeFromProgID("Schedule.Service");
-            if (serviceType is null) return null;
-            service = Activator.CreateInstance(serviceType);
-            if (service is null) return null;
-            Invoke(service, "Connect", BindingFlags.InvokeMethod);
-            folder = Invoke(service, "GetFolder", BindingFlags.InvokeMethod, @"\");
-            task = folder is null
-                ? null
-                : Invoke(folder, "GetTask", BindingFlags.InvokeMethod, TaskName(appName));
-            return task is null
-                ? null
-                : Convert.ToInt32(Invoke(task, "LastTaskResult", BindingFlags.GetProperty));
-        }
-        catch (Exception error) when (error is COMException
-                                       or TargetInvocationException
-                                       or InvalidCastException
-                                       or MissingMemberException)
-        {
-            return null;
-        }
-        finally
-        {
-            foreach (var item in new[] { task, folder, service })
-                if (item is not null && Marshal.IsComObject(item))
-                    Marshal.ReleaseComObject(item);
-        }
-    }
+    internal static string SignInTaskName(string appName, string userSid)
+        => $"{LegacyTaskName(appName)} sign-in {userSid}";
 
-    private static object? Invoke(
-        object target,
-        string member,
-        BindingFlags kind,
-        params object[] arguments)
-        => target.GetType().InvokeMember(member, kind, null, target, arguments);
-
-    /// <summary>
-    /// A directory both this process and its elevated schtasks child can reach.
-    /// TEMP is unsafe: it may sit on a subst drive, and subst drives exist only
-    /// in the logon session that created them, never in the elevated token's.
-    /// </summary>
-    private static string ElevationExchangeDirectory()
-    {
-        var localAppData = Environment.GetFolderPath(
-            Environment.SpecialFolder.LocalApplicationData,
-            Environment.SpecialFolderOption.DoNotVerify);
-        if (string.IsNullOrWhiteSpace(localAppData))
-            throw new InvalidOperationException(
-                "RedLeaf could not resolve the local application data folder.");
-        var directory = Path.Combine(localAppData, "RedBamboo", "Startup");
-        Directory.CreateDirectory(directory);
-        return directory;
-    }
-
-    internal static string BuildElevatedSchtasksCommandLine(
-        string schtasksPath,
-        string outputPath,
-        IReadOnlyList<string> arguments)
-    {
-        // cmd.exe expands % even inside quotes, so such a value cannot be passed safely.
-        static string Quote(string value)
-            => value.IndexOfAny(['"', '%']) >= 0
-                ? throw new ArgumentException(
-                    "Startup task arguments cannot contain quotes or percent signs.")
-                : $"\"{value}\"";
-
-        var command = string.Join(
-            " ",
-            arguments.Prepend(schtasksPath).Select(Quote));
-        // /s strips only the outermost quote pair, leaving every inner quote intact.
-        return $"/d /s /c \"{command} > {Quote(outputPath)} 2>&1\"";
-    }
-
-    private static void RunElevatedSchtasks(
-        params string[] arguments)
-    {
-        // An elevated ShellExecute child cannot redirect its streams back to us, so
-        // schtasks writes its own explanation to a file we read after it exits.
-        var outputFile = Path.Combine(
-            ElevationExchangeDirectory(),
-            $"redleaf-startup-{Guid.NewGuid():N}.log");
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = Path.Combine(
-                Environment.SystemDirectory,
-                "cmd.exe"),
-            Arguments = BuildElevatedSchtasksCommandLine(
-                Path.Combine(
-                    Environment.SystemDirectory,
-                    "schtasks.exe"),
-                outputFile,
-                arguments),
-            UseShellExecute = true,
-            Verb = "runas",
-            WindowStyle = ProcessWindowStyle.Hidden,
-        };
-
-        try
-        {
-            using var process = Process.Start(startInfo)
-                ?? throw new InvalidOperationException(
-                    "Windows did not start the startup-task installer.");
-            process.WaitForExit();
-            if (process.ExitCode != 0)
-            {
-                var detail = ReadElevatedOutput(outputFile);
-                throw new InvalidOperationException(
-                    string.IsNullOrEmpty(detail)
-                        ? $"Windows rejected the RedLeaf startup task (exit code {process.ExitCode})."
-                        : $"Windows rejected the RedLeaf startup task (exit code {process.ExitCode}): {detail}");
-            }
-        }
-        catch (Win32Exception error)
-            when (error.NativeErrorCode == 1223)
-        {
-            throw new InvalidOperationException(
-                "The Windows administrator approval was cancelled.",
-                error);
-        }
-        finally
-        {
-            try { File.Delete(outputFile); } catch { }
-        }
-    }
-
-    private static string ReadElevatedOutput(string outputFile)
-    {
-        try
-        {
-            // schtasks writes through cmd redirection in the console's OEM code page.
-            var text = File.ReadAllText(
-                outputFile,
-                CodePagesEncodingProvider.Instance.GetEncoding(
-                    (int)GetOEMCP()) ?? Encoding.Default);
-            return string.Join(
-                " ",
-                text.Split(
-                    ['\r', '\n'],
-                    StringSplitOptions.RemoveEmptyEntries
-                    | StringSplitOptions.TrimEntries));
-        }
-        catch (IOException)
-        {
-            return string.Empty;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return string.Empty;
-        }
-    }
-
-    [DllImport("kernel32.dll")]
-    private static extern uint GetOEMCP();
-
-    private static ProcessResult RunSchtasks(
-        params string[] arguments)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = Path.Combine(
-                Environment.SystemDirectory,
-                "schtasks.exe"),
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var argument in arguments)
-            startInfo.ArgumentList.Add(argument);
-
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException(
-                "Windows did not start the task query.");
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        return new ProcessResult(
-            process.ExitCode,
-            output,
-            error);
-    }
-
-    private static string TaskName(string appName)
+    /// <summary>The S4U boot task earlier versions registered.</summary>
+    internal static string LegacyTaskName(string appName)
     {
         if (string.IsNullOrWhiteSpace(appName)
             || appName.IndexOfAny(
@@ -599,6 +519,14 @@ public static class StartupManager
                 nameof(appName));
         return appName;
     }
+
+    private static string CurrentUserSid()
+        => WindowsIdentity.GetCurrent().User?.Value
+            ?? throw new InvalidOperationException(
+                "RedLeaf could not resolve the current Windows user.");
+
+    private static bool SidEquals(string? actual, string expected)
+        => string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
 
     private static bool PathEquals(string first, string second)
     {
@@ -611,10 +539,257 @@ public static class StartupManager
             StringComparison.OrdinalIgnoreCase);
     }
 
-    private sealed record ProcessResult(
-        int ExitCode,
-        string StandardOutput,
-        string StandardError);
+    /// <summary>Task Scheduler and the Run key, as the current Windows user sees them.</summary>
+    private sealed class WindowsStartupTaskStore : IStartupTaskStore
+    {
+        public bool ExecutableExists(string path) => File.Exists(path);
+
+        public ScheduledStartupRegistration? Query(string taskName)
+        {
+            var result = RunSchtasks(
+                "/Query", "/TN", taskName, "/XML", "/HRESULT");
+            if (result.ExitCode is FileNotFoundHResult or TaskNotFoundHResult)
+                return null;
+            if (result.ExitCode != 0)
+                throw new InvalidOperationException(
+                    $"Windows could not query the RedLeaf startup task (exit code 0x{result.ExitCode:X8}).");
+
+            var registration = ParseTaskXml(
+                result.StandardOutput,
+                QueryLastTaskResult(taskName));
+            return registration with
+            {
+                UserId = ToSid(registration.UserId),
+                LogonTriggerUserId = ToSid(registration.LogonTriggerUserId),
+            };
+        }
+
+        public void Register(string taskName, string taskXml)
+        {
+            var taskFile = Path.Combine(
+                ExchangeDirectory(),
+                $"redleaf-startup-{Guid.NewGuid():N}.xml");
+            try
+            {
+                File.WriteAllText(taskFile, taskXml, Encoding.Unicode);
+                var result = RunSchtasks(
+                    "/Create", "/TN", taskName, "/XML", taskFile, "/F", "/HRESULT");
+                if (result.ExitCode != 0)
+                    throw new InvalidOperationException(
+                        $"Windows did not create the RedLeaf sign-in task (0x{result.ExitCode:X8}): {Summarize(result)}");
+            }
+            finally
+            {
+                try { File.Delete(taskFile); } catch { }
+            }
+        }
+
+        public bool TryDelete(string taskName)
+        {
+            var result = RunSchtasks("/Delete", "/TN", taskName, "/F", "/HRESULT");
+            return result.ExitCode switch
+            {
+                0 or FileNotFoundHResult or TaskNotFoundHResult => true,
+                AccessDeniedHResult => false,
+                _ => throw new InvalidOperationException(
+                    $"Windows could not remove the RedLeaf startup task (0x{result.ExitCode:X8}): {Summarize(result)}"),
+            };
+        }
+
+        public void DeleteWithApproval(string taskName)
+        {
+            // schtasks itself is elevated, so the approval prompt names the Task Scheduler
+            // tool from Microsoft rather than a command shell.
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = Path.Combine(Environment.SystemDirectory, "schtasks.exe"),
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            foreach (var argument in new[] { "/Delete", "/TN", taskName, "/F", "/HRESULT" })
+                startInfo.ArgumentList.Add(argument);
+
+            try
+            {
+                using var process = Process.Start(startInfo)
+                    ?? throw new InvalidOperationException(
+                        "Windows did not start the startup-task removal.");
+                process.WaitForExit();
+                if (process.ExitCode is not (0 or FileNotFoundHResult or TaskNotFoundHResult))
+                    throw new InvalidOperationException(
+                        $"Windows did not remove the old RedLeaf boot task (0x{process.ExitCode:X8}).");
+            }
+            catch (Win32Exception error)
+                when (error.NativeErrorCode == 1223)
+            {
+                throw new InvalidOperationException(
+                    "The Windows administrator approval was cancelled.",
+                    error);
+            }
+        }
+
+        public string? ReadRunEntry(string appName)
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, false);
+            var value = key?.GetValue(
+                appName,
+                null,
+                RegistryValueOptions.DoNotExpandEnvironmentNames);
+            return value as string;
+        }
+
+        public void DeleteRunEntry(string appName)
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
+            key?.DeleteValue(appName, throwOnMissingValue: false);
+        }
+
+        /// <summary>Task Scheduler may report the principal as a name instead of a SID.</summary>
+        private static string? ToSid(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            try
+            {
+                return value.StartsWith("S-1-", StringComparison.OrdinalIgnoreCase)
+                    ? new SecurityIdentifier(value).Value
+                    : new NTAccount(value).Translate(typeof(SecurityIdentifier)).Value;
+            }
+            catch (SystemException)
+            {
+                return value;
+            }
+        }
+
+        /// <summary>
+        /// Reads the last run result through the Task Scheduler COM API. schtasks only
+        /// exposes it in localized text, so a parse there would break on non-English Windows.
+        /// Returns null when the result cannot be read; the definition checks still apply.
+        /// </summary>
+        private static int? QueryLastTaskResult(string taskName)
+        {
+            object? service = null;
+            object? folder = null;
+            object? task = null;
+            try
+            {
+                var serviceType = Type.GetTypeFromProgID("Schedule.Service");
+                if (serviceType is null) return null;
+                service = Activator.CreateInstance(serviceType);
+                if (service is null) return null;
+                Invoke(service, "Connect", BindingFlags.InvokeMethod);
+                folder = Invoke(service, "GetFolder", BindingFlags.InvokeMethod, @"\");
+                task = folder is null
+                    ? null
+                    : Invoke(folder, "GetTask", BindingFlags.InvokeMethod, taskName);
+                return task is null
+                    ? null
+                    : Convert.ToInt32(Invoke(task, "LastTaskResult", BindingFlags.GetProperty));
+            }
+            catch (Exception error) when (error is COMException
+                                           or TargetInvocationException
+                                           or InvalidCastException
+                                           or MissingMemberException)
+            {
+                return null;
+            }
+            finally
+            {
+                foreach (var item in new[] { task, folder, service })
+                    if (item is not null && Marshal.IsComObject(item))
+                        Marshal.ReleaseComObject(item);
+            }
+        }
+
+        private static object? Invoke(
+            object target,
+            string member,
+            BindingFlags kind,
+            params object[] arguments)
+            => target.GetType().InvokeMember(member, kind, null, target, arguments);
+
+        /// <summary>
+        /// A directory schtasks can read the task XML from. TEMP may point at a scratch
+        /// drive the RedLeaf process inherited from an agent session.
+        /// </summary>
+        private static string ExchangeDirectory()
+        {
+            var localAppData = Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData,
+                Environment.SpecialFolderOption.DoNotVerify);
+            if (string.IsNullOrWhiteSpace(localAppData))
+                throw new InvalidOperationException(
+                    "RedLeaf could not resolve the local application data folder.");
+            var directory = Path.Combine(localAppData, "RedBamboo", "Startup");
+            Directory.CreateDirectory(directory);
+            return directory;
+        }
+
+        private static string Summarize(ProcessResult result)
+            => string.Join(
+                " ",
+                (result.StandardError + "\n" + result.StandardOutput).Split(
+                    ['\r', '\n'],
+                    StringSplitOptions.RemoveEmptyEntries
+                    | StringSplitOptions.TrimEntries));
+
+        private static ProcessResult RunSchtasks(
+            params string[] arguments)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = Path.Combine(
+                    Environment.SystemDirectory,
+                    "schtasks.exe"),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            foreach (var argument in arguments)
+                startInfo.ArgumentList.Add(argument);
+
+            using var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException(
+                    "Windows did not start the task query.");
+            var output = process.StandardOutput.ReadToEndAsync();
+            var error = process.StandardError.ReadToEndAsync();
+            process.WaitForExit();
+            return new ProcessResult(
+                process.ExitCode,
+                output.Result,
+                error.Result);
+        }
+
+        private sealed record ProcessResult(
+            int ExitCode,
+            string StandardOutput,
+            string StandardError);
+    }
+}
+
+/// <summary>The Windows surfaces startup registration reads and changes.</summary>
+internal interface IStartupTaskStore
+{
+    bool ExecutableExists(string path);
+
+    ScheduledStartupRegistration? Query(string taskName);
+
+    /// <summary>Creates or replaces a task with the current user's token.</summary>
+    void Register(string taskName, string taskXml);
+
+    /// <summary>
+    /// Deletes a task with the current user's token. True when it is gone; false when
+    /// Windows requires administrator approval to delete it.
+    /// </summary>
+    bool TryDelete(string taskName);
+
+    /// <summary>Deletes a task after one Windows administrator approval prompt.</summary>
+    void DeleteWithApproval(string taskName);
+
+    string? ReadRunEntry(string appName);
+
+    void DeleteRunEntry(string appName);
 }
 
 internal sealed record ScheduledStartupRegistration(
@@ -627,7 +802,8 @@ internal sealed record ScheduledStartupRegistration(
     string? UserId,
     string? LogonType,
     string? RunLevel = null,
-    int? LastResult = null);
+    int? LastResult = null,
+    string? LogonTriggerUserId = null);
 
 public sealed record StartupRegistrationStatus(
     bool Enabled,
