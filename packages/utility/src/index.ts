@@ -42,6 +42,7 @@ export type {
   LeafPluginCommandContext,
   LeafPluginExtensionProps,
   LeafPluginSettingsPanel,
+  LeafPluginContextMenu,
 } from "./leaf-plugin"
 export { PluginExtensionSlot, registerPluginExtension } from "./plugin-extension"
 export type {

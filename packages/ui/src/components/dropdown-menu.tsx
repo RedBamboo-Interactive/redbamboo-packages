@@ -24,12 +24,14 @@ function DropdownMenuContent({
   sideOffset = 4,
   side,
   align,
+  anchor,
+  collisionPadding,
   ...props
-}: MenuPrimitive.Popup.Props & Pick<MenuPrimitive.Positioner.Props, "sideOffset" | "side" | "align">) {
+}: MenuPrimitive.Popup.Props & Pick<MenuPrimitive.Positioner.Props, "sideOffset" | "side" | "align" | "anchor" | "collisionPadding">) {
   const environment = useUiEnvironment()
   return (
     <MenuPrimitive.Portal container={environment.portalContainer}>
-      <MenuPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} className="z-50">
+      <MenuPrimitive.Positioner sideOffset={sideOffset} side={side} align={align} anchor={anchor} collisionPadding={collisionPadding} className="z-50">
         <MenuPrimitive.Popup
           data-slot="dropdown-menu-content"
           className={cn(menuPopupClassName, className)}
@@ -179,8 +181,8 @@ function DropdownMenuShortcut({
 
 function DropdownMenuSub({
   ...props
-}: MenuPrimitive.Root.Props) {
-  return <MenuPrimitive.Root data-slot="dropdown-menu-sub" {...props} />
+}: MenuPrimitive.SubmenuRoot.Props) {
+  return <MenuPrimitive.SubmenuRoot data-slot="dropdown-menu-sub" {...props} />
 }
 
 function DropdownMenuSubTrigger({

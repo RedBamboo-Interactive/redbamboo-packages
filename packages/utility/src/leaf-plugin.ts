@@ -1,4 +1,5 @@
 import type { ComponentType } from "react"
+import type { ContextMenuProvider } from "@redbamboo/ui"
 import type { Command } from "./types"
 
 /** Props handed by a host plugin to a component mounted in one of its slots. */
@@ -46,6 +47,18 @@ export interface LeafPluginSettingsPanel {
 }
 
 /**
+ * Items a plugin adds to the Leaf context menu (right-click, touch long-press).
+ * A provider with `match` owns a new kind of object; one without contributes
+ * to a kind owned elsewhere (`entity`, `link`, `image`, `selection`, or
+ * another plugin's kind), shown after the owner's items in a capped group.
+ * Rows a plugin renders itself register with `useContextTarget` instead.
+ * Ignored while the user has the Leaf context menu off.
+ */
+export interface LeafPluginContextMenu {
+  providers: ContextMenuProvider[]
+}
+
+/**
  * The frontend contract a Leaf plugin's web package exports (as `plugin`).
  * The shell lazy-imports the package, mounts `Page` when the manifest declares
  * a route, and aggregates optional contributions into their host surfaces.
@@ -76,4 +89,6 @@ export interface LeafAppPlugin {
   extensions?: Record<string, ComponentType<LeafPluginExtensionProps>>
   /** Settings tabs contributed to the kernel Settings panel. */
   settingsPanel?: LeafPluginSettingsPanel
+  /** Context-menu kind providers, registered by the shell while the Leaf context menu is on. */
+  contextMenu?: LeafPluginContextMenu
 }

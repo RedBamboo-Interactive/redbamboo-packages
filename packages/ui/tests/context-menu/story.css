@@ -1,0 +1,22 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../../src/tokens.css";
+@source "../../src";
+@source "./story.tsx";
+
+html, body, #root { height: 100%; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: system-ui, sans-serif; }
+
+/* Glyph stand-ins for the Phosphor font the host shell normally provides. */
+[class*="ph-"]::before { font-family: system-ui; font-style: normal; font-weight: 700; content: "\25aa"; }
+.ph-dots-three-vertical::before { content: "\22ee"; }
+.ph-arrow-left::before { content: "\2190"; }
+.ph-arrow-right::before { content: "\2192"; }
+.ph-arrow-clockwise::before { content: "\21bb"; }
+.ph-caret-right::before { content: "\203a"; }
+.ph-check::before { content: "\2713"; }
+
+/* Stand-in for a plugin's scoped rule, like Nova hiding Float in narrow windows. */
+[data-story-scope="plugin"] .story-plugin-only { display: none; }

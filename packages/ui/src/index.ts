@@ -153,6 +153,51 @@ export {
 
 export { ContextMenu, ContextMenuTrigger, ContextMenuContent } from "./components/context-menu"
 
+// Leaf context menu: one descriptor array renders the ⋮ row menu and the right-click menu.
+export {
+  ActionMenuItems,
+  RowActionsMenu,
+  useContextMenuConfig,
+  useContextMenuEnabled,
+  useContextTarget,
+} from "./components/action-menu"
+export type { ActionMenuItemsProps, RowActionsMenuProps } from "./components/action-menu"
+export { ContextMenuHost } from "./components/context-menu-host"
+export type { ContextMenuHostProps } from "./components/context-menu-host"
+export {
+  BUILTIN_CONTEXT_MENU_PROVIDERS,
+  CONTRIBUTION_CAP,
+  buildContextMenuSections,
+  classifyContextMenuEvent,
+  configureContextMenu,
+  copyImageToClipboard,
+  copyTextToClipboard,
+  createContextMenuRunContext,
+  getContextMenuConfig,
+  getContextMenuProviders,
+  isContextMenuSeparator,
+  normalizeContextMenuEntries,
+  registerBuiltinContextMenuProviders,
+  registerContextMenuProvider,
+  registerContextTarget,
+} from "./context-menu-core"
+export type {
+  ContextMenuCommandInfo,
+  ContextMenuConfig,
+  ContextMenuDecision,
+  ContextMenuEntries,
+  ContextMenuEntry,
+  ContextMenuItem,
+  ContextMenuProvider,
+  ContextMenuRunContext,
+  ContextMenuSection,
+  ContextMenuSeparator,
+  ContextTargetRegistration,
+  LinkSubject,
+  MediaSubject,
+  SelectionSubject,
+} from "./context-menu-core"
+
 export {
   Collapsible,
   CollapsibleTrigger,
