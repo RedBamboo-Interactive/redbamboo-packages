@@ -217,8 +217,9 @@ function CodeBlock({ node, children, style, className, ...props }: React.HTMLAtt
         data-slot="chat-code-copy"
         aria-label={copied ? "Copied" : "Copy code"}
         title={copied ? "Copied" : "Copy code"}
-        className="flex size-6 items-center justify-center rounded-md bg-overlay-6 font-sans text-xs text-text-muted transition-opacity duration-150 hover:bg-overlay-10 hover:text-contrast focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/code:opacity-100"
-        style={{ position: "absolute", top: "0.375rem", right: "0.375rem" }}
+        className="flex size-6 items-center justify-center rounded-md border border-overlay-10 font-sans text-xs text-text-muted shadow-sm transition-opacity duration-150 hover:text-contrast focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/code:opacity-100"
+        // Opaque, in the block's own colour, so long lines never show through it.
+        style={{ position: "absolute", top: "0.375rem", right: "0.375rem", zIndex: 1, background: "var(--code-bg)" }}
       >
         <i aria-hidden="true" className={copied ? "ph-bold ph-check" : "ph-bold ph-copy"} />
       </button>
