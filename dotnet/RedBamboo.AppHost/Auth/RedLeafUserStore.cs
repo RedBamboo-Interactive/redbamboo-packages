@@ -11,11 +11,16 @@ public sealed class RedLeafUserStore : IUserStore
     private readonly HttpClient _http;
 
     public RedLeafUserStore(JwtService jwtService, PermissionDataSourceOptions options)
-    {
-        _http = new HttpClient(new SystemAccessTokenHandler(jwtService))
+        : this(new HttpClient(new SystemAccessTokenHandler(jwtService))
         {
             BaseAddress = new Uri(options.RedLeafBaseUrl.TrimEnd('/') + "/"),
-        };
+        })
+    {
+    }
+
+    internal RedLeafUserStore(HttpClient http)
+    {
+        _http = http;
     }
 
     public async Task<AuthUser?> FindByProviderAsync(string provider, string providerId)
@@ -50,22 +55,24 @@ public sealed class RedLeafUserStore : IUserStore
         var existing = await FindByProviderAsync(identity.Provider, identity.ProviderId);
         if (existing is not null)
         {
-            var updatePayload = new
+            // Merge only the fields sign-in owns. A whole-data PUT would erase fields other
+            // owners keep on the User, such as a plugin's discord_user_id link. Roles stay
+            // with their administrators.
+            var loginFields = new
             {
-                name = identity.Name ?? existing.Name ?? identity.Email,
-                data = new
-                {
-                    email = identity.Email,
-                    display_name = identity.Name,
-                    avatar_url = identity.AvatarUrl,
-                    auth_provider = identity.Provider,
-                    provider_id = identity.ProviderId,
-                    roles = JsonSerializer.Serialize(existing.Roles),
-                    status = "active",
-                    last_login_at = DateTimeOffset.UtcNow.ToString("o"),
-                }
+                email = identity.Email,
+                display_name = identity.Name,
+                avatar_url = identity.AvatarUrl,
+                auth_provider = identity.Provider,
+                provider_id = identity.ProviderId,
+                status = "active",
+                last_login_at = DateTimeOffset.UtcNow.ToString("o"),
             };
-            await _http.PutAsJsonAsync($"api/entities/{existing.Id}", updatePayload);
+            await _http.PatchAsJsonAsync($"api/entities/{existing.Id}/data", loginFields);
+
+            // A name-only PUT leaves data untouched.
+            await _http.PutAsJsonAsync($"api/entities/{existing.Id}",
+                new { name = identity.Name ?? existing.Name ?? identity.Email });
 
             return existing with
             {
