@@ -42,7 +42,8 @@ export function useContextMenuEnabled(): boolean {
  */
 export function useContextTarget(
   ref: RefObject<Element | null>,
-  getItems: (ctx: ContextMenuRunContext) => ContextMenuEntries,
+  /** Return null to decline, letting an ancestor's menu show (see `ContextMenuRunContext.origin`). */
+  getItems: (ctx: ContextMenuRunContext) => ContextMenuEntries | null,
   options: { kind?: string; subject?: unknown } = {},
 ): void {
   const enabled = useContextMenuEnabled()
@@ -127,6 +128,8 @@ export interface ActionMenuItemsProps {
   entries: readonly ContextMenuEntry[]
   /** Element the actions apply to; null for a ⋮ menu. */
   target?: Element | null
+  /** Element pressed to open a context menu. */
+  origin?: Element | null
   surface?: ContextMenuRunContext["surface"]
 }
 
@@ -134,11 +137,11 @@ export interface ActionMenuItemsProps {
  * Renders item descriptors with the DropdownMenu parts, inside any menu popup.
  * The ⋮ row menu and the Leaf context menu both render through this.
  */
-export function ActionMenuItems({ entries, target = null, surface = "dropdown" }: ActionMenuItemsProps) {
+export function ActionMenuItems({ entries, target = null, origin = null, surface = "dropdown" }: ActionMenuItemsProps) {
   const environment = useUiEnvironment()
   const { resolveCommand } = useContextMenuConfig()
   const normalized = normalizeContextMenuEntries(entries, resolveCommand)
-  const ctx = () => createContextMenuRunContext({ target, surface, document: environment.document, window: environment.window })
+  const ctx = () => createContextMenuRunContext({ target, origin, surface, document: environment.document, window: environment.window })
   return <>{renderEntries(normalized, ctx)}</>
 }
 

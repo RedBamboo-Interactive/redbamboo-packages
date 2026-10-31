@@ -4,12 +4,20 @@ import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import rehypeHighlight from "rehype-highlight"
 import {
+  ActionMenuItems,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
   ImageLightbox,
+  copyTextToClipboard,
+  useContextMenuEnabled,
+  useContextTarget,
   useUiEnvironment,
+  type ContextMenuEntry,
 } from "@redbamboo/ui"
 import type { MessageBlock, MessagePart, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, TranscriptPayloadLoader, TranscriptPayloadRef, AgentDisplayInfo, ResolveAgentInfo } from "../types"
 import { ImageThumbnail, StreamingText, MarkdownRenderer } from "./streaming-text"
@@ -38,6 +46,7 @@ import { getAgentJobHref } from "../lib/session-resource-links"
 import { squarePosition, squareSequence, stepSquare, type SquareRef, type SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
+import { messageActionEntries, messageMarkdown, partActionEntries } from "../lib/chat-actions"
 
 interface TaskNotification {
   taskId: string
@@ -139,6 +148,17 @@ interface ChatMessageProps {
    */
   renderExtra?: (block: MessageBlock, index: number) => React.ReactNode
   renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode
+  /**
+   * Host items for this message's Leaf menu (Nova's React), after Copy. Passing
+   * it says the side actions are reachable from the menu, so while the menu is
+   * on a touch long-press opens the shared sheet instead of the action row.
+   */
+  getMessageActions?: (block: MessageBlock, index: number) => ContextMenuEntry[]
+  /**
+   * The whole message when this row shows one segment of it (an assistant turn
+   * split around its activity). Every segment's menu acts on the whole message.
+   */
+  actionBlock?: MessageBlock
   /** Projected segments of one canonical message should not add message spacing. */
   compactAfter?: boolean
   /** Activity rows spanning multiple canonical messages have no single owner. */
@@ -175,6 +195,8 @@ export const ChatMessage = memo(function ChatMessage({
   blockIndex = 0,
   renderExtra,
   renderSideActions,
+  getMessageActions,
+  actionBlock,
   compactAfter = false,
   showActions = true,
   turnOrigins,
@@ -197,6 +219,27 @@ export const ChatMessage = memo(function ChatMessage({
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const didFire = useRef(false)
   const actionsRef = useRef<HTMLDivElement>(null)
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [infoOpen, setInfoOpen] = useState(false)
+  const leafMenu = useContextMenuEnabled()
+  const isLiveBlock = block.role !== "user" && !!isStreaming && !!isLastAssistantBlock
+  // A person's row, the row that owns a message's rail, and every other text
+  // segment of that message have the message's menu once it has settled.
+  const messageBlock = actionBlock ?? block
+  const hasMessageActions = (block.role === "user" || showActions || !!actionBlock) && !isLiveBlock
+  const messageEntries = (): ContextMenuEntry[] => messageActionEntries({
+    markdown: messageMarkdown(messageBlock),
+    copyText: () => { void copyTextToClipboard(visibleMessageText(rowRef.current, messageBlock.id) || messageMarkdown(messageBlock), environment.document) },
+    copyMarkdown: () => { void copyTextToClipboard(messageMarkdown(messageBlock), environment.document) },
+    extra: getMessageActions?.(messageBlock, blockIndex),
+    openInfo: () => setInfoOpen(true),
+  })
+  useContextTarget(rowRef, () => hasMessageActions ? messageEntries() : null)
+  // While the Leaf menu is on, a row whose side actions are all reachable from
+  // its menu (it has none, or the host describes them) hands its long-press to
+  // the shared sheet. With the menu off, or side actions the menu cannot reach
+  // (Roleplay's edit pencil), the row keeps its own action row below.
+  const leafLongPress = leafMenu && (!showActions || !!getMessageActions || (!sideActions && !renderSideActions))
 
   const onTouchStart = useCallback(() => {
     didFire.current = false
@@ -235,7 +278,14 @@ export const ChatMessage = memo(function ChatMessage({
     return () => { clearTimeout(id); environment.document.removeEventListener("touchstart", dismiss); environment.document.removeEventListener("mousedown", dismiss) }
   }, [actionsOpen, environment.document])
 
-  const touchProps = { onTouchStart, onTouchEnd: cancelLongPress, onTouchMove: cancelLongPress, onContextMenu }
+  const touchProps = leafLongPress
+    ? { "data-leaf-long-press": "" }
+    : { onTouchStart, onTouchEnd: cancelLongPress, onTouchMove: cancelLongPress, onContextMenu }
+  const leafActionsMenu = leafMenu && hasMessageActions ? (
+    <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 has-[[data-popup-open]]:opacity-100 transition-opacity duration-150">
+      <MessageActionsMenu getEntries={messageEntries} />
+    </div>
+  ) : null
   const portraitSender = senderPresentation === "portrait"
     && block.parts.every(part => part.type === "text" || part.type === "image" || part.type === "audio")
 
@@ -306,7 +356,7 @@ export const ChatMessage = memo(function ChatMessage({
 
     return (
       <>
-      <div className={`mb-3 ${animateOnMount ? "msg-enter-user" : ""} group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
+      <div ref={rowRef} className={`mb-3 ${animateOnMount ? "msg-enter-user" : ""} group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
         {contextData && (
           <ContextSquare context={{ ...contextData, screenshot: contextScreenshot }} rawXml={contextXml} />
         )}
@@ -343,7 +393,14 @@ export const ChatMessage = memo(function ChatMessage({
                     <img src={attachment.downloadUrl} alt={attachment.name} className="max-h-48 rounded-md border border-overlay-10" />
                   </a>
                 ) : (
-                  <a key={attachment.id} href={`${attachment.downloadUrl}${attachment.downloadUrl.includes("?") ? "&" : "?"}download=true`} className="block no-underline" download={attachment.name}>
+                  <a
+                    key={attachment.id}
+                    href={`${attachment.downloadUrl}${attachment.downloadUrl.includes("?") ? "&" : "?"}download=true`}
+                    className="block no-underline"
+                    download={attachment.name}
+                    data-context-media={attachmentMediaKind(attachment.mediaType)}
+                    data-context-media-src={attachmentMediaKind(attachment.mediaType) ? attachment.downloadUrl : undefined}
+                  >
                     <AttachmentCard attachment={attachment} />
                   </a>
                 ))}
@@ -364,8 +421,9 @@ export const ChatMessage = memo(function ChatMessage({
         <div ref={actionsRef} className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex max-md:flex-row-reverse items-center max-md:gap-1 max-md:mt-1 md:absolute md:left-full md:ml-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
           {sideActionsNode}
           <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
-            <MessageMetadata block={block} inline />
+            <MessageMetadata block={block} inline open={infoOpen} onOpenChange={setInfoOpen} />
           </div>
+          {leafActionsMenu}
         </div>
         {extraNode}
       </div>
@@ -374,7 +432,6 @@ export const ChatMessage = memo(function ChatMessage({
     )
   }
 
-  const isLiveBlock = !!isStreaming && !!isLastAssistantBlock
   const groups = groupParts(block.parts, isLiveBlock)
   // A turn can start with visible text, leaving its origin alone in a row.
   if (turnOrigins?.length && !groups.some(group => group.kind === "frieze"))
@@ -387,7 +444,7 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <>
-    <div className={`${compactAfter ? "mb-0" : "mb-4"} min-w-0 group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
+    <div ref={rowRef} className={`${compactAfter ? "mb-0" : "mb-4"} min-w-0 group/msg relative`} {...entranceRowProps} data-actions={actionsOpen || undefined} {...touchProps}>
       <div className="relative max-w-full min-w-0 overflow-hidden">
         {portraitSender && portrait("left")}
         {senderName && !portraitSender && (
@@ -399,7 +456,7 @@ export const ChatMessage = memo(function ChatMessage({
         {turnOrigin && <TurnOriginMarker origin={turnOrigin} />}
         {groups.map((group, i) =>
           group.kind === "text" ? (
-            <div key={i} className="text-sm leading-relaxed font-serif markdown-body msg-enter-ai">
+            <div key={i} data-chat-assistant-text className="text-sm leading-relaxed font-serif markdown-body msg-enter-ai">
               {group.parts[0].isPartial ? (
                 <StreamingText content={group.parts[0].content} isLive resolveImageSrc={resolveImageSrc} resolveFileLink={resolveFileLink} />
               ) : (
@@ -452,9 +509,13 @@ export const ChatMessage = memo(function ChatMessage({
         <div ref={actionsRef} className="hidden group-data-[actions]/msg:!flex [&:has([data-visible])]:!flex md:!flex max-md:flex-row items-center max-md:gap-1 max-md:mt-1 md:absolute md:right-full md:mr-1.5 md:top-0 md:flex-col md:items-center md:gap-0.5">
           {sideActionsNode}
           <div className="opacity-0 [@media(hover:hover)]:group-hover/msg:opacity-100 group-data-[actions]/msg:opacity-100 transition-opacity duration-150">
-            {!isLiveBlock && <MessageMetadata block={block} inline />}
+            {!isLiveBlock && <MessageMetadata block={block} inline open={infoOpen} onOpenChange={setInfoOpen} />}
           </div>
+          {leafActionsMenu}
         </div>
+      )}
+      {leafMenu && !showActions && actionBlock && (
+        <MessageMetadata block={actionBlock} trigger={false} open={infoOpen} onOpenChange={setInfoOpen} />
       )}
       {extraNode}
     </div>
@@ -591,6 +652,23 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
   const originsBefore = (i: number) => (turnOrigins ?? []).filter(entry =>
     entry.before <= positions[i]! && entry.before > (i > 0 ? positions[i - 1]! : -1))
   const trailingOrigins = (turnOrigins ?? []).filter(entry => entry.before > (positions.at(-1) ?? -1))
+
+  // One target for the row: the pressed square picks the items; elsewhere the
+  // message's own menu answers.
+  useContextTarget(friezeRef, (ctx) => {
+    const square = ctx.origin?.closest("[data-part-index]")
+    if (!square || !friezeRef.current?.contains(square)) return null
+    const index = Number(square.getAttribute("data-part-index"))
+    const part = allParts[index]
+    if (!part) return null
+    const file = resolveFileLink ? extractToolFile(part) : null
+    return partActionEntries({
+      openDetails: () => { setMinHeight(0); select({ rowId: blockId, index }) },
+      openFile: file ? resolveFileLink?.(file.path, { line: file.line }) : undefined,
+      jobHref: part.type === "tool_use" ? getAgentJobHref(part.toolName, part.toolInput) : undefined,
+    })
+  })
+
   return (
     <>
       <div ref={friezeRef} className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5">
@@ -617,6 +695,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
               title={part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
               aria-label={queueStatus ? `${partLabel(part)}: ${queueStatus.label}` : part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
               data-input-message-uid={event ? part.messageUid : undefined}
+              data-part-index={positions[i]}
               data-tool-use-id={part.toolUseId}
               data-task-status={part.task?.status}
             />,
@@ -1200,8 +1279,18 @@ const novaContextKeys = new Set(["timestamp", "day", "device", "input", "discuss
 // Structured payloads rendered elsewhere (event modals) — not for the info dialog.
 const hiddenMetaKeys = new Set(["eventData"])
 
-function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: boolean }) {
-  const [open, setOpen] = useState(false)
+function MessageMetadata({ block, inline, trigger = true, open: openProp, onOpenChange }: {
+  block: MessageBlock
+  inline?: boolean
+  /** False renders the dialog alone, for a segment row with no rail of its own. */
+  trigger?: boolean
+  /** Controlled open state, so the message's menu can open the same dialog. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
+  const [ownOpen, setOwnOpen] = useState(false)
+  const open = openProp ?? ownOpen
+  const setOpen = onOpenChange ?? setOwnOpen
   const [showRaw, setShowRaw] = useState(false)
   const meta = block.metadata
   const novaMetaEntries = meta ? Object.entries(meta).filter(([k, v]) => novaContextKeys.has(k) && v != null) : []
@@ -1216,7 +1305,7 @@ function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: bool
 
   return (
     <>
-      <button
+      {trigger && <button
         onClick={() => setOpen(true)}
         className={inline
           ? "w-6 h-6 flex items-center justify-center rounded-full bg-overlay-4 hover:bg-overlay-8 text-text-disabled hover:text-text-muted transition-colors cursor-pointer"
@@ -1225,7 +1314,7 @@ function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: bool
         title="Message info"
       >
         <i className={inline ? "ph-light ph-info text-[11px]" : "ph-bold ph-info text-[10px] text-text-muted"} />
-      </button>
+      </button>}
 
       <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
         <DialogContent motion="snappy" className="max-w-sm max-h-[70vh] flex flex-col p-0 gap-0">
@@ -1299,6 +1388,45 @@ function MessageMetadata({ block, inline }: { block: MessageBlock; inline?: bool
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+/** Audio and video files are media to the Leaf menu (Open, Save, Copy address). */
+function attachmentMediaKind(mediaType: string): "audio" | "video" | undefined {
+  return mediaType.startsWith("audio/") ? "audio" : mediaType.startsWith("video/") ? "video" : undefined
+}
+
+/**
+ * The text a message shows, as rendered (what selecting all of it would copy),
+ * across every row its segments render in.
+ */
+function visibleMessageText(row: HTMLElement | null, messageId: string): string {
+  if (!row) return ""
+  const rows = Array.from(row.parentElement?.children ?? [row])
+    .filter(candidate => candidate.getAttribute("data-message-uid") === messageId)
+  return rows
+    .flatMap(candidate => Array.from(candidate.querySelectorAll<HTMLElement>("[data-chat-user-text], [data-chat-assistant-text]")))
+    .map(element => element.innerText.trim())
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+/** The message's ⋮ in its hover rail: the same items as its context menu. */
+function MessageActionsMenu({ getEntries }: { getEntries: () => ContextMenuEntry[] }) {
+  const [entries, setEntries] = useState<ContextMenuEntry[] | null>(null)
+  return (
+    <DropdownMenu onOpenChange={next => { if (next) setEntries(getEntries()) }}>
+      <DropdownMenuTrigger
+        className="w-6 h-6 flex items-center justify-center rounded-full bg-overlay-4 hover:bg-overlay-8 text-text-disabled hover:text-text-muted transition-colors cursor-pointer"
+        aria-label="Message actions"
+        title="Message actions"
+      >
+        <i aria-hidden="true" className="ph-bold ph-dots-three text-[11px]" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={4} data-slot="chat-message-actions">
+        {entries && <ActionMenuItems entries={entries} />}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

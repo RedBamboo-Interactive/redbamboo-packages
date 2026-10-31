@@ -4,5 +4,7 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src"],
+  // node:test files are not part of the shipped bundle and need @types/node.
+  "exclude": ["src/**/*.test.ts"]
 }

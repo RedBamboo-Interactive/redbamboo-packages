@@ -5,6 +5,7 @@ import {
   capContributions,
   classifyContextMenuEvent,
   configureContextMenu,
+  createContextMenuRunContext,
   getContextTarget,
   isTouchGestureOwned,
   normalizeContextMenuEntries,
@@ -25,8 +26,9 @@ function el(tagName, attributes = {}, extra = {}) {
     getAttribute: (name) => (name in attrs ? attrs[name] : null),
     hasAttribute: (name) => name in attrs,
     matches: (selector) => selector.split(",").some((part) => {
-      const match = part.trim().match(/^\[([\w-]+)(?:="([^"]*)")?\]$/)
-      return match ? (match[2] === undefined ? match[1] in attrs : attrs[match[1]] === match[2]) : false
+      const match = part.trim().match(/^\[([\w-]+)(?:="([^"]*)")?\](?::not\(\[([\w-]+)\]\))?$/)
+      if (!match || (match[3] && match[3] in attrs)) return false
+      return match[2] === undefined ? match[1] in attrs : attrs[match[1]] === match[2]
     }),
     ...(extra.href ? { href: extra.href } : {}),
     ...(extra.src ? { src: extra.src, currentSrc: extra.src } : {}),
@@ -88,6 +90,15 @@ test("Base UI context-menu triggers and chat rows own their touch long-press", (
   assert.equal(isTouchGestureOwned([el("button", { "data-slot": "context-menu-trigger" })]), true)
   assert.equal(isTouchGestureOwned([el("p"), el("div", { "data-message-uid": "m1" })]), true)
   assert.equal(isTouchGestureOwned([el("div", { "data-slot": "item-list-row" })]), false)
+})
+
+test("a chat row that hands its long-press to the Leaf menu is not owned", () => {
+  assert.equal(isTouchGestureOwned([el("p"), el("div", { "data-message-uid": "m1", "data-leaf-long-press": "" })]), false)
+  // The composer's send options still keep theirs inside such a row.
+  assert.equal(isTouchGestureOwned([
+    el("button", { "data-slot": "context-menu-trigger" }),
+    el("div", { "data-message-uid": "m1", "data-leaf-long-press": "" }),
+  ]), true)
 })
 
 // ── Toggle ──────────────────────────────────────────────────────────────────
@@ -180,6 +191,41 @@ test("a link that is or wraps the object is the object's own navigation", () => 
   assert.deepEqual(ids(buildContextMenuSections({ path: [el("span"), card], ctx })), ["object", "page"])
   assert.deepEqual(ids(buildContextMenuSections({ path: [el("div", { "data-entity-id": "e2" }), wrapper], ctx })), ["object", "page"])
   dispose()
+})
+
+test("a target that declines hands the menu to the next ancestor", () => {
+  const outer = el("section")
+  const inner = el("div")
+  const pressed = el("span")
+  let seen = null
+  const disposeOuter = registerContextTarget(outer, { getItems: () => [{ id: "outer", label: "Outer" }] })
+  const disposeInner = registerContextTarget(inner, { getItems: (context) => { seen = context.target; return null } })
+  const sections = buildContextMenuSections({ path: [pressed, inner, outer], ctx })
+  assert.equal(seen, inner)
+  assert.deepEqual(ids(sections), ["object", "page"])
+  assert.deepEqual(sections[0].entries.map((item) => item.id), ["outer"])
+  assert.equal(sections[0].element, outer)
+  disposeOuter()
+  disposeInner()
+})
+
+test("run contexts carry the pressed element, null by default", () => {
+  const pressed = el("span")
+  const base = { target: el("div"), surface: "context-menu", document: {}, window: fakeWindow }
+  assert.equal(createContextMenuRunContext(base).origin, null)
+  assert.equal(createContextMenuRunContext({ ...base, origin: pressed }).origin, pressed)
+})
+
+test("declared media beats the thumbnail pixels pressed", () => {
+  const poster = el("img", {}, { src: "blob:poster" })
+  const thumb = el("button", { "data-context-media": "video", "data-context-media-src": "http://127.0.0.1:18804/api/assets/clip.mp4" })
+  const sections = buildContextMenuSections({ path: [poster, thumb], ctx })
+  assert.deepEqual(ids(sections), ["video", "page"])
+  assert.equal(sections[0].element, thumb)
+  assert.deepEqual(sections[0].entries.map((item) => item.id), ["video-open", "video-save", "video-copy-url"])
+  // An unknown kind or a missing source is not media.
+  const bogus = el("div", { "data-context-media": "pdf", "data-context-media-src": "x" })
+  assert.deepEqual(ids(buildContextMenuSections({ path: [el("span"), bogus], ctx })), ["page"])
 })
 
 test("selection only when the pointer is on it", () => {

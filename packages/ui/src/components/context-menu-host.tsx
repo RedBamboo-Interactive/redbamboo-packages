@@ -42,6 +42,8 @@ interface OpenMenu {
   surface: "popup" | "sheet"
   point: Point
   anchorElement: Element | null
+  /** The element pressed, passed on to every item's run context. */
+  origin: Element | null
   sections: ResolvedSection[]
 }
 
@@ -105,7 +107,7 @@ function ActiveContextMenuHost({ pageActions = true }: ContextMenuHostProps) {
       const elements = pathElements(path)
       const target = elements[0] ?? null
       const ctx = (element: Element | null) =>
-        createContextMenuRunContext({ target: element, surface: surface === "sheet" ? "sheet" : "context-menu", document: ownerDocument, window: view })
+        createContextMenuRunContext({ target: element, origin: target, surface: surface === "sheet" ? "sheet" : "context-menu", document: ownerDocument, window: view })
       const sections = buildContextMenuSections({
         path,
         selection: selectionAt(view, target, keyboard ? null : point),
@@ -123,7 +125,7 @@ function ActiveContextMenuHost({ pageActions = true }: ContextMenuHostProps) {
         if (shown || sessionRef.current !== id) return
         shown = true
         view.clearTimeout(waitTimer)
-        setMenu({ id, surface, point, anchorElement: keyboard ? target : null, sections: resolved.slice() })
+        setMenu({ id, surface, point, anchorElement: keyboard ? target : null, origin: target, sections: resolved.slice() })
       }
       const settle = (index: number, update: (section: ResolvedSection) => ResolvedSection) => {
         resolved[index] = update(resolved[index])
@@ -329,7 +331,7 @@ function ContextMenuPopup({ menu, onClose }: { menu: OpenMenu; onClose: () => vo
             {index > 0 && <DropdownMenuSeparator />}
             {section.role === "page"
               ? <PageIconRow entries={section.entries} surface="context-menu" />
-              : <ActionMenuItems entries={section.entries} target={section.element} surface="context-menu" />}
+              : <ActionMenuItems entries={section.entries} target={section.element} origin={menu.origin} surface="context-menu" />}
           </Fragment>
         ))}
       </DropdownMenuContent>
@@ -370,7 +372,7 @@ function ContextMenuSheet({ menu, onClose }: { menu: OpenMenu; onClose: () => vo
   const [stack, setStack] = useState<{ item: ContextMenuItem; target: Element | null }[]>([])
   const environment = useUiEnvironment()
   const ctx = (target: Element | null) =>
-    createContextMenuRunContext({ target, surface: "sheet", document: environment.document, window: environment.window })
+    createContextMenuRunContext({ target, origin: menu.origin, surface: "sheet", document: environment.document, window: environment.window })
 
   const choose = (item: ContextMenuItem, target: Element | null) => {
     if (item.children?.length) {

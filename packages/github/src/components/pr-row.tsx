@@ -1,7 +1,9 @@
-import { Badge } from "@redbamboo/ui"
+import { useRef } from "react"
+import { Badge, useContextTarget } from "@redbamboo/ui"
 import type { GitHubPr, Review, HealthCheckResult, TackleRun } from "../types"
 import { useGitHub } from "../contexts/github-context"
 import { verdictIcon, tackleStatusIcon, timeAgo } from "./shared"
+import { prRowEntries } from "../lib/row-actions"
 
 interface Props {
   pr: GitHubPr
@@ -47,8 +49,17 @@ export function PrRow({
       tackle.status === "running" ||
       tackle.status === "merging")
 
+  const rowRef = useRef<HTMLTableRowElement>(null)
+  useContextTarget(rowRef, () => prRowEntries({
+    pr, review, healthCheck, tackle, onClick, onReview, onHealthCheck, onApprove, onMerge, onDismiss, onRetackle, onAdopt,
+    onClickTackle: actions.onClickTackle,
+    onClickReview: actions.onClickReview,
+    onClickHealthCheck: actions.onClickHealthCheck,
+  }))
+
   return (
     <tr
+      ref={rowRef}
       className="border-b border-overlay-6 bg-accent-yellow-a5 hover:bg-accent-yellow-a10 transition-colors cursor-pointer"
       onClick={() => onClick?.(pr)}
     >

@@ -13,7 +13,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
   cn,
+  useContextTarget,
   useEntityCardPresentation,
+  type ContextMenuEntry,
   type MediaViewerItem,
 } from "@redbamboo/ui"
 import { getEntityHref } from "@redbamboo/utility/entity-links"
@@ -37,6 +39,7 @@ import {
   type ArtifactOrigin,
   type ArtifactTab,
 } from "../lib/artifacts"
+import { artifactActionEntries } from "../lib/chat-actions"
 import { resolveEntityEmbedCardView } from "../lib/entity-embed"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { useVideoPoster } from "../lib/use-video-poster"
@@ -77,6 +80,31 @@ const TAB_ICONS: Record<ArtifactTab, string> = {
 /** The message an artifact most recently appeared in. */
 function jumpTarget(artifact: Artifact): string | null {
   return artifact.last.messageUid ?? artifact.first.messageUid ?? null
+}
+
+/** Go to message, when the host has a chat to jump to and the artifact names its message. */
+function goToMessage(artifact: Artifact, onJump?: (messageUid: string) => void): (() => void) | undefined {
+  const uid = jumpTarget(artifact)
+  return onJump && uid ? () => onJump(uid) : undefined
+}
+
+/**
+ * Registers a tile or row with the Leaf context menu. Media and links inside
+ * it add their own built-in items after these.
+ */
+function useArtifactTarget<T extends Element>(getEntries: () => ContextMenuEntry[]): React.RefObject<T | null> {
+  const ref = useRef<T | null>(null)
+  useContextTarget(ref, getEntries)
+  return ref
+}
+
+/** One element ref feeding both the context target and `useInView`. */
+function useTileRef<T extends Element>(viewRef: (node: T | null) => void, getEntries: () => ContextMenuEntry[]): (node: T | null) => void {
+  const ref = useArtifactTarget<T>(getEntries)
+  return useCallback((node: T | null) => {
+    ref.current = node
+    viewRef(node)
+  }, [ref, viewRef])
 }
 
 function useNow(intervalMs = 60_000): number {
@@ -179,12 +207,19 @@ const ImageTile = memo(function ImageTile({ artifact, actions }: { artifact: Art
   const [attempt, setAttempt] = useState(0)
   const src = sources[attempt]
   const name = artifactDisplayName(artifact)
+  const ref = useArtifactTarget<HTMLDivElement>(() => artifactActionEntries({
+    open: src ? () => actions.onOpenMedia(artifact) : undefined,
+    goToMessage: goToMessage(artifact, actions.onJump),
+  }))
 
   return (
     <div
+      ref={ref}
       data-slot="artifact-tile"
       data-kind="image"
       data-artifact-key={artifact.key}
+      data-context-media={full ? "image" : undefined}
+      data-context-media-src={full ?? undefined}
       className="group/tile relative aspect-square overflow-hidden rounded-lg border border-overlay-10 bg-overlay-6 transition-colors duration-200 hover:border-overlay-30"
     >
       {src ? (
@@ -213,9 +248,14 @@ const ImageTile = memo(function ImageTile({ artifact, actions }: { artifact: Art
 
 const VideoTile = memo(function VideoTile({ artifact, actions }: { artifact: Artifact; actions: ArtifactActions }) {
   const src = mediaSrc(artifact, actions)
-  const [ref, inView] = useInView<HTMLDivElement>()
+  const [viewRef, inView] = useInView<HTMLDivElement>()
   const poster = useVideoPoster(src ?? undefined, 256, inView)
   const name = artifactDisplayName(artifact)
+  const ref = useTileRef(viewRef, () => artifactActionEntries({
+    open: src ? () => actions.onOpenMedia(artifact) : undefined,
+    openLabel: "Play",
+    goToMessage: goToMessage(artifact, actions.onJump),
+  }))
 
   return (
     <div
@@ -223,6 +263,8 @@ const VideoTile = memo(function VideoTile({ artifact, actions }: { artifact: Art
       data-slot="artifact-tile"
       data-kind="video"
       data-artifact-key={artifact.key}
+      data-context-media={src ? "video" : undefined}
+      data-context-media-src={src ?? undefined}
       className="group/tile relative aspect-square overflow-hidden rounded-lg border border-overlay-10 bg-overlay-6 transition-colors duration-200 hover:border-overlay-30"
     >
       {src ? (
@@ -254,8 +296,9 @@ function MetaLine({ artifact, now }: { artifact: Artifact; now: number }) {
 
 const AudioRow = memo(function AudioRow({ artifact, actions }: { artifact: Artifact; actions: ArtifactActions }) {
   const src = actions.resolveTarget(artifact)
-  const [ref, inView] = useInView<HTMLDivElement>()
+  const [viewRef, inView] = useInView<HTMLDivElement>()
   const name = artifact.origin === "voice" ? artifact.title?.trim() || "Voice message" : artifactDisplayName(artifact)
+  const ref = useTileRef(viewRef, () => artifactActionEntries({ goToMessage: goToMessage(artifact, actions.onJump) }))
 
   return (
     <div
@@ -263,6 +306,8 @@ const AudioRow = memo(function AudioRow({ artifact, actions }: { artifact: Artif
       data-slot="artifact-row"
       data-kind="audio"
       data-artifact-key={artifact.key}
+      data-context-media={src ? "audio" : undefined}
+      data-context-media-src={src ?? undefined}
       className="rounded-lg border border-overlay-10 bg-overlay-4 p-2"
     >
       <div className="flex items-center gap-2">
@@ -282,15 +327,23 @@ const AudioRow = memo(function AudioRow({ artifact, actions }: { artifact: Artif
   )
 })
 
-function RowShell({ artifact, onJump, children, kind, className }: {
+function RowShell({ artifact, onJump, children, kind, className, onOpen }: {
   artifact: Artifact
   onJump?: (messageUid: string) => void
   children: ReactNode
   kind: string
   className?: string
+  /** An open action the row's link does not already offer (a repository file). */
+  onOpen?: { run: () => void; label: string }
 }) {
+  const ref = useArtifactTarget<HTMLLIElement>(() => artifactActionEntries({
+    open: onOpen?.run,
+    openLabel: onOpen?.label,
+    goToMessage: goToMessage(artifact, onJump),
+  }))
   return (
     <li
+      ref={ref}
       data-slot="artifact-row"
       data-kind={kind}
       data-artifact-key={artifact.key}
@@ -323,7 +376,7 @@ const DocumentRow = memo(function DocumentRow({ artifact, actions }: { artifact:
   )
 
   return (
-    <RowShell artifact={artifact} onJump={actions.onJump} kind="document">
+    <RowShell artifact={artifact} onJump={actions.onJump} kind="document" onOpen={fileAction ? { run: fileAction, label: "Open in editor" } : undefined}>
       {fileAction ? (
         <button type="button" onClick={fileAction} title={artifact.file?.path} aria-label={`Open ${name}`} className={cn(ROW_MAIN_CLASS, "cursor-pointer")}>{body}</button>
       ) : href ? (

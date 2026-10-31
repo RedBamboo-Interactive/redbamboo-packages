@@ -62,7 +62,7 @@ export function ChatPanel(props: ChatPanelProps) {
     enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
     prepareOutgoingMessage,
     speechBackend, handsFreeEnabled, pushToTalkKey, globalPushToTalk,
-    renderStatusLine, renderComposerInlineAction, renderComposerAttachments, renderAttachmentActions, renderMessageExtra, renderSideActions,
+    renderStatusLine, renderComposerInlineAction, renderComposerAttachments, renderAttachmentActions, renderMessageExtra, renderSideActions, getMessageActions,
     backgroundTasks, onStopBackgroundTask, hostActivity,
   } = props
   const runningBackgroundTasks = useMemo(() => filterRunningTasks(backgroundTasks), [backgroundTasks])
@@ -711,6 +711,8 @@ export function ChatPanel(props: ChatPanelProps) {
                 const block = row.block
                 const index = row.sourceIndices[row.sourceIndices.length - 1] ?? 0
                 const isLastAssistant = row.sourceIndices.includes(lastAssistantIndex)
+                // A content row from one message: its menu acts on that whole message.
+                const singleSource = row.kind === "message" && row.sourceIndices.length === 1
                 const reconcilesAnimatedOutgoing = block.role === "user" && settledUids.includes(String(block.id))
                 const senderAgent = block.senderAgentId && props.resolveAgentInfo
                   ? props.resolveAgentInfo(block.senderAgentId)
@@ -746,6 +748,8 @@ export function ChatPanel(props: ChatPanelProps) {
                     senderPresentation={props.senderPresentation}
                     renderExtra={row.ownsActions ? renderMessageExtra : undefined}
                     renderSideActions={row.ownsActions ? renderSideActions : undefined}
+                    getMessageActions={singleSource ? getMessageActions : undefined}
+                    actionBlock={singleSource ? messages[row.sourceIndices[0]] : undefined}
                     compactAfter={row.compactAfter}
                     showActions={row.ownsActions}
                     turnOrigins={row.turnOrigins}

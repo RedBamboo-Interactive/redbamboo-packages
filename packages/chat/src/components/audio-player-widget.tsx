@@ -50,7 +50,7 @@ export function AudioPlayerWidget({ src, avatarSrc }: AudioPlayerWidgetProps) {
     : "rgba(255,255,255,0.06)"
 
   return (
-    <div className="inline-block my-2">
+    <div className="inline-block my-2" data-context-media="audio" data-context-media-src={src}>
       <audio ref={audioRef} src={src} preload="metadata" />
       <button
         onClick={toggle}

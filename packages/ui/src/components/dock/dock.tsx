@@ -39,6 +39,8 @@ import {
 import { DockStore, DOCK_DEFAULT_ZONE_SIZE, type DockDragState, type DockPanelMeta, type DockSize, type DockSnapshot, type DockSurface } from "./store"
 import { HostSlot, useStableHost } from "./host-slot"
 import { ResizablePanel, ResizablePanelGroup } from "../resizable"
+import { ActionMenuItems, useContextMenuEnabled, useContextTarget } from "../action-menu"
+import { dockPanelEntries, type DockPanelEntry } from "./panel-actions"
 
 const DockStoreContext = createContext<DockStore | null>(null)
 
@@ -1133,6 +1135,8 @@ function DockGroupHeader({ store, group, snapshot }: { store: DockStore; group: 
   // narrows to 8px and the header's own gap (icon to title) follows the grip, so
   // the title moves right by the grip's slot, by design.
   const rowClass = (hasHeader ? snapshot.headerClasses.get(active) : undefined) ?? DEFAULT_HEADER_ROW
+  // A right-click on the header row (outside a tab) is the active panel's menu.
+  useContextTarget(rowRef, () => dockPanelMenuEntries(store, store.getSnapshot(), active))
   return (
     <div
       data-slot="dock-group-header"
@@ -1197,8 +1201,11 @@ function tabId(panelId: string) {
 function DockTab({ store, panelId, meta, active }: { store: DockStore; panelId: string; meta?: DockPanelMeta; active: boolean }) {
   const onPointerDown = useDragHandle(store, panelId)
   const title = meta?.title ?? panelId
+  const tabRef = useRef<HTMLDivElement>(null)
+  useContextTarget(tabRef, () => dockPanelMenuEntries(store, store.getSnapshot(), panelId))
   return (
     <div
+      ref={tabRef}
       id={tabId(panelId)}
       role="tab"
       aria-selected={active}
@@ -1286,8 +1293,29 @@ function ExpandButton({ store, panelId, meta }: { store: DockStore; panelId: str
 // Panel menu
 // ---------------------------------------------------------------------------
 
+/** The panel menu's items (grip menu and right-click), or null for an unknown panel. */
+function dockPanelMenuEntries(store: DockStore, snapshot: DockSnapshot, panelId: string): DockPanelEntry[] | null {
+  const meta = snapshot.panels.get(panelId)
+  if (!meta) return null
+  return dockPanelEntries({
+    zones: DOCK_ZONES,
+    zone: findPanel(snapshot.layout, panelId)?.zone ?? null,
+    canMoveToOwnLane: store.canMoveToOwnLane(panelId),
+    collapsible: !!meta.collapsible,
+    closable: !!meta.closable,
+  }, {
+    moveToZone: (zone) => store.moveToZone(panelId, zone),
+    moveToOwnLane: () => store.moveToOwnLane(panelId),
+    collapse: () => store.setCollapsed(panelId, true),
+    close: () => store.close(panelId),
+  })
+}
+
 function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: string; label?: string }) {
   const snapshot = useDockSnapshot(store)
+  // With the Leaf context menu on, the grip menu renders the same descriptors
+  // as a right-click on the panel's tab or header; off, it is the JSX below.
+  const leafMenu = useContextMenuEnabled()
   const meta = snapshot.panels.get(panelId)
   if (!meta) return null
   const zone = findPanel(snapshot.layout, panelId)?.zone ?? null
@@ -1310,6 +1338,7 @@ function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: s
         <i className="ph-bold ph-dots-six-vertical" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-44">
+        {leafMenu ? <ActionMenuItems entries={dockPanelMenuEntries(store, snapshot, panelId) ?? []} /> : <>
         {DOCK_ZONES.map((target) => (
           <DropdownMenuItem
             key={target}
@@ -1344,6 +1373,7 @@ function DockPanelMenu({ store, panelId, label }: { store: DockStore; panelId: s
             </DropdownMenuItem>
           </>
         )}
+        </>}
       </DropdownMenuContent>
     </DropdownMenu>
   )

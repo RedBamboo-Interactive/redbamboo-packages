@@ -1,3 +1,5 @@
+import type { ContextMenuEntry } from "@redbamboo/ui"
+
 export interface FocusMessageRequest {
   uid: string
   nonce: number
@@ -748,6 +750,12 @@ export interface ChatPanelProps {
   }) => React.ReactNode
   renderMessageExtra?: (block: MessageBlock, index: number) => React.ReactNode
   renderSideActions?: (block: MessageBlock, index: number) => React.ReactNode
+  /**
+   * Host items for a message's Leaf menu (Nova's React), shown after Copy in
+   * its context menu, its hover ⋮ and its touch sheet. Passing it says the side
+   * actions are reachable there, so the menu takes over the touch long-press.
+   */
+  getMessageActions?: (block: MessageBlock, index: number) => ContextMenuEntry[]
 }
 
 /** One piece of host-owned work in the activity row, e.g. a Nova delegation. */

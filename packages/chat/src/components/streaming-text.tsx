@@ -2,8 +2,11 @@ import { memo, useState, useRef, useEffect, useMemo, useSyncExternalStore } from
 import { createPortal } from "react-dom"
 import {
   buttonVariants,
+  copyTextToClipboard,
   EntityCard,
   Icon,
+  useContextMenuEnabled,
+  useContextTarget,
   useEntityCardPresentation,
   useEntityInteraction,
   useUiEnvironment,
@@ -25,6 +28,7 @@ import { useVideoPoster } from "../lib/use-video-poster"
 import { isUnsafeLinkHref, remarkUserText } from "../lib/user-markdown"
 import { rehypeColorSwatches } from "../lib/color-swatch"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
+import { codeBlockActionEntries, codeBlockSource, type HastLike } from "../lib/chat-actions"
 
 type FileLinkResolver = (
   filePath: string,
@@ -81,6 +85,8 @@ export function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: stri
     <button
       onClick={() => setLightbox({ src: resolved || "", alt: alt || "", type: "image" })}
       data-slot="chat-image-embed"
+      data-context-media={resolved ? "image" : undefined}
+      data-context-media-src={resolved || undefined}
       className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1"
     >
       <img src={resolved} alt={alt || ""} loading="lazy" className="w-20 h-20 object-cover" />
@@ -178,6 +184,49 @@ function MarkdownLink({
   return <a {...props} href={href}>{children}</a>
 }
 
+/**
+ * A fenced block with a Copy button, shown while the Leaf context menu is on.
+ * The button sits inside the `pre` so the Markdown's block structure and
+ * spacing stay exactly as rendered without it; Copy takes the block's source
+ * from its syntax tree, never from the highlighted DOM.
+ */
+function CodeBlock({ node, children, style, className, ...props }: React.HTMLAttributes<HTMLPreElement> & { node?: HastLike }) {
+  const environment = useUiEnvironment()
+  const ref = useRef<HTMLPreElement>(null)
+  const nodeRef = useRef(node)
+  nodeRef.current = node
+  const [copied, setCopied] = useState(false)
+  const resetRef = useRef(0)
+  useEffect(() => () => environment.window.clearTimeout(resetRef.current), [environment.window])
+
+  const copy = () => {
+    void copyTextToClipboard(codeBlockSource(nodeRef.current), environment.document).then((ok) => {
+      if (!ok) return
+      setCopied(true)
+      environment.window.clearTimeout(resetRef.current)
+      resetRef.current = environment.window.setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  useContextTarget(ref, () => codeBlockActionEntries(copy))
+
+  return (
+    <pre ref={ref} {...props} data-slot="chat-code-block" className={`group/code ${className ?? ""}`} style={{ ...style, position: "relative" }}>
+      <button
+        type="button"
+        onClick={copy}
+        data-slot="chat-code-copy"
+        aria-label={copied ? "Copied" : "Copy code"}
+        title={copied ? "Copied" : "Copy code"}
+        className="flex size-6 items-center justify-center rounded-md bg-overlay-6 font-sans text-xs text-text-muted transition-opacity duration-150 hover:bg-overlay-10 hover:text-contrast focus-visible:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/code:opacity-100"
+        style={{ position: "absolute", top: "0.375rem", right: "0.375rem" }}
+      >
+        <i aria-hidden="true" className={copied ? "ph-bold ph-check" : "ph-bold ph-copy"} />
+      </button>
+      {children}
+    </pre>
+  )
+}
+
 const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src?: string; alt?: string; resolve?: (s: string) => string | undefined }) {
   const resolved = resolveChatMediaSrc(src, resolve)
   const poster = useVideoPoster(resolved)
@@ -185,6 +234,8 @@ const VideoThumbnail = memo(function VideoThumbnail({ src, alt, resolve }: { src
   return (
     <button
       onClick={() => setLightbox({ src: resolved || "", alt: alt || "", type: "video" })}
+      data-context-media={resolved ? "video" : undefined}
+      data-context-media-src={resolved || undefined}
       className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1 relative"
     >
       {poster ? (
@@ -254,6 +305,7 @@ function useMarkdownComponents(
   currentOrigin: string,
 ) {
   const entityEmbedsEnabled = useEntityInteraction() !== null
+  const leafMenu = useContextMenuEnabled()
   const resolveRef = useRef(resolveImageSrc)
   resolveRef.current = resolveImageSrc
 
@@ -274,7 +326,13 @@ function useMarkdownComponents(
         ? <EntityMarkdownCard reference={reference} />
         : <p {...props}>{children}</p>
     },
-  }), [currentOrigin, entityEmbedsEnabled, resolveFileLink])
+    // Fenced blocks render as before unless the Leaf context menu is on.
+    ...(leafMenu ? {
+      pre: ({ node, children, ...props }: React.HTMLAttributes<HTMLPreElement> & { node?: unknown }) => (
+        <CodeBlock node={node as HastLike | undefined} {...props}>{children}</CodeBlock>
+      ),
+    } : {}),
+  }), [currentOrigin, entityEmbedsEnabled, leafMenu, resolveFileLink])
 }
 
 const CHARS_PER_FRAME = 3

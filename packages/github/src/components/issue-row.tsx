@@ -1,6 +1,8 @@
-import { Badge } from "@redbamboo/ui"
+import { useRef } from "react"
+import { Badge, useContextTarget } from "@redbamboo/ui"
 import type { GitHubIssue, TackleRun } from "../types"
 import { issueTypeIcon, tackleStatusIcon, timeAgo } from "./shared"
+import { issueRowEntries } from "../lib/row-actions"
 
 interface Props {
   issue: GitHubIssue
@@ -23,8 +25,11 @@ export function IssueRow({
   onClickTackle,
   getIssueUrl,
 }: Props) {
+  const rowRef = useRef<HTMLTableRowElement>(null)
+  useContextTarget(rowRef, () => issueRowEntries({ issue, tackle, onClick, onAutoTackle, onClose, onReopen, onClickTackle, getIssueUrl }))
   return (
     <tr
+      ref={rowRef}
       className="border-b border-overlay-6 hover:bg-overlay-5 transition-colors cursor-pointer"
       onClick={() => onClick?.(issue)}
     >

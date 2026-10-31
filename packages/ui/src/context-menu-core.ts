@@ -9,6 +9,11 @@
 export interface ContextMenuRunContext {
   /** The element the menu was opened for: the registered target, link, media, or null for a ⋮ menu. */
   target: Element | null
+  /**
+   * The element actually pressed (innermost on the event path), so one target
+   * can tailor its items to a part of itself. Null for a ⋮ menu.
+   */
+  origin: Element | null
   /** Where the item was chosen. */
   surface: "dropdown" | "context-menu" | "sheet"
   document: Document
@@ -110,7 +115,8 @@ export interface ContextMenuConfig {
 }
 
 export interface ContextTargetRegistration {
-  getItems: (ctx: ContextMenuRunContext) => ContextMenuEntries
+  /** Null declines: the menu resolves from the next registered or matched ancestor instead. */
+  getItems: (ctx: ContextMenuRunContext) => ContextMenuEntries | null
   /** Lets other providers contribute to this target (see {@link ContextMenuProvider}). */
   kind?: string
   subject?: unknown
@@ -213,11 +219,12 @@ export const LONG_PRESS_MS = 500
 export const LONG_PRESS_MOVE_TOLERANCE = 8
 
 /**
- * Subtrees that run their own touch long-press. Base UI context-menu triggers
- * (the composer's send options) and chat message rows keep their gesture until
- * the chat migrates onto the Leaf menu.
+ * Subtrees that run their own touch long-press: Base UI context-menu triggers
+ * (the composer's send options) and chat message rows, unless a row hands its
+ * long-press to the Leaf menu with `data-leaf-long-press`. A chat build that
+ * predates that attribute keeps its own gesture.
  */
-export const TOUCH_GESTURE_OWNERS = '[data-slot="context-menu-trigger"], [data-message-uid]'
+export const TOUCH_GESTURE_OWNERS = '[data-slot="context-menu-trigger"], [data-message-uid]:not([data-leaf-long-press])'
 
 export type ContextMenuDecision =
   /** Another handler already took the event: do nothing. */
@@ -397,7 +404,30 @@ function hrefOf(element: Element): string | null {
   return (element as HTMLAnchorElement).href || raw
 }
 
+const MEDIA_KINDS: readonly MediaSubject["kind"][] = ["image", "video", "audio"]
+
+/**
+ * An element that stands for media it does not render directly, such as a
+ * thumbnail button that opens the full image, a video poster or an attachment
+ * card: `data-context-media="image|video|audio"` plus `data-context-media-src`.
+ */
+function declaredMediaOf(element: Element): MediaSubject | null {
+  const kind = element.getAttribute("data-context-media") as MediaSubject["kind"] | null
+  const src = element.getAttribute("data-context-media-src")
+  if (!kind || !MEDIA_KINDS.includes(kind) || !src) return null
+  const ownerDocument = element.ownerDocument
+  let absolute = src
+  try {
+    absolute = new URL(src, ownerDocument?.baseURI).href
+  } catch {
+    // Keep the attribute as written.
+  }
+  return { element, kind, src: absolute }
+}
+
 function mediaOf(element: Element): MediaSubject | null {
+  const declared = declaredMediaOf(element)
+  if (declared) return declared
   const tag = element.tagName
   const kind = tag === "IMG" ? "image" : tag === "VIDEO" ? "video" : tag === "AUDIO" ? "audio" : null
   if (!kind) return null
@@ -424,14 +454,15 @@ export function buildContextMenuSections(input: BuildSectionsInput): ContextMenu
     const element = elements[index]
     const registration = getContextTarget(element)
     if (registration) {
-      objectIndex = index
-      let entries: ContextMenuEntries
+      let entries: ContextMenuEntries | null
       try {
         entries = registration.getItems(input.ctx(element))
       } catch (error) {
         console.warn("[context-menu] target failed", error)
         entries = []
       }
+      if (entries === null) continue
+      objectIndex = index
       sections.push({ id: "object", kind: registration.kind ?? "target", role: "object", element, entries, portalContainer: registration.portalContainer })
       if (registration.kind) {
         const contributions = contributionSection(registration.kind, registration.subject ?? element, element, input, providers)
@@ -479,12 +510,19 @@ export function buildContextMenuSections(input: BuildSectionsInput): ContextMenu
     break
   }
 
+  // A declared source (the full image behind a thumbnail) beats the pixels pressed.
+  let media: MediaSubject | null = null
   for (const element of elements) {
-    const media = mediaOf(element)
-    if (!media) continue
-    intrinsic(media.kind, media, element)
-    break
+    media = declaredMediaOf(element)
+    if (media) break
   }
+  if (!media) {
+    for (const element of elements) {
+      media = mediaOf(element)
+      if (media) break
+    }
+  }
+  if (media) intrinsic(media.kind, media, media.element)
 
   if (input.objectsOnly) return sections
 
@@ -596,12 +634,14 @@ export function shellRouteOf(url: string, origin: string): string | null {
 
 export function createContextMenuRunContext(input: {
   target: Element | null
+  origin?: Element | null
   surface: ContextMenuRunContext["surface"]
   document: Document
   window: Window
 }): ContextMenuRunContext {
   return {
     ...input,
+    origin: input.origin ?? null,
     navigate: (to) => {
       const navigate = getContextMenuConfig().navigate
       if (navigate) navigate(to)

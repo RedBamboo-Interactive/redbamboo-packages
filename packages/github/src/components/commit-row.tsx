@@ -1,7 +1,9 @@
-import { Badge } from "@redbamboo/ui"
+import { useRef } from "react"
+import { Badge, useContextTarget } from "@redbamboo/ui"
 import type { GitCommit, Review, HealthCheckResult } from "../types"
 import { useGitHub } from "../contexts/github-context"
 import { verdictIcon, timeAgo } from "./shared"
+import { commitRowEntries } from "../lib/row-actions"
 
 interface Props {
   commit: GitCommit
@@ -27,8 +29,15 @@ export function CommitRow({
   onClick,
 }: Props) {
   const actions = useGitHub()
+  const rowRef = useRef<HTMLTableRowElement>(null)
+  useContextTarget(rowRef, () => commitRowEntries({
+    commit, review, healthCheck, onClick, onReview, onHealthCheck, onAlign,
+    onClickReview: actions.onClickReview,
+    onClickHealthCheck: actions.onClickHealthCheck,
+  }))
   return (
     <tr
+      ref={rowRef}
       className="border-b border-overlay-6 hover:bg-overlay-5 transition-colors cursor-pointer"
       onClick={() => onClick?.(commit)}
     >
