@@ -19,7 +19,7 @@ const stamp = "2026-10-31T09:00:00Z"
 const CODE_SOURCE = 'const colour = "#ff0000" // keep `ticks` & <tags>\nif (a < b) {\n  return "x"\n}\n'
 const USER_TEXT = "Please check `#00ff00` and this:\n\n```ts\nlet n = 1\n```"
 const ASSISTANT_FIRST = `Here is the **fix**:\n\n\`\`\`ts\n${CODE_SOURCE}\`\`\``
-const ASSISTANT_LAST = "Done. See ![chart](/pic.svg) and [the docs](https://example.invalid/docs)."
+const ASSISTANT_LAST = "Done. See ![chart](/pic.svg), [the docs](https://example.invalid/docs) and [app.ts](/T:/Projects/example/src/app.ts#L12)."
 
 const tool = (toolName: string, input: Record<string, unknown>, result: string): MessagePart[] => [
   { type: "tool_use", toolName, toolInput: JSON.stringify(input), content: "" },

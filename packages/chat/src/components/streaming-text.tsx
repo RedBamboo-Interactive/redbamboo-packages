@@ -100,11 +100,14 @@ function MarkdownLink({
   resolve,
   resolveFileLink,
   currentOrigin,
+  leafMenu,
   ...props
 }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
   resolve?: (s: string) => string | undefined
   resolveFileLink?: FileLinkResolver
   currentOrigin: string
+  /** The Leaf context menu is on: a local file link declares its path (Copy path, "Open in Code"). */
+  leafMenu?: boolean
 }) {
   if (isImageUrl(href)) {
     const alt = typeof children === "string" ? children : ""
@@ -123,6 +126,9 @@ function MarkdownLink({
       ? `, line ${localFile.line}${localFile.column ? `, column ${localFile.column}` : ""}`
       : ""
     const className = `${AUTHORED_LINK_CLASS_NAME} disabled:cursor-default disabled:opacity-60`
+    const declared = leafMenu
+      ? { "data-context-file": localFile.filePath, "data-context-file-line": localFile.line ? String(localFile.line) : undefined }
+      : {}
     const content = (
       <>
         <Icon name="ph-bold ph-file" aria-hidden="true" className="size-3 shrink-0" />
@@ -134,6 +140,7 @@ function MarkdownLink({
       <button
         type="button"
         data-slot="local-file-link"
+        {...declared}
         className={className}
         title={`Open ${localFile.filePath}${location}`}
         aria-label={`Open ${localFile.filePath}${location}`}
@@ -142,7 +149,7 @@ function MarkdownLink({
         {content}
       </button>
     ) : (
-      <span data-slot="local-file-link" className={className} title={localFile.filePath}>{content}</span>
+      <span data-slot="local-file-link" {...declared} className={className} title={localFile.filePath}>{content}</span>
     )
   }
 
@@ -317,7 +324,7 @@ function useMarkdownComponents(
       return <ImageThumbnail src={s} alt={alt?.toString()} resolve={resolveRef.current} />
     },
     a: ({ href, children, node: _node, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { node?: unknown }) => (
-      <MarkdownLink href={href} resolve={resolveRef.current} resolveFileLink={resolveFileLink} currentOrigin={currentOrigin} {...props}>{children}</MarkdownLink>
+      <MarkdownLink href={href} resolve={resolveRef.current} resolveFileLink={resolveFileLink} currentOrigin={currentOrigin} leafMenu={leafMenu} {...props}>{children}</MarkdownLink>
     ),
     p: ({ node, children, ...props }: React.HTMLAttributes<HTMLParagraphElement> & { node?: unknown }) => {
       const reference = entityEmbedsEnabled

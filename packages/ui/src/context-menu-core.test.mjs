@@ -228,6 +228,57 @@ test("declared media beats the thumbnail pixels pressed", () => {
   assert.deepEqual(ids(buildContextMenuSections({ path: [el("span"), bogus], ctx })), ["page"])
 })
 
+test("a declared file inside the object gets Copy path and the file contributions", () => {
+  const dispose = registerContextMenuProvider({
+    id: "test:code",
+    kind: "file",
+    label: "Code",
+    getItems: (file) => [{ id: `open:${file.path}:${file.line ?? ""}`, label: "Open in Code" }],
+  })
+  const row = el("div")
+  const disposeRow = registerContextTarget(row, { getItems: () => [{ id: "message-copy-text", label: "Copy text" }] })
+  try {
+    const icon = el("i")
+    const link = el("button", { "data-context-file": "T:/Projects/x/a.ts", "data-context-file-line": "12" })
+    const sections = buildContextMenuSections({ path: [icon, link, row], ctx })
+    assert.deepEqual(ids(sections), ["object", "file", "file:contributions", "page"])
+    assert.deepEqual(sections[1].entries.map((item) => item.id), ["file-copy-path"])
+    assert.deepEqual(sections[2].entries.map((item) => item.id), ["open:T:/Projects/x/a.ts:12"])
+    // No line, or a bogus one, is just the path.
+    const plain = el("span", { "data-context-file": "T:/Projects/x/b.ts", "data-context-file-line": "nope" })
+    assert.deepEqual(buildContextMenuSections({ path: [plain, row], ctx })[2].entries.map((item) => item.id), ["open:T:/Projects/x/b.ts:"])
+  } finally {
+    disposeRow()
+    dispose()
+  }
+})
+
+test("a declared file outside the object is the object's business", () => {
+  const dispose = registerContextMenuProvider({ id: "test:code", kind: "file", getItems: () => [{ id: "open", label: "Open in Code" }] })
+  const tile = el("div", { "data-context-file": "T:/data" })
+  const disposeTile = registerContextTarget(tile, { getItems: () => [{ id: "tile", label: "Tile" }] })
+  try {
+    assert.deepEqual(ids(buildContextMenuSections({ path: [el("span"), tile], ctx })), ["object", "page"])
+  } finally {
+    disposeTile()
+    dispose()
+  }
+})
+
+test("a registered file target gets the file contributions with its own subject", () => {
+  const seen = []
+  const dispose = registerContextMenuProvider({ id: "test:code", kind: "file", getItems: (file) => { seen.push(file); return [{ id: "open", label: "Open in Code" }] } })
+  const tile = el("div")
+  const disposeTile = registerContextTarget(tile, { kind: "file", subject: { path: "T:/data" }, getItems: () => [{ id: "tile", label: "Tile" }] })
+  try {
+    assert.deepEqual(ids(buildContextMenuSections({ path: [tile], ctx })), ["object", "file:contributions", "page"])
+    assert.deepEqual(seen, [{ path: "T:/data" }])
+  } finally {
+    disposeTile()
+    dispose()
+  }
+})
+
 test("selection only when the pointer is on it", () => {
   assert.deepEqual(ids(buildContextMenuSections({ path: [el("p")], selection: { text: "x", containsTarget: false }, ctx })), ["page"])
   assert.deepEqual(ids(buildContextMenuSections({ path: [el("p")], selection: { text: "x", containsTarget: true }, ctx })), ["selection", "page"])

@@ -193,6 +193,7 @@ export type {
   ContextMenuSection,
   ContextMenuSeparator,
   ContextTargetRegistration,
+  FileSubject,
   LinkSubject,
   MediaSubject,
   SelectionSubject,

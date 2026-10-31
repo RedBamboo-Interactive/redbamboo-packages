@@ -181,6 +181,16 @@ async function main() {
       await closeMenu()
       check("chat image thumbnail and link get media and link items")
 
+      // A local file link declares its file: Copy path after the message's items.
+      await rightClick(owner(page).locator('[data-slot="local-file-link"]'))
+      const fileIds = await menuIds(menu)
+      assert(fileIds.indexOf("message-copy-text") < fileIds.indexOf("file-copy-path") && fileIds.includes("file-copy-path"), fileIds.join(","))
+      await shot(page, "08-local-file-context-menu")
+      await clearClipboard(page)
+      await choose("file-copy-path")
+      assert.equal(await clipboard(page), "T:/Projects/example/src/app.ts")
+      check("local file link: Copy path after the message items")
+
       assert.deepEqual(errors, [], "no page errors with the menu on")
       await close()
     }
@@ -193,6 +203,12 @@ async function main() {
         const copy = body.cloneNode(true)
         for (const pre of copy.querySelectorAll("pre")) {
           pre.querySelector('[data-slot="chat-code-copy"]')?.remove()
+        }
+        for (const file of copy.querySelectorAll("[data-context-file]")) {
+          file.removeAttribute("data-context-file")
+          file.removeAttribute("data-context-file-line")
+        }
+        for (const pre of copy.querySelectorAll("pre")) {
           if (pre.getAttribute("data-slot") === "chat-code-block") {
             pre.removeAttribute("data-slot")
             pre.removeAttribute("style")

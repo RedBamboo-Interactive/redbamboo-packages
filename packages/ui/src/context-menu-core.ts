@@ -292,7 +292,7 @@ export function distance(a: { x: number; y: number }, b: { x: number; y: number 
 
 // ── Section assembly ─────────────────────────────────────────────────────────
 
-export const INTRINSIC_KINDS = ["selection", "link", "image", "video", "audio", "page"] as const
+export const INTRINSIC_KINDS = ["selection", "link", "file", "image", "video", "audio", "page"] as const
 
 /** Contributions shown before the rest folds into a "More" submenu. */
 export const CONTRIBUTION_CAP = 4
@@ -320,6 +320,18 @@ export interface MediaSubject {
   element: Element
   kind: "image" | "video" | "audio"
   src: string
+}
+
+/**
+ * A local file an element stands for (a chat file link): `data-context-file`
+ * holds the absolute path, `data-context-file-line` an optional line. Plugins
+ * contribute to the `file` kind ("Open in Code"); a registered target that is a
+ * file passes `{ kind: "file", subject: { path, line? } }` instead.
+ */
+export interface FileSubject {
+  element: Element
+  path: string
+  line?: number
 }
 
 export interface SelectionSubject {
@@ -404,6 +416,13 @@ function hrefOf(element: Element): string | null {
   return (element as HTMLAnchorElement).href || raw
 }
 
+function declaredFileOf(element: Element): FileSubject | null {
+  const path = element.getAttribute("data-context-file")?.trim()
+  if (!path) return null
+  const line = Number(element.getAttribute("data-context-file-line"))
+  return Number.isInteger(line) && line > 0 ? { element, path, line } : { element, path }
+}
+
 const MEDIA_KINDS: readonly MediaSubject["kind"][] = ["image", "video", "audio"]
 
 /**
@@ -438,7 +457,7 @@ function mediaOf(element: Element): MediaSubject | null {
 
 /**
  * Sections, in order: the innermost registered object and its contributions,
- * then selection, link and media, then the page row and the command palette.
+ * then selection, link, file and media, then the page row and the command palette.
  * Ancestor objects are not merged in.
  */
 export function buildContextMenuSections(input: BuildSectionsInput): ContextMenuSection[] {
@@ -507,6 +526,14 @@ export function buildContextMenuSections(input: BuildSectionsInput): ContextMenu
     const href = hrefOf(elements[index])
     if (!href) continue
     intrinsic("link", { element: elements[index], href, text: elements[index].textContent?.trim() ?? "" } satisfies LinkSubject, elements[index])
+    break
+  }
+
+  // Likewise a declared file: only inside the object, which otherwise speaks for itself.
+  for (let index = 0; index < objectIndex; index++) {
+    const file = declaredFileOf(elements[index])
+    if (!file) continue
+    intrinsic("file", file, file.element)
     break
   }
 
@@ -710,6 +737,15 @@ function mediaProvider(kind: MediaSubject["kind"]): ContextMenuProvider<MediaSub
   }
 }
 
+export const fileProvider: ContextMenuProvider<FileSubject> = {
+  id: "builtin:file",
+  kind: "file",
+  match: declaredFileOf,
+  getItems: (file) => [
+    { id: "file-copy-path", label: "Copy path", icon: "ph-bold ph-copy", run: (run) => { void run.copyText(file.path) } },
+  ],
+}
+
 export const selectionProvider: ContextMenuProvider<SelectionSubject> = {
   id: "builtin:selection",
   kind: "selection",
@@ -737,6 +773,7 @@ export const pageProvider: ContextMenuProvider<null> = {
 
 export const BUILTIN_CONTEXT_MENU_PROVIDERS: readonly ContextMenuProvider[] = [
   linkProvider,
+  fileProvider,
   mediaProvider("image"),
   mediaProvider("video"),
   mediaProvider("audio"),
