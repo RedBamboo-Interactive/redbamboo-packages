@@ -26,6 +26,15 @@ export function remainingProviderUsage(window: ProviderUsageWindow): number {
   return Math.max(0, Math.round((100 - window.usedPercent) * 10) / 10)
 }
 
+/** Shared severity scale for usage meters across Chat and its consumers. */
+export function usageToneColor(usedPercent: number): string {
+  return usedPercent < 75
+    ? "var(--color-accent-teal)"
+    : usedPercent < 90
+      ? "var(--color-accent-gold)"
+      : "var(--color-accent-red)"
+}
+
 export function claimProviderUsageAlerts(
   snapshot: ProviderUsageSnapshot,
   storage?: Pick<Storage, "getItem" | "setItem"> | null,

@@ -12,7 +12,7 @@ import {
 } from "@redbamboo/ui"
 import { MorphSpinner } from "./morph-spinner"
 import { getSessionResourceHref, type SessionResourceKind } from "../lib/session-resource-links"
-import { formatProviderUsageWindow, remainingProviderUsage } from "../lib/provider-usage"
+import { formatProviderUsageWindow, remainingProviderUsage, usageToneColor } from "../lib/provider-usage"
 
 interface Props {
   open: boolean
@@ -129,7 +129,7 @@ function ProviderUsageBlock({ usage, loading }: { usage?: ProviderUsageSnapshot 
                 className="h-full rounded-full transition-all duration-500"
                 style={{
                   width: `${used}%`,
-                  backgroundColor: used < 90 ? "var(--color-accent-teal)" : used < 100 ? "var(--color-accent-gold)" : "var(--color-accent-red)",
+                  backgroundColor: usageToneColor(used),
                 }}
               />
             </div>
@@ -473,7 +473,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                         className="h-full rounded-full transition-all duration-500"
                         style={{
                           width: `${pct}%`,
-                          backgroundColor: pct < 60 ? "var(--color-accent-teal)" : pct < 80 ? "var(--color-accent-gold)" : "var(--color-accent-red)",
+                          backgroundColor: usageToneColor(pct),
                         }}
                       />
                     </div>

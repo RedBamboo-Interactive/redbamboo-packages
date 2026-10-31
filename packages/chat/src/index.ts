@@ -78,6 +78,7 @@ export {
   claimProviderUsageAlerts,
   formatProviderUsageWindow,
   remainingProviderUsage,
+  usageToneColor,
 } from "./lib/provider-usage"
 export type { ProviderUsageThresholdAlert } from "./lib/provider-usage"
 export { ChatStatusLine, StreamingStatusLine } from "./components/streaming-status-line"

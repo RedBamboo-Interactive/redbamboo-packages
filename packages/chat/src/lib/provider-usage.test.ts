@@ -5,6 +5,7 @@ import {
   claimProviderUsageAlerts,
   formatProviderUsageWindow,
   remainingProviderUsage,
+  usageToneColor,
 } from "./provider-usage.ts"
 
 function snapshot(usedPercent: number, resetsAt = "2026-09-07T02:25:33Z"): ProviderUsageSnapshot {
@@ -55,4 +56,13 @@ test("formats quota windows and remaining capacity", () => {
   assert.equal(formatProviderUsageWindow(300), "5 hours")
   assert.equal(formatProviderUsageWindow(10080), "Weekly")
   assert.equal(remainingProviderUsage({ id: "x", usedPercent: 92.4, windowDurationMinutes: 300 }), 7.6)
+})
+
+test("uses one severity scale for every usage gauge", () => {
+  assert.equal(usageToneColor(0), "var(--color-accent-teal)")
+  assert.equal(usageToneColor(74.9), "var(--color-accent-teal)")
+  assert.equal(usageToneColor(75), "var(--color-accent-gold)")
+  assert.equal(usageToneColor(89.9), "var(--color-accent-gold)")
+  assert.equal(usageToneColor(90), "var(--color-accent-red)")
+  assert.equal(usageToneColor(100), "var(--color-accent-red)")
 })
