@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using RedBamboo.AppHost.Tunnel;
+using RedBamboo.AppHost.Auth;
 
 namespace RedBamboo.AppHost.RemoteAccess;
 
@@ -51,6 +52,8 @@ public static class RemoteAccessEndpoints
         }
 
         var group = app.MapGroup("/api/remote");
+        // Everything but the public status changes or reveals the tunnel and its tokens.
+        var guarded = group.MapGroup("").RequireInfrastructureAccess();
 
         group.MapGet("/status", () =>
         {
@@ -73,7 +76,7 @@ public static class RemoteAccessEndpoints
             });
         });
 
-        group.MapGet("/secrets", () => Results.Ok(new
+        guarded.MapGet("/secrets", () => Results.Ok(new
         {
             tunnel_token = new
             {
@@ -83,7 +86,7 @@ public static class RemoteAccessEndpoints
             },
         }));
 
-        group.MapPut("/secrets/tunnel-token", async (HttpRequest request) =>
+        guarded.MapPut("/secrets/tunnel-token", async (HttpRequest request) =>
         {
             var body = await request.ReadFromJsonAsync<SecretReplacement>();
             if (string.IsNullOrWhiteSpace(body?.Value))
@@ -98,7 +101,7 @@ public static class RemoteAccessEndpoints
             });
         });
 
-        group.MapDelete("/secrets/tunnel-token", async () =>
+        guarded.MapDelete("/secrets/tunnel-token", async () =>
         {
             await tunnelService.StopAsync();
             TokenPersistence.DeleteTunnelToken(configDir);
@@ -110,7 +113,7 @@ public static class RemoteAccessEndpoints
             });
         });
 
-        group.MapPost("/enable", async () =>
+        guarded.MapPost("/enable", async () =>
         {
             var config = GetEffectiveTunnelConfig();
             var accessToken = GetEffectiveAccessToken();
@@ -133,7 +136,7 @@ public static class RemoteAccessEndpoints
             });
         });
 
-        group.MapPost("/disable", async () =>
+        guarded.MapPost("/disable", async () =>
         {
             await tunnelService.StopAsync();
             return Results.Ok(new
@@ -143,7 +146,7 @@ public static class RemoteAccessEndpoints
             });
         });
 
-        group.MapGet("/share", () =>
+        guarded.MapGet("/share", () =>
         {
             var config = GetEffectiveTunnelConfig();
             var accessToken = GetEffectiveAccessToken();
@@ -161,7 +164,7 @@ public static class RemoteAccessEndpoints
             return Results.Ok(new { url, hostname = config.Hostname, token = accessToken });
         });
 
-        group.MapPut("/token", () =>
+        guarded.MapPut("/token", () =>
         {
             var newToken = TokenPersistence.GenerateAccessToken();
             TokenPersistence.SaveToken(configDir, newToken);

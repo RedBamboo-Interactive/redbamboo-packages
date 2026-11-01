@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using RedBamboo.AppHost.Discovery;
+using RedBamboo.AppHost.Auth;
 
 namespace RedBamboo.AppHost.Logging;
 
@@ -8,7 +9,7 @@ public static class LogEndpoints
 {
     public static void MapLogEndpoints(this WebApplication app, LogService logService)
     {
-        var group = app.MapGroup("/api/logs");
+        var group = app.MapGroup("/api/logs").RequireInfrastructureAccess();
 
         group.MapGet("/", async (
             string? level,

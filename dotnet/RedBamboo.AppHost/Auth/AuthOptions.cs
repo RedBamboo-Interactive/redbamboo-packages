@@ -16,6 +16,10 @@ public class AuthOptions
         "/auth/refresh", "/auth/logout", "/login", "/discover"];
 }
 
+/// <summary>
+/// Whether an external sign-in provider is configured. A local caller is the default identity
+/// without signing in under either mode; a remote caller must always sign in.
+/// </summary>
 public enum AuthMode
 {
     LocalDefault,

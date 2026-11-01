@@ -110,30 +110,30 @@ public sealed class AuthMiddleware
             return;
         }
 
-        if (_options.Mode == AuthMode.Required)
+        // Neither signed in nor on this machine: refused in every mode. LocalDefault only names the
+        // default identity of a local caller; it never opened a remote one. An install without a
+        // Google sign-in used to pass these through to whatever the route itself checked, so a
+        // tunnel exposed its entities and remote-access tokens anonymously (field report, 2026-11-01).
+        var accept = context.Request.Headers.Accept.ToString();
+        if (accept.Contains("text/html", StringComparison.OrdinalIgnoreCase))
         {
-            var accept = context.Request.Headers.Accept.ToString();
-            if (accept.Contains("text/html", StringComparison.OrdinalIgnoreCase))
-            {
-                var request = context.Request;
-                var rawPath = request.Path.Value ?? "/";
-                var rawQuery = request.QueryString.Value ?? "";
-                var returnUrl = Uri.EscapeDataString(rawPath + rawQuery);
-                context.Response.Redirect($"/login?returnUrl={returnUrl}");
-                return;
-            }
-
-            context.Response.StatusCode = 401;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = "unauthorized",
-                message = "Authentication required."
-            });
+            var request = context.Request;
+            var rawPath = request.Path.Value ?? "/";
+            var rawQuery = request.QueryString.Value ?? "";
+            var returnUrl = Uri.EscapeDataString(rawPath + rawQuery);
+            // /login only offers the external provider; without one the app shell signs in locally.
+            var signIn = _options.Mode == AuthMode.Required ? "/login" : "/";
+            context.Response.Redirect($"{signIn}?returnUrl={returnUrl}");
             return;
         }
 
-        await ContinueAsync(context);
+        context.Response.StatusCode = 401;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "unauthorized",
+            message = "Authentication required."
+        });
     }
 
     private async Task ContinueAsync(HttpContext context)

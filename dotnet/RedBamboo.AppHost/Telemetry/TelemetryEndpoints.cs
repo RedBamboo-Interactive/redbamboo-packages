@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using RedBamboo.AppHost.Discovery;
+using RedBamboo.AppHost.Auth;
 
 namespace RedBamboo.AppHost.Telemetry;
 
@@ -8,7 +9,7 @@ public static class TelemetryEndpoints
 {
     public static void MapTelemetryEndpoints(this WebApplication app, TelemetryService telemetry)
     {
-        var group = app.MapGroup("/api/telemetry");
+        var group = app.MapGroup("/api/telemetry").RequireInfrastructureAccess();
 
         group.MapGet("/", (
             string? route,
