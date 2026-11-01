@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { queuedMessageStatusLabel, maintenanceBlocksQueuedMessage, queuedMessageHasNothingToShow } from "./queue-status.ts"
+import { failedHeadBlocksQueuedMessage, queuedMessageCanRetry, queuedMessageSendBlockedReason, queuedMessageStatusLabel, maintenanceBlocksQueuedMessage, queuedMessageHasNothingToShow } from "./queue-status.ts"
 import { acknowledgeRemoteMessage } from "./message-queue.ts"
 import type { QueuedMessage } from "./message-queue.ts"
 
@@ -16,6 +16,22 @@ test("local refusal and uncertain admission never claim the server saved input",
   assert.equal(queuedMessageStatusLabel(failed), failed.deliveryError)
   assert.equal(maintenanceBlocksQueuedMessage(failed), false)
   assert.equal(maintenanceBlocksQueuedMessage({ ...pending, admissionUncertain: true }), false)
+})
+test("a message behind a failed head says so and offers no send that cannot work", () => {
+  const blocked = { ...pending, blockedReason: "failed_head" }
+  assert.equal(queuedMessageStatusLabel(blocked), "Blocked by an earlier failed message")
+  assert.equal(failedHeadBlocksQueuedMessage(blocked), true)
+  assert.equal(queuedMessageSendBlockedReason(blocked), "Cancel or retry the failed message first")
+  assert.equal(queuedMessageSendBlockedReason(pending), "Message delivery is paused for an update")
+  assert.equal(queuedMessageSendBlockedReason({ ...pending, blockedReason: "active_turn" }), undefined)
+  // The failed row itself keeps its own error and its own actions.
+  const failed = { ...blocked, remoteState: "failed" as const, deliveryError: "Provider rejected the input" }
+  assert.equal(queuedMessageStatusLabel(failed), failed.deliveryError)
+  assert.equal(queuedMessageSendBlockedReason(failed), undefined)
+})
+test("retry is offered unless the server said it would refuse", () => {
+  assert.equal(queuedMessageCanRetry({ ...pending, remoteState: "failed", deliveryError: "x" }), true)
+  assert.equal(queuedMessageCanRetry({ ...pending, remoteState: "failed", deliveryError: "x", deliveryRetryable: false }), false)
 })
 test("normal active waits and delivery retain their own meanings", () => {
   assert.match(queuedMessageStatusLabel({ ...pending, blockedReason: "active_turn" }), /after this turn/)

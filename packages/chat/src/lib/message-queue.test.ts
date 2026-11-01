@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { acknowledgeRemoteMessage, canonicalUserMessageUids, enqueue, cancel, coalesce, createRemoteMessageIdentity, isCanonicalQueuedMessage, remoteSubmissionOptions, queuedMessageTimelineTimestamp, shouldDrain, drainStep, type QueuedMessage } from "./message-queue.ts"
+import { acknowledgeRemoteMessage, canonicalUserMessageUids, enqueue, cancel, coalesce, createRemoteMessageIdentity, isCanonicalQueuedMessage, isVisibleOutgoingMessage, remoteSubmissionOptions, queuedMessageTimelineTimestamp, shouldDrain, drainStep, type QueuedMessage } from "./message-queue.ts"
 
 const msg = (id: string, text: string, images?: QueuedMessage["images"]): QueuedMessage => ({ id, text, images })
 
@@ -87,6 +87,16 @@ test("canonical history suppresses the optimistic bridge before acknowledgement"
     optimistic,
     new Set(["625ae27acaf24d6bab4c89c97838a077"]),
   ), true)
+})
+
+test("a canonical bridge goes away unless the queue still holds it as failed", () => {
+  const canonical = new Set(["first"])
+  const row: QueuedMessage = { id: "q", text: "one", messageUid: "first" }
+  assert.equal(isVisibleOutgoingMessage({ ...row, remoteState: "failed", deliveryError: "x" }, canonical), true)
+  assert.equal(isVisibleOutgoingMessage({ ...row, remoteState: "delivered" }, canonical), false)
+  assert.equal(isVisibleOutgoingMessage({ ...row, remoteState: "pending" }, canonical), false)
+  assert.equal(isVisibleOutgoingMessage({ ...row, optimistic: true }, canonical), false)
+  assert.equal(isVisibleOutgoingMessage({ ...row, messageUid: "other", remoteState: "pending" }, canonical), true)
 })
 
 test("a batched bridge follows the combined delivered transcript identity", () => {

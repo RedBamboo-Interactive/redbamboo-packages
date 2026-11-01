@@ -13,6 +13,8 @@ export interface QueuedMessage {
   images?: ImageAttachment[]
   attachments?: UploadedAttachment[]
   deliveryError?: string
+  /** False when the server would refuse a retry of this failure. */
+  deliveryRetryable?: boolean
   /** Canonical queue blocker, cleared once delivery is underway or complete. */
   blockedReason?: string
   remoteState?: "pending" | "delivering" | "failed" | "delivered"
@@ -123,6 +125,17 @@ export function isCanonicalQueuedMessage(
 ): boolean {
   return (!!message.messageUid && canonicalUserUids.has(message.messageUid))
     || (!!message.deliveredMessageUid && canonicalUserUids.has(message.deliveredMessageUid))
+}
+
+/**
+ * A canonical message no longer needs its outgoing bridge, unless the queue still holds it as failed.
+ * That row blocks everything behind it, so it stays visible even when the transcript shows the message.
+ */
+export function isVisibleOutgoingMessage(
+  message: QueuedMessage,
+  canonicalUserUids: ReadonlySet<string>,
+): boolean {
+  return message.remoteState === "failed" || !isCanonicalQueuedMessage(message, canonicalUserUids)
 }
 
 /** Timestamp used when an outgoing bridge is merged with transcript rows. */

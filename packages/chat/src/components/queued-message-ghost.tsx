@@ -1,5 +1,5 @@
 import type { QueuedMessage } from "../lib/message-queue"
-import { maintenanceBlocksQueuedMessage, queuedMessageHasNothingToShow, queuedMessageStatusLabel } from "../lib/queue-status"
+import { queuedMessageCanRetry, queuedMessageHasNothingToShow, queuedMessageSendBlockedReason, queuedMessageStatusLabel } from "../lib/queue-status"
 import type { ImageAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
@@ -43,8 +43,10 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
     )
   }
 
-  // An Agent's internal note (hidden envelope only) never was a person's message to show.
-  if (queuedMessageHasNothingToShow(item)) return null
+  // An Agent's internal note (hidden envelope only) never was a person's message to show,
+  // but once failed it blocks the queue, so its status and actions must still be reachable.
+  if (queuedMessageHasNothingToShow(item) && item.remoteState !== "failed") return null
+  const sendBlockedReason = queuedMessageSendBlockedReason(item)
 
   const contextData = parseContextFromMessage(item.text)
   const contextXml = contextData ? extractRawContextXml(item.text) : undefined
@@ -102,15 +104,15 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
         <span className={`text-[10px] italic mr-1 ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
           {queuedMessageStatusLabel(item)}
         </span>
-        <button
-          disabled={maintenanceBlocksQueuedMessage(item)}
+        {queuedMessageCanRetry(item) && <button
+          disabled={!!sendBlockedReason}
           onClick={(e) => { e.stopPropagation(); onSendNow(item.id) }}
           className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-amber-400 hover:bg-overlay-6 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-          title={maintenanceBlocksQueuedMessage(item) ? "Message delivery is paused for an update" : item.deliveryError ? "Retry" : "Send now (interrupts the current turn)"}
+          title={sendBlockedReason ?? (item.deliveryError ? "Retry" : "Send now (interrupts the current turn)")}
           aria-label={item.deliveryError ? "Retry queued message" : "Send queued message now"}
         >
           <i className={`ph-bold ${item.deliveryError ? "ph-arrow-clockwise" : "ph-paper-plane-tilt"} text-[10px]`} />
-        </button>
+        </button>}
         {!item.admissionUncertain && (
           <button
             onClick={(e) => { e.stopPropagation(); onCancel(item.id) }}

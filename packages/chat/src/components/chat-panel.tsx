@@ -11,7 +11,7 @@ import type { SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
 import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
-import { canonicalUserMessageUids, isCanonicalQueuedMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
+import { canonicalUserMessageUids, isCanonicalQueuedMessage, isVisibleOutgoingMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
 import { ChatStatusLine, StreamingStatusLine } from "./streaming-status-line"
 import { BackgroundWorkContext, taskTitle, type BackgroundWorkContextValue } from "./background-task-view"
 import { ActivityItemDialog, ActivityShapes, ActivityShapesProvider, type ActivityShape } from "./activity-status-row"
@@ -136,7 +136,7 @@ export function ChatPanel(props: ChatPanelProps) {
     if (settledUids.length > 0) messageQueue.settleDelivered(settledUids)
   }, [messageQueue.settleDelivered, settledKey])
   const visibleOutgoing = useMemo(() => messageQueue.queue.filter(
-    item => !isCanonicalQueuedMessage(item, canonicalUserUids),
+    item => isVisibleOutgoingMessage(item, canonicalUserUids),
   ), [canonicalUserUids, messageQueue.queue])
 
   const enqueueMessage = useCallback((content: string, images?: ImageAttachment[], options?: SendOptions) => {

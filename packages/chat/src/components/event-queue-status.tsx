@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import type { QueuedMessage } from "../lib/message-queue"
-import { maintenanceBlocksQueuedMessage, queuedMessageStatusLabel } from "../lib/queue-status"
+import { queuedMessageCanRetry, queuedMessageSendBlockedReason, queuedMessageStatusLabel } from "../lib/queue-status"
 import type { MessagePart } from "../types"
 
 export interface EventQueueStatus {
@@ -17,19 +17,20 @@ export function eventQueueStatus(
   onSendNow: (id: string) => void,
 ): EventQueueStatus | undefined {
   if (!item || item.appearance === "message" || item.remoteState === "delivered") return undefined
+  const sendBlockedReason = queuedMessageSendBlockedReason(item)
   return {
     label: queuedMessageStatusLabel(item, true),
     failed: !!item.deliveryError,
     actions: <>
-      <button
-        disabled={maintenanceBlocksQueuedMessage(item)}
+      {queuedMessageCanRetry(item) && <button
+        disabled={!!sendBlockedReason}
         onClick={() => onSendNow(item.id)}
         className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-amber-400 hover:bg-overlay-6 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-        title={maintenanceBlocksQueuedMessage(item) ? "Message delivery is paused for an update" : item.deliveryError ? "Retry" : "Send now (interrupts the current turn)"}
+        title={sendBlockedReason ?? (item.deliveryError ? "Retry" : "Send now (interrupts the current turn)")}
         aria-label={item.deliveryError ? "Retry queued event" : "Send queued event now"}
       >
         <i className={`ph-bold ${item.deliveryError ? "ph-arrow-clockwise" : "ph-paper-plane-tilt"} text-[10px]`} />
-      </button>
+      </button>}
       {!item.admissionUncertain && <button
         onClick={() => onCancel(item.id)}
         className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-red-400 hover:bg-overlay-6 transition-colors"
