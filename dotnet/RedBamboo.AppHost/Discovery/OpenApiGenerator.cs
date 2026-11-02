@@ -2,11 +2,8 @@ namespace RedBamboo.AppHost.Discovery;
 
 public static class OpenApiGenerator
 {
-    public static async Task<object> GenerateAsync(IServiceDescriptor descriptor)
+    public static object Generate(IServiceDescriptor descriptor, DiscoveryCatalog catalog)
     {
-        var capabilities = await descriptor.GetCapabilitiesAsync();
-        var appEndpoints = descriptor.GetAppEndpoints();
-
         var paths = new Dictionary<string, object>();
 
         AddPath(paths, "/ping", "get", "Ping", "Liveness probe");
@@ -26,22 +23,13 @@ public static class OpenApiGenerator
                 [new ParameterDescriptor("enabled", "boolean", Required: true, Location: ParamLocation.Body)]);
         }
 
-        foreach (var ep in appEndpoints)
+        foreach (var route in catalog.Routes)
         {
-            AddPath(paths, ep.Path, ep.Method.ToLowerInvariant(),
-                ep.Path.Replace("/", "").Replace("{", "").Replace("}", ""),
-                ep.Description, ep.Parameters, ep.RequestBody, ep.Response);
-        }
-
-        foreach (var cap in capabilities)
-        {
-            if (cap.Endpoints == null) continue;
-            foreach (var ep in cap.Endpoints)
-            {
-                AddPath(paths, ep.Path, ep.Method.ToLowerInvariant(),
-                    $"{cap.Slug}_{ep.Path.Replace("/", "_").Trim('_')}",
-                    ep.Description, ep.Parameters, ep.RequestBody, ep.Response);
-            }
+            var path = route.CleanPath;
+            var method = route.Method.ToLowerInvariant();
+            AddPath(paths, path, method,
+                method + path.Replace("/", "_").Replace("{", "").Replace("}", "").Replace("*", ""),
+                route.Description ?? "", route.Parameters, route.RequestBody, route.Response);
         }
 
         return new

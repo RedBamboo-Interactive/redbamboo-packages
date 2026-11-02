@@ -13,7 +13,13 @@ public class AuthOptions
     /// would 401 every remote renewal before the handler could rotate the session.
     /// </summary>
     public List<string> BypassPaths { get; init; } = ["/ping", "/api/remote/status", "/auth/login", "/auth/callback",
-        "/auth/refresh", "/auth/logout", "/login", "/discover"];
+        "/auth/refresh", "/auth/logout", "/login"];
+
+    /// <summary>
+    /// Exact paths that answer anyone but still learn who is calling, so the handler can tell a stranger
+    /// from a signed-in caller. Not a prefix: /discover/find and friends stay behind sign-in.
+    /// </summary>
+    public List<string> OptionalAuthPaths { get; init; } = ["/discover", "/openapi.json"];
 }
 
 /// <summary>

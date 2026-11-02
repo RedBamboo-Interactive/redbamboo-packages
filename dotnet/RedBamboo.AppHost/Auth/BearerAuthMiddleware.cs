@@ -37,6 +37,12 @@ public sealed class BearerAuthMiddleware
         }
 
         var path = context.Request.Path.Value ?? "";
+        if (_options.ExactBypassPaths.Contains(path, StringComparer.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         foreach (var bypass in _options.BypassPaths)
         {
             if (path.StartsWith(bypass, StringComparison.OrdinalIgnoreCase))

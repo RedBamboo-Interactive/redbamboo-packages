@@ -12,4 +12,7 @@ public interface IServiceDescriptor
     Task<IReadOnlyList<CapabilityDescriptor>> GetCapabilitiesAsync();
     IReadOnlyList<EndpointDescriptor> GetAppEndpoints();
     Task<object?> GetHealthExtrasAsync();
+
+    /// <summary>Plugins and other parts that own routes beyond the kernel.</summary>
+    Task<IReadOnlyList<DiscoveryArea>> GetAreasAsync() => Task.FromResult<IReadOnlyList<DiscoveryArea>>([]);
 }

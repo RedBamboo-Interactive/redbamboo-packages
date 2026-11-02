@@ -20,4 +20,7 @@ public abstract class RegistryServiceDescriptor : IServiceDescriptor
     public IReadOnlyList<EndpointDescriptor> GetAppEndpoints() => _registry.GetEndpoints();
 
     public virtual Task<object?> GetHealthExtrasAsync() => Task.FromResult<object?>(null);
+
+    public virtual Task<IReadOnlyList<DiscoveryArea>> GetAreasAsync()
+        => Task.FromResult<IReadOnlyList<DiscoveryArea>>([]);
 }

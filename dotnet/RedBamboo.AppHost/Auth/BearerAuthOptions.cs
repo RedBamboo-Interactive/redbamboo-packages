@@ -11,11 +11,15 @@ public class BearerAuthOptions
     public string CookieName { get; init; } = "redsuite_token";
 
     /// <summary>
-    /// /discover and /openapi.json are public service metadata: agents must be able to
-    /// learn what a service is before they hold a token for it (parity with JWT mode).
+    /// Prefixes the access token does not guard.
     /// </summary>
-    public List<string> BypassPaths { get; init; } =
-        ["/ping", "/api/remote/status", "/discover", "/openapi.json"];
+    public List<string> BypassPaths { get; init; } = ["/ping", "/api/remote/status"];
+
+    /// <summary>
+    /// Exact paths that answer without the access token. Agents must be able to learn what a service is
+    /// before they hold a token for it; the handlers decide how much a stranger sees.
+    /// </summary>
+    public List<string> ExactBypassPaths { get; init; } = ["/discover", "/openapi.json"];
     public bool AllowQueryParamToken { get; init; } = true;
     public bool FallThroughOnFailure { get; init; } = false;
 }

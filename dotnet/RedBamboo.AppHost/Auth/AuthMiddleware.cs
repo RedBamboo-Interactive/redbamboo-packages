@@ -43,7 +43,9 @@ public sealed class AuthMiddleware
             }
         }
 
-        if (IsStaticAssetRequest(context))
+        var optional = _options.OptionalAuthPaths.Contains(path, StringComparer.OrdinalIgnoreCase);
+
+        if (!optional && IsStaticAssetRequest(context))
         {
             await _next(context);
             return;
@@ -82,7 +84,7 @@ public sealed class AuthMiddleware
             }
         }
 
-        if (cookieToken is not null)
+        if (cookieToken is not null && !optional)
         {
             if (_logger?.IsEnabled(LogLevel.Warning) == true)
             {
@@ -107,6 +109,12 @@ public sealed class AuthMiddleware
             var identity = new ClaimsIdentity(claims, "LocalDefault");
             context.User = new ClaimsPrincipal(identity);
             await ContinueAsync(context);
+            return;
+        }
+
+        if (optional)
+        {
+            await _next(context);
             return;
         }
 

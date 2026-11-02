@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,7 +11,30 @@ namespace RedBamboo.AppHost.Discovery;
 
 public static class DiscoveryEndpoints
 {
+    private const string CatalogProperty = "RedBamboo.AppHost.DiscoveryCatalog";
+    private static readonly JsonSerializerOptions Compact = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     private static DateTime _startTime = DateTime.UtcNow;
+
+    /// <summary>The live catalog of this service, for callers such as a not-found fallback.</summary>
+    public static DiscoveryCatalogProvider? DiscoveryCatalog(this IApplicationBuilder app)
+        => app.Properties.TryGetValue(CatalogProperty, out var provider) ? provider as DiscoveryCatalogProvider : null;
+
+    /// <summary>
+    /// Everything past a service's name shows what it runs, so it needs a signed-in caller. A host
+    /// with no sign-in middleware has only its own machine to trust.
+    /// </summary>
+    internal static bool MayReadCatalog(HttpContext context, AuthOptions? auth)
+        => context.User.Identity?.IsAuthenticated == true || (auth is null && RequestOrigin.IsLocal(context));
+
+    private static IResult SignInRequired() => Results.Json(new
+    {
+        error = "unauthorized",
+        message = "Sign in to read this service's routes.",
+    }, statusCode: StatusCodes.Status401Unauthorized);
 
     public static void MapDiscoveryEndpoints(
         this WebApplication app,
@@ -21,6 +46,9 @@ public static class DiscoveryEndpoints
         IReadOnlyDictionary<string, string>? proxyRoutes = null)
     {
         _startTime = DateTime.UtcNow;
+        var catalog = new DiscoveryCatalogProvider(app, descriptor);
+        ((IApplicationBuilder)app).Properties[CatalogProperty] = catalog;
+        var auth = app.Services.GetService<AuthOptions>();
 
         app.MapGet("/ping", () => Results.Ok(new
         {
@@ -52,9 +80,26 @@ public static class DiscoveryEndpoints
             });
         });
 
-        app.MapGet("/discover", async () =>
+        app.MapGet("/discover", async (HttpContext context, string? format) =>
         {
-            var capabilities = await descriptor.GetCapabilitiesAsync();
+            var authMode = auth?.Mode.ToString();
+
+            // The sign-in pages read this before anyone has signed in; they need only the name and icon.
+            if (!MayReadCatalog(context, auth))
+            {
+                return Results.Json(new
+                {
+                    service = descriptor.ServiceName,
+                    name = descriptor.ServiceName,
+                    version = descriptor.Version,
+                    description = descriptor.Description,
+                    iconClass = descriptor.IconClass,
+                    iconColor = descriptor.IconColor,
+                    authMode,
+                    signIn = "Sign in to read this service's routes.",
+                }, Compact);
+            }
+
             var appEndpoints = descriptor.GetAppEndpoints().ToList();
 
             if (broadcaster is not null)
@@ -120,7 +165,13 @@ public static class DiscoveryEndpoints
                 }).ToList();
             }
 
-            var authMode = app.Services.GetService<AuthOptions>()?.Mode.ToString();
+            if (!string.Equals(format, "v1", StringComparison.OrdinalIgnoreCase))
+            {
+                var current = await catalog.GetAsync();
+                return Results.Json(current.Map(descriptor, authMode, management, proxies), Compact);
+            }
+
+            var capabilities = await descriptor.GetCapabilitiesAsync();
 
             return Results.Ok(new
             {
@@ -139,10 +190,33 @@ public static class DiscoveryEndpoints
             });
         });
 
-        app.MapGet("/openapi.json", async () =>
+        app.MapGet("/discover/find", async (HttpContext context, string? q, int? limit, bool? @public) =>
         {
-            var spec = await OpenApiGenerator.GenerateAsync(descriptor);
-            return Results.Json(spec);
+            if (!MayReadCatalog(context, auth)) return SignInRequired();
+            var current = await catalog.GetAsync();
+            return Results.Json(current.Find(q, limit ?? 15, @public == true), Compact);
+        });
+
+        app.MapGet("/discover/{area}", async (HttpContext context, string area, bool? @public) =>
+        {
+            if (!MayReadCatalog(context, auth)) return SignInRequired();
+            var current = await catalog.GetAsync();
+            var detail = current.Area(area, @public == true);
+            return detail is null
+                ? Results.Json(new
+                {
+                    error = "unknown_area",
+                    message = $"Nothing here is called '{area}'. /discover lists the areas.",
+                    find = "/discover/find?q=" + Uri.EscapeDataString(area),
+                }, statusCode: StatusCodes.Status404NotFound)
+                : Results.Json(detail, Compact);
+        });
+
+        app.MapGet("/openapi.json", async (HttpContext context) =>
+        {
+            if (!MayReadCatalog(context, auth)) return SignInRequired();
+            var current = await catalog.GetAsync();
+            return Results.Json(OpenApiGenerator.Generate(descriptor, current));
         });
     }
 }

@@ -101,6 +101,49 @@ public class RemoteAnonymousAccessTests
         Assert.True(reached);
     }
 
+    [Theory]
+    [InlineData("/discover/find")]
+    [InlineData("/discover/mail")]
+    [InlineData("/discoverable")]
+    public async Task Only_the_exact_discover_path_stays_public(string path)
+    {
+        var (reached, _) = await Send(AuthMode.LocalDefault, Request(path: path));
+        Assert.False(reached);
+    }
+
+    [Fact]
+    public async Task The_discover_path_still_learns_who_a_signed_in_caller_is()
+    {
+        var jwt = new JwtService(Jwt);
+        var token = jwt.GenerateAccessToken("user-1", "user@example.test", "User", ["user"]);
+        var context = Request(path: "/discover");
+        context.Request.Headers.Authorization = "Bearer " + token;
+
+        var (reached, sub) = await Send(AuthMode.LocalDefault, context);
+
+        Assert.True(reached);
+        Assert.Equal("user-1", sub);
+    }
+
+    [Fact]
+    public async Task A_stranger_on_the_discover_path_stays_a_stranger()
+    {
+        var (reached, sub) = await Send(AuthMode.Required, Request(path: "/discover"));
+        Assert.True(reached);
+        Assert.Null(sub);
+    }
+
+    [Fact]
+    public async Task The_openapi_document_no_longer_passes_as_a_static_file()
+    {
+        var context = Request(path: "/openapi.json");
+        var (reached, sub) = await Send(AuthMode.Required, context);
+
+        // It reaches its handler, which refuses a stranger, rather than skipping sign-in altogether.
+        Assert.True(reached);
+        Assert.Null(sub);
+    }
+
     private static ClaimsPrincipal Signed(string roles)
         => new(new ClaimsIdentity([new Claim("sub", "user-1"), new Claim("roles", roles)], "test"));
 
