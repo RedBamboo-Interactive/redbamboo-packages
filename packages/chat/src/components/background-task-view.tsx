@@ -3,6 +3,7 @@ import { Button } from "@redbamboo/ui"
 import type { BackgroundTaskInfo, BackgroundTaskState, MessagePart, TurnOrigin } from "../types"
 import { PART_COLOR, getPartColor, isBackgroundRunning } from "../lib/part-colors"
 import { getEffectiveToolName } from "../lib/tool-semantics"
+import { taskKindWord } from "../lib/background-work"
 
 /**
  * Panel-wide background work state shared with every message row without
@@ -49,7 +50,7 @@ const STATUS_CLASS: Record<string, string> = {
 }
 
 export function taskTitle(task: Pick<BackgroundTaskState, "kind" | "description" | "agentType">): string {
-  return task.description || task.agentType || (task.kind === "shell" ? "Background shell" : "Background agent")
+  return task.description || task.agentType || `Unnamed ${taskKindWord(task.kind)}`
 }
 
 function formatDuration(ms: number): string {
@@ -72,14 +73,73 @@ function useNow(active: boolean): number {
   return now
 }
 
+function useStopTask(taskId: string | undefined, onStop: ((taskId: string) => Promise<void> | void) | undefined) {
+  const [stopping, setStopping] = useState(false)
+  const [stopError, setStopError] = useState<string | null>(null)
+  const stop = async () => {
+    if (!onStop || !taskId) return
+    setStopping(true)
+    setStopError(null)
+    try { await onStop(taskId) }
+    catch (error) { setStopError(error instanceof Error ? error.message : "Stop failed") }
+    finally { setStopping(false) }
+  }
+  return { stopping, stopError, stop }
+}
+
+function BackgroundTaskRow({ task, onOpen, onStop }: {
+  task: BackgroundTaskInfo
+  onOpen: () => void
+  onStop?: (taskId: string) => Promise<void> | void
+}) {
+  const now = useNow(true)
+  const { stopping, stopError, stop } = useStopTask(task.taskId, onStop)
+  const started = task.startedAt ? Date.parse(task.startedAt) : NaN
+  const detail = [taskKindWord(task.kind), Number.isFinite(started) ? formatDuration(now - started) : "", task.lastActivity]
+    .filter(Boolean).join(" · ")
+  return (
+    <li data-slot="background-task-row" data-task-id={task.taskId} className="flex items-center gap-2 py-2">
+      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left cursor-pointer group">
+        <span className="block truncate text-sm text-contrast group-hover:underline">{taskTitle(task)}</span>
+        <span className="block truncate text-xs text-text-muted first-letter:uppercase">{detail}</span>
+      </button>
+      {onStop && (
+        <Button variant="destructive" size="xs" onClick={stop} disabled={stopping} aria-label={`Stop ${taskTitle(task)}`}>
+          <i className={`ph-bold ${stopping ? "ph-spinner animate-spin" : "ph-stop"} text-[10px]`} />
+          Stop
+        </Button>
+      )}
+      {stopError && <span className="text-xs text-red-300">{stopError}</span>}
+    </li>
+  )
+}
+
+/** Every running task the activity row counted: what each one is, and a way to stop it. */
+export function BackgroundTaskList({ tasks, turnEnded, onOpen, onStop }: {
+  tasks: readonly BackgroundTaskInfo[]
+  turnEnded: boolean
+  onOpen: (task: BackgroundTaskInfo) => void
+  onStop?: (taskId: string) => Promise<void> | void
+}) {
+  return (
+    <div data-slot="background-task-list">
+      <p className="text-xs text-text-muted mb-1">
+        {turnEnded ? "The reply is finished. These keep going until they end or you stop them." : "These run beside the current reply."}
+      </p>
+      <ul className="divide-y divide-border-subtle">
+        {tasks.map(task => <BackgroundTaskRow key={task.taskId} task={task} onOpen={() => onOpen(task)} onStop={onStop} />)}
+      </ul>
+    </div>
+  )
+}
+
 /** Status, duration, tool count and summary of the task a square launched, with Stop while it runs. */
 export function BackgroundTaskPanel({ part }: { part: MessagePart }) {
   const { onStopBackgroundTask, live } = useBackgroundWork()
   const task = part.task
   const running = task?.status === "running"
   const now = useNow(running)
-  const [stopping, setStopping] = useState(false)
-  const [stopError, setStopError] = useState<string | null>(null)
+  const { stopping, stopError, stop } = useStopTask(task?.taskId, onStopBackgroundTask)
   if (!task) return null
 
   const progress = live.get(task.taskId)
@@ -88,14 +148,6 @@ export function BackgroundTaskPanel({ part }: { part: MessagePart }) {
   const duration = task.usage?.durationMs ?? (Number.isFinite(started) && Number.isFinite(ended) ? ended - started : NaN)
   const toolUses = task.usage?.toolUses ?? progress?.usage?.toolUses
     ?? part.children?.filter(child => child.type === "tool_use").length
-  const stop = async () => {
-    if (!onStopBackgroundTask) return
-    setStopping(true)
-    setStopError(null)
-    try { await onStopBackgroundTask(task.taskId) }
-    catch (error) { setStopError(error instanceof Error ? error.message : "Stop failed") }
-    finally { setStopping(false) }
-  }
 
   return (
     <div data-slot="background-task-panel" data-task-status={task.status} className="mb-3 rounded-md border border-border-subtle bg-overlay-3 px-3 py-2 space-y-1.5">
@@ -103,7 +155,7 @@ export function BackgroundTaskPanel({ part }: { part: MessagePart }) {
         <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${STATUS_CLASS[task.status] ?? STATUS_CLASS.completed}`}>
           {STATUS_LABEL[task.status] ?? task.status}
         </span>
-        <span className="text-xs text-text-muted">{task.kind === "shell" ? "Background shell" : "Background agent"}</span>
+        <span className="text-xs text-text-muted">Background {taskKindWord(task.kind)}</span>
         {Number.isFinite(duration) && <span className="text-[10px] font-mono text-text-disabled">{formatDuration(duration)}</span>}
         {typeof toolUses === "number" && toolUses > 0 && (
           <span className="text-[10px] font-mono text-text-disabled">{toolUses} {toolUses === 1 ? "tool call" : "tool calls"}</span>

@@ -132,8 +132,10 @@ async function main() {
       // the leading group only. A shape opens its launching square's own dialog.
       const row = page.locator('[data-slot="activity-status-row"]')
       const shapes = row.getByRole("group", { name: "Background work" }).getByRole("button")
-      await row.getByText("Agent working...", { exact: true }).waitFor()
-      assert.equal(await row.getByText("Running Echo alpha").count(), 0, "the row names the kind of work, not its progress")
+      await row.getByText("Done. 1 agent and 1 command still running", { exact: true }).waitFor()
+      assert.equal(await row.getByText("Running Echo alpha").count(), 0, "the row names the work, not its progress")
+      assert.deepEqual(await shapes.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-running") === "true")), [true, false],
+        "left behind by a finished turn, only the agent moves")
       assert.equal(await row.locator('[data-slot="streaming-status-line"]').count(), 1, "one line, not two")
       assert.deepEqual(await shapes.evaluateAll(nodes => nodes.map(node => node.getAttribute("data-activity-key"))),
         ["task:task-research", "task:task-shell"], "agents before other tasks")
@@ -143,6 +145,19 @@ async function main() {
         assert.equal(await node.evaluate(el => el.offsetWidth), 10)
       }
       await shot("04-activity-row")
+      // The count opens a list of each one, with Stop; a row opens that task's own details.
+      await row.locator('[data-slot="activity-open"]').click()
+      const taskList = dialog.locator('[data-slot="background-task-list"]')
+      await taskList.getByText("Sleep then echo").waitFor()
+      await taskList.getByText("The reply is finished.", { exact: false }).waitFor()
+      assert.equal(await taskList.locator('[data-slot="background-task-row"]').count(), 2)
+      await shot("04b-task-list")
+      await taskList.getByRole("button", { name: "Stop Sleep then echo" }).click()
+      assert.deepEqual(await page.evaluate(() => window.__stops.at(-1)), "task-shell")
+      await taskList.getByRole("button", { name: /^Sleep then echo/ }).click()
+      await heading("Bash").waitFor()
+      await page.keyboard.press("Escape")
+      await dialog.waitFor({ state: "detached" })
       await shapes.nth(1).click({ force: true })
       await heading("Bash").waitFor()
       await panel.getByText("Running", { exact: true }).waitFor()
@@ -189,7 +204,8 @@ async function main() {
       .evaluateAll(nodes => nodes.map(node => [node.getAttribute("data-activity-key"), node.getAttribute("data-running") === "true"]))
     await row.getByRole("group", { name: "Background work" }).waitFor()
     assert.equal(await row.locator('[data-slot="streaming-status-line"]').count(), 1, "session and background share one line")
-    assert.equal(await row.getByText("Agent working...").count(), 0, "the session owns the text while it works")
+    assert.equal(await row.getByText("still running", { exact: false }).count(), 0, "the session owns the text while it works")
+    await row.getByRole("button", { name: "Also running: 1 agent and 1 command" }).waitFor()
     assert.deepEqual(await shapeKeys(), [["task:task-research", true], ["task:task-shell", true], ["host:d1", true], ["host:d2", false]])
     await page.waitForTimeout(600)
     await page.screenshot({ path: path.join(shots, "05-streaming-row-1440.png") })

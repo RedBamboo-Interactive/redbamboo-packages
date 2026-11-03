@@ -136,6 +136,8 @@ export {
   orderBackgroundActivity,
   runningBackgroundTasks,
   summarizeBackgroundActivity,
+  describeAlsoRunning,
+  taskKindWord,
   backgroundStopWarning,
   turnOriginOf,
 } from "./lib/background-work"

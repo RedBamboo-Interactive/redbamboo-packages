@@ -346,19 +346,69 @@ test("activity row: agents lead, then other tasks, then host work; each group ol
   assert.deepEqual(running.map(task => task.taskId), ["shell", "late-agent", "early-agent", "monitor"])
   assert.deepEqual(orderBackgroundActivity(running).map(task => task.taskId), ["early-agent", "late-agent", "monitor", "shell"])
   const host = { label: "1 delegation running…", icon: "ph-bold ph-code", title: "Delegations" }
-  // Agents own the text as an icon and verb; the shapes carry counts and details.
-  assert.deepEqual(summarizeBackgroundActivity(running, host),
-    { source: "agents", icon: "ph-bold ph-robot", label: "Agents working..." })
-  assert.equal(summarizeBackgroundActivity([tasks[1]], host)?.label, "Agent working...")
-  // Without agents, the oldest remaining task's kind leads.
-  assert.deepEqual(summarizeBackgroundActivity(running.filter(task => task.kind !== "agent"), host),
-    { source: "tasks", icon: "ph-bold ph-gear", label: "Working..." })
-  assert.deepEqual(summarizeBackgroundActivity([tasks[0]], host),
-    { source: "tasks", icon: "ph-bold ph-terminal", label: "Running command..." })
-  assert.equal(summarizeBackgroundActivity([tasks[0], { ...tasks[0], taskId: "shell-2" }], host)?.label, "Running commands...")
+  // Agents lead the row even when other work runs beside them.
+  assert.equal(summarizeBackgroundActivity(running, host)?.source, "agents")
+  assert.equal(summarizeBackgroundActivity(running, host)?.icon, "ph-bold ph-robot")
+  // Without agents, the oldest remaining task's kind picks the icon.
+  assert.equal(summarizeBackgroundActivity(running.filter(task => task.kind !== "agent"), host)?.icon, "ph-bold ph-gear")
+  assert.equal(summarizeBackgroundActivity([tasks[0]], host)?.icon, "ph-bold ph-terminal")
   // Host work only speaks when nothing else runs.
   assert.deepEqual(summarizeBackgroundActivity([], host),
     { source: "host", icon: "ph-bold ph-code", label: "1 delegation running…", title: "Delegations" })
   assert.equal(summarizeBackgroundActivity([], null), null)
   assert.equal(summarizeBackgroundActivity([], { label: "" }), null)
+})
+
+const running = (taskId: string, kind: string, description?: string | null, startedAt = "2026-11-03T21:00:00Z") =>
+  ({ taskId, kind, status: "running", startedAt, description: description ?? null })
+
+test("activity row: one task says what it is", async () => {
+  const { summarizeBackgroundActivity, describeAlsoRunning } = await import("./background-work.ts")
+  const bench = running("a", "shell", "Start the bench server")
+  assert.equal(summarizeBackgroundActivity([bench])?.label, "Done. Still running: Start the bench server")
+  assert.equal(summarizeBackgroundActivity([running("b", "agent", "Research mail options")])?.label,
+    "Done. Agent still working: Research mail options")
+  assert.equal(summarizeBackgroundActivity([running("c", "other", "Watch the build")])?.label, "Done. Still running: Watch the build")
+  assert.equal(describeAlsoRunning([bench]), "Also running: Start the bench server")
+})
+
+test("activity row: several tasks show a count, and the title names each one", async () => {
+  const { summarizeBackgroundActivity, describeAlsoRunning } = await import("./background-work.ts")
+  const benches = [running("a", "shell", "Start the game server"), running("b", "shell", "Start the portal")]
+  const two = summarizeBackgroundActivity(benches)
+  assert.equal(two?.label, "Done. 2 commands still running")
+  assert.equal(two?.title, "Start the game server\nStart the portal")
+  assert.equal(summarizeBackgroundActivity([running("a", "agent", "R"), running("b", "agent", "M")])?.label, "Done. 2 agents still working")
+  assert.equal(summarizeBackgroundActivity([...benches, running("c", "agent", "R")])?.label, "Done. 1 agent and 2 commands still running")
+  assert.equal(describeAlsoRunning(benches), "Also running: 2 commands")
+  assert.equal(describeAlsoRunning([]), null)
+})
+
+test("activity row: a missing description reads as plain words, not a blank or an internal name", async () => {
+  const { summarizeBackgroundActivity, describeAlsoRunning } = await import("./background-work.ts")
+  assert.equal(summarizeBackgroundActivity([running("a", "shell")])?.label, "Done. A command is still running")
+  assert.equal(summarizeBackgroundActivity([running("a", "shell", "   ")])?.label, "Done. A command is still running")
+  assert.equal(summarizeBackgroundActivity([running("a", "other")])?.label, "Done. A task is still running")
+  assert.equal(summarizeBackgroundActivity([running("a", "agent")])?.label, "Done. An agent is still working")
+  assert.equal(summarizeBackgroundActivity([{ ...running("a", "agent"), agentType: "Explore" }])?.label, "Done. Agent still working: Explore")
+  assert.equal(describeAlsoRunning([running("a", "shell")]), "Also running: a command")
+  assert.equal(describeAlsoRunning([running("a", "agent")]), "Also running: an agent")
+  assert.equal(summarizeBackgroundActivity([running("a", "shell"), running("b", "shell", "Portal")])?.title, "Unnamed command\nPortal")
+})
+
+test("activity row: work left running after the turn ended never reads like progress", async () => {
+  const { summarizeBackgroundActivity } = await import("./background-work.ts")
+  const bench = running("a", "shell", "Start the bench server")
+  const left = summarizeBackgroundActivity([bench])!
+  assert.equal(left.paused, true, "still spinner")
+  assert.match(left.label, /^Done\. /)
+  assert.doesNotMatch(left.label, /\.\.\.|Running command/, "no verb in progress")
+  assert.equal(summarizeBackgroundActivity([running("o", "other", "Watch")])?.paused, true)
+  // An agent is the one kind known to be moving, and it leads anything beside it.
+  assert.ok(!summarizeBackgroundActivity([running("b", "agent", "R")])?.paused)
+  assert.ok(!summarizeBackgroundActivity([bench, running("b", "agent", "R")])?.paused)
+  // A turn parked on a question isn't done, whatever runs beside it.
+  assert.equal(summarizeBackgroundActivity([bench], null, { turnEnded: false })?.label, "Still running: Start the bench server")
+  // Host work keeps its own wording and animation.
+  assert.deepEqual(summarizeBackgroundActivity([], { label: "1 delegation running…" }), { source: "host", label: "1 delegation running…" })
 })

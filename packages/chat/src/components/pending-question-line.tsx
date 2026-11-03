@@ -1,4 +1,4 @@
-import { useActivityShapes } from "./activity-status-row"
+import { ActivityNote, useActivityShapes } from "./activity-status-row"
 
 export function PendingQuestionLine() {
   const shapes = useActivityShapes()
@@ -6,7 +6,8 @@ export function PendingQuestionLine() {
     <div data-slot="pending-question-line" className="flex items-center gap-2.5 text-teal-400 text-sm py-1">
       <i className="ph-bold ph-question text-xs animate-pulse" />
       {shapes}
-      <span>Waiting for your answer...</span>
+      <span className="shrink-0">Waiting for your answer...</span>
+      <ActivityNote />
     </div>
   )
 }

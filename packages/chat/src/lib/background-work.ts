@@ -347,7 +347,9 @@ export function describeBackgroundCount(tasks: readonly { kind?: string | null }
   return segments.join(" · ")
 }
 
-type ActivityTask = Pick<BackgroundTaskState, "kind" | "status" | "startedAt"> & { lastActivity?: string | null }
+type ActivityTask = Pick<BackgroundTaskState, "kind" | "status" | "startedAt">
+  & Partial<Pick<BackgroundTaskState, "description" | "agentType">>
+  & { lastActivity?: string | null }
 
 /** Background tasks still running: an unknown status counts as running. */
 export function runningBackgroundTasks<T extends Pick<BackgroundTaskState, "status">>(tasks: readonly T[] | undefined): T[] {
@@ -372,25 +374,72 @@ export interface BackgroundActivitySummary {
   icon?: string
   label: string
   title?: string
+  /** Still spinner: nothing says this work is moving towards anything. */
+  paused?: boolean
+}
+
+/** What the provider calls a task, when it says. */
+function taskName(task: Pick<ActivityTask, "description" | "agentType">): string | null {
+  return task.description?.trim() || task.agentType?.trim() || null
+}
+
+/** The plain word for a kind of task: "command" reads better than "shell" in a status line. */
+export function taskKindWord(kind: string | null | undefined): "command" | "agent" | "task" {
+  return kind === "shell" ? "command" : kind === "agent" ? "agent" : "task"
+}
+
+function countTasks(tasks: readonly Pick<ActivityTask, "kind">[]): string {
+  const segments: string[] = []
+  for (const word of ["agent", "command", "task"] as const) {
+    const count = tasks.filter(task => taskKindWord(task.kind) === word).length
+    if (count) segments.push(`${count} ${word}${count === 1 ? "" : "s"}`)
+  }
+  return segments.join(" and ")
 }
 
 /**
- * One icon and verb for the work behind an idle session, by priority: agents,
- * then other background tasks, then host-owned work such as delegations. The
- * shapes carry the count and each item's details; the text only says what
- * kind of work leads.
+ * One running task by name, several by count. What this deliberately doesn't
+ * say: whether the work is expected to end. A test run wakes the agent when it
+ * finishes and a bench server stays up until stopped; nothing in the provider's
+ * data tells those apart.
+ */
+function describeLeftRunning(ordered: readonly ActivityTask[]): string {
+  if (ordered.length > 1) {
+    return `${countTasks(ordered)} still ${ordered.every(task => task.kind === "agent") ? "working" : "running"}`
+  }
+  const task = ordered[0]
+  const name = taskName(task)
+  const word = taskKindWord(task.kind)
+  if (word === "agent") return name ? `Agent still working: ${name}` : "An agent is still working"
+  return name ? `Still running: ${name}` : `A ${word} is still running`
+}
+
+/** The same work beside a turn that is still running: it isn't what the turn is doing. */
+export function describeAlsoRunning(running: readonly ActivityTask[]): string | null {
+  if (running.length === 0) return null
+  if (running.length > 1) return `Also running: ${countTasks(running)}`
+  const word = taskKindWord(running[0].kind)
+  return `Also running: ${taskName(running[0]) ?? `${word === "agent" ? "an" : "a"} ${word}`}`
+}
+
+/**
+ * One line for the work behind an idle session, by priority: agents, then other
+ * background tasks, then host-owned work such as delegations. It reads as a
+ * finished reply with something left behind, never as progress: only an agent
+ * is known to be moving, so anything else keeps the spinner still.
+ *
+ * `turnEnded` is false while a turn is parked on a question: it isn't done.
  */
 export function summarizeBackgroundActivity(running: readonly ActivityTask[],
-  host?: { label: string; icon?: string; title?: string } | null): BackgroundActivitySummary | null {
+  host?: { label: string; icon?: string; title?: string } | null,
+  { turnEnded = true }: { turnEnded?: boolean } = {}): BackgroundActivitySummary | null {
   const ordered = orderBackgroundActivity(running)
-  const agents = ordered.filter(task => task.kind === "agent")
-  if (agents.length) return { source: "agents", icon: "ph-bold ph-robot", label: agents.length === 1 ? "Agent working..." : "Agents working..." }
   if (ordered.length) {
-    const lead = ordered[0].kind
-    const same = ordered.filter(task => task.kind === lead).length
-    return lead === "shell"
-      ? { source: "tasks", icon: "ph-bold ph-terminal", label: same === 1 ? "Running command..." : "Running commands..." }
-      : { source: "tasks", icon: "ph-bold ph-gear", label: "Working..." }
+    const text = describeLeftRunning(ordered)
+    const label = turnEnded ? `Done. ${text}` : text
+    const title = ordered.length > 1 ? ordered.map(task => taskName(task) ?? `Unnamed ${taskKindWord(task.kind)}`).join("\n") : label
+    if (ordered[0].kind === "agent") return { source: "agents", icon: "ph-bold ph-robot", label, title }
+    return { source: "tasks", icon: ordered[0].kind === "shell" ? "ph-bold ph-terminal" : "ph-bold ph-gear", label, title, paused: true }
   }
   if (host?.label) return { source: "host", label: host.label, ...(host.icon ? { icon: host.icon } : {}), ...(host.title ? { title: host.title } : {}) }
   return null

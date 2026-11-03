@@ -17,6 +17,44 @@ export function useActivityShapes(): ReactNode {
   return useContext(ActivityShapesContext)
 }
 
+/**
+ * Background work beside a turn that is still working: one short text after the
+ * session's own, so the row says what the shapes are without a hover.
+ */
+export interface ActivityNoteValue {
+  label: string
+  title?: string
+  onOpen?: () => void
+}
+
+const ActivityNoteContext = createContext<ActivityNoteValue | null>(null)
+
+export const ActivityNoteProvider = ActivityNoteContext.Provider
+
+/** Text that opens the work it names; plain text when there is nothing to open. */
+export function ActivityText({ label, title, onOpen, className = "" }: ActivityNoteValue & { className?: string }) {
+  if (!onOpen) return <span className={`truncate min-w-0 ${className}`} title={title}>{label}</span>
+  return (
+    <button type="button" onClick={onOpen} title={title} data-slot="activity-open"
+      className={`flex min-w-0 items-center gap-1 cursor-pointer hover:text-text-secondary transition-colors text-left ${className}`}>
+      <span className="truncate">{label}</span>
+      <i aria-hidden className="ph-bold ph-caret-right text-[9px] opacity-60 shrink-0" />
+    </button>
+  )
+}
+
+/** The note in whichever status line occupies the panel's status slot. */
+export function ActivityNote() {
+  const note = useContext(ActivityNoteContext)
+  if (!note) return null
+  return (
+    <>
+      <span aria-hidden className="opacity-40 shrink-0">·</span>
+      <ActivityText {...note} className="shrink-[100]" />
+    </>
+  )
+}
+
 export interface ActivityShape {
   key: string
   label: string

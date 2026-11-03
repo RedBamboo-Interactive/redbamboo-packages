@@ -3,19 +3,21 @@ import type { MessageBlock } from "../types"
 import { getChatStatusPresentation, isContextCompactionActive } from "../lib/chat-status"
 import { getSpinnerColor } from "./chat-message"
 import { MorphSpinner } from "./morph-spinner"
-import { useActivityShapes } from "./activity-status-row"
+import { ActivityNote, ActivityText, useActivityShapes } from "./activity-status-row"
 
 /**
  * Spinner and one status text. In the chat panel's status slot it also shows
  * the activity row's shapes between the two.
  */
-export function ChatStatusLine({ color, paused = false, icon, label, title }: {
+export function ChatStatusLine({ color, paused = false, icon, label, title, onOpen }: {
   color: string
   /** Still spinner, for work that is only waiting. */
   paused?: boolean
   icon?: string
   label: string
   title?: string
+  /** Makes the text open the work it names. */
+  onOpen?: () => void
 }) {
   const shapes = useActivityShapes()
   return (
@@ -23,7 +25,8 @@ export function ChatStatusLine({ color, paused = false, icon, label, title }: {
       <MorphSpinner color={color} paused={paused} />
       {shapes}
       {icon && <i className={`${icon} text-[10px] opacity-60`} />}
-      <span className="truncate">{label}</span>
+      <ActivityText label={label} onOpen={onOpen} />
+      <ActivityNote />
     </div>
   )
 }

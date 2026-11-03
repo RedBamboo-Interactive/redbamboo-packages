@@ -13,9 +13,9 @@ import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
 import { canonicalUserMessageUids, isCanonicalQueuedMessage, isVisibleOutgoingMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
 import { ChatStatusLine, StreamingStatusLine } from "./streaming-status-line"
-import { BackgroundWorkContext, taskTitle, type BackgroundWorkContextValue } from "./background-task-view"
-import { ActivityItemDialog, ActivityShapes, ActivityShapesProvider, type ActivityShape } from "./activity-status-row"
-import { backgroundStopWarning, findLaunchingSquare, indexBackgroundTasks, orderBackgroundActivity, runningBackgroundTasks as filterRunningTasks, summarizeBackgroundActivity } from "../lib/background-work"
+import { BackgroundTaskList, BackgroundWorkContext, taskTitle, type BackgroundWorkContextValue } from "./background-task-view"
+import { ActivityItemDialog, ActivityNoteProvider, ActivityShapes, ActivityShapesProvider, type ActivityShape } from "./activity-status-row"
+import { backgroundStopWarning, describeAlsoRunning, findLaunchingSquare, indexBackgroundTasks, orderBackgroundActivity, runningBackgroundTasks as filterRunningTasks, summarizeBackgroundActivity, taskKindWord } from "../lib/background-work"
 import { PART_COLOR, getPartColor } from "../lib/part-colors"
 import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
@@ -525,10 +525,14 @@ export function ChatPanel(props: ChatPanelProps) {
   // work leaves it, and never follow the panel to another session.
   const [detachedTaskId, setDetachedTaskId] = useState<string | null>(null)
   const [openHostKey, setOpenHostKey] = useState<string | null>(null)
+  const [taskListOpen, setTaskListOpen] = useState(false)
   useEffect(() => {
     setDetachedTaskId(null)
     setOpenHostKey(null)
+    setTaskListOpen(false)
   }, [sessionId])
+  // The turn itself is over: what still runs was left behind, not waited on.
+  const turnEnded = !isStreaming && !isReconnecting && !pendingQuestion
   const orderedTasks = useMemo(() => orderBackgroundActivity(runningBackgroundTasks), [runningBackgroundTasks])
   const hostItems = hostActivity?.items ?? []
   const taskColor = (task: BackgroundTaskInfo) => {
@@ -536,17 +540,22 @@ export function ChatPanel(props: ChatPanelProps) {
     if (launcher) return getPartColor(launcher)
     return task.kind === "agent" ? PART_COLOR.delegation : task.kind === "shell" ? PART_COLOR.shell : PART_COLOR.fallback
   }
+  const openTask = (task: BackgroundTaskInfo) => {
+    const launcher = task.parentToolUseId ?? backgroundTaskIndex.get(task.taskId)?.part.toolUseId
+    if (!launcher || !requestOpen(launcher)) setDetachedTaskId(task.taskId)
+  }
+  // One task opens its own details; a count opens the list of each one.
+  const openRunningWork = orderedTasks.length === 0 ? undefined
+    : orderedTasks.length === 1 ? () => openTask(orderedTasks[0]) : () => setTaskListOpen(true)
   const activityShapes: ActivityShape[] = [
     ...orderedTasks.map(task => ({
       key: `task:${task.taskId}`,
-      label: `${taskTitle(task)} (${task.kind === "agent" ? "background agent" : task.kind === "shell" ? "background shell" : "background task"})`,
+      label: `${taskTitle(task)} (background ${taskKindWord(task.kind)})`,
       color: taskColor(task),
       shape: "square" as const,
-      running: true,
-      onOpen: () => {
-        const launcher = task.parentToolUseId ?? backgroundTaskIndex.get(task.taskId)?.part.toolUseId
-        if (!launcher || !requestOpen(launcher)) setDetachedTaskId(task.taskId)
-      },
+      // Left behind by a finished turn, only an agent is known to be moving.
+      running: !turnEnded || task.kind === "agent",
+      onOpen: () => openTask(task),
     })),
     ...hostItems.map(item => ({
       key: `host:${item.key}`,
@@ -559,6 +568,16 @@ export function ChatPanel(props: ChatPanelProps) {
   ]
   // Open details always read the current item, so they never show a stale state.
   const shownHostItem: ActivityStatusItem | null = openHostKey ? hostItems.find(item => item.key === openHostKey) ?? null : null
+  const taskListItem: ActivityStatusItem | null = taskListOpen && orderedTasks.length > 0 ? {
+    key: "background-tasks",
+    title: "Still running",
+    label: "Still running",
+    color: taskColor(orderedTasks[0]),
+    shape: "square",
+    running: !turnEnded,
+    renderDetails: close => <BackgroundTaskList tasks={orderedTasks} turnEnded={turnEnded}
+      onStop={onStopBackgroundTask} onOpen={task => { close(); openTask(task) }} />,
+  } : null
   const detachedTask = detachedTaskId ? liveBackgroundTasks.get(detachedTaskId) : undefined
   const detachedPart = useMemo<MessagePart | undefined>(() => detachedTask ? {
     type: "tool_use",
@@ -575,24 +594,29 @@ export function ChatPanel(props: ChatPanelProps) {
     : pendingQuestion && !renderStatusLine
       ? <PendingQuestionLine />
       : null
-  const backgroundSummary = sessionLine ? null : summarizeBackgroundActivity(orderedTasks, hostActivity)
+  const backgroundSummary = sessionLine ? null : summarizeBackgroundActivity(orderedTasks, hostActivity, { turnEnded })
   const backgroundColor = backgroundSummary?.source === "host"
     ? hostItems[0]?.color ?? PART_COLOR.delegation
     : orderedTasks[0] ? taskColor(orderedTasks[0]) : PART_COLOR.delegation
   // Host work that is only waiting, blocked or unknown keeps the spinner still, like its shapes.
-  const backgroundPaused = backgroundSummary?.source === "host" && !hostItems.some(item => item.running)
+  const backgroundPaused = backgroundSummary?.paused || backgroundSummary?.source === "host" && !hostItems.some(item => item.running)
+  const alsoRunning = sessionLine ? describeAlsoRunning(orderedTasks) : null
   const statusLine = (
     <div data-slot="activity-status-row" className="min-w-0">
       <ActivityShapesProvider value={<ActivityShapes shapes={activityShapes} />}>
-        {sessionLine ?? (backgroundSummary && (
-          <ChatStatusLine color={backgroundColor} paused={backgroundPaused} icon={backgroundSummary.icon} label={backgroundSummary.label} title={backgroundSummary.title} />
-        ))}
+        <ActivityNoteProvider value={alsoRunning ? { label: alsoRunning, onOpen: openRunningWork } : null}>
+          {sessionLine ?? (backgroundSummary && (
+            <ChatStatusLine color={backgroundColor} paused={backgroundPaused} icon={backgroundSummary.icon} label={backgroundSummary.label} title={backgroundSummary.title}
+              onOpen={backgroundSummary.source === "host" ? undefined : openRunningWork} />
+          ))}
+        </ActivityNoteProvider>
       </ActivityShapesProvider>
       <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTaskId(null)}
         resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink}
         resolveAgentInfo={props.resolveAgentInfo}
         loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
       <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostKey(null)} />
+      <ActivityItemDialog item={taskListItem} onClose={() => setTaskListOpen(false)} />
     </div>
   )
 
