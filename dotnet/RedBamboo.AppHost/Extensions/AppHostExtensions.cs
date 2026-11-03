@@ -296,17 +296,19 @@ public static class AppHostExtensions
     }
 
     /// <summary>
-    /// Best-effort startup diagnostic: any route mapped on the app but absent from the
+    /// Best-effort startup diagnostic: a kernel route mapped on the app but absent from the
     /// EndpointRegistry (and not a known AppHost infra route) is invisible to /discover.
+    /// A route under an area's prefix is not: the catalog reads those from the route table.
     /// Logs one warning per undiscoverable route so gaps can't accumulate silently.
     /// </summary>
     private static void WarnOnUnregisteredRoutes(
         WebApplication app, IServiceDescriptor descriptor, Dictionary<string, string>? proxyRoutes)
     {
-        app.Lifetime.ApplicationStarted.Register(() =>
+        app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
         {
             try
             {
+                var areas = await descriptor.GetAreasAsync();
                 var registered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var ep in descriptor.GetAppEndpoints())
                     registered.Add($"{ep.Method} {ep.Path.TrimEnd('/')}");
@@ -319,6 +321,7 @@ public static class AppHostExtensions
                 };
                 if (proxyRoutes is not null)
                     infraPrefixes.AddRange(proxyRoutes.Keys);
+                infraPrefixes.AddRange(areas.Select(area => area.RoutePrefix));
 
                 var sources = ((Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)app).DataSources;
                 foreach (var endpoint in sources.SelectMany(ds => ds.Endpoints))
@@ -347,6 +350,6 @@ public static class AppHostExtensions
             {
                 // Diagnostics only — never let this interfere with startup.
             }
-        });
+        }));
     }
 }
