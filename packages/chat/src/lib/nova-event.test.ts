@@ -16,3 +16,10 @@ test("uses event defaults and rejects ordinary messages", () => {
   )
   assert.equal(parseNovaEvent("ordinary message"), null)
 })
+
+test("tolerates the attributes that say who sent an event", () => {
+  assert.deepEqual(
+    parseNovaEvent('<nova-event source="agent-note" from-agent="Nova" from-agent-id="id-1" from-discussion="94453f76" from-title="Tom &amp; Jerry &quot;plans&quot; &lt;x&gt;">\nDone\n</nova-event>'),
+    { source: "agent-note", type: "generic", content: "Done" },
+  )
+})
