@@ -30,6 +30,50 @@ public static class DiscoveryEndpoints
     internal static bool MayReadCatalog(HttpContext context, AuthOptions? auth)
         => context.User.Identity?.IsAuthenticated == true || (auth is null && RequestOrigin.IsLocal(context));
 
+    /// <summary>
+    /// Answers a request no route took. A caller who may read the catalog hears what they probably meant;
+    /// anyone else learns nothing about the routes.
+    /// </summary>
+    public static async Task WriteNoRouteAsync(this IApplicationBuilder app, HttpContext context, string path)
+    {
+        var provider = MayReadCatalog(context, context.RequestServices.GetService<AuthOptions>())
+            ? app.DiscoveryCatalog()
+            : null;
+        if (provider is null)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsJsonAsync(new { error = "not_found", message = "No such endpoint -- see /discover" });
+            return;
+        }
+
+        var catalog = await provider.GetAsync();
+        var miss = catalog.Explain(context.Request.Method, path);
+        if (miss.Allowed.Count > 0)
+        {
+            context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
+            context.Response.Headers.Allow = string.Join(", ", miss.Allowed);
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "method_not_allowed",
+                message = $"{context.Request.Method} is not supported here. Allowed: {string.Join(", ", miss.Allowed)}.",
+                allowed = miss.Allowed,
+                discover = miss.Area is null ? "/discover" : $"/discover/{miss.Area}",
+            });
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        await context.Response.WriteAsJsonAsync(new
+        {
+            error = "not_found",
+            message = miss.BadValue is { } route
+                ? $"No such endpoint -- a value doesn't fit {route.Method} {route.Path}"
+                : "No such endpoint -- see /discover",
+            closest = miss.Closest.Select(item => new { method = item.Method, path = item.Path, description = item.Description }),
+            find = miss.Find,
+        });
+    }
+
     private static IResult SignInRequired() => Results.Json(new
     {
         error = "unauthorized",

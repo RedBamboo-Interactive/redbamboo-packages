@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using RedBamboo.AppHost.Auth;
@@ -61,6 +62,8 @@ public class DiscoveryCatalogTests
         group.MapPatch("/repositories/{id:guid}", (Guid id) => Results.Ok());
         group.MapGet("/quiet", () => Results.Ok()).ExcludeFromDescription();
         group.MapGet("/discover", () => Results.Ok());
+        group.MapPost("/raw-body", (HttpContext context) => Results.Ok())
+            .WithMetadata(new AcceptsMetadata([], typeof(RegisterRequest)));
 
         app.MapDiscoveryEndpoints(new Descriptor(registry), new CloudflareTunnelService());
         return app;
@@ -137,7 +140,7 @@ public class DiscoveryCatalogTests
         var code = body.GetProperty("areas").EnumerateArray().Single(area => area.GetProperty("id").GetString() == "codered");
         Assert.Equal("plugin", code.GetProperty("kind").GetString());
         Assert.Equal("/discover/codered", code.GetProperty("href").GetString());
-        Assert.Equal(4, code.GetProperty("routes").GetInt32());
+        Assert.Equal(5, code.GetProperty("routes").GetInt32());
         Assert.Equal("repository", code.GetProperty("concepts")[0].GetString());
         Assert.DoesNotContain("/repositories/register", body.GetRawText());
     }
@@ -289,6 +292,70 @@ public class DiscoveryCatalogTests
         Assert.False(paths.TryGetProperty("/api/apps/codered/repositories/{id:guid}", out _));
         Assert.True(paths.GetProperty("/api/apps/codered/repositories/register").TryGetProperty("post", out var post));
         Assert.True(post.TryGetProperty("requestBody", out _));
+    }
+
+    private static async Task<(int Status, JsonElement Body, HttpContext Context)> NoRoute(
+        WebApplication app, string method, string path, ClaimsPrincipal? user)
+    {
+        var context = new DefaultHttpContext { RequestServices = app.Services };
+        context.Request.Method = method;
+        context.Request.Path = path;
+        context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.9");
+        if (user is not null) context.User = user;
+        context.Response.Body = new MemoryStream();
+        await ((IApplicationBuilder)app).WriteNoRouteAsync(context, path);
+        context.Response.Body.Position = 0;
+        using var document = await JsonDocument.ParseAsync(context.Response.Body);
+        return (context.Response.StatusCode, document.RootElement.Clone(), context);
+    }
+
+    [Fact]
+    public async Task A_signed_in_caller_with_the_wrong_method_hears_which_methods_work()
+    {
+        await using var app = BuildApp();
+        var (status, body, context) = await NoRoute(app, "PATCH", "/api/apps/codered/repositories", SignedIn());
+
+        Assert.Equal(405, status);
+        Assert.Equal("GET", context.Response.Headers.Allow.ToString());
+        Assert.Equal("method_not_allowed", body.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task A_signed_in_caller_who_guessed_a_path_gets_the_closest_routes()
+    {
+        await using var app = BuildApp();
+        var (status, body, _) = await NoRoute(app, "GET", "/api/repositories", SignedIn());
+
+        Assert.Equal(404, status);
+        Assert.Contains(body.GetProperty("closest").EnumerateArray(),
+            route => route.GetProperty("path").GetString() == "/api/apps/codered/repositories");
+    }
+
+    [Fact]
+    public async Task A_stranger_who_reaches_no_route_learns_nothing_about_the_routes()
+    {
+        await using var app = BuildApp();
+        var (status, body, _) = await NoRoute(app, "PATCH", "/api/apps/codered/repositories", null);
+
+        Assert.Equal(404, status);
+        Assert.False(body.TryGetProperty("closest", out _));
+        Assert.False(body.TryGetProperty("allowed", out _));
+    }
+
+    [Fact]
+    public async Task A_hand_read_body_can_carry_a_schema_without_restricting_content_types()
+    {
+        await using var app = BuildApp();
+        var catalog = await CatalogOf(app);
+        var route = catalog.Routes.Single(item => item.Path == "/api/apps/codered/raw-body");
+
+        Assert.NotNull(route.RequestBody);
+        Assert.Null(route.ContentTypes);
+        var metadata = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Single(endpoint => endpoint.RoutePattern.RawText == "/api/apps/codered/raw-body")
+            .Metadata.GetMetadata<IAcceptsMetadata>();
+        Assert.Empty(metadata!.ContentTypes);
     }
 
     [Fact]

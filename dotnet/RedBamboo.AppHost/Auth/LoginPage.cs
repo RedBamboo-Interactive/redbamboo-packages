@@ -14,7 +14,6 @@ public static class LoginPage
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" crossorigin="anonymous">
             <style>
                 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -149,14 +148,20 @@ public static class LoginPage
                                 document.getElementById('app-name').textContent = data.name;
                                 document.title = 'Sign in — ' + data.name;
                             }
-                            if (data.iconClass) {
-                                var iconEl = document.getElementById('app-icon');
-                                var i = document.createElement('i');
-                                i.className = data.iconClass;
-                                iconEl.appendChild(i);
-                                if (data.iconColor) {
-                                    iconEl.style.background = data.iconColor;
-                                }
+                            // Icon classes need a font this page doesn't load. Use the service's own
+                            // favicon, or its first letter when it has none.
+                            var iconEl = document.getElementById('app-icon');
+                            var icon = new Image();
+                            icon.alt = '';
+                            icon.width = 28;
+                            icon.height = 28;
+                            icon.onerror = function() {
+                                iconEl.textContent = (data.name || '').charAt(0);
+                            };
+                            icon.src = '/favicon.svg';
+                            iconEl.appendChild(icon);
+                            if (data.iconColor) {
+                                iconEl.style.background = data.iconColor;
                             }
                         })
                         .catch(function() {});

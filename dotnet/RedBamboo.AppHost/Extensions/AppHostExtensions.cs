@@ -322,6 +322,7 @@ public static class AppHostExtensions
                 if (proxyRoutes is not null)
                     infraPrefixes.AddRange(proxyRoutes.Keys);
                 infraPrefixes.AddRange(areas.Select(area => area.RoutePrefix));
+                infraPrefixes.AddRange(areas.Select(area => area.PublicPrefix).OfType<string>());
 
                 var sources = ((Microsoft.AspNetCore.Routing.IEndpointRouteBuilder)app).DataSources;
                 foreach (var endpoint in sources.SelectMany(ds => ds.Endpoints))
