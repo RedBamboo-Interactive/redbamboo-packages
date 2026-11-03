@@ -714,26 +714,57 @@ public sealed class DiscoveryCatalogProvider(
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(30);
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private DiscoveryCatalog? _catalog;
+    private volatile DiscoveryCatalog? _catalog;
     private DateTime _builtAt;
 
+    /// <summary>
+    /// Only the first call waits for a build, which takes a couple of seconds. After that a caller gets
+    /// the current catalog at once and an old one is rebuilt behind them, since routes rarely change.
+    /// </summary>
     public async Task<DiscoveryCatalog> GetAsync()
     {
-        if (_catalog is { } fresh && DateTime.UtcNow - _builtAt < Lifetime) return fresh;
+        if (_catalog is { } current)
+        {
+            if (DateTime.UtcNow - _builtAt >= Lifetime) _ = Task.Run(RefreshAsync);
+            return current;
+        }
+
         await _gate.WaitAsync();
         try
         {
-            if (_catalog is { } built && DateTime.UtcNow - _builtAt < Lifetime) return built;
-            var capabilities = await descriptor.GetCapabilitiesAsync();
-            var areas = await descriptor.GetAreasAsync();
-            _catalog = DiscoveryCatalog.Build(routes.DataSources, descriptor.GetAppEndpoints(), capabilities, areas,
-                DiscoveryCatalog.HttpOptions(routes.ServiceProvider));
-            _builtAt = DateTime.UtcNow;
-            return _catalog;
+            return _catalog ?? await BuildAsync();
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (!await _gate.WaitAsync(0)) return;
+        try
+        {
+            await BuildAsync();
+        }
+        catch
+        {
+            // Keep serving the last good catalog; the next caller tries again.
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<DiscoveryCatalog> BuildAsync()
+    {
+        var capabilities = await descriptor.GetCapabilitiesAsync();
+        var areas = await descriptor.GetAreasAsync();
+        var catalog = DiscoveryCatalog.Build(routes.DataSources, descriptor.GetAppEndpoints(), capabilities, areas,
+            DiscoveryCatalog.HttpOptions(routes.ServiceProvider));
+        _builtAt = DateTime.UtcNow;
+        _catalog = catalog;
+        return catalog;
     }
 }

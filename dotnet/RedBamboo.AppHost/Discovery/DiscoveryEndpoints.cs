@@ -92,6 +92,11 @@ public static class DiscoveryEndpoints
         _startTime = DateTime.UtcNow;
         var catalog = new DiscoveryCatalogProvider(app, descriptor);
         ((IApplicationBuilder)app).Properties[CatalogProperty] = catalog;
+        app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
+        {
+            try { await catalog.GetAsync(); }
+            catch { /* A failed warm-up just leaves the first caller to build it. */ }
+        }));
         var auth = app.Services.GetService<AuthOptions>();
 
         app.MapGet("/ping", () => Results.Ok(new
