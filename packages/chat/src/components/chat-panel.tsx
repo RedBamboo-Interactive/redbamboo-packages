@@ -647,7 +647,7 @@ export function ChatPanel(props: ChatPanelProps) {
   }
 
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
-  const timelineRows = projectActivityTimeline(visibleMessages, startIndex)
+  const timelineRows = projectActivityTimeline(visibleMessages, startIndex, props.eventRows?.isRow)
   timelineRowsRef.current = timelineRows
   activityRowsRef.current = timelineRows
     .filter(row => row.kind === "activity")
@@ -709,6 +709,20 @@ export function ChatPanel(props: ChatPanelProps) {
                 if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
                 const row = visual.row
                 const block = row.block
+                if (row.kind === "event-row") {
+                  const part = block.parts[0]
+                  return (
+                    <div
+                      key={visual.key}
+                      className="mb-4 msg-enter-ai"
+                      data-message-uid={block.id}
+                      data-input-message-uid={part.messageUid}
+                      data-chat-entrance-row=""
+                    >
+                      {props.eventRows?.render(part, { queueStatus: resolveEventQueueStatus(part) })}
+                    </div>
+                  )
+                }
                 const index = row.sourceIndices[row.sourceIndices.length - 1] ?? 0
                 const isLastAssistant = row.sourceIndices.includes(lastAssistantIndex)
                 // A content row from one message: its menu acts on that whole message.

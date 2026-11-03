@@ -685,6 +685,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
           const event = isEventPart(part)
           const queueStatus = resolveEventQueueStatus?.(part)
           const squareEvent = usesSquareEventMarker(part)
+          const inlineLabel = event ? eventInlineLabel(part) : null
           return [
             ...originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />),
             <button
@@ -699,6 +700,17 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
               data-tool-use-id={part.toolUseId}
               data-task-status={part.task?.status}
             />,
+            ...(inlineLabel ? [
+              <button
+                key={`label:${i}`}
+                type="button"
+                onClick={() => handleClick(part)}
+                data-slot="event-inline-label"
+                className="ml-0.5 mr-1.5 text-[11px] leading-none text-text-muted hover:text-text-secondary cursor-pointer"
+              >
+                {inlineLabel}
+              </button>,
+            ] : []),
           ]
         })}
         {trailingOrigins.map(entry =>
@@ -1254,6 +1266,12 @@ function formatTimestamp(iso: string): string {
       hour: "2-digit", minute: "2-digit", second: "2-digit",
     })
   } catch { return iso }
+}
+
+/** A name the host wants shown beside the marker: it has no presentation that identifies it. */
+function eventInlineLabel(part: MessagePart): string | null {
+  const event = parseEventPart(part)
+  return event?.inlineLabel && event.label ? event.label : null
 }
 
 /** The Agent that sent an event, when the event names one and the host knows it. */

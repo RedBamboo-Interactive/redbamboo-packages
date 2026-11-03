@@ -1,4 +1,5 @@
 import type { ContextMenuEntry } from "@redbamboo/ui"
+import type { EventQueueStatus } from "./components/event-queue-status"
 
 export interface FocusMessageRequest {
   uid: string
@@ -427,6 +428,16 @@ export interface AgentDisplayInfo {
  */
 export type ResolveAgentInfo = (agentRef: string) => AgentDisplayInfo | undefined
 
+/**
+ * Lets a host lift chosen event parts out of the activity frieze into a row it
+ * draws itself, in the same chronological place with the same identity. Leave
+ * it unset and every event stays a frieze marker.
+ */
+export interface EventRowRenderer {
+  isRow: (part: MessagePart) => boolean
+  render: (part: MessagePart, context: { queueStatus?: EventQueueStatus }) => React.ReactNode
+}
+
 export interface SessionAgentInfo {
   id: string
   name: string
@@ -712,6 +723,7 @@ export interface ChatPanelProps {
   // Avatar
   assistantAvatar?: string
   resolveAgentInfo?: ResolveAgentInfo
+  eventRows?: EventRowRenderer
   /** Opt-in sender treatment for prose-led experiences such as roleplay. */
   senderPresentation?: "compact" | "portrait"
 

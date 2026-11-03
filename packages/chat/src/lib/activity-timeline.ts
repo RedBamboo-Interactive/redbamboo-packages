@@ -1,5 +1,6 @@
 import type { MessageBlock, MessagePart, TurnOrigin } from "../types"
 import { TURN_ORIGIN_KEY, turnOriginOf } from "./background-work.ts"
+import { isEventPart } from "./event-parts.ts"
 
 /** A turn-origin marker drawn inside an activity frieze, before `parts[before]`. */
 export interface ActivityTurnOrigin {
@@ -12,7 +13,8 @@ export interface ActivityTurnOrigin {
 
 export interface ActivityTimelineRow {
   key: string
-  kind: "activity" | "message"
+  /** `event-row` is one event part the host draws itself; only hosts that ask get one. */
+  kind: "activity" | "message" | "event-row"
   block: MessageBlock
   /** Original message indexes contributing parts to this rendered row. */
   sourceIndices: number[]
@@ -58,7 +60,11 @@ function withoutTurnOrigin(block: MessageBlock): MessageBlock {
  * it joins the frieze once, at the turn's chronological start, and is stripped
  * from the content rows the turn is split into.
  */
-export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0): ActivityTimelineRow[] {
+export function projectActivityTimeline(
+  blocks: MessageBlock[],
+  indexOffset = 0,
+  isEventRow?: (part: MessagePart) => boolean,
+): ActivityTimelineRow[] {
   const rows: ActivityTimelineRow[] = []
   let activityParts: MessagePart[] = []
   let activitySources: number[] = []
@@ -155,6 +161,24 @@ export function projectActivityTimeline(blocks: MessageBlock[], indexOffset = 0)
       if (isVisibleContent(part)) {
         flushActivity()
         contentParts.push(part)
+        continue
+      }
+
+      // A lifted event is a row in its own right, so it splits the frieze. It
+      // keeps the block's timestamp: the panel sorts rows on it, and a merged
+      // group's later parts must not overtake the rows that follow them.
+      if (isEventRow && isEventPart(part) && isEventRow(part)) {
+        flushContent()
+        flushActivity()
+        rows.push({
+          key: `event-row:${part.messageUid || `${block.id}:${partIndex}`}`,
+          kind: "event-row",
+          block: { ...contentBlock, id: `event-row:${part.messageUid || `${block.id}:${partIndex}`}`, parts: [part] },
+          sourceIndices: [sourceIndex],
+          compactAfter: false,
+          ownsActions: false,
+          ownsSender: false,
+        })
         continue
       }
 

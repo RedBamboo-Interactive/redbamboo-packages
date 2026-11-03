@@ -49,6 +49,7 @@ export type {
   SessionConfigOption,
   SessionAgentInfo,
   AgentDisplayInfo,
+  EventRowRenderer,
   ResolveAgentInfo,
   ProviderUsageWindow,
   ProviderUsageCredits,
@@ -70,6 +71,7 @@ export { MorphSpinner } from "./components/morph-spinner"
 export { ToolInputView } from "./components/tool-input-view"
 export { ToolOutputView } from "./components/tool-output"
 export { EventView, parseEventPart } from "./components/event-view"
+export type { EventQueueStatus } from "./components/event-queue-status"
 export type { ParsedEvent, EventViewProps } from "./components/event-view"
 export { ToolCallCard } from "./components/tool-call-card"
 export { ContextIndicator, SessionInfoButton } from "./components/context-indicator"

@@ -24,6 +24,8 @@ export interface ParsedEvent {
   data: Record<string, unknown> | null
   /** ISO timestamp of the individual event, when the pipeline provided it. */
   timestamp?: string
+  /** Show the label beside the frieze marker instead of only in its modal. */
+  inlineLabel?: boolean
 }
 
 export function parseEventPart(part: MessagePart): ParsedEvent | null {
@@ -41,6 +43,7 @@ export function parseEventPart(part: MessagePart): ParsedEvent | null {
     color: typeof payload.color === "string" ? payload.color : null,
     data: data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null,
     timestamp: typeof payload.timestamp === "string" ? payload.timestamp : undefined,
+    inlineLabel: payload.inlineLabel === true,
   }
 }
 

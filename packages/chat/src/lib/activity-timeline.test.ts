@@ -2,6 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import type { MessageBlock, MessagePart } from "../types.ts"
 import { projectActivityTimeline } from "./activity-timeline.ts"
+import { squareSequence, stepSquare } from "./part-navigation.ts"
 
 let seq = 0
 const part = (type: MessagePart["type"], content: string): MessagePart => ({ type, content })
@@ -192,4 +193,43 @@ test("an origin learned late keeps the activity row identity", () => {
   const after = projectActivityTimeline([woken(plain, "wake")])
   assert.equal(after[0].key, before[0].key)
   assert.deepEqual(after[0].turnOrigins, [{ before: 0, origin, turnKey: "wake" }])
+})
+
+const eventPart = (key: string, uid: string): MessagePart => ({ type: "tool_use", toolName: `event:${key}`, content: uid, messageUid: uid })
+const isNote = (p: MessagePart) => p.toolName === "event:agent-note"
+
+test("without a host predicate every event stays in the frieze", () => {
+  const rows = projectActivityTimeline([block("assistant", [eventPart("weather", "w"), eventPart("agent-note", "n"), eventPart("hue", "h")])])
+  assert.deepEqual(rows.map(row => row.kind), ["activity"])
+  assert.equal(rows[0].block.parts.length, 3)
+})
+
+test("a lifted event becomes its own row, in place, splitting the frieze around it", () => {
+  const merged = block("assistant", [eventPart("weather", "w"), eventPart("agent-note", "n"), eventPart("hue", "h")])
+  const rows = projectActivityTimeline([merged], 0, isNote)
+  assert.deepEqual(rows.map(row => row.kind), ["activity", "event-row", "activity"])
+  assert.equal(rows[1].key, "event-row:n")
+  assert.equal(rows[1].block.id, "event-row:n")
+  assert.equal(rows[1].block.parts[0].messageUid, "n")
+  // Rows are sorted on these: a merged group's later rows must not overtake each other.
+  assert.deepEqual(rows.map(row => row.block.timestamp), [merged.timestamp, merged.timestamp, merged.timestamp])
+  assert.deepEqual(rows.map(row => row.sourceIndices), [[0], [0], [0]])
+  assert.equal(rows[1].ownsSender, false)
+  assert.equal(rows[1].ownsActions, false)
+})
+
+test("only tool parts that are events can be lifted", () => {
+  const rows = projectActivityTimeline([block("assistant", [part("tool_use", "Bash")])], 0, () => true)
+  assert.deepEqual(rows.map(row => row.kind), ["activity"])
+})
+
+test("part navigation walks the frieze rows and skips a lifted note", () => {
+  const rows = projectActivityTimeline([block("assistant", [eventPart("weather", "w"), eventPart("agent-note", "n"), eventPart("hue", "h")])], 0, isNote)
+  const squares = rows
+    .filter(row => row.kind === "activity")
+    .map(row => ({ id: row.block.id, parts: row.block.parts }))
+  const sequence = squareSequence(squares)
+  assert.equal(sequence.length, 2)
+  assert.deepEqual(stepSquare(squares, sequence[0], 1), sequence[1])
+  assert.equal(stepSquare(squares, sequence[1], 1), undefined)
 })
