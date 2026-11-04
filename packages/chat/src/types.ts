@@ -79,6 +79,8 @@ export interface MessagePart {
   thinkingState?: "active" | "completed"
   /** Existing logical input identity retained by a projected host-event part. */
   messageUid?: string
+  /** A host event part the host put where the turn received it, from its canonical input record. */
+  inputPlaced?: boolean
   type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image" | "task"
   content: string
   toolName?: string
@@ -216,6 +218,8 @@ export interface ChatQueueTransport {
   cancel(itemId: string): Promise<ChatQueuedItem>
   retry(itemId: string): Promise<ChatQueuedItem>
   sendNow(): Promise<void>
+  /** Ask one pending input to join the running turn, without interrupting it. Optional: without it a queued event's send button interrupts, as `sendNow` does. */
+  steer?(itemId: string): Promise<unknown>
   /** Subscribe to queue invalidations, normally sourced from session.input-queue.updated. */
   subscribe?(listener: () => void): () => void
 }
@@ -724,6 +728,12 @@ export interface ChatPanelProps {
   assistantAvatar?: string
   resolveAgentInfo?: ResolveAgentInfo
   eventRows?: EventRowRenderer
+  /**
+   * A queued host event behaves like a queued message: it waits below the running turn and enters
+   * the conversation where it was processed. Only for a host that sets `inputPlaced` on the event
+   * parts it placed from their canonical input records.
+   */
+  queuedEventsWait?: boolean
   /** Opt-in sender treatment for prose-led experiences such as roleplay. */
   senderPresentation?: "compact" | "portrait"
 

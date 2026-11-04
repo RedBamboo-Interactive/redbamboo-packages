@@ -1,10 +1,11 @@
+import type { ReactNode } from "react"
 import type { QueuedMessage } from "../lib/message-queue"
 import { queuedMessageCanRetry, queuedMessageHasNothingToShow, queuedMessageSendBlockedReason, queuedMessageStatusLabel } from "../lib/queue-status"
 import type { ImageAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 import { parseNovaEvent } from "../lib/nova-event"
-import { eventQueueStatus } from "./event-queue-status"
+import { eventQueueStatus, type EventSendAction } from "./event-queue-status"
 import { NovaEventSquare } from "./nova-event-square"
 import { ContextSquare, extractRawContextXml, parseContextFromMessage } from "./context-card"
 import { stripHiddenMessageEnvelopes } from "../lib/message-content"
@@ -14,6 +15,11 @@ interface QueuedMessageGhostProps {
   onCancel: (id: string) => void
   onEdit: (id: string) => void
   onSendNow: (id: string) => void
+  /** A queued event's send button. It is not a person's message, so it may steer where theirs interrupts. */
+  onSendEvent?: (id: string) => void
+  eventSend?: EventSendAction
+  /** A waiting event's own row, already projected: its sender and origin, or its dot. */
+  eventContent?: ReactNode
 }
 
 /**
@@ -21,12 +27,45 @@ interface QueuedMessageGhostProps {
  * dashed border + reduced opacity distinguish it from a delivered message.
  * The whole point of the queue is that this is never invisible.
  */
-export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: QueuedMessageGhostProps) {
+export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEvent, eventSend, eventContent }: QueuedMessageGhostProps) {
   const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
   // Queued and immediately delivered submissions are the same outgoing message
   // entering the same timeline. The dashed styling communicates queue state;
   // both should get the established user-message spawn exactly once at mount.
   const entranceClass = "msg-enter-user"
+
+  // A waiting event reads as a waiting message does: the same dashed shape, the same status line
+  // below it. An event can't be pulled back into a draft, so there is no click to edit.
+  if (eventContent) {
+    const status = eventQueueStatus(item, onCancel, onSendEvent ?? onSendNow, eventSend)
+    return (
+      <div
+        className={`mb-3 ${entranceClass}`}
+        data-slot="queued-nova-event"
+        data-session-id={item.sessionId}
+        data-queue-item-id={item.remoteId ?? item.id}
+        data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
+        data-input-message-uid={item.messageUid}
+      >
+        <div className="flex justify-end">
+          <div
+            data-slot="queued-event-ghost"
+            className="min-w-0 max-w-[80%] border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90"
+            style={USER_BUBBLE_SHAPE_STYLE}
+          >
+            {eventContent}
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-1 mt-1">
+          <span className={`text-[10px] italic mr-1 ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
+            {queuedMessageStatusLabel(item, true)}
+          </span>
+          {status?.actions}
+        </div>
+      </div>
+    )
+  }
+
   const novaEvent = parseNovaEvent(item.text)
 
   if (novaEvent) {
@@ -38,7 +77,7 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow }: Queued
         data-queue-item-id={item.remoteId ?? item.id}
         data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
       >
-        <NovaEventSquare event={novaEvent} queueStatus={eventQueueStatus(item, onCancel, onSendNow)} />
+        <NovaEventSquare event={novaEvent} queueStatus={eventQueueStatus(item, onCancel, onSendEvent ?? onSendNow, eventSend)} />
       </div>
     )
   }

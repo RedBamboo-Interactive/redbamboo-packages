@@ -11,22 +11,33 @@ export interface EventQueueStatus {
 
 export type ResolveEventQueueStatus = (part: MessagePart) => EventQueueStatus | undefined
 
+/**
+ * What a queued event's send button does, when it isn't today's interrupt. Absent, the button
+ * interrupts and says so. `steers` hides it once the input is already on its way into the turn.
+ */
+export interface EventSendAction {
+  title: string
+  steers: boolean
+}
+
 export function eventQueueStatus(
   item: QueuedMessage | undefined,
   onCancel: (id: string) => void,
   onSendNow: (id: string) => void,
+  send?: EventSendAction,
 ): EventQueueStatus | undefined {
   if (!item || item.appearance === "message" || item.remoteState === "delivered") return undefined
   const sendBlockedReason = queuedMessageSendBlockedReason(item)
+  const alreadySteering = !!send?.steers && item.delivery === "steer-current" && !item.deliveryError
   return {
     label: queuedMessageStatusLabel(item, true),
     failed: !!item.deliveryError,
     actions: <>
-      {queuedMessageCanRetry(item) && <button
+      {queuedMessageCanRetry(item) && !alreadySteering && <button
         disabled={!!sendBlockedReason}
         onClick={() => onSendNow(item.id)}
         className="w-5 h-5 flex items-center justify-center rounded text-text-disabled hover:text-amber-400 hover:bg-overlay-6 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-        title={sendBlockedReason ?? (item.deliveryError ? "Retry" : "Send now (interrupts the current turn)")}
+        title={sendBlockedReason ?? (item.deliveryError ? "Retry" : send?.title ?? "Send now (interrupts the current turn)")}
         aria-label={item.deliveryError ? "Retry queued event" : "Send queued event now"}
       >
         <i className={`ph-bold ${item.deliveryError ? "ph-arrow-clockwise" : "ph-paper-plane-tilt"} text-[10px]`} />

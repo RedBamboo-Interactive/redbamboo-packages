@@ -300,9 +300,19 @@ export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, d
     return true
   }, [remote, sessionId])
 
+  /** Asks one pending input to join the running turn. False when this transport has no such call. */
+  const steer = useCallback((id: string) => {
+    if (!remote || !sessionId) return false
+    const transport = getRemoteMessageQueueTransport(sessionId)
+    if (!transport?.steer) return false
+    const item = store.getSnapshot().queue.find(message => message.id === id)
+    void transport.steer(item?.remoteId ?? id).then(() => refreshRemoteMessageQueue(sessionId)).catch(() => refreshRemoteMessageQueue(sessionId))
+    return true
+  }, [store, remote, sessionId])
+
   const settleDelivered = useCallback((messageUids: Iterable<string>) => {
     if (remote && sessionId) settleRemoteMessageQueue(sessionId, messageUids)
   }, [remote, sessionId])
 
-  return { queue, add, addInput, cancel, pullback, retry, sendNow, settleDelivered, remote }
+  return { queue, add, addInput, cancel, pullback, retry, sendNow, steer, settleDelivered, remote }
 }

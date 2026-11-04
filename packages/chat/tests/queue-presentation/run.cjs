@@ -117,6 +117,83 @@ async function main() {
       assert.deepEqual(eventErrors, [])
       results.push({ scenario: "projected-event-queue-lifecycle", width, passed: true })
       await events.close()
+
+      // A queued event waits like a queued message, then enters the conversation once.
+      const wait = await browser.newPage({ viewport: { width, height: 850 } })
+      const waitErrors = []
+      wait.on("pageerror", error => waitErrors.push(error.message))
+      await wait.goto(origin + "?wait")
+      await wait.getByText("Text after", { exact: true }).waitFor()
+      const rowsFor = uid => wait.locator(`[data-input-message-uid="${uid}"]`)
+      const ghost = wait.locator('[data-slot="queued-nova-event"]')
+      const above = async (upper, lower) => {
+        const [a, b] = [await upper.boundingBox(), await lower.boundingBox()]
+        return a.y + a.height <= b.y + 1
+      }
+      // No queue item known yet: both stay where the host put them. Nothing is hidden.
+      assert.equal(await wait.locator('[data-slot="test-note-row"]').count(), 1)
+      assert.equal(await ghost.count(), 0)
+      await wait.evaluate(() => waitTest.apply({ states: { note: "pending", dot: "pending" } }))
+      await ghost.nth(1).waitFor()
+      assert.equal(await wait.locator('[data-slot="test-note-row"]').count(), 1, "waiting note has one row")
+      assert.equal(await rowsFor("note").count(), 1, "waiting note has one uid in the page")
+      assert.equal(await wait.locator('button[data-input-message-uid="dot"]').count(), 1, "machine event keeps its dot")
+      assert.equal(await wait.getByText("raw frame").count(), 0, "no square or raw frame beside the row")
+      assert(await above(wait.getByText("Text after", { exact: true }), ghost.first()), "the note waits below the running turn")
+      // The waiting shape is the queued message ghost's own.
+      const shape = await wait.locator('[data-slot="queued-event-ghost"]').first().getAttribute("class")
+      assert(shape.includes("border-dashed") && shape.includes("opacity-60"), "ghost shape")
+      await ghost.first().getByText("Queued, sends after this turn", { exact: true }).waitFor()
+
+      // The send button steers one item and says so; it never asks for the interrupt.
+      const send = ghost.first().getByRole("button", { name: "Send queued event now", exact: true })
+      assert.equal(await send.getAttribute("title"), "Send into this turn (does not interrupt it)")
+      await send.focus()
+      await send.press("Enter")
+      await wait.waitForFunction(() => waitTest.actions.length === 1)
+      assert.deepEqual(await wait.evaluate(() => waitTest.actions), ["steer:q-note"])
+      // Without steering support, today's honest interrupt button stays.
+      await wait.evaluate(() => { waitTest.actions.length = 0; waitTest.steerSupport = false; waitTest.apply({}) })
+      await wait.waitForFunction(() => document.querySelector('[data-slot="queued-nova-event"] button[aria-label="Send queued event now"]')?.title === "Send now (interrupts the current turn)")
+      await send.focus()
+      await send.press("Enter")
+      await wait.waitForFunction(() => waitTest.actions.length === 1)
+      assert.deepEqual(await wait.evaluate(() => waitTest.actions), ["send-now"])
+      await wait.evaluate(() => { waitTest.steerSupport = true; waitTest.apply({}) })
+
+      // Delivered with no record yet: still one row, still below the turn, no second copy.
+      await wait.evaluate(() => waitTest.apply({ states: { note: "delivered", dot: "delivered" } }))
+      await ghost.first().getByText("Delivering update", { exact: true }).waitFor()
+      assert.equal(await wait.locator('[data-slot="test-note-row"]').count(), 1)
+      assert.equal(await ghost.count(), 2)
+      assert.equal(await ghost.first().getByRole("button", { name: "Send queued event now" }).count(), 0, "a delivered event offers no send")
+
+      // The record arrives: it moves once to its real place, and the receipt goes.
+      await wait.evaluate(() => waitTest.apply({ placed: true }))
+      await ghost.first().waitFor({ state: "detached" })
+      assert.equal(await wait.locator('[data-slot="test-note-row"]').count(), 1)
+      assert.equal(await rowsFor("note").count(), 1)
+      assert.equal(await wait.locator('button[data-input-message-uid="dot"]').count(), 1)
+      assert(await above(wait.locator('[data-slot="test-note-row"]'), wait.getByText("Text after", { exact: true })), "placed between the text around it")
+      assert(await above(wait.getByText("Text before", { exact: true }), wait.locator('[data-slot="test-note-row"]')), "placed after the text before it")
+      await wait.evaluate(() => waitTest.remount())
+      await wait.getByText("Text after", { exact: true }).waitFor()
+      assert.equal(await ghost.count(), 0, "reload agrees: no queue copy")
+      assert.equal(await wait.locator('[data-slot="test-note-row"]').count(), 1, "reload agrees: one row")
+      assert.deepEqual(waitErrors, [])
+      results.push({ scenario: "queued-event-waits-then-places-once", width, passed: true })
+      await wait.close()
+
+      // A transport without the new call keeps today's button even where the session can steer.
+      const plain = await browser.newPage({ viewport: { width, height: 850 } })
+      await plain.goto(origin + "?wait&nosteercall")
+      await plain.getByText("Text after", { exact: true }).waitFor()
+      await plain.evaluate(() => waitTest.apply({ placed: false, states: { note: "pending" } }))
+      const plainSend = plain.locator('[data-slot="queued-nova-event"]').getByRole("button", { name: "Send queued event now", exact: true })
+      await plainSend.waitFor()
+      assert.equal(await plainSend.getAttribute("title"), "Send now (interrupts the current turn)")
+      results.push({ scenario: "queued-event-no-steer-call", width, passed: true })
+      await plain.close()
       const blocked = await browser.newPage({ viewport: { width, height: 850 } })
       const blockedErrors = []
       blocked.on("pageerror", error => blockedErrors.push(error.message))

@@ -932,6 +932,7 @@ function PartModalView({ part, pairedResult, open, onClose, navigation, minHeigh
               {event.timestamp && (
                 <p className="text-[10px] font-mono text-text-disabled truncate">
                   {formatEventTime(event.timestamp)}
+                  {event.postedAt && ` · Posted ${formatEventTime(event.postedAt)}`}
                 </p>
               )}
             </div>

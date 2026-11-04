@@ -97,4 +97,59 @@ function EventApp() {
   ] }]
   return <ChatPanel key={mount} messages={messages} isStreaming sessionId="event-test" queueTransport={transport} persistQueue={false} />
 }
-createRoot(document.getElementById("root")!).render(new URLSearchParams(location.search).has("events") ? <EventApp /> : new URLSearchParams(location.search).has("links") ? <LinkProbe /> : <App />)
+
+const waitTest = {
+  actions: [] as string[],
+  states: {} as Record<string, ChatQueuedItem["state"] | undefined>,
+  steerSupport: true,
+  streaming: true,
+  placed: false,
+  apply: (_change: Partial<{ states: Record<string, ChatQueuedItem["state"] | undefined>; streaming: boolean; placed: boolean }>) => {},
+  remount: () => {},
+}
+;(window as unknown as { waitTest: typeof waitTest }).waitTest = waitTest
+
+/** A running turn with a note and a machine event that are queued, then delivered, then placed. */
+function WaitApp() {
+  const [, render] = useState(0)
+  const [mount, setMount] = useState(0)
+  const listeners = useMemo(() => new Set<() => void>(), [])
+  const noSteerCall = new URLSearchParams(location.search).has("nosteercall")
+  const items = (): ChatQueuedItem[] => Object.entries(waitTest.states).flatMap(([uid, state], index) => state ? [{
+    id: `q-${uid}`, sessionId: "wait-test", sequence: index + 1, state,
+    delivery: "after-current" as const, displayContent: "<nova-event source=\"x\">raw frame</nova-event>", messageUid: uid,
+    deliveredMessageUid: state === "delivered" ? uid : undefined,
+    createdAt: stamp, updatedAt: stamp, completedAt: state === "delivered" ? stamp : undefined, attemptCount: 0,
+  }] : [])
+  waitTest.apply = change => {
+    Object.assign(waitTest, change)
+    render(value => value + 1)
+    listeners.forEach(listener => listener())
+  }
+  waitTest.remount = () => setMount(value => value + 1)
+  const transport = useMemo<ChatQueueTransport>(() => ({
+    list: async () => ({ items: items(), queue: { depth: items().length, state: "waiting_for_session", blockedReason: "active_turn" } }),
+    cancel: async id => { waitTest.actions.push("cancel:" + id); return items()[0]! },
+    retry: async id => { waitTest.actions.push("retry:" + id); return items()[0]! },
+    sendNow: async () => { waitTest.actions.push("send-now") },
+    ...(noSteerCall ? {} : { steer: async (id: string) => { waitTest.actions.push("steer:" + id) } }),
+    subscribe: listener => { listeners.add(listener); return () => { listeners.delete(listener) } },
+  }), [])
+  const part = (uid: string) => ({ type: "tool_use" as const, toolName: uid === "note" ? "event:agent-note" : "event:weather",
+    messageUid: uid, content: uid, inputPlaced: waitTest.placed || undefined,
+    toolInput: JSON.stringify({ event: uid, label: uid, timestamp: stamp }) })
+  const events = (timestamp: string): MessageBlock[] => [
+    { id: "event-note", role: "assistant", timestamp, parts: [part("note")] },
+    { id: "event-dot", role: "assistant", timestamp, parts: [part("dot")] },
+  ]
+  const before: MessageBlock = { id: "turn", role: "assistant", timestamp: "2026-09-12T22:00:00Z", parts: [{ type: "text", content: "Text before" }], metadata: { messageUid: "turn" } }
+  const after: MessageBlock = { id: "turn:segment:1", role: "assistant", timestamp: "2026-09-12T22:02:00Z", parts: [{ type: "text", content: "Text after" }], metadata: { messageUid: "turn" } }
+  const messages = [before, ...events("2026-09-12T22:01:00Z"), after]
+  return <div style={{ width: "100%", height: 700 }}><ChatPanel key={mount} messages={messages} isStreaming={waitTest.streaming}
+    supportsSteering={waitTest.steerSupport} sessionId="wait-test" queueTransport={transport} persistQueue={false} queuedEventsWait
+    eventRows={{ isRow: candidate => candidate.toolName === "event:agent-note",
+      render: (candidate, { queueStatus }) => <div data-slot="test-note-row" data-has-status={!!queueStatus}>Nova, from elsewhere: {candidate.content}</div> }} />
+  </div>
+}
+
+createRoot(document.getElementById("root")!).render(new URLSearchParams(location.search).has("wait") ? <WaitApp /> : new URLSearchParams(location.search).has("events") ? <EventApp /> :new URLSearchParams(location.search).has("links") ? <LinkProbe /> : <App />)

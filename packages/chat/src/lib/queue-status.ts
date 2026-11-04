@@ -28,6 +28,9 @@ export function queuedMessageStatusLabel(item: QueuedMessage, internalEvent = fa
   if (item.deliveryError) return item.deliveryError
   if (maintenanceBlocksQueuedMessage(item)) return "Saved, waiting for the update to finish"
   if (failedHeadBlocksQueuedMessage(item)) return "Blocked by an earlier failed message"
+  // A receipt whose transcript copy hasn't arrived: it reached the provider, so it no longer waits for a turn.
+  if (item.remoteState === "delivered" && item.delivery !== "steer-current")
+    return internalEvent ? "Delivering update" : "Delivering message"
   if (item.steerUnavailable) return "Sends after this turn"
   if (item.delivery === "steer-current") return "Sending into this turn"
   if (item.remoteState === "delivering") return internalEvent ? "Delivering update" : "Delivering message"

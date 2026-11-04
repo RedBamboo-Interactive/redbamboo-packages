@@ -29,7 +29,8 @@ function queuedMessage(item: ChatQueuedItem, previous: QueuedMessage | undefined
     attachments: item.attachments ?? previous?.attachments,
     deliveryError: item.error?.code === "steer_unavailable" ? undefined : item.error?.message,
     ...(item.state === "failed" && item.error?.retryable === false ? { deliveryRetryable: false } : {}),
-    ...((item.error?.code === "steer_unavailable" || previous?.steerUnavailable)
+    // Sticky across refreshes, until the server says it is steering again.
+    ...((item.error?.code === "steer_unavailable" || (previous?.steerUnavailable && item.delivery !== "steer-current"))
       ? { steerUnavailable: true } : {}),
     ...(item.state === "pending" && summary.blockedReason ? { blockedReason: summary.blockedReason } : {}),
     remoteState: item.state === "cancelled" ? undefined : item.state,

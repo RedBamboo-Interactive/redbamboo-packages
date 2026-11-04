@@ -1,5 +1,5 @@
 import { eventInputMessageUid } from "./event-parts.ts"
-import type { ChatQueuedItem, ChatQueueSummary, ImageAttachment, MessageBlock, SendOptions, UploadedAttachment } from "../types"
+import type { ChatQueuedItem, ChatQueueSummary, ImageAttachment, MessageBlock, MessagePart, SendOptions, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
   /** Stable presentation identity. For remote items this remains the client id across acknowledgement. */
@@ -73,6 +73,87 @@ export function canonicalUserMessageUids(messages: readonly MessageBlock[]): Set
       return uid ? [uid] : []
     }),
   ]))
+}
+
+/** Finds a queue item from a projected input. Every member of a batch shares its delivered uid, so a member's own uid wins. */
+export function queuedItemsByInputUid(queue: readonly QueuedMessage[]): Map<string, QueuedMessage> {
+  const byUid = new Map<string, QueuedMessage>()
+  for (const item of queue) {
+    const uid = item.deliveredMessageUid ?? item.messageUid
+    if (uid) byUid.set(uid, item)
+  }
+  for (const item of queue)
+    if (item.messageUid) byUid.set(item.messageUid, item)
+  return byUid
+}
+
+/** Where queued host events go for a host that places delivered ones (`queuedEventsWait`). */
+export interface QueuedEventPlacement {
+  /** The conversation: everything except the events that aren't in it yet. */
+  messages: MessageBlock[]
+  /** Inputs that are in the conversation, at the place the turn received them. */
+  placedUids: Set<string>
+  /** The projected part of each event still waiting, by queue item id. */
+  waiting: Map<string, MessagePart>
+}
+
+/**
+ * A queued event isn't in the conversation until it is processed, like a queued message. It waits
+ * with the queue, and a delivered one whose canonical record hasn't arrived keeps waiting while the
+ * turn runs (a steer is only folded in later; going inline first would move it twice). If the turn
+ * ends with no record, it goes inline at its delivery time, as an outgoing message's bridge does.
+ * An event with no queue item, or an unplaced one with no known state, is left exactly where it is:
+ * nothing is hidden because its state is unknown. Returns `messages` itself when nothing moved.
+ */
+export function placeQueuedEvents(
+  messages: MessageBlock[],
+  queue: readonly QueuedMessage[],
+  isStreaming: boolean,
+): QueuedEventPlacement {
+  const placedUids = new Set<string>()
+  for (const message of messages) {
+    if (message.role === "user") {
+      placedUids.add(message.id)
+      for (const uid of message.inputMessageUids ?? []) placedUids.add(uid)
+    }
+    for (const part of message.parts) {
+      const uid = eventInputMessageUid(part)
+      if (uid && part.inputPlaced) placedUids.add(uid)
+    }
+  }
+
+  const waiting = new Map<string, MessagePart>()
+  const byUid = new Map(queue.flatMap(item => item.messageUid && item.remoteState ? [[item.messageUid, item] as const] : []))
+  if (byUid.size === 0) return { messages, placedUids, waiting }
+
+  const bridged: MessageBlock[] = []
+  let moved = false
+  const remaining = messages.flatMap(block => {
+    const parts = block.parts.filter(part => {
+      const uid = eventInputMessageUid(part)
+      const item = uid && !part.inputPlaced ? byUid.get(uid) : undefined
+      if (!item) return true
+      const deliveredAt = item.remoteState === "delivered" ? queuedMessageTimelineTimestamp(item) : Number.NaN
+      if (item.remoteState === "delivered" && !isStreaming) {
+        if (!Number.isFinite(deliveredAt)) return true
+        bridged.push({ ...block, id: `event-${uid}`, parts: [part], timestamp: new Date(deliveredAt).toISOString() })
+      } else {
+        waiting.set(item.id, part)
+      }
+      moved = true
+      return false
+    })
+    if (parts.length === block.parts.length) return [block]
+    return parts.length > 0 ? [{ ...block, parts }] : []
+  })
+  if (!moved) return { messages, placedUids, waiting }
+
+  for (const block of bridged) {
+    const time = Date.parse(block.timestamp)
+    const after = remaining.findIndex(other => Date.parse(other.timestamp) > time)
+    remaining.splice(after < 0 ? remaining.length : after, 0, block)
+  }
+  return { messages: remaining, placedUids, waiting }
 }
 
 export interface RemoteMessageAdmission {

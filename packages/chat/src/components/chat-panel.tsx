@@ -4,14 +4,14 @@ import { useChatStream } from "../hooks/use-chat-stream"
 import { useVoiceInput } from "../hooks/use-voice-input"
 import { useMessageQueue } from "../hooks/use-message-queue"
 import { ChatMessage, PartModal, extractPlanFileContent } from "./chat-message"
-import { eventQueueStatus, type ResolveEventQueueStatus } from "./event-queue-status"
+import { eventQueueStatus, type EventSendAction, type ResolveEventQueueStatus } from "./event-queue-status"
 import { isEventBlock, eventInputMessageUid } from "../lib/event-parts"
 import { projectActivityTimeline } from "../lib/activity-timeline"
 import type { SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
 import { Composer, type ComposerHandle } from "./composer"
 import { QueuedMessageGhost } from "./queued-message-ghost"
-import { canonicalUserMessageUids, isCanonicalQueuedMessage, isVisibleOutgoingMessage, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
+import { canonicalUserMessageUids, isCanonicalQueuedMessage, isVisibleOutgoingMessage, placeQueuedEvents, queuedItemsByInputUid, queuedMessageTimelineTimestamp, type QueuedMessage } from "../lib/message-queue"
 import { ChatStatusLine, StreamingStatusLine } from "./streaming-status-line"
 import { BackgroundTaskList, BackgroundWorkContext, taskTitle, type BackgroundWorkContextValue } from "./background-task-view"
 import { ActivityItemDialog, ActivityNoteProvider, ActivityShapes, ActivityShapesProvider, type ActivityShape } from "./activity-status-row"
@@ -37,7 +37,7 @@ function hasExitPlanPart(block: MessageBlockType): boolean {
 export function ChatPanel(props: ChatPanelProps) {
   const internal = useChatStream(props.backend ?? null)
 
-  const messages = props.messages ?? internal.messages
+  const sourceMessages = props.messages ?? internal.messages
   const isStreaming = props.isStreaming ?? internal.isStreaming
   const supportsSteering = props.supportsSteering ?? false
   const sendMessage = props.onSend ?? internal.sendMessage
@@ -83,7 +83,7 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const voice = useVoiceInput(speechBackend ? {
     speech: speechBackend,
-    messages,
+    messages: sourceMessages,
     onSend: (content, opts) => deliverMessage(prepareMessage({ content }), opts),
     onAnswerQuestion,
     pendingQuestion: !!pendingQuestion,
@@ -112,11 +112,20 @@ export function ChatPanel(props: ChatPanelProps) {
     },
   })
 
-  const canonicalUserUids = useMemo(() => canonicalUserMessageUids(messages), [messages])
+  const canonicalUserUids = useMemo(() => canonicalUserMessageUids(sourceMessages), [sourceMessages])
+  const queuedEventsWait = !!props.queuedEventsWait
+  const eventPlacement = useMemo(
+    () => queuedEventsWait ? placeQueuedEvents(sourceMessages, messageQueue.queue, isStreaming) : null,
+    [queuedEventsWait, sourceMessages, messageQueue.queue, isStreaming],
+  )
+  // Everything below reads the conversation without the events that aren't in it yet.
+  const messages = eventPlacement?.messages ?? sourceMessages
+  // A delivered event's receipt holds its place until its canonical record has placed it.
+  const settledAgainst = eventPlacement?.placedUids ?? canonicalUserUids
   const settledUids = useMemo(() => messageQueue.queue.flatMap(item => {
     const uid = item.deliveredMessageUid ?? item.messageUid
-    return item.remoteState === "delivered" && uid && isCanonicalQueuedMessage(item, canonicalUserUids) ? [uid] : []
-  }), [canonicalUserUids, messageQueue.queue])
+    return item.remoteState === "delivered" && uid && isCanonicalQueuedMessage(item, settledAgainst) ? [uid] : []
+  }), [settledAgainst, messageQueue.queue])
   const settledKey = settledUids.join("\u0000")
   const entranceActivationRef = useRef<{ sessionKey: string | null; shown: boolean }>({
     sessionKey: sessionId ?? null,
@@ -162,24 +171,55 @@ export function ChatPanel(props: ChatPanelProps) {
     else if (!messageQueue.sendNow()) interrupt()
   }, [messageQueue.queue, messageQueue.retry, messageQueue.sendNow, interrupt])
 
-  const eventQueueByUid = useMemo(() => new Map(messageQueue.queue.flatMap(item => {
-    const uid = item.deliveredMessageUid ?? item.messageUid
-    return uid ? [[uid, item] as const] : []
-  })), [messageQueue.queue])
+  // A queued event's send button joins the running turn where it can, and otherwise does what it
+  // always did. A person's queued message keeps its own button.
+  const eventSteers = supportsSteering && !!queueTransport?.steer
+  const eventSend = useMemo<EventSendAction | undefined>(() => eventSteers
+    ? { steers: true, title: isStreaming ? "Send into this turn (does not interrupt it)" : "Send now" }
+    : undefined, [eventSteers, isStreaming])
+  const handleSendQueuedEvent = useCallback((id: string) => {
+    const current = messageQueue.queue.find(message => message.id === id)
+    if (eventSteers && !current?.deliveryError && messageQueue.steer(id)) return
+    handleSendQueued(id)
+  }, [eventSteers, messageQueue.queue, messageQueue.steer, handleSendQueued])
+
+  const eventQueueByUid = useMemo(() => queuedItemsByInputUid(messageQueue.queue), [messageQueue.queue])
   const resolveEventQueueStatus = useCallback<ResolveEventQueueStatus>(part => {
     const uid = eventInputMessageUid(part)
-    return uid ? eventQueueStatus(eventQueueByUid.get(uid), messageQueue.cancel, handleSendQueued) : undefined
-  }, [eventQueueByUid, messageQueue.cancel, handleSendQueued])
+    return uid ? eventQueueStatus(eventQueueByUid.get(uid), messageQueue.cancel, handleSendQueuedEvent, eventSend) : undefined
+  }, [eventQueueByUid, messageQueue.cancel, handleSendQueuedEvent, eventSend])
 
-  const renderQueuedGhost = useCallback((item: QueuedMessage) => (
-    <QueuedMessageGhost
-      key={`outgoing:${item.id}`}
-      item={item}
-      onCancel={messageQueue.cancel}
-      onEdit={handleEditQueued}
-      onSendNow={handleSendQueued}
+  const renderWaitingEvent = (part: MessagePart) => {
+    if (props.eventRows?.isRow(part)) return props.eventRows.render(part, {})
+    return <ChatMessage
+      block={{ id: `waiting:${part.messageUid}`, role: "assistant", parts: [part], timestamp: "" }}
+      blockIndex={-1}
+      isStreaming={false}
+      isLastAssistantBlock={false}
+      resolveEventLink={resolveEventLink}
+      resolveEventQueueStatus={resolveEventQueueStatus}
+      resolveImageSrc={resolveImageSrc}
+      resolveFileLink={resolveFileLink}
+      animateEntrance={false}
+      showActions={false}
     />
-  ), [messageQueue.cancel, handleEditQueued, handleSendQueued])
+  }
+
+  const renderQueuedGhost = (item: QueuedMessage) => {
+    const waitingPart = eventPlacement?.waiting.get(item.id)
+    return (
+      <QueuedMessageGhost
+        key={`outgoing:${item.id}`}
+        item={item}
+        onCancel={messageQueue.cancel}
+        onEdit={handleEditQueued}
+        onSendNow={handleSendQueued}
+        onSendEvent={handleSendQueuedEvent}
+        eventSend={eventSend}
+        eventContent={waitingPart ? renderWaitingEvent(waitingPart) : undefined}
+      />
+    )
+  }
 
   const activityRowsRef = useRef<SquareRow[]>([])
   const getActivityRows = useCallback(() => activityRowsRef.current, [])
@@ -356,7 +396,7 @@ export function ChatPanel(props: ChatPanelProps) {
     })
   }, [])
 
-  const outgoingLayoutKey = visibleOutgoing.map(item => (
+  const outgoingLayoutKey = [...visibleOutgoing, ...messageQueue.queue.filter(item => eventPlacement?.waiting.has(item.id))].map(item => (
     `${item.id}:${item.appearance ?? "queue"}:${item.remoteState ?? "local"}`
   )).join("\u0000")
 
@@ -654,7 +694,7 @@ export function ChatPanel(props: ChatPanelProps) {
     />
   )
 
-  if (messages.length === 0 && !header && visibleOutgoing.length === 0 && !isStreaming) {
+  if (messages.length === 0 && !header && visibleOutgoing.length === 0 && !eventPlacement?.waiting.size && !isStreaming) {
     return (
       <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 ${className || ""}`}>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-text-muted">
@@ -676,8 +716,10 @@ export function ChatPanel(props: ChatPanelProps) {
   activityRowsRef.current = timelineRows
     .filter(row => row.kind === "activity")
     .map(row => ({ id: row.block.id, parts: row.block.parts }))
-  const inlineOutgoing = visibleOutgoing.filter(item => item.appearance === "message" || item.remoteState === "delivered")
-  const waitingOutgoing = visibleOutgoing.filter(item => item.appearance !== "message" && item.remoteState !== "delivered")
+  const inlineOutgoing = visibleOutgoing.filter(item => !eventPlacement?.waiting.has(item.id)
+    && (item.appearance === "message" || item.remoteState === "delivered"))
+  const waitingOutgoing = messageQueue.queue.filter(item => eventPlacement?.waiting.has(item.id)
+    || (visibleOutgoing.includes(item) && item.appearance !== "message" && item.remoteState !== "delivered"))
   const inlineTimeline = [
     ...timelineRows.map((row, sequence) => ({
       kind: "message" as const,

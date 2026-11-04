@@ -14,6 +14,26 @@ const empty: ChatQueueSnapshot = {
   queue: { depth: 0, state: "empty" },
 }
 
+test("a demoted item says it waits, stays saying so across refreshes, and stops once it steers again", async () => {
+  resetRemoteMessageQueueStores()
+  const store = getRemoteMessageQueueStore("demoted")
+  const item = { id: "remote", sessionId: "demoted", sequence: 1, state: "pending" as const, displayContent: "note", messageUid: "note", createdAt: "2026-11-04T08:00:00Z", updatedAt: "2026-11-04T08:00:00Z", attemptCount: 0 }
+  let snapshot: ChatQueueSnapshot = {
+    items: [{ ...item, delivery: "after-current", error: { code: "steer_unavailable", message: "Steering was unavailable", retryable: false } }],
+    queue: { depth: 1, state: "waiting_for_session", blockedReason: "active_turn" },
+  }
+  connectRemoteMessageQueue("demoted", { list: async () => snapshot, cancel: async () => snapshot.items[0]!, retry: async () => snapshot.items[0]!, sendNow: async () => {} })
+  await refreshRemoteMessageQueue("demoted")
+  assert.equal(store.getSnapshot().queue[0]?.steerUnavailable, true)
+  assert.equal(store.getSnapshot().queue[0]?.deliveryError, undefined)
+  snapshot = { ...snapshot, items: [{ ...item, delivery: "after-current" }] }
+  await refreshRemoteMessageQueue("demoted")
+  assert.equal(store.getSnapshot().queue[0]?.steerUnavailable, true)
+  snapshot = { ...snapshot, items: [{ ...item, delivery: "steer-current" }] }
+  await refreshRemoteMessageQueue("demoted")
+  assert.equal(store.getSnapshot().queue[0]?.steerUnavailable, undefined)
+})
+
 test("a waiting snapshot corrects immediate presentation and keeps its client identity through delivery", async () => {
   resetRemoteMessageQueueStores()
   const store = getRemoteMessageQueueStore("waiting")
