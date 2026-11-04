@@ -172,7 +172,8 @@ export function processStreamEvent(
   // An event type this client does not know is skipped rather than rendered
   // as a junk part, so a newer backend cannot corrupt an older client.
   if (!KNOWN_EVENT_TYPES.has(event.type)) {
-    return { messages, isStreaming, pendingQuestion: question.pending, question, interrupting: false, resumePending }
+    // `background` is what tells a host this moved no turn state: hosts pass isStreaming=true here.
+    return { background: true, messages, isStreaming, pendingQuestion: question.pending, question, interrupting: false, resumePending }
   }
 
   // Background work (a subagent's calls, a task's lifecycle) is routed to the

@@ -1,6 +1,7 @@
 import "./chat.css"
 
 export type {
+  ConversationRollback,
   MessageBlock,
   MessagePart,
   MessagePhase,
@@ -153,6 +154,7 @@ export { canonicalUserMessageUids } from "./lib/message-queue"
 export { DeferredInvalidationCoordinator } from "./lib/deferred-invalidation-coordinator"
 export type { PersistedMessage } from "./lib/rebuild-blocks"
 export { TranscriptAccumulator } from "./lib/transcript-accumulator"
+export { TRANSCRIPT_RESET_EVENT } from "./lib/conversation-rollback"
 export type {
   TranscriptAccumulatorResult,
   TranscriptCursor,

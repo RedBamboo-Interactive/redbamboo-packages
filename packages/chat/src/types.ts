@@ -233,7 +233,7 @@ export interface ChatEvent {
    * See process-stream-event.ts for why the pending question can't be inferred
    * from the parts alone.
    */
-  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "status" | "question" | "question_resolved" | "image" | "task"
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "status" | "question" | "question_resolved" | "image" | "task" | "transcript_reset"
   content?: string | null
   toolName?: string | null
   toolInput?: string | null
@@ -589,6 +589,17 @@ export interface ChatMaintenanceStatus {
   activeTurnCount: number | null
 }
 
+/** A session that can be rewound. Absent, or `supported: false`, offers nothing. */
+export interface ConversationRollback {
+  /** The session's `supportsRollback`. */
+  supported: boolean
+  /**
+   * Asks the server to rewind to just before this message. Rejects with an Error whose message is
+   * the server's own explanation. Resolves with the removed text for the composer.
+   */
+  request: (messageUid: string) => Promise<{ restoredText?: string | null }>
+}
+
 export interface ChatPanelProps {
   // Uncontrolled mode: ChatPanel manages state via useChatStream
   backend?: ChatBackend
@@ -598,6 +609,12 @@ export interface ChatPanelProps {
   isStreaming?: boolean
   /** Whether this session's provider can inject input into an active turn without interruption. */
   supportsSteering?: boolean
+  /**
+   * Adds "Rewind to before this message" to a person's messages (through the message menu) and to
+   * refusal and error rows (always visible, whatever the Leaf menu preference). Only ever acts on
+   * the person's explicit confirmation.
+   */
+  rollback?: ConversationRollback
   /**
    * Running background work as the session reports it (`session.backgroundTasks`).
    * Drives the background status line and the Stop affordance's warning; it never

@@ -47,6 +47,7 @@ import { squarePosition, squareSequence, stepSquare, type SquareRef, type Square
 import { ActivityRowsContext } from "./activity-rows-context"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 import { messageActionEntries, messageMarkdown, partActionEntries } from "../lib/chat-actions"
+import { REWIND_ICON, REWIND_LABEL } from "../lib/conversation-rollback"
 
 interface TaskNotification {
   taskId: string
@@ -165,6 +166,13 @@ interface ChatMessageProps {
   showActions?: boolean
   /** Turn-origin circles drawn inside this activity row's frieze. */
   turnOrigins?: readonly ActivityTurnOrigin[]
+  /**
+   * This row shows a refusal or an error and the conversation can be rewound past it: the message
+   * to rewind to. A visible button, because a person who just hit a refusal has to find it without
+   * knowing about any menu, and it must not depend on the Leaf menu preference.
+   */
+  errorRewindTarget?: string
+  onRewind?: (messageUid: string) => void
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -200,6 +208,8 @@ export const ChatMessage = memo(function ChatMessage({
   compactAfter = false,
   showActions = true,
   turnOrigins,
+  errorRewindTarget,
+  onRewind,
 }: ChatMessageProps) {
   // Entrance is a mount-time decision. Queue reconciliation can remove the
   // outgoing bridge immediately after this row mounts; changing the prop then
@@ -502,6 +512,17 @@ export const ChatMessage = memo(function ChatMessage({
             status={questionCardStatus(!!pendingQuestion, questionOutcome, askQuestionPart, block.parts)}
             onAnswer={onAnswerQuestion}
           />
+        )}
+        {errorRewindTarget && onRewind && (
+          <button
+            type="button"
+            data-chat-error-rewind=""
+            onClick={() => onRewind(errorRewindTarget)}
+            className="mt-1.5 inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-text-muted hover:bg-overlay-10 hover:text-text transition-colors"
+          >
+            <i aria-hidden="true" className={REWIND_ICON} />
+            {REWIND_LABEL}
+          </button>
         )}
       </div>
       {/* `max-md:` rather than bare utilities -- see the user branch above. */}

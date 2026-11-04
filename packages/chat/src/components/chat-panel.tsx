@@ -22,6 +22,8 @@ import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
 import { MediaLightbox } from "./streaming-text"
 import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
+import { canOfferRollback, hasErrorPart, restoredDraftText, rollbackMessageEntries, rollbackTargetBefore } from "../lib/conversation-rollback"
+import { RollbackDialog } from "./rollback-dialog"
 
 // Windowed rendering: long conversations are read from the tail, so only the
 // last WINDOW blocks are mounted. Scrolling up (or the "earlier messages"
@@ -111,6 +113,37 @@ export function ChatPanel(props: ChatPanelProps) {
       for (const attachment of attachments) void attachmentTransport.delete(attachment.id).catch(() => {})
     },
   })
+
+  const rollback = props.rollback
+  const hasRollback = !!rollback
+  const rollbackRef = useRef(rollback)
+  rollbackRef.current = rollback
+  const rollbackAvailable = canOfferRollback({
+    supported: !!rollback?.supported,
+    disabled,
+    isStreaming,
+    interrupting,
+    resumePending,
+    questionPending: !!pendingQuestion,
+    queuedCount: messageQueue.queue.length,
+    runningBackgroundTaskCount: runningBackgroundTasks.length,
+  })
+  const rollbackAvailableRef = useRef(rollbackAvailable)
+  rollbackAvailableRef.current = rollbackAvailable
+  const [rollbackTarget, setRollbackTarget] = useState<string | null>(null)
+  useEffect(() => { setRollbackTarget(null) }, [sessionId])
+  // Read when the menu opens: a stable function keeps every row's memo while a turn streams.
+  const messageActions = useMemo(() => hasRollback
+    ? (block: MessageBlockType, index: number) => [
+        ...(getMessageActions?.(block, index) ?? []),
+        ...rollbackMessageEntries(block, rollbackAvailableRef.current, setRollbackTarget),
+      ]
+    : getMessageActions, [hasRollback, getMessageActions])
+  const confirmRollback = useCallback(async (messageUid: string) => {
+    const result = await rollbackRef.current?.request(messageUid)
+    const text = restoredDraftText(result?.restoredText)
+    if (text) composerRef.current?.restoreText(text)
+  }, [])
 
   const canonicalUserUids = useMemo(() => canonicalUserMessageUids(sourceMessages), [sourceMessages])
   const queuedEventsWait = !!props.queuedEventsWait
@@ -831,11 +864,15 @@ export function ChatPanel(props: ChatPanelProps) {
                     senderPresentation={props.senderPresentation}
                     renderExtra={row.ownsActions ? renderMessageExtra : undefined}
                     renderSideActions={row.ownsActions ? renderSideActions : undefined}
-                    getMessageActions={singleSource ? getMessageActions : undefined}
+                    getMessageActions={singleSource ? messageActions : undefined}
                     actionBlock={singleSource ? messages[row.sourceIndices[0]] : undefined}
                     compactAfter={row.compactAfter}
                     showActions={row.ownsActions}
                     turnOrigins={row.turnOrigins}
+                    errorRewindTarget={rollbackAvailable && hasErrorPart(block)
+                      ? rollbackTargetBefore(messages, index) ?? undefined
+                      : undefined}
+                    onRewind={setRollbackTarget}
                   />
                 )
               })}
@@ -858,6 +895,11 @@ export function ChatPanel(props: ChatPanelProps) {
       {footer}
       {maintenanceEl}
       {composerEl}
+      <RollbackDialog
+        messageUid={rollbackTarget}
+        onConfirm={confirmRollback}
+        onClose={() => setRollbackTarget(null)}
+      />
       <MediaLightbox />
     </div>
   )

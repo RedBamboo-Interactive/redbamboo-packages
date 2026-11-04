@@ -6,6 +6,7 @@ import { shouldAutoFocusComposer } from "../lib/composer-focus"
 import type { ComposerAutoFocusMode } from "../lib/composer-focus"
 import { composerDelivery, shouldSubmitDraftOnTab } from "../lib/composer-delivery"
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger, DropdownMenuItem, useUiEnvironment } from "@redbamboo/ui"
+import { mergeRestoredDraft } from "../lib/conversation-rollback"
 
 interface ComposerProps {
   /**
@@ -48,6 +49,8 @@ interface ComposerProps {
 export interface ComposerHandle {
   /** Loads text (and images) into the composer, e.g. pulling a queued ghost back in to edit. */
   loadDraft: (text: string, images?: ImageAttachment[], attachments?: UploadedAttachment[]) => void
+  /** Puts text a rewind removed ahead of whatever is being typed. Images and attachments stay. */
+  restoreText: (text: string) => void
 }
 
 function readImageFile(file: File): Promise<ImageAttachment | null> {
@@ -231,6 +234,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       setValue(text)
       setImages(imgs ?? [])
       setAttachments(restoreAttachments(atts ?? [], attachmentTransport))
+      setDraftRestoreKey(k => k + 1)
+      textareaRef.current?.focus()
+    },
+    restoreText: text => {
+      setValue(current => mergeRestoredDraft(text, current))
       setDraftRestoreKey(k => k + 1)
       textareaRef.current?.focus()
     },
