@@ -202,6 +202,7 @@ export function ChatPanel(props: ChatPanelProps) {
       resolveFileLink={resolveFileLink}
       animateEntrance={false}
       showActions={false}
+      compactAfter
     />
   }
 
