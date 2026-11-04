@@ -21,7 +21,7 @@ import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
 import { MorphSpinner } from "./morph-spinner"
 import { MediaLightbox } from "./streaming-text"
-import { findFocusBlockIndex, pulseMessageHighlight } from "../lib/focus-message"
+import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
 
 // Windowed rendering: long conversations are read from the tail, so only the
 // last WINDOW blocks are mounted. Scrolling up (or the "earlier messages"
@@ -320,12 +320,13 @@ export function ChatPanel(props: ChatPanelProps) {
   const handledFocusRef = useRef<{ uid: string; nonce: number } | null>(null)
   const pendingFocusRef = useRef<{ uid: string; nonce: number; index: number } | null>(null)
   const focusSettleRef = useRef<{ index: number; until: number } | null>(null)
+  const focusUidRef = useRef<string | null>(null)
 
   const centreBlock = useCallback((index: number, highlight: boolean): boolean => {
     const scroller = scrollRef.current
     if (!scroller) return false
     // The block may share a rendered row (an activity frieze) with others.
-    const row = timelineRowsRef.current.find(candidate => candidate.sourceIndices.includes(index))
+    const row = findFocusRow(timelineRowsRef.current, index, focusUidRef.current)
     if (!row) return false
     const nodes = scroller.querySelectorAll<HTMLElement>("[data-message-uid]")
     const element = Array.from(nodes).find(node => node.dataset.messageUid === row.block.id)
@@ -349,6 +350,7 @@ export function ChatPanel(props: ChatPanelProps) {
     focusSettleRef.current = null
 
     const { uid, nonce } = focusMessageRequest
+    focusUidRef.current = uid
     const index = findFocusBlockIndex(messagesRef.current, uid)
     if (index < 0) {
       focusResultRef.current?.({ uid, nonce, found: false })

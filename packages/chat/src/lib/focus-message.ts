@@ -1,10 +1,32 @@
 import type { MessageBlock } from "../types"
+import { eventInputMessageUid } from "./event-parts.ts"
 
-/** Index of the block a "go to message" uid names: its `id`, or one of its `inputMessageUids`. -1 when it is not loaded. */
+const holdsEvent = (block: MessageBlock, uid: string) =>
+  block.parts.some(part => eventInputMessageUid(part) === uid)
+
+/**
+ * Index of the block a "go to message" uid names: its `id`, one of its `inputMessageUids`, or an
+ * event it holds (an event block's id isn't the event's uid). -1 when it is not loaded.
+ */
 export function findFocusBlockIndex(blocks: readonly MessageBlock[], uid: string): number {
   const byId = blocks.findIndex(block => block.id === uid)
   if (byId >= 0) return byId
-  return blocks.findIndex(block => block.inputMessageUids?.includes(uid))
+  const byInput = blocks.findIndex(block => block.inputMessageUids?.includes(uid))
+  if (byInput >= 0) return byInput
+  return blocks.findIndex(block => holdsEvent(block, uid))
+}
+
+/**
+ * The rendered row to centre for a block. One block can draw several rows (adjacent notes share an
+ * event block, each with its own row), so the row holding the event the uid names wins.
+ */
+export function findFocusRow<Row extends { sourceIndices: number[]; block: MessageBlock }>(
+  rows: readonly Row[],
+  index: number,
+  uid: string | null,
+): Row | undefined {
+  const candidates = rows.filter(row => row.sourceIndices.includes(index))
+  return (uid ? candidates.find(row => holdsEvent(row.block, uid)) : undefined) ?? candidates[0]
 }
 
 const PULSE_MS = 1500
