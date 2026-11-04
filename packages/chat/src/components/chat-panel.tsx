@@ -426,7 +426,9 @@ export function ChatPanel(props: ChatPanelProps) {
   const scrollToEnd = useCallback(() => {
     if (!shouldAutoScroll.current || !scrollRef.current) return
     requestAnimationFrame(() => {
-      if (scrollRef.current) {
+      // Pinning may have been released since this was asked for: a go-to-message that landed
+      // in between keeps its place instead of being pulled back to the tail.
+      if (shouldAutoScroll.current && scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight
       }
     })
