@@ -223,7 +223,7 @@ export function ChatPanel(props: ChatPanelProps) {
   }, [eventQueueByUid, messageQueue.cancel, handleSendQueuedEvent, eventSend])
 
   const renderWaitingEvent = (part: MessagePart) => {
-    if (props.eventRows?.isRow(part)) return props.eventRows.render(part, {})
+    if (props.eventRows?.isRow(part)) return props.eventRows.render(part, { waiting: true })
     return <ChatMessage
       block={{ id: `waiting:${part.messageUid}`, role: "assistant", parts: [part], timestamp: "" }}
       blockIndex={-1}
@@ -251,6 +251,7 @@ export function ChatPanel(props: ChatPanelProps) {
         onSendEvent={handleSendQueuedEvent}
         eventSend={eventSend}
         eventContent={waitingPart ? renderWaitingEvent(waitingPart) : undefined}
+        eventDrawsOwnShape={!!waitingPart && !!props.eventRows?.isRow(waitingPart)}
       />
     )
   }

@@ -140,9 +140,15 @@ async function main() {
       assert.equal(await wait.locator('button[data-input-message-uid="dot"]').count(), 1, "machine event keeps its dot")
       assert.equal(await wait.getByText("raw frame").count(), 0, "no square or raw frame beside the row")
       assert(await above(wait.getByText("Text after", { exact: true }), ghost.first()), "the note waits below the running turn")
-      // The waiting shape is the queued message ghost's own.
+      // A machine event takes the waiting shape from the queued message ghost.
       const shape = await wait.locator('[data-slot="queued-event-ghost"]').first().getAttribute("class")
       assert(shape.includes("border-dashed") && shape.includes("opacity-60"), "ghost shape")
+      // A host's row has its own bubble, so it draws its waiting state itself: no box in a box.
+      const noteGhost = ghost.filter({ has: wait.locator('[data-slot="test-note-row"]') })
+      assert.equal(await noteGhost.count(), 1, "the row waits in the queue")
+      assert.equal(await noteGhost.locator('[data-slot="queued-event-ghost"]').count(), 0, "no ghost frame around a row")
+      assert.equal(await noteGhost.locator('[data-slot="test-note-row"]').getAttribute("data-waiting"), "true", "the row is told it is waiting")
+      assert.equal(await wait.locator('[data-slot="queued-event-ghost"]').count(), 1, "only the machine event is framed")
       await ghost.first().getByText("Queued, sends after this turn", { exact: true }).waitFor()
 
       // The send button steers one item and says so; it never asks for the interrupt.

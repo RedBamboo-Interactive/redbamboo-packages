@@ -148,7 +148,7 @@ function WaitApp() {
   return <div style={{ width: "100%", height: 700 }}><ChatPanel key={mount} messages={messages} isStreaming={waitTest.streaming}
     supportsSteering={waitTest.steerSupport} sessionId="wait-test" queueTransport={transport} persistQueue={false} queuedEventsWait
     eventRows={{ isRow: candidate => candidate.toolName === "event:agent-note",
-      render: (candidate, { queueStatus }) => <div data-slot="test-note-row" data-has-status={!!queueStatus}>Nova, from elsewhere: {candidate.content}</div> }} />
+      render: (candidate, { queueStatus, waiting }) => <div data-slot="test-note-row" data-has-status={!!queueStatus} data-waiting={!!waiting}>Nova, from elsewhere: {candidate.content}</div> }} />
   </div>
 }
 

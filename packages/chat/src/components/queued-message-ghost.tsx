@@ -20,6 +20,8 @@ interface QueuedMessageGhostProps {
   eventSend?: EventSendAction
   /** A waiting event's own row, already projected: its sender and origin, or its dot. */
   eventContent?: ReactNode
+  /** The waiting event is a host's row, which has its own bubble: a second one around it reads as a box in a box. */
+  eventDrawsOwnShape?: boolean
 }
 
 /**
@@ -27,7 +29,7 @@ interface QueuedMessageGhostProps {
  * dashed border + reduced opacity distinguish it from a delivered message.
  * The whole point of the queue is that this is never invisible.
  */
-export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEvent, eventSend, eventContent }: QueuedMessageGhostProps) {
+export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEvent, eventSend, eventContent, eventDrawsOwnShape }: QueuedMessageGhostProps) {
   const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
   // Queued and immediately delivered submissions are the same outgoing message
   // entering the same timeline. The dashed styling communicates queue state;
@@ -47,15 +49,17 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEv
         data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
         data-input-message-uid={item.messageUid}
       >
-        <div className="flex justify-end">
-          <div
-            data-slot="queued-event-ghost"
-            className="min-w-0 max-w-[80%] border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90"
-            style={USER_BUBBLE_SHAPE_STYLE}
-          >
-            {eventContent}
+        {eventDrawsOwnShape ? eventContent : (
+          <div className="flex justify-end">
+            <div
+              data-slot="queued-event-ghost"
+              className="min-w-0 max-w-[80%] border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90"
+              style={USER_BUBBLE_SHAPE_STYLE}
+            >
+              {eventContent}
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex items-center justify-end gap-1 mt-1">
           <span className={`text-[10px] italic mr-1 ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
             {queuedMessageStatusLabel(item, true)}

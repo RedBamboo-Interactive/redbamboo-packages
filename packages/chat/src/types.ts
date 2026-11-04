@@ -439,7 +439,8 @@ export type ResolveAgentInfo = (agentRef: string) => AgentDisplayInfo | undefine
  */
 export interface EventRowRenderer {
   isRow: (part: MessagePart) => boolean
-  render: (part: MessagePart, context: { queueStatus?: EventQueueStatus }) => React.ReactNode
+  /** `waiting`: still in the queue. A row draws its own shape, so it draws this state too. */
+  render: (part: MessagePart, context: { queueStatus?: EventQueueStatus; waiting?: boolean }) => React.ReactNode
 }
 
 export interface SessionAgentInfo {
