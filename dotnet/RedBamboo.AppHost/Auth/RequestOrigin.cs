@@ -10,15 +10,29 @@ namespace RedBamboo.AppHost.Auth;
 /// a trusted loopback proxy has its address replaced by X-Forwarded-For before this runs (see
 /// <c>UseAppHostForwardedHeaders</c>), so a remote client behind the tunnel never looks like loopback.
 /// Both services bind 127.0.0.1 only; a peer on any other interface (LAN) is not local.
+///
+/// Any other same-machine proxy (nginx, Caddy, ngrok, tailscale serve) also connects over loopback.
+/// The forwarded-headers middleware removes an X-Forwarded-For it consumed (the original peer moves to
+/// X-Original-For), so one still present was not applied: unparseable, or a chain longer than the one
+/// hop we trust. That, or an RFC 7239 <c>Forwarded</c> header, which the middleware never reads, means
+/// a proxy is describing a client we did not resolve, and the request is not local.
 /// </summary>
 public static class RequestOrigin
 {
     public static bool ArrivedThroughTunnel(HttpContext context)
         => context.Request.Headers.ContainsKey("Cf-Connecting-Ip") || context.Request.Headers.ContainsKey("Cf-Ray");
 
+    /// <summary>
+    /// A proxy described the client and the forwarded-headers middleware did not resolve it: an RFC 7239
+    /// <c>Forwarded</c> header, or an <c>X-Forwarded-For</c> left behind (a consumed one is removed).
+    /// </summary>
+    public static bool CarriesUnresolvedForwarding(HttpContext context)
+        => context.Request.Headers.ContainsKey("Forwarded") || context.Request.Headers.ContainsKey("X-Forwarded-For");
+
     public static bool IsLocal(HttpContext context)
     {
         if (ArrivedThroughTunnel(context)) return false;
+        if (CarriesUnresolvedForwarding(context)) return false;
 
         var remote = context.Connection.RemoteIpAddress;
         if (remote == null) return true;
