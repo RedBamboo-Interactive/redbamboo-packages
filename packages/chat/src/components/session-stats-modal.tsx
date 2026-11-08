@@ -13,6 +13,7 @@ import {
 import { MorphSpinner } from "./morph-spinner"
 import { getSessionResourceHref, type SessionResourceKind } from "../lib/session-resource-links"
 import { formatProviderUsageWindow, remainingProviderUsage, usageToneColor } from "../lib/provider-usage"
+import { formatProviderEffort } from "../lib/provider-effort"
 
 interface Props {
   open: boolean
@@ -323,6 +324,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
   const providerValue = s.providerEntity ?? s.provider
   const providerOption = findOption(providerOptions, providerValue)
   const qualityTierOption = findOption(qualityTierOptions, s.qualityTier)
+  const thinking = formatProviderEffort(s.effort)
 
   const hasConfig = onConfigChange && (modelOptions || effortOptions || qualityTierOptions)
 
@@ -423,6 +425,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                       disabled={updating}
                     />
                   )}
+                  {thinking && <StatRow label="Thinking" value={thinking} />}
                   {updating && (
                     <div className="flex items-center gap-1.5 text-[10px] text-text-muted mt-1">
                       <MorphSpinner color="var(--muted-foreground)" />
@@ -439,6 +442,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                 {s.qualityTier && !(onConfigChange && qualityTierOptions) && (
                   <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
                 )}
+                {!hasConfig && thinking && <StatRow label="Thinking" value={thinking} />}
                 <StatRow label="Model" value={shortModel(s.model)} />
                 <StatRow label={s.costEstimated ? "Est. standard API cost" : "Cost"} value={formatCost(s.costUsd)} />
                 {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}
