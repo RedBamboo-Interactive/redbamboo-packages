@@ -47,6 +47,8 @@ export type {
   ExchangeState,
   HandsFreeContextValue,
   SessionStats,
+  SessionConfigChange,
+  AccessLevel,
   SessionConfigOption,
   SessionAgentInfo,
   AgentDisplayInfo,
@@ -87,6 +89,8 @@ export type { ProviderUsageThresholdAlert } from "./lib/provider-usage"
 export { ChatStatusLine, StreamingStatusLine } from "./components/streaming-status-line"
 export { CONTEXT_COMPACTION_TOOL_NAME, isContextCompactionActive } from "./lib/chat-status"
 export { PendingQuestionLine } from "./components/pending-question-line"
+export { ACCESS_LEVELS, ACCESS_LEVEL_DESCRIPTIONS, ACCESS_LEVEL_LABELS, accessLevelChoices, isAccessLevel } from "./lib/access-level"
+export type { AccessLevelChoice } from "./lib/access-level"
 export { HandsFreeStatusLine } from "./components/hands-free-status-line"
 export { VoiceInputButton } from "./components/voice-input-button"
 export { useChatStream } from "./hooks/use-chat-stream"

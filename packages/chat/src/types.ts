@@ -373,7 +373,19 @@ export interface SessionStats {
   qualityTier?: string | null
   provider?: string | null
   providerEntity?: string | null
+  /** The session's current access level. */
+  accessLevel?: AccessLevel | null
+  /** Levels this session's provider can run at, in order. Absent: the Permissions row is hidden. */
+  supportedAccessLevels?: AccessLevel[] | null
+  /** Hard cap set when the session started; levels above it cannot be chosen. */
+  maxAccessLevel?: AccessLevel | null
 }
+
+/**
+ * How much an agent may do without asking, lowest first. See
+ * `ACCESS_LEVELS` for the order the cap compares against.
+ */
+export type AccessLevel = "plan" | "ask" | "auto" | "full"
 
 export interface ProviderUsageWindow {
   id: string
@@ -451,6 +463,14 @@ export interface SessionAgentInfo {
   href?: string | null
 }
 
+/** One change from the Info modal. Exactly one field is set per call. */
+export interface SessionConfigChange {
+  model?: string
+  effort?: string
+  qualityTier?: string
+  accessLevel?: AccessLevel
+}
+
 export interface SessionInfoButtonProps {
   stats: SessionStats | null
   messages: MessageBlock[]
@@ -460,7 +480,18 @@ export interface SessionInfoButtonProps {
   qualityTierOptions?: SessionConfigOption[]
   providerOptions?: SessionConfigOption[]
   loadProviderUsage?: ProviderUsageLoader
-  onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
+  /**
+   * Rejecting keeps the previous selection. For `accessLevel`, the rejection's
+   * Error message is shown under the Permissions row, so pass the server's words.
+   */
+  onConfigChange?: (config: SessionConfigChange) => Promise<void>
+  /**
+   * Whether Full access is turned on for this install. Only `false` disables
+   * the Full option; absent leaves it to `supportedAccessLevels` and the cap.
+   */
+  fullAccessEnabled?: boolean
+  /** Where Full access is turned on, linked from the disabled Full option. */
+  fullAccessSettingsHref?: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode

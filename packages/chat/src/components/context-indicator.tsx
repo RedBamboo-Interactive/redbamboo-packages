@@ -21,7 +21,7 @@ function formatResetForToast(value?: string | null): string | undefined {
   }).format(date)
 }
 
-export function SessionInfoButton({ stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, loadProviderUsage, onConfigChange, open: controlledOpen, onOpenChange, children }: SessionInfoButtonProps) {
+export function SessionInfoButton({ stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, loadProviderUsage, onConfigChange, fullAccessEnabled, fullAccessSettingsHref, open: controlledOpen, onOpenChange, children }: SessionInfoButtonProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = controlledOpen ?? uncontrolledOpen
   const [providerUsage, setProviderUsage] = useState<ProviderUsageSnapshot | null>(null)
@@ -79,19 +79,25 @@ export function SessionInfoButton({ stats, messages, agent, modelOptions, effort
     if (open) void refreshProviderUsage(true)
   }, [open, refreshProviderUsage])
 
+  // Full access runs everything without asking: the button says so wherever the chat is open.
+  const fullAccess = stats?.accessLevel === "full"
+
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-text-muted transition-colors hover:bg-overlay-10 hover:text-contrast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-a50"
-        title="Session info"
-        aria-label="Open session info"
+        className={`inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring-a50 ${fullAccess
+          ? "bg-amber-400/15 text-amber-400 hover:bg-amber-400/25 hover:text-amber-300"
+          : "text-text-muted hover:bg-overlay-10 hover:text-contrast"}`}
+        title={fullAccess ? "Session info: Full access is on" : "Session info"}
+        aria-label={fullAccess ? "Open session info. Full access is on" : "Open session info"}
         aria-haspopup="dialog"
         aria-expanded={open}
         data-slot="session-info-trigger"
+        data-access-level={stats?.accessLevel ?? undefined}
       >
-        <i aria-hidden="true" className="ph-bold ph-info text-sm" />
+        <i aria-hidden="true" className={`ph-bold ${fullAccess ? "ph-shield-warning" : "ph-info"} text-sm`} />
         <span>Info</span>
       </button>
 
@@ -108,6 +114,8 @@ export function SessionInfoButton({ stats, messages, agent, modelOptions, effort
         providerUsage={providerUsage}
         providerUsageLoading={providerUsageLoading}
         onConfigChange={onConfigChange}
+        fullAccessEnabled={fullAccessEnabled}
+        fullAccessSettingsHref={fullAccessSettingsHref}
       >
         {children}
       </SessionStatsModal>

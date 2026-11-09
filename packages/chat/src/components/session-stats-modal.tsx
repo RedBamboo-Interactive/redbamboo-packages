@@ -1,5 +1,5 @@
-import { useState } from "react"
-import type { MessageBlock, SessionStats, SessionConfigOption, SessionAgentInfo, ProviderUsageSnapshot } from "../types"
+import { useEffect, useState } from "react"
+import type { AccessLevel, MessageBlock, SessionStats, SessionConfigChange, SessionConfigOption, SessionAgentInfo, ProviderUsageSnapshot } from "../types"
 import {
   Button,
   Dialog,
@@ -14,6 +14,7 @@ import { MorphSpinner } from "./morph-spinner"
 import { getSessionResourceHref, type SessionResourceKind } from "../lib/session-resource-links"
 import { formatProviderUsageWindow, remainingProviderUsage, usageToneColor } from "../lib/provider-usage"
 import { formatProviderEffort } from "../lib/provider-effort"
+import { ACCESS_LEVEL_DESCRIPTIONS, ACCESS_LEVEL_LABELS, accessLevelChoices, isAccessLevel, type AccessLevelChoice } from "../lib/access-level"
 
 interface Props {
   open: boolean
@@ -27,7 +28,10 @@ interface Props {
   providerOptions?: SessionConfigOption[]
   providerUsage?: ProviderUsageSnapshot | null
   providerUsageLoading?: boolean
-  onConfigChange?: (config: { model?: string; effort?: string; qualityTier?: string }) => Promise<void>
+  onConfigChange?: (config: SessionConfigChange) => Promise<void>
+  /** Only `false` disables Full. */
+  fullAccessEnabled?: boolean
+  fullAccessSettingsHref?: string
   children?: React.ReactNode
 }
 
@@ -260,28 +264,36 @@ function findOption(options: SessionConfigOption[] | undefined, value: string | 
     || option.aliases?.some(alias => alias.toLowerCase() === normalized))
 }
 
-function ConfigSelect({ label, value, options, onChange, disabled }: {
+function ConfigSelect({ label, value, options, onChange, disabled, optionDisabled, optionTitle, slot }: {
   label: string
   value: string
   options: SessionConfigOption[]
   onChange: (value: string) => void
   disabled?: boolean
+  /** One option that can't be chosen, while the others can. */
+  optionDisabled?: (value: string) => boolean
+  optionTitle?: (option: SessionConfigOption) => string
+  slot?: string
 }) {
   const hasIcons = options.some(o => o.icon || o.iconSvgPath || o.color)
 
   if (hasIcons) {
     return (
-      <div className="flex items-center justify-between py-1.5">
-        <span className="text-xs text-text-muted">{label}</span>
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-3 py-1.5" data-slot={slot}>
+        <span className="text-xs text-text-muted shrink-0">{label}</span>
+        <div className="flex flex-wrap items-center justify-end gap-1" role="group" aria-label={label}>
           {options.map(o => {
             const active = value === o.value
+            const off = disabled || !!optionDisabled?.(o.value)
             return (
               <button
                 key={o.value}
-                onClick={() => !disabled && onChange(o.value)}
-                disabled={disabled}
-                title={o.label}
+                type="button"
+                onClick={() => !off && onChange(o.value)}
+                disabled={off}
+                aria-pressed={active}
+                data-value={o.value}
+                title={optionTitle?.(o) ?? o.label}
                 className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md transition-colors disabled:opacity-50 ${
                   active ? "" : "bg-overlay-6 text-text-muted hover:bg-overlay-10 hover:text-contrast"
                 }`}
@@ -314,7 +326,93 @@ function ConfigSelect({ label, value, options, onChange, disabled }: {
   )
 }
 
-export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, providerUsage, providerUsageLoading, onConfigChange, children }: Props) {
+const CAP_TITLE = "Above the limit this session was started with"
+const FULL_OFF_TITLE = "Full access is turned off in Settings"
+
+/**
+ * The session's access level, with one line saying what the shown level lets
+ * the agent do. Full stays visible while it is turned off, so the person learns
+ * where it is turned on. A refused change keeps the previous level and says why.
+ */
+function AccessLevelRow({ level, choices, onChange, fullAccessSettingsHref, onNavigate }: {
+  level: AccessLevel | null
+  choices: AccessLevelChoice[]
+  onChange?: (level: AccessLevel) => Promise<void>
+  fullAccessSettingsHref?: string
+  onNavigate: () => void
+}) {
+  const [choosing, setChoosing] = useState<AccessLevel | null>(null)
+  // A change the server accepted, shown until the host's stats catch up with it.
+  const [accepted, setAccepted] = useState<AccessLevel | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => { setAccepted(null) }, [level])
+  const shown = choosing ?? accepted ?? level
+  const fullOff = choices.some(choice => choice.level === "full" && choice.disabledReason === "full_access_not_enabled")
+
+  const choose = async (next: string) => {
+    if (!onChange || !isAccessLevel(next)) return
+    setChoosing(next)
+    setError(null)
+    try {
+      await onChange(next)
+      setAccepted(next)
+    } catch (failure) {
+      setError(failure instanceof Error && failure.message ? failure.message : "The access level didn't change.")
+    } finally {
+      setChoosing(null)
+    }
+  }
+
+  return (
+    <div data-slot="access-level-row" data-access-level={shown ?? undefined}>
+      {onChange ? (
+        <ConfigSelect
+          slot="access-level-select"
+          label="Permissions"
+          value={shown ?? ""}
+          options={choices.map(choice => choice.option)}
+          onChange={value => void choose(value)}
+          disabled={!!choosing}
+          optionDisabled={value => !!choices.find(choice => choice.level === value)?.disabledReason}
+          optionTitle={option => {
+            const reason = choices.find(choice => choice.level === option.value)?.disabledReason
+            return reason === "above_session_cap" ? `${option.label}: ${CAP_TITLE}`
+              : reason === "full_access_not_enabled" ? `${option.label}: ${FULL_OFF_TITLE}`
+              : option.label
+          }}
+        />
+      ) : (
+        <StatRow label="Permissions" value={shown ? ACCESS_LEVEL_LABELS[shown] : "--"} />
+      )}
+      {shown && (
+        <p data-slot="access-level-description" className="pb-1 text-right text-[11px] leading-snug text-text-muted">
+          {ACCESS_LEVEL_DESCRIPTIONS[shown]}
+        </p>
+      )}
+      {onChange && fullOff && (
+        <p className="pb-1 text-right text-[11px] leading-snug">
+          {fullAccessSettingsHref ? (
+            <a data-slot="full-access-settings-link" href={fullAccessSettingsHref} onClick={onNavigate}
+              className="text-primary underline-offset-2 hover:underline">
+              Enable Full access in Settings
+            </a>
+          ) : (
+            <span className="text-text-muted">Enable Full access in Settings</span>
+          )}
+        </p>
+      )}
+      {choosing && (
+        <div className="flex items-center justify-end gap-1.5 pb-1 text-[10px] text-text-muted">
+          <MorphSpinner color="var(--muted-foreground)" />
+          <span>Changing to {ACCESS_LEVEL_LABELS[choosing]}...</span>
+        </div>
+      )}
+      {error && <p role="alert" data-slot="access-level-error" className="pb-1 text-right text-xs text-red-400">{error}</p>}
+    </div>
+  )
+}
+
+export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, providerUsage, providerUsageLoading, onConfigChange, fullAccessEnabled, fullAccessSettingsHref, children }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
   const pct = getContextPercent(s)
@@ -326,9 +424,22 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
   const qualityTierOption = findOption(qualityTierOptions, s.qualityTier)
   const thinking = formatProviderEffort(s.effort)
 
-  const hasConfig = onConfigChange && (modelOptions || effortOptions || qualityTierOptions)
+  const accessChoices = accessLevelChoices({ supported: s.supportedAccessLevels, max: s.maxAccessLevel, fullAccessEnabled })
+  const accessLevel = isAccessLevel(s.accessLevel) ? s.accessLevel : null
+  const accessRow = accessChoices.length > 0 && (
+    <AccessLevelRow
+      key={s.sessionId ?? undefined}
+      level={accessLevel}
+      choices={accessChoices}
+      onChange={onConfigChange ? level => onConfigChange({ accessLevel: level }) : undefined}
+      fullAccessSettingsHref={fullAccessSettingsHref}
+      onNavigate={() => onOpenChange(false)}
+    />
+  )
 
-  const handleConfigChange = async (config: { model?: string; effort?: string; qualityTier?: string }) => {
+  const hasConfig = onConfigChange && (modelOptions || effortOptions || qualityTierOptions || accessChoices.length > 0)
+
+  const handleConfigChange = async (config: SessionConfigChange) => {
     if (!onConfigChange) return
     setUpdating(true)
     try {
@@ -426,6 +537,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                     />
                   )}
                   {thinking && <StatRow label="Thinking" value={thinking} />}
+                  {accessRow}
                   {updating && (
                     <div className="flex items-center gap-1.5 text-[10px] text-text-muted mt-1">
                       <MorphSpinner color="var(--muted-foreground)" />
@@ -443,6 +555,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
                   <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
                 )}
                 {!hasConfig && thinking && <StatRow label="Thinking" value={thinking} />}
+                {!hasConfig && accessRow}
                 <StatRow label="Model" value={shortModel(s.model)} />
                 <StatRow label={s.costEstimated ? "Est. standard API cost" : "Cost"} value={formatCost(s.costUsd)} />
                 {s.startedAt && <StatRow label="Duration" value={formatDuration(s.startedAt)} />}
