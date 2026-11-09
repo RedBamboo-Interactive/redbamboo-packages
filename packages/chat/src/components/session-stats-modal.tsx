@@ -29,6 +29,7 @@ interface Props {
   providerUsage?: ProviderUsageSnapshot | null
   providerUsageLoading?: boolean
   onConfigChange?: (config: SessionConfigChange) => Promise<void>
+  onAccessLevelChange?: (level: AccessLevel) => Promise<void>
   /** Only `false` disables Full. */
   fullAccessEnabled?: boolean
   fullAccessSettingsHref?: string
@@ -412,7 +413,7 @@ function AccessLevelRow({ level, choices, onChange, fullAccessSettingsHref, onNa
   )
 }
 
-export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, providerUsage, providerUsageLoading, onConfigChange, fullAccessEnabled, fullAccessSettingsHref, children }: Props) {
+export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, fullAccessEnabled, fullAccessSettingsHref, children }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
   const pct = getContextPercent(s)
@@ -431,7 +432,7 @@ export function SessionStatsModal({ open, onOpenChange, stats, messages, agent, 
       key={s.sessionId ?? undefined}
       level={accessLevel}
       choices={accessChoices}
-      onChange={onConfigChange ? level => onConfigChange({ accessLevel: level }) : undefined}
+      onChange={onAccessLevelChange ?? (onConfigChange ? level => onConfigChange({ accessLevel: level }) : undefined)}
       fullAccessSettingsHref={fullAccessSettingsHref}
       onNavigate={() => onOpenChange(false)}
     />

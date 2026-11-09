@@ -498,6 +498,13 @@ export interface SessionInfoButtonProps {
    */
   onConfigChange?: (config: SessionConfigChange) => Promise<void>
   /**
+   * Change only the access level. Takes precedence over `onConfigChange` for
+   * the Permissions row, so a host that cannot change model or quality on a
+   * running session can offer the level alone and keep the other rows
+   * read-only. Rejecting shows the Error's message under the row.
+   */
+  onAccessLevelChange?: (level: AccessLevel) => Promise<void>
+  /**
    * Whether Full access is turned on for this install. Only `false` disables
    * the Full option; absent leaves it to `supportedAccessLevels` and the cap.
    */

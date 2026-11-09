@@ -99,7 +99,9 @@ export { PendingQuestionLine } from "./components/pending-question-line"
 export { PermissionApprovalCard } from "./components/permission-approval-card"
 export {
   PERMISSION_DECISIONS,
+  abandonPermissions,
   answerableQuestion,
+  closePermission,
   isPermissionQuestion,
   permissionOutcome,
   permissionPendingQuestion,

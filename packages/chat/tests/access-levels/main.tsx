@@ -50,7 +50,9 @@ function ModalFixture() {
           { value: "high", label: "High", color: "#a78bfa", icon: "ph-bold ph-lightning" },
           { value: "low", label: "Low", color: "#38bdf8", icon: "ph-bold ph-feather" },
         ]}
-        onConfigChange={onConfigChange}
+        {...(params.get("host") === "level-only"
+          ? { onAccessLevelChange: (accessLevel: AccessLevel) => onConfigChange({ accessLevel }) }
+          : { onConfigChange })}
         fullAccessEnabled={params.get("full") !== "off"}
         fullAccessSettingsHref="#/settings/agent-permissions"
       />

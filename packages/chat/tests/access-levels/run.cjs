@@ -126,6 +126,21 @@ async function main() {
       check("only supported levels are offered and levels above the session cap are disabled")
     }
 
+    // ── A host that can change only the level keeps Quality read-only ──
+    {
+      const { page, errors, close } = await open("view=modal&level=ask&host=level-only")
+      await openModal(page)
+      assert.equal(await page.locator('button[data-value="low"]').count(), 0, "Quality is not a picker")
+      await levelButton(page, "auto").click()
+      await page.waitForFunction(() => window.__changes.length === 1)
+      assert.deepEqual(await page.evaluate(() => window.__changes), [{ accessLevel: "auto" }])
+      await page.waitForFunction(() => document.querySelector('[data-slot="access-level-row"]')?.getAttribute("data-access-level") === "auto")
+      assert(await fitsDialog(page))
+      assert.deepEqual(errors, [])
+      await close()
+      check("onAccessLevelChange alone offers the level and leaves Quality read-only")
+    }
+
     // ── A refused change keeps the previous level and says why ──
     {
       const { page, errors, close } = await open("view=modal&level=ask&refuse=1")
