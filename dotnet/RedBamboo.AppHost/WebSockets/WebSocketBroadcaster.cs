@@ -79,6 +79,42 @@ public class WebSocketBroadcaster
         }
     }
 
+    /// <summary>
+    /// Start the close handshake through the client's single writer (a close frame is a send),
+    /// so it never races a broadcast. False when the client is gone or its socket is not open.
+    /// </summary>
+    internal async Task<bool> CloseClientAsync(
+        string id,
+        WebSocketCloseStatus status,
+        string description,
+        CancellationToken ct)
+    {
+        if (!_clients.TryGetValue(id, out var client)) return false;
+
+        try
+        {
+            await client.SendGate.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        try
+        {
+            if (client.Socket.State != WebSocketState.Open) return false;
+            await client.Socket.CloseOutputAsync(status, description, ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or ObjectDisposedException)
+        {
+            return false;
+        }
+        finally
+        {
+            client.SendGate.Release();
+        }
+    }
+
     internal void AddClient(string id, WebSocket ws)
         => _clients[id] = new ClientConnection(ws, new SemaphoreSlim(1, 1));
 

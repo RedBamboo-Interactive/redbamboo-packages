@@ -58,14 +58,23 @@ public static class WebSocketEndpoints
                 }
             }
 
+            // Kestrel's graceful stop waits for every open connection, and RequestAborted only
+            // fires once its shutdown timeout (30 s) runs out. So on ApplicationStopping, close
+            // the socket ourselves (1001, the browser reconnects to the next server) and give
+            // the client a moment to acknowledge before the receive is abandoned.
+            using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+            using var onStopping = app.Lifetime.ApplicationStopping.Register(
+                () => _ = CloseForShutdownAsync(broadcaster, id, receiveCts));
+
             try
             {
                 var buf = new byte[256];
                 while (ws.State == WebSocketState.Open)
-                    await ws.ReceiveAsync(buf, ctx.RequestAborted);
+                    await ws.ReceiveAsync(buf, receiveCts.Token);
             }
             catch (WebSocketException) { }
             catch (OperationCanceledException) { }
+            catch (ObjectDisposedException) { }
             finally
             {
                 relayCts.Cancel();
@@ -81,6 +90,27 @@ public static class WebSocketEndpoints
                           "All messages are JSON: { \"type\": \"<event-type>\", \"data\": { ... } }",
             events = broadcaster.GetEventSchemas()
         }));
+    }
+
+    internal static readonly TimeSpan ShutdownCloseGrace = TimeSpan.FromSeconds(2);
+
+    private static async Task CloseForShutdownAsync(
+        WebSocketBroadcaster broadcaster,
+        string id,
+        CancellationTokenSource receiveCts)
+    {
+        try
+        {
+            using var sendTimeout = new CancellationTokenSource(ShutdownCloseGrace);
+            var closing = await broadcaster.CloseClientAsync(
+                id, WebSocketCloseStatus.EndpointUnavailable, "Server is stopping", sendTimeout.Token);
+            if (closing) receiveCts.CancelAfter(ShutdownCloseGrace);
+            else receiveCts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The handler already finished and disposed its token source.
+        }
     }
 
     private static async Task RelayWithReconnect(
