@@ -19,6 +19,8 @@ import { backgroundStopWarning, describeAlsoRunning, findLaunchingSquare, indexB
 import { PART_COLOR, getPartColor } from "../lib/part-colors"
 import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
+import { PermissionApprovalCard } from "./permission-approval-card"
+import { answerableQuestion, isPermissionQuestion, unanchoredApprovals as findUnanchoredApprovals, visibleApprovals } from "../lib/permission-approval"
 import { MorphSpinner } from "./morph-spinner"
 import { MediaLightbox } from "./streaming-text"
 import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
@@ -31,6 +33,7 @@ import { RollbackDialog } from "./rollback-dialog"
 const WINDOW = 40
 const CHUNK = 80
 const CONVERSATION_ENTRANCE_STAGGER_MS = 180
+const NO_APPROVALS: readonly import("../types").PermissionApproval[] = []
 
 function hasExitPlanPart(block: MessageBlockType): boolean {
   return block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
@@ -51,6 +54,15 @@ export function ChatPanel(props: ChatPanelProps) {
   const resumePending = props.resumePending ?? internal.resumePending
   // Uncontrolled mode answers through the hook, which knows the live requestId.
   const onAnswerQuestion = props.onAnswerQuestion ?? (props.backend ? internal.answerQuestion : undefined)
+  // A pending approval parks the turn like a question (the queue holds, steering
+  // waits), but only its buttons decide it: typing or speaking is a message.
+  const answerable = answerableQuestion(pendingQuestion)
+  const permissionApprovals = props.permissionApprovals !== undefined ? props.permissionApprovals : internal.permissionApprovals
+  const onPermissionDecision = props.onPermissionDecision ?? (props.backend ? internal.decidePermission : undefined)
+  const approvals = useMemo(() => {
+    const list = visibleApprovals(permissionApprovals, pendingQuestion)
+    return list.length ? list : NO_APPROVALS
+  }, [permissionApprovals, pendingQuestion])
 
   const {
     sessionId, autoFocusMode, queueTransport, persistQueue = true, disabled = false, hideComposer = false, onResume,
@@ -88,7 +100,7 @@ export function ChatPanel(props: ChatPanelProps) {
     messages: sourceMessages,
     onSend: (content, opts) => deliverMessage(prepareMessage({ content }), opts),
     onAnswerQuestion,
-    pendingQuestion: !!pendingQuestion,
+    pendingQuestion: !!answerable,
     disabled,
     handsFreeEnabled,
     pushToTalkKey,
@@ -671,7 +683,7 @@ export function ChatPanel(props: ChatPanelProps) {
       ? renderStatusLine({ isStreaming, isReconnecting, messages, pendingQuestion: pendingQuestion ?? null })
       : <StreamingStatusLine isStreaming={isStreaming} isReconnecting={isReconnecting} messages={messages} />
     : pendingQuestion && !renderStatusLine
-      ? <PendingQuestionLine />
+      ? <PendingQuestionLine kind={isPermissionQuestion(pendingQuestion) ? "permission" : "question"} />
       : null
   const backgroundSummary = sessionLine ? null : summarizeBackgroundActivity(orderedTasks, hostActivity, { turnEnded })
   const backgroundColor = backgroundSummary?.source === "host"
@@ -718,7 +730,7 @@ export function ChatPanel(props: ChatPanelProps) {
       placeholder={voice.interimTranscript ?? placeholder}
       permissionMode={permissionMode}
       onTogglePlanMode={onTogglePlanMode}
-      pendingQuestion={!!pendingQuestion}
+      pendingQuestion={!!answerable}
       onAnswerQuestion={onAnswerQuestion}
       onResume={onResume}
       sessionId={sessionId}
@@ -784,6 +796,16 @@ export function ChatPanel(props: ChatPanelProps) {
     { kind: "status" as const, key: "streaming-status" },
     ...waitingOutgoing.map(item => ({ kind: "outgoing" as const, key: `outgoing:${item.id}`, item })),
   ]
+  // An approval whose tool call isn't on screen still gets its card: at the end
+  // of the last assistant row, like a question card, or above the status line
+  // when there is no assistant row yet.
+  const unanchored = findUnanchoredApprovals(visibleMessages, approvals)
+  const unanchoredApprovals = unanchored.length ? unanchored : NO_APPROVALS
+  const fallbackApprovalRowKey = unanchored.length
+    ? inlineTimeline.filter(visual => visual.kind === "message" && visual.row.kind !== "event-row"
+        && visual.row.sourceIndices.includes(lastAssistantIndex)).at(-1)?.key ?? null
+    : null
+  const standaloneApprovals = unanchored.length && !fallbackApprovalRowKey ? unanchored : NO_APPROVALS
   return (
     <div data-slot="chat-panel" className={`flex-1 flex flex-col min-h-0 min-w-0 relative ${className || ""}`}>
       {header && <div className="shrink-0">{header}</div>}
@@ -810,7 +832,15 @@ export function ChatPanel(props: ChatPanelProps) {
             <BackgroundWorkContext.Provider value={backgroundWork}>
             <ActivityRowsContext.Provider value={getActivityRows}>
               {visualTimeline.map((visual) => {
-                if (visual.kind === "status") return <div key={visual.key}>{statusLine}</div>
+                if (visual.kind === "status") return <div key={visual.key}>
+                  {standaloneApprovals.map(approval => (
+                    <PermissionApprovalCard key={approval.key} approval={approval}
+                      onDecide={onPermissionDecision && approval.requestId
+                        ? decision => onPermissionDecision({ requestId: approval.requestId, toolUseId: approval.request.toolUseId ?? null, decision })
+                        : undefined} />
+                  ))}
+                  {statusLine}
+                </div>
                 if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
                 const row = visual.row
                 const block = row.block
@@ -850,9 +880,12 @@ export function ChatPanel(props: ChatPanelProps) {
                     permissionMode={permissionMode}
                     onExecutePlan={onExecutePlan}
                     planFileContent={hasExitPlanPart(block) ? planFileContent : null}
-                    pendingQuestion={isLastAssistant ? pendingQuestion : null}
+                    pendingQuestion={isLastAssistant ? answerable : null}
                     questionOutcome={isLastAssistant ? questionOutcome : undefined}
-                    onAnswerQuestion={isLastAssistant && pendingQuestion ? onAnswerQuestion : undefined}
+                    onAnswerQuestion={isLastAssistant && answerable ? onAnswerQuestion : undefined}
+                    permissionApprovals={approvals}
+                    unanchoredApprovals={visual.key === fallbackApprovalRowKey ? unanchoredApprovals : undefined}
+                    onPermissionDecision={onPermissionDecision}
                     resolveImageSrc={resolveImageSrc}
                     resolveFileLink={resolveFileLink}
                     resolveEventLink={resolveEventLink}

@@ -1,4 +1,5 @@
 import type { ChatEvent, MessageBlock, MessagePart, PendingQuestion, ProcessEventResult, QuestionOutcome, QuestionState, StructuredQuestion } from "../types"
+import { abandonPermissions, approvalForToolResult, closePermission, isPermissionQuestion, openPermission, permissionOutcome, reparkOnOpenApproval, resolvedApproval, withPendingRecorded } from "./permission-approval.ts"
 // Explicit extension: this module is exercised by node:test, and bare Node ESM
 // does not resolve extensionless relative specifiers.
 import { isEventBlock, streamTargetIndex } from "./event-parts.ts"
@@ -118,6 +119,30 @@ function toOutcome(content: string | null | undefined): QuestionOutcome {
  * because that would silently drop the requestId the answer has to echo.
  */
 function nextQuestion(prev: QuestionState, msgs: MessageBlock[], event: ChatEvent): QuestionState {
+  const recorded = withPendingRecorded(prev)
+  const next = nextQuestionState(recorded, msgs, event)
+  // The question paths below predate approvals and rebuild the state from
+  // scratch; the approvals seen so far carry through them untouched.
+  const merged = next.permissions || !recorded.permissions ? next : { ...next, permissions: recorded.permissions }
+  return reparkOnOpenApproval(merged)
+}
+
+function nextQuestionState(prev: QuestionState, msgs: MessageBlock[], event: ChatEvent): QuestionState {
+  // A permission request is its own lifecycle, keyed by tool call; it never
+  // touches `outcome`, which says how the last AskUserQuestion ended.
+  if (event.type === "question" && event.kind === "permission") return openPermission(prev, event)
+  if (event.type === "question_resolved") {
+    const approval = resolvedApproval(prev, event)
+    if (approval) return closePermission(prev, approval.key, permissionOutcome(event))
+  }
+  if (event.type === "tool_result") {
+    // Only the call waiting for approval is settled by its own result: a
+    // parallel call finishing says nothing about this one.
+    const approval = approvalForToolResult(prev, event)
+    if (approval) return closePermission(prev, approval.key, "unresolved")
+    if (isPermissionQuestion(prev.pending)) return prev
+  }
+
   if (event.type === "question") {
     return {
       // Claude carries the questions in toolInput; Codex carries them in content.
@@ -240,7 +265,8 @@ export function processStreamEvent(
   // the composer must look idle even though the turn hasn't ended. Resolving it
   // hands the turn back — except for "session_ended", which resolves the card
   // by tearing the session down, and nothing is going to resume after it.
-  const endedUnderQuestion = event.type === "question_resolved" && q.outcome === "session_ended"
+  const endedUnderQuestion = event.type === "question_resolved"
+    && (q.outcome === "session_ended" || (q.permissions !== question.permissions && permissionOutcome(event) === "session_ended"))
   const streamingOut = q.pending || endedUnderQuestion ? false : isStreaming
   return { messages: msgs, isStreaming: streamingOut, pendingQuestion: q.pending, question: q, interrupting: false, resumePending }
 }
@@ -265,8 +291,10 @@ function withStatusTurnOrigin(messages: MessageBlock[], event: ChatEvent): Messa
 
 /** Drop anything still pending without claiming it was answered. */
 function closeQuestion(question: QuestionState): QuestionState {
-  if (!question.pending) return question
-  return { pending: null, outcome: question.pending.requestId ? "unresolved" : question.outcome }
+  const state = abandonPermissions(question)
+  if (!state.pending) return state
+  const closed: QuestionState = { pending: null, outcome: state.pending.requestId ? "unresolved" : state.outcome }
+  return state.permissions ? { ...closed, permissions: state.permissions } : closed
 }
 
 /** Update the same native thinking item, even across an ambient visual boundary. */

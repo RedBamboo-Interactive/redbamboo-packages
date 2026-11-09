@@ -1,14 +1,19 @@
 import { useState } from "react"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
+import { PermissionApprovalCard } from "./permission-approval-card"
+import type { PermissionApproval, PermissionDecision } from "../types"
 
 interface Props {
   toolName: string
   toolInput?: string
   toolResult?: string
+  /** The approval this call waits on, or how it ended. Drawn inside the card, always visible. */
+  approval?: PermissionApproval | null
+  onPermissionDecision?: (decision: PermissionDecision) => void | Promise<void>
 }
 
-export function ToolCallCard({ toolName, toolInput, toolResult }: Props) {
+export function ToolCallCard({ toolName, toolInput, toolResult, approval, onPermissionDecision }: Props) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -26,6 +31,11 @@ export function ToolCallCard({ toolName, toolInput, toolResult }: Props) {
           </span>
         )}
       </button>
+      {approval && (
+        <div className="border-t border-border-subtle px-2">
+          <PermissionApprovalCard approval={approval} onDecide={onPermissionDecision} />
+        </div>
+      )}
       {expanded && (
         <div className="border-t border-border-subtle">
           {toolInput && (

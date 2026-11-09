@@ -262,6 +262,18 @@ export interface ChatEvent {
    * is why those events are deliberately not persisted.
    */
   requestId?: string | null
+  /** On `question`: what is being asked. Absent means `"question"`. */
+  kind?: PendingQuestionKind | null
+  /**
+   * On a `question` of kind `"permission"`: the request. When absent the
+   * request is read from `toolName`, `toolInput` and `messageId`.
+   */
+  permission?: PermissionRequest | null
+  /**
+   * On `question_resolved` for a permission request: the decision, when the
+   * server names it here rather than in `content`.
+   */
+  decision?: PermissionDecision | null
   /** Native tool-call identity. Defaults to `messageId` for tool_use/tool_result events. */
   toolUseId?: string | null
   /**
@@ -525,6 +537,69 @@ export interface PendingQuestion {
    * `question` events); such a question can only be answered as a plain turn.
    */
   requestId?: string | null
+  /**
+   * `"permission"`: the provider wants approval to run a tool, and `permission`
+   * says what. Absent means `"question"`: an AskUserQuestion-style question.
+   */
+  kind?: PendingQuestionKind | null
+  /** Present when `kind` is `"permission"`. */
+  permission?: PermissionRequest | null
+}
+
+export type PendingQuestionKind = "question" | "permission"
+
+/** What the person can answer to a permission request. */
+export type PermissionDecision = "allow_once" | "allow_session" | "deny"
+
+/** A tool call the provider wants approved before it runs. */
+export interface PermissionRequest {
+  toolName: string
+  /** The transcript tool_use the approval belongs to; the card is drawn on it. */
+  toolUseId?: string | null
+  /** The command or file the tool is about to touch, in a line. */
+  summary?: string | null
+  /** The tool's input, verbatim. */
+  input?: unknown
+  cwd?: string | null
+  /** Offered decisions, in order. Defaults to all three. */
+  options?: PermissionDecision[] | null
+}
+
+/**
+ * How an approval ended. A decision when the person made one (or the server
+ * reports one, e.g. an expiry that denies); `answered` when the server
+ * resolved it without saying which; the rest as for `QuestionOutcome`.
+ */
+export type PermissionOutcome =
+  | PermissionDecision
+  | "answered"
+  | "timeout"
+  | "cancelled"
+  | "session_ended"
+  | "unresolved"
+
+/**
+ * One approval this client has seen open, live or resolved. Client-side
+ * control state, like the pending question: never part of the transcript, so a
+ * reload shows the settled tool call alone.
+ */
+export interface PermissionApproval {
+  /** `request.toolUseId` when the provider names one, else the requestId. */
+  key: string
+  requestId: string | null
+  request: PermissionRequest
+  /** Null while it waits for the person. */
+  outcome: PermissionOutcome | null
+}
+
+/** Approvals by `PermissionApproval.key`. */
+export type PermissionApprovals = Record<string, PermissionApproval>
+
+/** What a client sends to decide on a permission request. */
+export interface PermissionDecisionPayload {
+  requestId: string | null
+  toolUseId: string | null
+  decision: PermissionDecision
 }
 
 /**
@@ -562,6 +637,8 @@ export interface QuestionAnswerPayload {
   decline?: boolean
   /** Message shown to the model when `decline` is true. */
   reason?: string
+  /** For a permission request: the person's decision. Sent with `requestId` and nothing else. */
+  decision?: PermissionDecision
 }
 
 /**
@@ -571,8 +648,17 @@ export interface QuestionAnswerPayload {
  */
 export interface QuestionState {
   pending: PendingQuestion | null
-  /** Outcome of the most recently resolved question, or null if none has. */
+  /**
+   * Outcome of the most recently resolved question, or null if none has.
+   * Permission requests leave it alone: their outcomes are in `permissions`.
+   */
   outcome: QuestionOutcome | null
+  /**
+   * Every permission request seen in this stream, open or resolved, so each
+   * approval card keeps its outcome after the tool result lands. Absent until
+   * the first one opens.
+   */
+  permissions?: PermissionApprovals
 }
 
 export interface ProcessEventResult {
@@ -712,6 +798,18 @@ export interface ChatPanelProps {
    * `{ response: answer }` there.
    */
   onAnswerQuestion?: (answer: string, payload?: QuestionAnswerPayload) => void
+  /**
+   * Approvals seen in this stream, from `ProcessEventResult.question.permissions`,
+   * so a resolved card keeps its outcome. Omit it and only the pending one
+   * (from `pendingQuestion`) is drawn.
+   */
+  permissionApprovals?: PermissionApprovals | null
+  /**
+   * Send the person's decision on a permission request. Rejecting keeps the
+   * buttons and shows the Error's message on the card. Without it (and without
+   * a `backend` that answers questions) the card shows no buttons.
+   */
+  onPermissionDecision?: (payload: PermissionDecisionPayload) => void | Promise<void>
   onResume?: () => void | Promise<void>
   /** Whether older history exists beyond the currently loaded tail. */
   hasEarlierMessages?: boolean

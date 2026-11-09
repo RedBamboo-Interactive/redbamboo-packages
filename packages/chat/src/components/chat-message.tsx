@@ -19,7 +19,7 @@ import {
   useUiEnvironment,
   type ContextMenuEntry,
 } from "@redbamboo/ui"
-import type { MessageBlock, MessagePart, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, TranscriptPayloadLoader, TranscriptPayloadRef, AgentDisplayInfo, ResolveAgentInfo } from "../types"
+import type { MessageBlock, MessagePart, ImageAttachment, PendingQuestion, PermissionApproval, PermissionDecisionPayload, QuestionAnswerPayload, QuestionOutcome, TranscriptPayloadLoader, TranscriptPayloadRef, AgentDisplayInfo, ResolveAgentInfo } from "../types"
 import { ImageThumbnail, StreamingText, MarkdownRenderer } from "./streaming-text"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
@@ -37,6 +37,8 @@ import type { ActivityTurnOrigin } from "../lib/activity-timeline"
 import { CONTEXT_COMPACTION_TOOL_NAME } from "../lib/chat-status"
 import { resolveQuestionCardContent } from "../lib/question-card"
 import { QuestionCard, type QuestionCardStatus } from "./question-card"
+import { PermissionApprovalCard } from "./permission-approval-card"
+import { approvalsOnParts } from "../lib/permission-approval"
 import { AudioPlayerWidget } from "./audio-player-widget"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 import { AttachmentCard } from "./attachment-card"
@@ -120,6 +122,14 @@ interface ChatMessageProps {
   /** How the last question ended, when the host tracks it. See QuestionCard. */
   questionOutcome?: QuestionOutcome | null
   onAnswerQuestion?: (answer: string, payload?: QuestionAnswerPayload) => void
+  /**
+   * Approvals in this conversation. Each is drawn under the frieze holding its
+   * tool call, wherever that call renders; keep the reference stable.
+   */
+  permissionApprovals?: readonly PermissionApproval[]
+  /** Approvals with no tool call on screen, drawn standalone at the end of this block. */
+  unanchoredApprovals?: readonly PermissionApproval[]
+  onPermissionDecision?: (payload: PermissionDecisionPayload) => void | Promise<void>
   resolveImageSrc?: (src: string) => string | undefined
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   /**
@@ -186,6 +196,9 @@ export const ChatMessage = memo(function ChatMessage({
   pendingQuestion,
   questionOutcome,
   onAnswerQuestion,
+  permissionApprovals,
+  unanchoredApprovals,
+  onPermissionDecision,
   resolveImageSrc,
   resolveFileLink,
   resolveEventLink,
@@ -451,6 +464,21 @@ export const ChatMessage = memo(function ChatMessage({
   const askQuestionPart = block.parts.find(p => p.type === "tool_use" && p.toolName === "AskUserQuestion")
   const questionCard = resolveQuestionCardContent(pendingQuestion, askQuestionPart)
   const turnOrigin = turnOriginOf(block)
+  const approvals = approvalsOnParts(block.parts, permissionApprovals)
+  const approvalCard = (approval: PermissionApproval) => (
+    <PermissionApprovalCard
+      key={approval.key}
+      approval={approval}
+      onDecide={onPermissionDecision && approval.requestId
+        ? decision => onPermissionDecision({ requestId: approval.requestId, toolUseId: approval.request.toolUseId ?? null, decision })
+        : undefined}
+    />
+  )
+  const friezeApprovals = (parts: readonly MessagePart[]) => approvals.size === 0 ? [] : parts.flatMap(part => {
+    const id = part.type === "tool_use" ? part.toolUseId ?? part.messageId : undefined
+    const approval = id ? approvals.get(id) : undefined
+    return approval ? [approval] : []
+  })
 
   return (
     <>
@@ -493,7 +521,8 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} awaitingApproval={approvals} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+              {friezeApprovals(group.parts).map(approvalCard)}
             </div>
           )
         )}
@@ -513,6 +542,7 @@ export const ChatMessage = memo(function ChatMessage({
             onAnswer={onAnswerQuestion}
           />
         )}
+        {unanchoredApprovals?.map(approvalCard)}
         {errorRewindTarget && onRewind && (
           <button
             type="button"
@@ -587,13 +617,15 @@ function partLabel(part: MessagePart): string {
 }
 
 
-function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApproval, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
   parts: MessagePart[]
   allParts: MessagePart[]
   /** Positions index `allParts`; an origin past the last part trails the frieze. */
   turnOrigins?: readonly ActivityTurnOrigin[]
   isLive?: boolean
+  /** Approvals on this row's tool calls; a waiting one rings its square. */
+  awaitingApproval?: ReadonlyMap<string, PermissionApproval>
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
@@ -707,12 +739,14 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
           const queueStatus = resolveEventQueueStatus?.(part)
           const squareEvent = usesSquareEventMarker(part)
           const inlineLabel = event ? eventInlineLabel(part) : null
+          const approvalId = part.type === "tool_use" ? part.toolUseId ?? part.messageId : undefined
+          const waitingApproval = !!approvalId && awaitingApproval?.get(approvalId)?.outcome === null
           return [
             ...originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />),
             <button
               key={`part:${i}`}
               onClick={() => handleClick(part)}
-              className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}`}
+              className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}`}
               style={{ backgroundColor: queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part) }}
               title={part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
               aria-label={queueStatus ? `${partLabel(part)}: ${queueStatus.label}` : part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
@@ -720,6 +754,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, resolveFile
               data-part-index={positions[i]}
               data-tool-use-id={part.toolUseId}
               data-task-status={part.task?.status}
+              data-awaiting-approval={waitingApproval || undefined}
             />,
             ...(inlineLabel ? [
               <button

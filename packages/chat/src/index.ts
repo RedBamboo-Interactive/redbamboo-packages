@@ -38,6 +38,13 @@ export type {
   QuestionOutcome,
   QuestionAnswerPayload,
   QuestionState,
+  PendingQuestionKind,
+  PermissionDecision,
+  PermissionRequest,
+  PermissionOutcome,
+  PermissionApproval,
+  PermissionApprovals,
+  PermissionDecisionPayload,
   ProcessEventResult,
   SpeechBackend,
   SpeakOptions,
@@ -89,6 +96,17 @@ export type { ProviderUsageThresholdAlert } from "./lib/provider-usage"
 export { ChatStatusLine, StreamingStatusLine } from "./components/streaming-status-line"
 export { CONTEXT_COMPACTION_TOOL_NAME, isContextCompactionActive } from "./lib/chat-status"
 export { PendingQuestionLine } from "./components/pending-question-line"
+export { PermissionApprovalCard } from "./components/permission-approval-card"
+export {
+  PERMISSION_DECISIONS,
+  answerableQuestion,
+  isPermissionQuestion,
+  permissionOutcome,
+  permissionPendingQuestion,
+  readPermissionRequest,
+  summarizeToolInput,
+  visibleApprovals,
+} from "./lib/permission-approval"
 export { ACCESS_LEVELS, ACCESS_LEVEL_DESCRIPTIONS, ACCESS_LEVEL_LABELS, accessLevelChoices, isAccessLevel } from "./lib/access-level"
 export type { AccessLevelChoice } from "./lib/access-level"
 export { HandsFreeStatusLine } from "./components/hands-free-status-line"

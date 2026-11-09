@@ -1,9 +1,16 @@
 import { useState, useCallback, useEffect, useRef } from "react"
-import type { ChatBackend, ChatEvent, ChatInputPart, MessageBlock, ImageAttachment, PendingQuestion, QuestionAnswerPayload, QuestionOutcome, QuestionState, UploadedAttachment } from "../types"
+import type { ChatBackend, ChatEvent, ChatInputPart, MessageBlock, ImageAttachment, PendingQuestion, PermissionApprovals, PermissionDecisionPayload, QuestionAnswerPayload, QuestionOutcome, QuestionState, UploadedAttachment } from "../types"
 import { processStreamEvent, finalizeStreamBlock } from "../lib/process-stream-event"
+import { abandonPermissions, closePermission, isPermissionQuestion, reparkOnOpenApproval } from "../lib/permission-approval"
 
 const EMPTY_MESSAGES: MessageBlock[] = []
 const NO_QUESTION: QuestionState = { pending: null, outcome: null }
+
+/** Nothing pending; earlier approval cards keep saying how they ended. */
+function keepApprovals(state: QuestionState): QuestionState {
+  const permissions = abandonPermissions(state).permissions
+  return permissions ? { pending: null, outcome: null, permissions } : NO_QUESTION
+}
 const noop = () => {}
 const noopAsync = async () => {}
 
@@ -12,6 +19,7 @@ export function useChatStream(backend: ChatBackend | null) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [pendingQuestion, setPendingQuestion] = useState<PendingQuestion | null>(null)
   const [questionOutcome, setQuestionOutcome] = useState<QuestionOutcome | null>(null)
+  const [permissionApprovals, setPermissionApprovals] = useState<PermissionApprovals | null>(null)
   const [interrupting, setInterrupting] = useState(false)
   const [resumePending, setResumePending] = useState(false)
   const resumePendingRef = useRef(false)
@@ -35,6 +43,7 @@ export function useChatStream(backend: ChatBackend | null) {
       questionRef.current = result.question
       setPendingQuestion(result.question.pending)
       setQuestionOutcome(result.question.outcome)
+      setPermissionApprovals(result.question.permissions ?? null)
       setInterrupting(result.interrupting)
       resumePendingRef.current = result.resumePending
       setResumePending(result.resumePending)
@@ -44,12 +53,18 @@ export function useChatStream(backend: ChatBackend | null) {
 
   const answerQuestion = useCallback(async (answer: string, payload?: QuestionAnswerPayload) => {
     const pending = questionRef.current.pending
+    // An approval is decided with its buttons, never with typed text.
+    if (isPermissionQuestion(pending)) return
     const sessionId = sessionIdRef.current
     // Optimistic: the card resolves now rather than waiting for the round trip.
     // A backend that can't take structured answers gets the readable form as a
     // normal turn instead — that was the only channel before this existed.
-    questionRef.current = { pending: null, outcome: "answered" }
-    setPendingQuestion(null)
+    const permissions = questionRef.current.permissions
+    // An approval opened under the question keeps the turn parked.
+    questionRef.current = permissions
+      ? reparkOnOpenApproval({ pending: null, outcome: "answered", permissions })
+      : { pending: null, outcome: "answered" }
+    setPendingQuestion(questionRef.current.pending)
     setQuestionOutcome("answered")
 
     const body: QuestionAnswerPayload = { ...(payload ?? { response: answer }) }
@@ -67,6 +82,25 @@ export function useChatStream(backend: ChatBackend | null) {
     }
   }, [backend])
 
+  // Not optimistic: the card says "Sending" until the server takes it, and a
+  // refusal rejects so the card can show it and keep its buttons.
+  const decidePermission = useCallback(async ({ requestId, toolUseId, decision }: PermissionDecisionPayload) => {
+    const sessionId = sessionIdRef.current
+    if (!sessionId || !backend?.answerQuestion || !requestId)
+      throw new Error("This chat can't answer approvals")
+    await backend.answerQuestion(sessionId, { requestId, decision })
+    const key = toolUseId && questionRef.current.permissions?.[toolUseId] ? toolUseId
+      : Object.values(questionRef.current.permissions ?? {}).find(approval => approval.requestId === requestId)?.key
+    if (!key) return
+    // A backend that never sends question_resolved still settles the card;
+    // one that does overrides this with its own word.
+    const next = closePermission(questionRef.current, key, decision)
+    questionRef.current = next
+    setPendingQuestion(next.pending)
+    setPermissionApprovals(next.permissions ?? null)
+    if (!next.pending) setIsStreaming(true)
+  }, [backend])
+
   const sendMessage = useCallback(async (text: string, images?: ImageAttachment[]) => {
     if (!backend) return
     const userBlock: MessageBlock = {
@@ -77,7 +111,8 @@ export function useChatStream(backend: ChatBackend | null) {
     }
     setMessages(prev => [...prev, userBlock])
     setIsStreaming(true)
-    questionRef.current = NO_QUESTION
+    questionRef.current = keepApprovals(questionRef.current)
+    setPermissionApprovals(questionRef.current.permissions ?? null)
     setPendingQuestion(null)
     setQuestionOutcome(null)
     setInterrupting(false)
@@ -112,7 +147,8 @@ export function useChatStream(backend: ChatBackend | null) {
     }
     setMessages(previous => [...previous, userBlock])
     setIsStreaming(true)
-    questionRef.current = NO_QUESTION
+    questionRef.current = keepApprovals(questionRef.current)
+    setPermissionApprovals(questionRef.current.permissions ?? null)
     setPendingQuestion(null)
     setQuestionOutcome(null)
     setInterrupting(false)
@@ -138,7 +174,10 @@ export function useChatStream(backend: ChatBackend | null) {
   // without risking getting stuck if a backend never sends one.
   const interrupt = useCallback(() => {
     setIsStreaming(false)
-    questionRef.current = { pending: null, outcome: questionRef.current.pending ? "cancelled" : questionRef.current.outcome }
+    // Interrupting under an approval says nothing about the last question's outcome.
+    const { pending, outcome } = questionRef.current
+    questionRef.current = { ...keepApprovals(questionRef.current), outcome: pending && !isPermissionQuestion(pending) ? "cancelled" : outcome }
+    setPermissionApprovals(questionRef.current.permissions ?? null)
     setPendingQuestion(null)
     setQuestionOutcome(questionRef.current.outcome)
     setInterrupting(false)
@@ -168,6 +207,7 @@ export function useChatStream(backend: ChatBackend | null) {
     questionRef.current = NO_QUESTION
     setPendingQuestion(null)
     setQuestionOutcome(null)
+    setPermissionApprovals(null)
     setInterrupting(false)
     resumePendingRef.current = false
     setResumePending(false)
@@ -186,6 +226,7 @@ export function useChatStream(backend: ChatBackend | null) {
       isStreaming: false,
       pendingQuestion: null as PendingQuestion | null,
       questionOutcome: null as QuestionOutcome | null,
+      permissionApprovals: null as PermissionApprovals | null,
       interrupting: false,
       resumePending: false,
       sendMessage: noopAsync as (text: string, images?: ImageAttachment[]) => Promise<void>,
@@ -193,8 +234,9 @@ export function useChatStream(backend: ChatBackend | null) {
       interrupt: noop,
       reset: noopAsync,
       answerQuestion: noopAsync as (answer: string, payload?: QuestionAnswerPayload) => Promise<void>,
+      decidePermission: noopAsync as (payload: PermissionDecisionPayload) => Promise<void>,
     }
   }
 
-  return { messages, isStreaming, pendingQuestion, questionOutcome, interrupting, resumePending, sendMessage, sendInput, interrupt, reset, answerQuestion }
+  return { messages, isStreaming, pendingQuestion, questionOutcome, permissionApprovals, interrupting, resumePending, sendMessage, sendInput, interrupt, reset, answerQuestion, decidePermission }
 }
