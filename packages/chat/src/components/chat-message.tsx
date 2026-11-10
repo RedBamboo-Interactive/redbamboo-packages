@@ -38,6 +38,8 @@ import { CONTEXT_COMPACTION_TOOL_NAME } from "../lib/chat-status"
 import { resolveQuestionCardContent } from "../lib/question-card"
 import { QuestionCard, type QuestionCardStatus } from "./question-card"
 import { PermissionApprovalCard } from "./permission-approval-card"
+import { StoredMessageContext } from "./message-context-view"
+import { MESSAGE_CONTEXT_BLOCK_KEY } from "../lib/message-context"
 import { approvalsOnParts } from "../lib/permission-approval"
 import { AudioPlayerWidget } from "./audio-player-widget"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
@@ -1289,9 +1291,13 @@ const novaContextLabels: Record<string, string> = {
   timestamp: "Context time",
   day: "Day",
   device: "Device",
+  deviceType: "Device type",
+  devicePlatform: "Platform",
+  deviceRoom: "Room",
   input: "Input method",
   discussion: "Discussion",
   agent: "Agent",
+  extensionContextCount: "Extension contexts",
 }
 
 const metadataLabels: Record<string, string> = {
@@ -1349,10 +1355,10 @@ function formatEventTime(iso: string): string {
   })
 }
 
-const novaContextKeys = new Set(["timestamp", "day", "device", "input", "discussion", "agent", "outfit", "activeDiscussionCount", "archivedDiscussionCount", "otherAgentDiscussionCount"])
+const novaContextKeys = new Set(["timestamp", "day", "device", "deviceType", "devicePlatform", "deviceRoom", "input", "discussion", "agent", "outfit", "activeDiscussionCount", "archivedDiscussionCount", "otherAgentDiscussionCount", "extensionContextCount"])
 
-// Structured payloads rendered elsewhere (event modals) — not for the info dialog.
-const hiddenMetaKeys = new Set(["eventData"])
+// Structured payloads rendered elsewhere (event modals, the stored context view) — not rows.
+const hiddenMetaKeys = new Set(["eventData", MESSAGE_CONTEXT_BLOCK_KEY])
 
 function MessageMetadata({ block, inline, trigger = true, open: openProp, onOpenChange }: {
   block: MessageBlock
@@ -1374,9 +1380,16 @@ function MessageMetadata({ block, inline, trigger = true, open: openProp, onOpen
   const imageCount = block.parts.reduce((n, p) => n + (p.images?.length ?? 0), 0)
   const hasAudio = block.parts.some(p => p.type === "audio")
 
+  // The exact context a host stored with this message; null when it keeps them but this one predates that.
+  const storedContext = meta?.[MESSAGE_CONTEXT_BLOCK_KEY]
+  const storedContextText = typeof storedContext === "string" && storedContext ? storedContext : null
+  const contextNotRecorded = !storedContextText && block.role === "user"
+    && !!meta && MESSAGE_CONTEXT_BLOCK_KEY in meta && storedContext == null
+
   const rawContent = block.parts[0]?.content || ""
-  const novaCtxFromXml = novaMetaEntries.length === 0 ? parseNovaContextMeta(rawContent) : null
-  const hasNovaCtx = novaMetaEntries.length > 0 || novaCtxFromXml != null
+  // Other products keep the context inside the message text: parse it out there.
+  const novaCtxFromXml = novaMetaEntries.length === 0 && !storedContextText ? parseNovaContextMeta(rawContent) : null
+  const hasNovaCtx = novaMetaEntries.length > 0 || novaCtxFromXml != null || !!storedContextText || contextNotRecorded
 
   return (
     <>
@@ -1392,7 +1405,12 @@ function MessageMetadata({ block, inline, trigger = true, open: openProp, onOpen
       </button>}
 
       <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
-        <DialogContent motion="snappy" className="max-w-sm max-h-[70vh] flex flex-col p-0 gap-0">
+        <DialogContent
+          motion="snappy"
+          className={storedContextText
+            ? "max-w-sm sm:max-w-2xl max-h-[85svh] flex flex-col p-0 gap-0"
+            : "max-w-sm max-h-[70vh] flex flex-col p-0 gap-0"}
+        >
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
             <i className="ph-bold ph-info text-sm text-text-muted" />
             <DialogTitle className="text-sm">Message Info</DialogTitle>
@@ -1421,15 +1439,23 @@ function MessageMetadata({ block, inline, trigger = true, open: openProp, onOpen
             {novaMetaEntries.length > 0 && (
               <div className="border-t border-border-subtle my-1 pt-1">
                 <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1.5">Nova Context</p>
-                {novaMetaEntries.map(([key, value]) => (
-                  <MetaRow
-                    key={key}
-                    label={novaContextLabels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
-                    value={key === "timestamp" ? formatTimestamp(String(value)) : String(value)}
-                    mono={key === "discussion"}
-                  />
-                ))}
+                {novaMetaEntries.map(([key, value]) => key === "outfit"
+                  ? <FoldedMetaRow key={key} label="Outfit" value={String(value)} />
+                  : (
+                    <MetaRow
+                      key={key}
+                      label={novaContextLabels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
+                      value={key === "timestamp" ? formatTimestamp(String(value)) : String(value)}
+                      mono={key === "discussion"}
+                    />
+                  ))}
               </div>
+            )}
+            {storedContextText && <StoredMessageContext text={storedContextText} />}
+            {contextNotRecorded && (
+              <p data-slot="message-context-missing" className="text-xs text-text-disabled italic pt-1">
+                Context wasn't recorded for this message.
+              </p>
             )}
             {novaCtxFromXml && (
               <div className="border-t border-border-subtle my-1 pt-1">
@@ -1502,6 +1528,25 @@ function MessageActionsMenu({ getEntries }: { getEntries: () => ContextMenuEntry
         {entries && <ActionMenuItems entries={entries} />}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/** A long value (an outfit description) folded to one line until asked for. */
+function FoldedMetaRow({ label, value }: { label: string; value: string }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div data-slot="message-info-folded-row" className="flex justify-between items-baseline gap-4 text-xs">
+      <span className="text-text-muted shrink-0">{label}</span>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        title={open ? "Show less" : "Show all"}
+        className={`min-w-0 text-text-secondary text-right cursor-pointer hover:text-text-primary ${open ? "whitespace-pre-wrap break-words" : "truncate"}`}
+      >
+        {value}
+      </button>
+    </div>
   )
 }
 
