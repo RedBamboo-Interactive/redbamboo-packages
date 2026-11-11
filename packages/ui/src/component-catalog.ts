@@ -62,6 +62,30 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
     ],
   },
   {
+    id: "toast",
+    packageName: "@redbamboo/ui",
+    exports: ["toast", "useToast", "updateToast", "dismissToast", "Toaster"],
+    description: "The page's single toast queue: one entry point (toast() or useToast()) and one portalled Toaster per document, with arrival and exit motion.",
+    tags: ["toast", "notification", "feedback", "snackbar", "alert", "status", "progress"],
+    useWhen: [
+      "Confirming an action, reporting its failure, or tracking async work with a loading toast updated in place.",
+      "Raising feedback from anywhere, including outside React, with toast(); useToast() inside a detached window targets that window.",
+      "Many toasts can come from one source; pass group so at most three show and the rest collapse into one +N more toast.",
+    ],
+    avoidWhen: [
+      "Mounting another Toaster or a ToastProvider in a plugin; the host shell already renders the only stack (ToastProvider is a deprecated no-op).",
+      "Durable or actionable information the user must find later; write a notification record instead.",
+      "Validation of a form field; show it next to the field.",
+    ],
+    variants: ["default", "success", "error", "loading", "action", "group-overflow"],
+    selectors: [
+      '[data-slot="toaster"]',
+      '[data-slot="toast-slot"]',
+      '[data-slot="toast"]',
+      '[data-slot="toast-dismiss"]',
+    ],
+  },
+  {
     id: "entity-card",
     packageName: "@redbamboo/ui",
     exports: [

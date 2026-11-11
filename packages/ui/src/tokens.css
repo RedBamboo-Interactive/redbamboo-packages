@@ -782,6 +782,105 @@ body {
   }
 }
 
+/* ── Toast motion ─────────────────────────────────────────────────── */
+
+/* A toast arrives from the right while its slot grows from nothing, so the stack above glides
+   up to make room. Leaving, it slides back out, then its slot collapses and the stack settles.
+   The store removes a closing toast after TOAST_EXIT_MS (toast-store.ts): out + collapse delay
+   + collapse must stay within it. */
+@keyframes rb-toast-in {
+  from {
+    opacity: 0;
+    translate: var(--rb-toast-shift) 0;
+    scale: var(--rb-toast-scale);
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+}
+
+@keyframes rb-toast-out {
+  from {
+    opacity: 1;
+    translate: 0 0;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    translate: var(--rb-toast-shift) 0;
+    scale: var(--rb-toast-scale);
+  }
+}
+
+@keyframes rb-toast-grow {
+  from { grid-template-rows: 0fr; }
+  to { grid-template-rows: 1fr; }
+}
+
+@keyframes rb-toast-collapse {
+  from { grid-template-rows: 1fr; }
+  to { grid-template-rows: 0fr; }
+}
+
+.rb-toast-slot {
+  --rb-toast-shift: 1.5rem;
+  --rb-toast-scale: 0.97;
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.rb-toast-clip {
+  min-height: 0;
+}
+
+/* Clip only while the height moves; the margin keeps the shadow visible meanwhile. */
+.rb-toast-slot[data-entering] > .rb-toast-clip,
+.rb-toast-slot[data-phase="closing"] > .rb-toast-clip {
+  overflow: clip;
+  overflow-clip-margin: 1.25rem;
+}
+
+.rb-toast-slot[data-entering] {
+  animation: rb-toast-grow 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.rb-toast-slot[data-entering] .rb-toast {
+  animation: rb-toast-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* After the entering rules: a toast dismissed mid-arrival leaves from where it is. */
+.rb-toast-slot[data-phase="closing"] {
+  pointer-events: none;
+  animation: rb-toast-collapse 160ms cubic-bezier(0.4, 0, 0.2, 1) 170ms both;
+}
+
+.rb-toast-slot[data-phase="closing"] .rb-toast {
+  animation: rb-toast-out 170ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-toast-slot {
+    --rb-toast-shift: 0px;
+    --rb-toast-scale: 1;
+  }
+
+  .rb-toast-slot[data-entering] {
+    animation-duration: 1ms;
+  }
+
+  .rb-toast-slot[data-entering] .rb-toast,
+  .rb-toast-slot[data-phase="closing"] .rb-toast {
+    animation-duration: 150ms;
+  }
+
+  .rb-toast-slot[data-phase="closing"] {
+    animation-duration: 1ms;
+    animation-delay: 150ms;
+  }
+}
+
 /* ── Sheet and media-viewer motion ────────────────────────────────── */
 
 @keyframes rb-sheet-in {

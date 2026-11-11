@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react"
 import { createRoot } from "react-dom/client"
-import { ToastProvider } from "@redbamboo/ui"
+import { Toaster } from "@redbamboo/ui"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { SessionInfoButton } from "../../src/components/context-indicator"
 import { processStreamEvent } from "../../src/lib/process-stream-event"
@@ -138,5 +138,5 @@ function ChatFixture() {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <ToastProvider>{view === "chat" ? <ChatFixture /> : <ModalFixture />}</ToastProvider>,
+  <>{view === "chat" ? <ChatFixture /> : <ModalFixture />}<Toaster /></>,
 )

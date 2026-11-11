@@ -32,6 +32,7 @@
     "test:protected-value-field": "node tests/protected-value-field/run.mjs",
     "test:dock": "node tests/dock/run.mjs",
     "test:context-menu": "node tests/context-menu/run.mjs",
+    "test:toast": "node tests/toast/run.mjs",
     "clean": "rimraf dist"
   },
   "peerDependencies": {

@@ -1,6 +1,6 @@
 import React from "react"
 import { createRoot } from "react-dom/client"
-import { ToastProvider } from "@redbamboo/ui"
+import { Toaster } from "@redbamboo/ui"
 import { ChatMessage } from "../../src/components/chat-message"
 import type { MessageBlock } from "../../src/types"
 import "./fixture.css"
@@ -96,9 +96,10 @@ function block(): MessageBlock {
 ;(window as unknown as { __context: string }).__context = kind === "delta" ? DELTA : fullContext()
 
 createRoot(document.getElementById("root")!).render(
-  <ToastProvider>
+  <>
     <div className="mx-auto max-w-3xl p-4">
       <ChatMessage block={block()} animateEntrance={false} />
     </div>
-  </ToastProvider>,
+    <Toaster />
+  </>,
 )

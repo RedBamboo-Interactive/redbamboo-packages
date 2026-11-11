@@ -1,106 +1,59 @@
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { cn } from "../utils"
+import { useUiEnvironment } from "../ui-environment"
+import {
+  activeToaster,
+  dismissToast,
+  getToasts,
+  pauseToasts,
+  registerToaster,
+  resumeToasts,
+  subscribeToasts,
+  toast,
+  updateToast,
+  type ToastInput,
+  type ToastRecord,
+  type ToastUpdate,
+  type ToastVariant,
+} from "./toast-store"
 
-// ── Types ──────────────────────────────────────────────────────────────
+export type { Toast, ToastAction, ToastInput, ToastOptions, ToastUpdate, ToastVariant } from "./toast-store"
+export { dismissToast, toast, updateToast } from "./toast-store"
 
-export type ToastVariant = "default" | "success" | "error" | "loading"
+// One entry point: `toast()` (or `useToast()` inside React) raises a toast on the page's
+// single queue. One renderer: the host mounts one <Toaster /> per document; the RedLeaf
+// shell's AppShell owns the main page's, a detached window (Float Nova) owns its own.
 
-export interface Toast {
-  id: string
-  title: string
-  description?: string
-  variant: ToastVariant
-  duration?: number
-  action?: { label: string; onClick: () => void }
-}
-
-export interface ToastUpdate {
-  title?: string
-  description?: string
-  variant?: ToastVariant
-  duration?: number
-  action?: { label: string; onClick: () => void }
-}
-
-interface ToastContextValue {
-  toast: (toast: Omit<Toast, "id">) => string
+export interface ToastApi {
+  toast: (toast: ToastInput) => string
   update: (id: string, update: ToastUpdate) => void
   dismiss: (id: string) => void
 }
 
-// ── Context ────────────────────────────────────────────────────────────
-
-const ToastContext = React.createContext<ToastContextValue | null>(null)
-
-export function useToast(): ToastContextValue {
-  const ctx = React.useContext(ToastContext)
-  if (!ctx) throw new Error("useToast must be used within a ToastProvider")
-  return ctx
+/**
+ * Raise toasts from a component. Toasts go to the toaster of the document the component
+ * renders in, so a detached window shows its own toasts. Works anywhere; no provider needed.
+ */
+export function useToast(): ToastApi {
+  const { document: target } = useUiEnvironment()
+  return React.useMemo<ToastApi>(() => ({
+    toast: (input) => toast(input, { document: target }),
+    update: updateToast,
+    dismiss: dismissToast,
+  }), [target])
 }
 
-// ── Provider & Renderer ────────────────────────────────────────────────
-
-let idCounter = 0
-
+/**
+ * @deprecated Toasts no longer need a provider: `useToast()` and `toast()` work anywhere and
+ * the host's single <Toaster /> renders them. Kept so existing plugin bundles keep working;
+ * it renders its children and nothing else.
+ */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const [toasts, setToasts] = React.useState<Toast[]>([])
-  const timers = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-
-  function scheduleRemoval(id: string, duration: number) {
-    const existing = timers.current.get(id)
-    if (existing) clearTimeout(existing)
-    const timer = setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id))
-      timers.current.delete(id)
-    }, duration)
-    timers.current.set(id, timer)
-  }
-
-  const toast = React.useCallback((t: Omit<Toast, "id">) => {
-    const id = `toast-${++idCounter}`
-    const newToast: Toast = { ...t, id }
-    setToasts((prev) => [...prev, newToast])
-    if (t.variant !== "loading") {
-      scheduleRemoval(id, t.duration ?? 5000)
-    }
-    return id
-  }, [])
-
-  const update = React.useCallback((id: string, u: ToastUpdate) => {
-    setToasts((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...u } : t))
-    )
-    if (u.variant && u.variant !== "loading") {
-      scheduleRemoval(id, u.duration ?? 5000)
-    }
-  }, [])
-
-  const dismiss = React.useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id))
-    const timer = timers.current.get(id)
-    if (timer) {
-      clearTimeout(timer)
-      timers.current.delete(id)
-    }
-  }, [])
-
-  React.useEffect(() => {
-    return () => {
-      timers.current.forEach((timer) => clearTimeout(timer))
-    }
-  }, [])
-
-  const value = React.useMemo(() => ({ toast, update, dismiss }), [toast, update, dismiss])
-
-  return (
-    <ToastContext.Provider value={value}>
-      {children}
-      <Toaster toasts={toasts} onDismiss={dismiss} />
-    </ToastContext.Provider>
-  )
+  return <>{children}</>
 }
 
-// ── Toaster (renders toasts) ───────────────────────────────────────────
+// ── Toaster ────────────────────────────────────────────────────────────
 
 const variantIcon: Record<ToastVariant, string> = {
   default: "ph-bold ph-info",
@@ -116,44 +69,101 @@ const variantColor: Record<ToastVariant, string> = {
   loading: "text-primary",
 }
 
-function Toaster({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
-  if (toasts.length === 0) return null
+/**
+ * Renders the toasts of the document it is mounted in, portalled to that document's portal
+ * container. Mount exactly one per document; a second one for the same document stays empty.
+ */
+export function Toaster() {
+  const { document: target, portalContainer } = useUiEnvironment()
+  const [key] = React.useState(() => Symbol("toaster"))
+  React.useEffect(() => registerToaster(target, key), [target, key])
+
+  const all = React.useSyncExternalStore(subscribeToasts, getToasts, getToasts)
+  const active = React.useSyncExternalStore(
+    subscribeToasts,
+    () => activeToaster(target) === key,
+    () => false,
+  )
+  const mine = React.useMemo(() => all.filter((t) => t.target === target), [all, target])
+
+  // The stack unmounts with its last toast, which never fires pointerleave.
+  const empty = mine.length === 0
+  React.useEffect(() => {
+    if (empty) resumeToasts(target)
+  }, [empty, target])
+  React.useEffect(() => () => resumeToasts(target), [target])
+
+  if (!active || empty) return null
+
+  return createPortal(
+    <div
+      data-slot="toaster"
+      role="region"
+      aria-label="Notifications"
+      aria-live="polite"
+      onPointerEnter={() => pauseToasts(target)}
+      onPointerLeave={() => resumeToasts(target)}
+      className="fixed bottom-4 left-4 right-4 z-[100] flex flex-col sm:left-auto sm:max-w-sm"
+    >
+      {mine.map((t) => (
+        <ToastItem key={t.id} toast={t} />
+      ))}
+    </div>,
+    portalContainer,
+  )
+}
+
+function ToastItem({ toast: t }: { toast: ToastRecord }) {
+  // Entering until the arrival motion has played; the slot clips its growing height meanwhile.
+  const [entering, setEntering] = React.useState(true)
 
   return (
     <div
-      data-slot="toaster"
-      className="fixed bottom-4 left-4 right-4 z-[100] flex flex-col gap-2 sm:left-auto sm:max-w-sm"
+      data-slot="toast-slot"
+      data-phase={t.phase}
+      data-entering={entering ? "" : undefined}
+      className="rb-toast-slot"
+      onAnimationEnd={(event) => {
+        if (event.animationName === "rb-toast-in") setEntering(false)
+      }}
     >
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          data-slot="toast"
-          data-variant={t.variant}
-          className="flex items-start gap-3 rounded-lg border border-border bg-popover px-4 py-3 shadow-lg shadow-black/20 animate-in slide-in-from-right-full fade-in duration-200"
-        >
-          <i className={cn(variantIcon[t.variant], variantColor[t.variant], "mt-0.5 text-sm")} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">{t.title}</p>
-            {t.description && (
-              <p className="mt-0.5 text-xs text-muted-foreground">{t.description}</p>
-            )}
-            {t.action && (
-              <button
-                onClick={t.action.onClick}
-                className="mt-1.5 text-xs font-medium text-primary hover:underline"
-              >
-                {t.action.label}
-              </button>
-            )}
-          </div>
-          <button
-            onClick={() => onDismiss(t.id)}
-            className="text-muted-foreground hover:text-foreground transition-colors text-xs p-0.5"
+      <div className="rb-toast-clip">
+        <div className="pt-2">
+          <div
+            data-slot="toast"
+            data-variant={t.variant}
+            data-phase={t.phase}
+            role={t.variant === "error" ? "alert" : "status"}
+            className="rb-toast flex items-start gap-3 rounded-lg border border-border bg-popover px-4 py-3 shadow-lg shadow-black/20"
           >
-            <i className="ph-bold ph-x" />
-          </button>
+            <i className={cn(variantIcon[t.variant], variantColor[t.variant], "mt-0.5 text-sm")} aria-hidden />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">{t.title}</p>
+              {t.description && (
+                <p className="mt-0.5 text-xs text-muted-foreground">{t.description}</p>
+              )}
+              {t.action && (
+                <button
+                  type="button"
+                  onClick={t.action.onClick}
+                  className="mt-1.5 text-xs font-medium text-primary hover:underline"
+                >
+                  {t.action.label}
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-label="Dismiss"
+              data-slot="toast-dismiss"
+              onClick={() => dismissToast(t.id)}
+              className="text-muted-foreground hover:text-foreground transition-colors text-xs p-0.5"
+            >
+              <i className="ph-bold ph-x" aria-hidden />
+            </button>
+          </div>
         </div>
-      ))}
+      </div>
     </div>
   )
 }

@@ -260,12 +260,20 @@ export {
 export type { DialogMotion } from "./components/dialog"
 
 export {
+  Toaster,
   ToastProvider,
+  dismissToast,
+  toast,
+  updateToast,
   useToast,
 } from "./components/toast"
 
 export type {
   Toast,
+  ToastAction,
+  ToastApi,
+  ToastInput,
+  ToastOptions,
   ToastUpdate,
   ToastVariant,
 } from "./components/toast"

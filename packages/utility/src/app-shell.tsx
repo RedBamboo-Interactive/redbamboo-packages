@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
-  ToastProvider,
+  Toaster,
   useToast,
 } from "@redbamboo/ui"
 import { AuthProvider, useAuth } from "./auth-provider"
@@ -441,9 +441,9 @@ function AppShell(props: AppShellProps) {
   return (
     <AuthProvider>
       <CommandProvider source={commandSource}>
-        <ToastProvider>
-          <AppShellInner {...props} />
-        </ToastProvider>
+        <AppShellInner {...props} />
+        {/* The page's only toast stack; toast() and useToast() feed it from anywhere. */}
+        <Toaster />
       </CommandProvider>
     </AuthProvider>
   )
