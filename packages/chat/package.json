@@ -32,6 +32,42 @@
     "./chat-status": {
       "types": "./src/lib/chat-status.ts",
       "default": "./src/lib/chat-status.ts"
+    },
+    "./conversation-actions": {
+      "types": "./src/lib/conversation-actions.ts",
+      "default": "./src/lib/conversation-actions.ts"
+    },
+    "./conversation-commands": {
+      "types": "./src/lib/conversation-commands.ts",
+      "default": "./src/lib/conversation-commands.ts"
+    },
+    "./go-to-message": {
+      "types": "./src/lib/go-to-message.ts",
+      "default": "./src/lib/go-to-message.ts"
+    },
+    "./message-deep-link": {
+      "types": "./src/lib/message-deep-link.ts",
+      "default": "./src/lib/message-deep-link.ts"
+    },
+    "./latest-task-coordinator": {
+      "types": "./src/lib/latest-task-coordinator.ts",
+      "default": "./src/lib/latest-task-coordinator.ts"
+    },
+    "./transcript-page": {
+      "types": "./src/lib/transcript-page.ts",
+      "default": "./src/lib/transcript-page.ts"
+    },
+    "./session-transcript-paging": {
+      "types": "./src/lib/session-transcript-paging.ts",
+      "default": "./src/lib/session-transcript-paging.ts"
+    },
+    "./share-sources": {
+      "types": "./src/lib/share-sources.ts",
+      "default": "./src/lib/share-sources.ts"
+    },
+    "./session-search-source": {
+      "types": "./src/lib/session-search-source.ts",
+      "default": "./src/lib/session-search-source.ts"
     }
   },
   "files": [

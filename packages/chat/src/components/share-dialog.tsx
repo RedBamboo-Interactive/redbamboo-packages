@@ -14,9 +14,13 @@ export interface ShareDialogProps {
   error: string | null
   title?: string
   description?: string
+  /** What the snapshot leaves out, said plainly whatever state the dialog is in. */
+  scopeNote?: string
 }
 
-export function ShareDialog({ open, onOpenChange, shareUrl, loading, error, title = "Share conversation", description = "Anyone with this link can view a read-only snapshot of this conversation." }: ShareDialogProps) {
+export const SHARE_SCOPE_NOTE = "Only the conversation's text is shared. Tool output and file contents are not included."
+
+export function ShareDialog({ open, onOpenChange, shareUrl, loading, error, title = "Share conversation", description = "Anyone with this link can view a read-only snapshot of this conversation.", scopeNote = SHARE_SCOPE_NOTE }: ShareDialogProps) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {
@@ -70,6 +74,10 @@ export function ShareDialog({ open, onOpenChange, shareUrl, loading, error, titl
               </div>
             </>
           )}
+
+          <p data-slot="share-dialog-scope" className="text-xs text-text-muted">
+            {scopeNote}
+          </p>
         </div>
       </DialogContent>
     </Dialog>

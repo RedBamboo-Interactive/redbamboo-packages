@@ -2,6 +2,8 @@ import "./chat.css"
 
 export type {
   ConversationRollback,
+  FocusMessageRequest,
+  FocusMessageResult,
   MessageBlock,
   MessagePart,
   MessagePhase,
@@ -237,3 +239,48 @@ export type {
   ArtifactPage,
   ArtifactTab,
 } from "./lib/artifacts"
+
+// Conversation actions, shared by Nova and Code: one descriptor builder, one shortcut map, one hook.
+export { CONVERSATION_SHORTCUTS, conversationActionEntries, conversationShortcut } from "./lib/conversation-actions"
+export type { ConversationActionHandlers, ConversationShortcutKey } from "./lib/conversation-actions"
+export { conversationCommandSpecs } from "./lib/conversation-commands"
+export type { ConversationCommandSpec } from "./lib/conversation-commands"
+export { useConversationShortcuts } from "./hooks/use-conversation-shortcuts"
+export type { ConversationCommandOptions, ConversationShortcutsOptions } from "./hooks/use-conversation-shortcuts"
+export { ConversationActionsMenu } from "./components/conversation-actions-menu"
+export type { ConversationActionsMenuProps } from "./components/conversation-actions-menu"
+export { EditableTitle } from "./components/editable-title"
+export type { EditableTitleProps } from "./components/editable-title"
+export { useTitleUpdate } from "./hooks/use-title-update"
+
+// Sharing, whatever the conversation is.
+export { SHARE_SCOPE_NOTE } from "./components/share-dialog"
+export { useShare } from "./hooks/use-share"
+export type { ShareState } from "./hooks/use-share"
+export { discussionShareSource, sessionShareSource, shareErrorMessage } from "./lib/share-sources"
+export type { CreatedShare, ShareHttp, ShareInfo, ShareSource } from "./lib/share-sources"
+
+// Maintenance banner.
+export { useMaintenanceStatus } from "./hooks/use-maintenance-status"
+export type { UseMaintenanceStatusOptions } from "./hooks/use-maintenance-status"
+export { MaintenanceStatusReader } from "./lib/maintenance-status-reader"
+export type { MaintenanceStatusLoader, MaintenanceStatusSnapshot } from "./lib/maintenance-status-reader"
+export { LatestTaskCoordinator } from "./lib/latest-task-coordinator"
+
+// History paging and go to message.
+export { isTranscriptPageMetadata, isTranscriptPageResponse, toPersistedTranscriptPage } from "./lib/transcript-page"
+export type { TranscriptPageDirection, TranscriptPageMetadata, TranscriptPageResponse } from "./lib/transcript-page"
+export { SessionTranscriptPaging, TranscriptPagingError, isTranscriptCursorRejected } from "./lib/session-transcript-paging"
+export type { SessionTranscriptPagingOptions, TranscriptPageRequest, TranscriptPagingResult, TranscriptWindow } from "./lib/session-transcript-paging"
+export { GoToMessageController, GO_TO_MESSAGE_MAX_PAGES } from "./lib/go-to-message"
+export type { GoToMessageView } from "./lib/go-to-message"
+export { useGoToMessage } from "./hooks/use-go-to-message"
+export type { GoToMessage, UseGoToMessageOptions } from "./hooks/use-go-to-message"
+export { MESSAGE_PARAM, messageDeepLinkStep, withoutMessageParam } from "./lib/message-deep-link"
+export type { MessageDeepLinkState, MessageDeepLinkStep } from "./lib/message-deep-link"
+
+// Search.
+export { ConversationSearchDialog } from "./components/conversation-search"
+export type { ConversationSearchDialogProps, ConversationSearchResult, ConversationSearchSource } from "./components/conversation-search"
+export { sessionSearchPath, sessionSearchSource, toSessionSearchResults } from "./lib/session-search-source"
+export type { SessionSearchHttp, SessionSearchItem, SessionSearchResult } from "./lib/session-search-source"
