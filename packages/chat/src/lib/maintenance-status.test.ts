@@ -30,3 +30,13 @@ test("malformed or contradictory status is unknown rather than idle", () => {
   for (const value of [null, {}, { ...status, paused: false }, { ...status, activeTurnCount: -1 }, { ...status, changedAt: "invalid" }])
     assert.equal(parseMaintenanceStatus(value), null)
 })
+test("fields RedCompute omits when null parse as null", () => {
+  // The live idle response: runId, startedAt and activeTurnCount are left out, not sent as null.
+  const changedAt = "2026-11-13T00:12:09.8960519+00:00"
+  assert.deepEqual(parseMaintenanceStatus({ state: "idle", paused: false, changedAt }),
+    { state: "idle", paused: false, runId: null, startedAt: null, changedAt, activeTurnCount: null })
+  const launching = parseMaintenanceStatus({ state: "launching", paused: true, runId: "run-a", startedAt: changedAt, changedAt })!
+  assert.equal(launching.activeTurnCount, null)
+  assert.equal(maintenanceNotice(launching, true)!.title, "Restarting for an update")
+  assert.equal(parseMaintenanceStatus({ state: "draining", paused: true, changedAt, activeTurnCount: "2" }), null)
+})

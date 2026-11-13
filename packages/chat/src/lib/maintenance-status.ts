@@ -2,7 +2,9 @@ import type { ChatMaintenanceStatus } from "../types"
 
 export function parseMaintenanceStatus(value: unknown): ChatMaintenanceStatus | null {
   if (!value || typeof value !== "object") return null
-  const s = value as Record<string, unknown>
+  // RedCompute omits null fields from its JSON, so an absent optional field means null.
+  const raw = value as Record<string, unknown>
+  const s: Record<string, unknown> = { ...raw, runId: raw.runId ?? null, startedAt: raw.startedAt ?? null, activeTurnCount: raw.activeTurnCount ?? null }
   if (!["idle", "draining", "launching", "failed"].includes(String(s.state))
     || s.paused !== (s.state === "draining" || s.state === "launching")
     || !(s.runId === null || typeof s.runId === "string")
