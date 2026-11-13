@@ -57,7 +57,17 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
         return byLegacyTime(a, b)
       return a.record.sequence! - b.record.sequence! || a.index - b.index
     })
-  const ordered = [...legacy, ...sequenced]
+  // (epoch, sequence) is one event's identity. RedLeaf may hold two rows for it (a write retried
+  // after an ambiguous timeout, before writes were idempotent): render the first stored one only,
+  // never both, so a final answer cannot read twice. Content equality is not identity.
+  const seenSequences = new Set<string>()
+  const uniqueSequenced = sequenced.filter(({ record }) => {
+    const identity = `${record.epoch ?? ""}:${record.sequence}`
+    if (seenSequences.has(identity)) return false
+    seenSequences.add(identity)
+    return true
+  })
+  const ordered = [...legacy, ...uniqueSequenced]
     .map(({ record }) => record)
   // Background work never opens or extends a turn: it is attached to its
   // launching tool call after the turns are built, in the same order.

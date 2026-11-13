@@ -44,6 +44,34 @@ test("ordered records use transcript sequence instead of timestamp", () => {
   assert.equal(blocks[0].parts[0].content, "firstsecond")
 })
 
+// LIVE fe9ef992, 13 Nov 2026: a timed-out inline write RedLeaf had committed was re-queued without
+// its idempotency key, so rows 32966552 and 32966571 both carry epoch/sequence 1387.
+test("two stored rows of one (epoch, sequence) render once, the first stored", () => {
+  const epoch = "6a7d3edbb34ba46017a965ffbca1a3b5"
+  const uid = "7bccab843c4748c1aece1d9fadce7b37"
+  const text = "It's 16:00, time for Tinder's gaba. \u{1F43E}"
+  const final = { role: "assistant", eventType: "text", phase: "final_answer" as const, messageId: "msg_011Ch17yu7PQXCekAdQvTEPa:1", messageUid: uid, epoch, timestamp: "2026-11-13T14:56:01.1481357Z" }
+  const blocks = rebuildBlocks([
+    { id: 32966539, role: "assistant", eventType: "thinking", content: "Check the Miamor point.", messageId: "msg_011Ch17yu7PQXCekAdQvTEPa:0", messageUid: uid, epoch, sequence: 1359, timestamp: "2026-11-13T14:56:00.0663631Z" },
+    { id: 32966552, ...final, content: text, sequence: 1387 },
+    { id: 32966559, role: "assistant", eventType: "status", content: "idle", epoch, sequence: 1389, timestamp: "2026-11-13T14:56:16.1996396Z" },
+    { id: 32966571, ...final, content: text, sequence: 1387 },
+  ])
+
+  assert.equal(blocks.length, 1)
+  assert.deepEqual(blocks[0].parts.filter(p => p.type === "text").map(p => p.content), [text])
+})
+
+test("identical text at distinct sequences or epochs is not a duplicate", () => {
+  const blocks = rebuildBlocks([
+    { id: 1, role: "assistant", eventType: "text", content: "ha", messageUid: "t", timestamp: "2026-08-01T00:00:01Z", epoch: "e", sequence: 1 },
+    { id: 2, role: "assistant", eventType: "text", content: "ha", messageUid: "t", timestamp: "2026-08-01T00:00:02Z", epoch: "e", sequence: 2 },
+    { id: 3, role: "assistant", eventType: "text", content: "ho", messageUid: "u", timestamp: "2026-08-01T00:00:03Z", epoch: "f", sequence: 2 },
+  ])
+
+  assert.deepEqual(blocks.map(b => b.parts.map(p => p.content).join("")), ["haha", "ho"])
+})
+
 test("history preserves message phases and does not merge commentary into the final answer", () => {
   const blocks = rebuildBlocks([
     { id: 1, role: "assistant", eventType: "text", content: "Working", phase: "commentary", timestamp: "2026-08-01T00:00:01Z", messageUid: "turn" },

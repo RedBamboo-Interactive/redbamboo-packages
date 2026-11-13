@@ -62,7 +62,8 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
 
     private const int MaxUpsertAttempts = 10;
 
-    private sealed record Pending(string Stream, string DataJson, Guid? EntityId, string? EntitySlug, string? UserId, DateTimeOffset CreatedAt);
+    private sealed record Pending(string Stream, string DataJson, Guid? EntityId, string? EntitySlug, string? UserId, DateTimeOffset CreatedAt,
+        string? ExternalId = null);
     private sealed record PendingUpsert(string Slug, string TypeSlug, string Name, string DataJson, int Attempts = 0);
 
     private readonly HttpClient _http;
@@ -149,6 +150,22 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
     }
 
     /// <summary>
+    /// Queue an idempotent record linked to an entity slug: the batched counterpart of
+    /// <see cref="AppendForEntityAsync"/>. RedLeaf treats <paramref name="externalId"/> as unique
+    /// within the stream, so a record whose synchronous append timed out after RedLeaf had
+    /// committed it, or a batch re-sent after an ambiguous failure, is stored once.
+    /// </summary>
+    public void EnqueueIdempotentForEntity(string stream, string entitySlug, object data, string externalId,
+        DateTimeOffset? createdAt = null, string? userId = null)
+    {
+        if (string.IsNullOrWhiteSpace(externalId) || externalId.Length > 256)
+            throw new ArgumentException("An external ID must be non-empty and at most 256 characters", nameof(externalId));
+        var json = JsonSerializer.Serialize(data);
+        _channel.Writer.TryWrite(new Pending(stream, json, null, entitySlug, userId,
+            createdAt ?? DateTimeOffset.UtcNow, externalId));
+    }
+
+    /// <summary>
     /// Durably append one payload-backed record linked to an entity. Unlike the
     /// normal batched writer this is awaited because callers must not publish a
     /// payload reference before the bytes exist.
@@ -162,7 +179,8 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
         string encoding,
         string? userId = null,
         DateTimeOffset? createdAt = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? externalId = null)
     {
         if (!await EnsureStreamAsync(stream, ct))
             throw new InvalidOperationException($"Stream '{stream}' is unavailable in RedLeaf");
@@ -181,6 +199,10 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
         form.Add(new StringContent(encoding), "encoding");
         if (!string.IsNullOrWhiteSpace(userId))
             form.Add(new StringContent(userId), "user_id");
+        // Idempotency key: a retry after an ambiguous timeout returns the stored record instead
+        // of appending a second one. A RedLeaf without the field ignores it.
+        if (!string.IsNullOrWhiteSpace(externalId))
+            form.Add(new StringContent(externalId), "external_id");
 
         var bytes = new ByteArrayContent(payload.ToArray());
         bytes.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentType);
@@ -669,6 +691,8 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
                 entityId = await ResolveEntityIdAsync(slug, ct);
 
             sb.Append("{\"data\":").Append(r.DataJson);
+            if (r.ExternalId is { } externalId)
+                sb.Append(",\"external_id\":").Append(JsonSerializer.Serialize(externalId));
             if (entityId is { } eid)
                 sb.Append(",\"entity_id\":\"").Append(eid).Append('"');
             if (r.UserId is { } uid)
