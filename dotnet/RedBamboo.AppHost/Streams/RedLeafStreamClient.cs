@@ -321,6 +321,10 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
                 null, response.StatusCode);
     }
 
+    /// <summary>
+    /// Downloads the whole entity to read one status code, and reads a 403 as "missing". Prefer
+    /// <see cref="ExistingEntitySlugsAsync"/>, which checks a thousand slugs without their data.
+    /// </summary>
     public async Task<bool> EntityExistsAsync(string slug, CancellationToken ct = default)
     {
         using var response = await _http.GetAsync($"api/entities/{Uri.EscapeDataString(slug)}", ct);
@@ -360,6 +364,74 @@ public sealed class RedLeafStreamClient : IAsyncDisposable
             present.Add(id.GetString()!);
         }
         return present;
+    }
+
+    /// <summary>
+    /// Bounded entity presence lookup (<c>POST api/entities/exists</c>): which of up to 1000 slugs of
+    /// one type RedLeaf has and lets this client read, without fetching their data. Failures,
+    /// including 403, throw and never mean that entities are missing.
+    /// </summary>
+    public async Task<HashSet<string>> ExistingEntitySlugsAsync(string typeSlug,
+        IReadOnlyCollection<string> slugs, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(typeSlug) || typeSlug.Length > 128)
+            throw new ArgumentException("Supply an entity type slug of at most 128 characters", nameof(typeSlug));
+        if (slugs.Count > 1000 || slugs.Any(slug => string.IsNullOrWhiteSpace(slug) || slug.Length > 512))
+            throw new ArgumentException("Supply at most 1000 non-empty slugs of at most 512 characters", nameof(slugs));
+        if (slugs.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
+        var requested = slugs.ToHashSet(StringComparer.Ordinal);
+        using var content = JsonContent.Create(new { type = typeSlug, slugs = requested.ToArray() });
+        using var response = await _http.PostAsync("api/entities/exists", content, ct);
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.ValueKind != JsonValueKind.Object
+            || !doc.RootElement.TryGetProperty("slugs", out var ids) || ids.ValueKind != JsonValueKind.Array)
+            throw new JsonException("Invalid entity presence response");
+        var present = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var id in ids.EnumerateArray())
+        {
+            if (id.ValueKind != JsonValueKind.String || !requested.Contains(id.GetString()!))
+                throw new JsonException("Entity presence response contains an unrequested slug");
+            present.Add(id.GetString()!);
+        }
+        // An entity RedLeaf no longer has must not keep its old id here: the next record linked
+        // to it would carry a deleted parent instead of resolving the recreated one.
+        foreach (var slug in requested)
+            if (!present.Contains(slug)) _entityIds.TryRemove(slug, out _);
+        return present;
+    }
+
+    /// <summary>
+    /// The <c>retention_days</c> RedLeaf applies to an entity type (its entities are deleted once
+    /// their creation is older). Null when the type sets none or does not exist; a value of zero or
+    /// less also means none, as RedLeaf reads it. Failures throw: an unknown horizon is not "none".
+    /// </summary>
+    public async Task<int?> EntityTypeRetentionDaysAsync(string typeSlug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(typeSlug) || typeSlug.Length > 128)
+            throw new ArgumentException("Supply an entity type slug of at most 128 characters", nameof(typeSlug));
+        using var response = await _http.GetAsync(
+            $"api/entities?type=entity-type&slug={Uri.EscapeDataString(typeSlug)}&limit=1", ct);
+        response.EnsureSuccessStatusCode();
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        if (doc.RootElement.ValueKind != JsonValueKind.Object
+            || !doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            throw new JsonException("Invalid entity type response");
+        foreach (var item in items.EnumerateArray())
+        {
+            if (!item.TryGetProperty("slug", out var slug) || slug.GetString() != typeSlug) continue;
+            if (!item.TryGetProperty("data", out var data)) return null;
+            // The entity API double-encodes data as a JSON string; accept an object too.
+            using var parsed = data.ValueKind == JsonValueKind.String
+                ? JsonDocument.Parse(data.GetString() ?? "{}")
+                : JsonDocument.Parse(data.GetRawText());
+            return parsed.RootElement.ValueKind == JsonValueKind.Object
+                && parsed.RootElement.TryGetProperty("retention_days", out var days)
+                && days.ValueKind == JsonValueKind.Number && days.TryGetInt32(out var value)
+                    ? value
+                    : null;
+        }
+        return null;
     }
 
     private async Task RunAsync(CancellationToken ct)
