@@ -199,7 +199,7 @@ public class BadgeReachAndRefreshTests
     {
         var (jwt, vault, options) = Setup();
         var f = new Fixture { Jwt = jwt, Vault = vault, Options = options };
-        var user = await f.Users.CreateOrUpdateFromExternalAsync(new ExternalIdentity("g-1", "owner@example.test", "Owner", null, "google"));
+        var user = await f.Users.CreateOrUpdateFromExternalAsync(new ExternalIdentity("g-1", "owner@example.test", "Owner", null, "google"), mayBootstrapFirstUser: true);
         f.UserId = user.Id;
         return f;
     }

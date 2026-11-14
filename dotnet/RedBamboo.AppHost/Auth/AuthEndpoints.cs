@@ -76,67 +76,8 @@ public static class AuthEndpoints
                 var redirectUri = $"{scheme}://{host}/auth/callback";
 
                 var identity = await provider.ExchangeCodeAsync(code, redirectUri);
-
-                AuthUser? user = null;
-                try { user = await userStore.CreateOrUpdateFromExternalAsync(identity); }
-                catch { /* RedLeaf may be unavailable */ }
-
-                var userId = user?.Id ?? identity.ProviderId;
-
-                if (identity.AccessToken is not null)
-                {
-                    var tokenStore = sp.GetService<GoogleTokenStore>();
-                    if (tokenStore is not null)
-                    {
-                        var expiresAt = DateTimeOffset.UtcNow.AddSeconds(
-                            identity.ExpiresIn > 0 ? identity.ExpiresIn - 60 : 3540);
-                        try { await tokenStore.StoreTokensAsync(userId, identity.AccessToken, identity.RefreshToken, expiresAt); }
-                        catch { /* non-fatal — login still proceeds */ }
-                    }
-                }
-
-                var email = user?.Email ?? identity.Email;
-                var name = user?.Name ?? identity.Name;
-                var roles = user?.Roles ?? ["admin"];
-                var avatarUrl = user?.AvatarUrl ?? identity.AvatarUrl;
-
-                string accessToken;
-                try { accessToken = jwtService.GenerateBrowserAccessToken(userId, email, name, roles, avatarUrl); }
-                catch (Vault.VaultUnavailableException) { return VaultUnavailable(); }
-                var refreshToken = jwtService.GenerateRefreshToken();
-
-                var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
-                try { await refreshTokenStore.StoreAsync(refreshToken, userId, refreshExpiry); }
-                catch { /* refresh won't work but login still proceeds */ }
-
-                var isSecure = context.Request.IsHttps;
-
-                context.Response.Cookies.Append(options.CookieName, accessToken, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = isSecure,
-                    SameSite = isSecure ? SameSiteMode.Lax : SameSiteMode.Lax,
-                    Path = "/",
-                    MaxAge = jwtService.BrowserAccessTokenLifetime
-                });
-
-                context.Response.Cookies.Append(options.RefreshCookieName, refreshToken, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = isSecure,
-                    SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
-                    Path = "/auth/refresh",
-                    MaxAge = options.Jwt.RefreshTokenLifetime
-                });
-
-                context.Response.Cookies.Delete("redsuite_auth_state");
-                context.Response.Cookies.Delete("redsuite_auth_return");
-
-                var returnUrl = SanitizeReturnUrl(context.Request.Cookies["redsuite_auth_return"]);
-                sp.GetService<ILoggerFactory>()?.CreateLogger("auth").LogInformation(
-                    "Google sign-in issued a session for {Sub} on {Host} (https={Https}, tunnel={Tunnel}, return={Return})",
-                    userId, host, isSecure, RequestOrigin.ArrivedThroughTunnel(context), returnUrl);
-                return Results.Redirect(returnUrl);
+                return await CompleteExternalSignInAsync(context, identity, sp, userStore, jwtService,
+                    refreshTokenStore, options);
             });
 
         registry.MapPost("/auth/refresh", "Refresh access token",
@@ -260,6 +201,136 @@ public static class AuthEndpoints
     }
 
     /// <summary>
+    /// Turns a provider-verified identity into a session, failing closed. The user store decides who
+    /// may enter (see <see cref="IUserStore.CreateOrUpdateFromExternalAsync"/>); a refusal is a 403 and
+    /// a store error is a 503, and neither issues a cookie. Creating the very first account is only
+    /// offered to a request made on this machine, the same rule as the local first-admin setup, so a
+    /// fresh installation reachable through the tunnel cannot be claimed from outside.
+    /// </summary>
+    internal static async Task<IResult> CompleteExternalSignInAsync(HttpContext context, ExternalIdentity identity,
+        IServiceProvider sp, IUserStore userStore, JwtService jwtService, IRefreshTokenStore refreshTokenStore,
+        AuthOptions options)
+    {
+        var logger = sp.GetService<ILoggerFactory>()?.CreateLogger("auth");
+        var host = context.Request.Host;
+        var throughTunnel = RequestOrigin.ArrivedThroughTunnel(context);
+
+        AuthUser user;
+        try
+        {
+            user = await userStore.CreateOrUpdateFromExternalAsync(identity,
+                mayBootstrapFirstUser: RequestOrigin.IsLocal(context));
+        }
+        catch (ExternalSignInDeniedException denied)
+        {
+            logger?.LogWarning(
+                "{Provider} sign-in refused for {Email} ({Sub}) on {Host} (tunnel={Tunnel}): {Reason}. {Detail}",
+                identity.Provider, identity.Email, identity.ProviderId, host, throughTunnel, denied.Reason, denied.Message);
+            ClearSignInCookies(context, options);
+            return denied.Reason == ExternalSignInDeniedException.AccountDisabled
+                ? AccountDisabledPage()
+                : SignInPage(StatusCodes.Status403Forbidden, "This account is not allowed here",
+                    "This Google account has no access to this Leaf installation. Ask its owner to add you, then sign in again.");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogError(ex, "{Provider} sign-in for {Sub} on {Host} failed closed: the user store could not decide",
+                identity.Provider, identity.ProviderId, host);
+            ClearSignInCookies(context, options);
+            return SignInPage(StatusCodes.Status503ServiceUnavailable, "Sign-in is unavailable",
+                "Leaf could not check your account just now. Nothing was signed in. Try again in a moment.");
+        }
+
+        // Defence in depth: whatever store is plugged in, a disabled account never gets a session.
+        if (!user.IsActive)
+        {
+            logger?.LogWarning("{Provider} sign-in refused for {Sub}: the store returned an account with status {Status}",
+                identity.Provider, user.Id, user.Status);
+            ClearSignInCookies(context, options);
+            return AccountDisabledPage();
+        }
+
+        var userId = user.Id;
+
+        if (identity.AccessToken is not null)
+        {
+            var tokenStore = sp.GetService<GoogleTokenStore>();
+            if (tokenStore is not null)
+            {
+                var expiresAt = DateTimeOffset.UtcNow.AddSeconds(
+                    identity.ExpiresIn > 0 ? identity.ExpiresIn - 60 : 3540);
+                try { await tokenStore.StoreTokensAsync(userId, identity.AccessToken, identity.RefreshToken, expiresAt); }
+                catch { /* non-fatal: Google API access waits for the next sign-in */ }
+            }
+        }
+
+        string accessToken;
+        try { accessToken = jwtService.GenerateBrowserAccessToken(userId, user.Email, user.Name, user.Roles, user.AvatarUrl); }
+        catch (Vault.VaultUnavailableException) { return VaultUnavailable(); }
+        var refreshToken = jwtService.GenerateRefreshToken();
+
+        var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
+        try { await refreshTokenStore.StoreAsync(refreshToken, userId, refreshExpiry); }
+        catch { /* refresh won't work but login still proceeds */ }
+
+        var isSecure = context.Request.IsHttps;
+
+        context.Response.Cookies.Append(options.CookieName, accessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = isSecure,
+            SameSite = SameSiteMode.Lax,
+            Path = "/",
+            MaxAge = jwtService.BrowserAccessTokenLifetime
+        });
+
+        context.Response.Cookies.Append(options.RefreshCookieName, refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = isSecure,
+            SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
+            Path = "/auth/refresh",
+            MaxAge = options.Jwt.RefreshTokenLifetime
+        });
+
+        context.Response.Cookies.Delete("redsuite_auth_state");
+        context.Response.Cookies.Delete("redsuite_auth_return");
+
+        var returnUrl = SanitizeReturnUrl(context.Request.Cookies["redsuite_auth_return"]);
+        logger?.LogInformation(
+            "Google sign-in issued a session for {Sub} on {Host} (https={Https}, tunnel={Tunnel}, return={Return})",
+            userId, host, isSecure, throughTunnel, returnUrl);
+        return Results.Redirect(returnUrl);
+    }
+
+    /// <summary>A refused or failed sign-in leaves no half-session behind: no state, no badge, no refresh cookie.</summary>
+    private static void ClearSignInCookies(HttpContext context, AuthOptions options)
+    {
+        context.Response.Cookies.Delete("redsuite_auth_state");
+        context.Response.Cookies.Delete("redsuite_auth_return");
+        context.Response.Cookies.Delete(options.CookieName, new CookieOptions { Path = "/" });
+        context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+    }
+
+    private static IResult AccountDisabledPage()
+        => SignInPage(StatusCodes.Status403Forbidden, "This account is disabled",
+            "An administrator has disabled this account on this Leaf installation.");
+
+    private static IResult SignInPage(int statusCode, string title, string message)
+    {
+        var safeTitle = System.Net.WebUtility.HtmlEncode(title);
+        var safeMessage = System.Net.WebUtility.HtmlEncode(message);
+        var html = "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+            + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+            + "<title>" + safeTitle + "</title>"
+            + "<style>body{font-family:system-ui,sans-serif;background:#111;color:#eee;display:grid;place-items:center;"
+            + "min-height:100vh;margin:0}main{max-width:28rem;padding:2rem;text-align:center}a{color:#f0a060}</style>"
+            + "</head><body><main><h1>" + safeTitle + "</h1><p>" + safeMessage + "</p>"
+            + "<p><a href=\"/login\">Back to sign-in</a></p></main></body></html>";
+        return Results.Content(html, "text/html; charset=utf-8", System.Text.Encoding.UTF8, statusCode);
+    }
+
+    /// <summary>
     /// Rotating refresh: a valid refresh cookie is swapped for a new one and a fresh browser access badge
     /// (one hour in vault mode). The replacement is stored before the old token is revoked, so a failure
     /// in between never leaves the browser holding a dead cookie. A revoked, expired or unknown token is
@@ -293,6 +364,13 @@ public static class AuthEndpoints
         {
             return ClearAuthCookiesAndReturn(context, options,
                 Results.Json(new { error = "user_not_found" }, statusCode: 401));
+        }
+        if (!user.IsActive)
+        {
+            // A disabled account loses its sessions: this refresh token dies with the refusal.
+            await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
+            return ClearAuthCookiesAndReturn(context, options,
+                Results.Json(new { error = "account_disabled" }, statusCode: 401));
         }
 
         string newAccessToken;

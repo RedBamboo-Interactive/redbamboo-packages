@@ -76,7 +76,8 @@ public sealed class GoogleAuthProvider : IAuthProvider
             Provider: Name,
             AccessToken: accessToken,
             RefreshToken: refreshToken,
-            ExpiresIn: expiresIn
+            ExpiresIn: expiresIn,
+            EmailVerified: googlePayload.EmailVerified
         );
     }
 }

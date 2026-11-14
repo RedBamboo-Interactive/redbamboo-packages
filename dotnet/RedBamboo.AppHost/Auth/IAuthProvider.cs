@@ -15,5 +15,8 @@ public record ExternalIdentity(
     string Provider,
     string? AccessToken = null,
     string? RefreshToken = null,
-    int ExpiresIn = 0
+    int ExpiresIn = 0,
+    // Whether the provider vouches that the account owns Email. Only a verified email can claim a
+    // user entity an administrator created ahead of time.
+    bool EmailVerified = false
 );
