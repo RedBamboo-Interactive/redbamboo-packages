@@ -303,6 +303,121 @@
   --scrollbar-thumb-hover: #72767E;
 }
 
+/* ── Cozy layer ────────────────────────────────────────────────────── */
+/* A third appearance axis on top of light/dark and contrast: the shell's
+   surfaces become separate frosted-glass cards floating over the wallpaper,
+   with a gap between them and around the window. The host sets
+   `data-cozy` on <html>. Glass is the resolved background of the current
+   theme and contrast, so every combination keeps its own palette; high
+   contrast trades translucency for legibility. Shared `data-slot` hooks
+   carry the layout, so plugin bundles need no rebuild to take part.
+   Unlayered on purpose: these rules outrank component utilities. */
+
+:root[data-cozy] {
+  --cozy-gap: 12px;
+  --cozy-radius: 20px;
+  --cozy-header-radius: 16px;
+  --cozy-glass: color-mix(in srgb, var(--background) 58%, transparent);
+  --cozy-glass-line: rgb(from var(--contrast) r g b / 0.1);
+  --cozy-glass-filter: blur(26px) saturate(1.6);
+  --cozy-shadow: 0 30px 70px -28px rgb(0 0 0 / 0.65);
+  --cozy-header-shadow: 0 18px 50px -24px rgb(0 0 0 / 0.6);
+  /* Behind the cards when no wallpaper is set. */
+  --cozy-backdrop:
+    radial-gradient(120% 90% at 85% 0%, rgb(from var(--brand) r g b / 0.16), transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, rgb(124 77 255 / 0.10), transparent 65%),
+    #15161b;
+}
+
+:root:not(.dark)[data-cozy] {
+  --cozy-glass: color-mix(in srgb, var(--background) 82%, transparent);
+  --cozy-shadow: 0 30px 70px -30px rgb(31 35 40 / 0.35);
+  --cozy-header-shadow: 0 18px 50px -26px rgb(31 35 40 / 0.3);
+  --cozy-backdrop:
+    radial-gradient(120% 90% at 85% 0%, rgb(from var(--brand) r g b / 0.14), transparent 60%),
+    radial-gradient(90% 80% at 0% 100%, rgb(124 77 255 / 0.08), transparent 65%),
+    #e9ebef;
+}
+
+:root.dark[data-cozy][data-contrast="high"] {
+  --cozy-glass: color-mix(in srgb, var(--background) 86%, transparent);
+  --cozy-glass-line: rgb(from var(--contrast) r g b / 0.24);
+}
+
+:root:not(.dark)[data-cozy][data-contrast="high"] {
+  --cozy-glass: color-mix(in srgb, var(--background) 92%, transparent);
+  --cozy-glass-line: rgb(from var(--contrast) r g b / 0.2);
+}
+
+@media (max-width: 640px) {
+  :root[data-cozy] {
+    --cozy-gap: 8px;
+    --cozy-radius: 16px;
+    --cozy-header-radius: 14px;
+  }
+}
+
+:root[data-cozy] body {
+  background: var(--cozy-backdrop);
+}
+
+:root[data-cozy] [data-slot="app-shell"] {
+  gap: var(--cozy-gap);
+  padding: var(--cozy-gap);
+}
+
+:root[data-cozy] [data-slot="app-header"] {
+  border: 1px solid var(--cozy-glass-line);
+  border-radius: var(--cozy-header-radius);
+  background: var(--cozy-glass);
+  -webkit-backdrop-filter: var(--cozy-glass-filter);
+  backdrop-filter: var(--cozy-glass-filter);
+  box-shadow: var(--cozy-header-shadow);
+}
+
+/* The main view and every docked panel are their own card. */
+:root[data-cozy] [data-slot="dock-center-host"],
+:root[data-cozy] [data-slot="dock-panel-surface"] {
+  border: 1px solid var(--cozy-glass-line);
+  border-radius: var(--cozy-radius);
+  background: var(--cozy-glass);
+  -webkit-backdrop-filter: var(--cozy-glass-filter);
+  backdrop-filter: var(--cozy-glass-filter);
+  box-shadow: var(--cozy-shadow);
+  overflow: hidden;
+}
+
+/* Separators between docked cards become the gap; the bar shows only while used. */
+:root[data-cozy] [data-dock-separator] {
+  background: transparent;
+}
+:root[data-cozy] [data-dock-separator][aria-orientation="vertical"] {
+  width: var(--cozy-gap);
+}
+:root[data-cozy] [data-dock-separator][aria-orientation="horizontal"] {
+  height: var(--cozy-gap);
+}
+:root[data-cozy] [data-dock-separator]::before {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+:root[data-cozy] [data-dock-separator][aria-orientation="vertical"]::before {
+  inset: 25% calc(50% - 1px);
+}
+:root[data-cozy] [data-dock-separator][aria-orientation="horizontal"]::before {
+  inset: calc(50% - 1px) 25%;
+}
+:root[data-cozy] [data-dock-separator][data-separator="hover"]::before {
+  background: rgb(from var(--contrast) r g b / 0.25);
+}
+:root[data-cozy] [data-dock-separator][data-separator="focus"]::before,
+:root[data-cozy] [data-dock-separator][data-separator="active"]::before {
+  background: rgb(from var(--color-accent-teal) r g b / 0.7);
+}
+
 /* ── Overlay utilities ─────────────────────────────────────────────── */
 /* Use relative color syntax to apply true alpha to --contrast,
    avoiding Tailwind v4's color-mix-with-transparent which loses
