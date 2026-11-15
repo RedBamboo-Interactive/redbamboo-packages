@@ -315,6 +315,9 @@
 
 :root[data-cozy] {
   --cozy-gap: 12px;
+  /* Between the window edge and the cards: the site's hero stage and the
+     cookbook videos frame the app with 24px, twice the gap between cards. */
+  --cozy-margin: 24px;
   --cozy-radius: 20px;
   --cozy-header-radius: 16px;
   --cozy-glass: color-mix(in srgb, var(--background) 58%, transparent);
@@ -359,6 +362,7 @@
 @media (max-width: 640px) {
   :root[data-cozy] {
     --cozy-gap: 8px;
+    --cozy-margin: 8px;
     --cozy-radius: 16px;
     --cozy-header-radius: 14px;
   }
@@ -368,9 +372,15 @@
   background: var(--cozy-backdrop);
 }
 
+@media (min-width: 641px) and (max-width: 1023px) {
+  :root[data-cozy] {
+    --cozy-margin: 16px;
+  }
+}
+
 :root[data-cozy] [data-slot="app-shell"] {
   gap: var(--cozy-gap);
-  padding: var(--cozy-gap);
+  padding: var(--cozy-margin);
 }
 
 :root[data-cozy] [data-slot="app-header"] {
@@ -437,6 +447,22 @@
 :root[data-cozy] [data-slot="master-detail-sidebar"]:not([data-docked]),
 :root[data-cozy] [data-slot="master-detail-mobile-list"] {
   background: transparent;
+}
+
+/* Lists inside a card are inset rounded rows, as on the site: padding
+   around the list, no dividers, and the selected row a soft tint with a
+   hairline glass edge. */
+:root[data-cozy] [data-slot="item-list"] > [data-slot="scroll-area-viewport"] > * {
+  gap: 2px;
+  padding: 6px 8px;
+}
+:root[data-cozy] [data-slot="item-list-row"] {
+  border-bottom-color: transparent;
+  border-radius: 10px;
+  padding-inline: 10px;
+}
+:root[data-cozy] [data-slot="item-list-row"][data-selected] {
+  box-shadow: inset 0 0 0 1px var(--cozy-glass-line);
 }
 
 /* Separators between docked cards become the gap; the bar shows only while used. */
