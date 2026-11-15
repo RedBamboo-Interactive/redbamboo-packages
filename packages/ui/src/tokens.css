@@ -476,6 +476,35 @@
   background-color: transparent;
 }
 
+/* Scrollbars are a slim frosted pill, faint at rest and brighter while the
+   list is hovered or scrolled. Native scrollbars follow through the
+   shell-owned thumb variables, plugin scopes included. The `:is()` matches
+   the specificity of the per-theme token blocks it overrides. */
+:root[data-cozy]:is(.dark, :not(.dark)) {
+  --scrollbar-thumb: rgb(from var(--contrast) r g b / 0.16);
+  --scrollbar-thumb-hover: rgb(from var(--contrast) r g b / 0.34);
+}
+:root[data-cozy][data-contrast="high"] {
+  --scrollbar-thumb: rgb(from var(--contrast) r g b / 0.4);
+  --scrollbar-thumb-hover: rgb(from var(--contrast) r g b / 0.6);
+}
+:root[data-cozy] [data-slot="scroll-area-scrollbar"][data-orientation="vertical"] {
+  padding: 4px 3px;
+  border-left-width: 0;
+}
+:root[data-cozy] [data-slot="scroll-area-scrollbar"][data-orientation="horizontal"] {
+  padding: 3px 4px;
+  border-top-width: 0;
+}
+:root[data-cozy] [data-slot="scroll-area-thumb"] {
+  background-color: var(--scrollbar-thumb);
+  transition: background-color 0.2s;
+}
+:root[data-cozy] [data-slot="scroll-area-scrollbar"]:is([data-hovering], [data-scrolling]) [data-slot="scroll-area-thumb"],
+:root[data-cozy] [data-slot="scroll-area-thumb"]:is(:hover, :active) {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
 /* A card inside a card is a light tint of the glass with a faint glass
    edge, not a solid block. Plugins mark their own cards `data-slot="card"`. */
 :root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"]) [data-slot="card"] {
