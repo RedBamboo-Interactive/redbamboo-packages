@@ -387,6 +387,14 @@
   overflow: hidden;
 }
 
+/* List surfaces inside a card let the card's glass through instead of
+   stacking an opaque layer on it: the inline master-detail sidebar and
+   its phone tab. */
+:root[data-cozy] [data-slot="master-detail-sidebar"]:not([data-docked]),
+:root[data-cozy] [data-slot="master-detail-mobile-list"] {
+  background: transparent;
+}
+
 /* Separators between docked cards become the gap; the bar shows only while used. */
 :root[data-cozy] [data-dock-separator] {
   background: transparent;
