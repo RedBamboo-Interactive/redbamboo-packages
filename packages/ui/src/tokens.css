@@ -476,16 +476,19 @@
   background-color: transparent;
 }
 
-/* A card inside a card is a light tint of the glass, not a solid block. */
+/* A card inside a card is a light tint of the glass with a faint glass
+   edge, not a solid block. Plugins mark their own cards `data-slot="card"`. */
 :root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"]) [data-slot="card"] {
   background-color: rgb(from var(--contrast) r g b / 0.05);
+  box-shadow: inset 0 0 0 1px var(--cozy-glass-line);
 }
 
 /* Floating surfaces (menus, popovers, selects, dialogs, sheets, toasts, the
    command palette) are glass too, tinted from the popover colour and
    blurred like the cards. Every one of them paints `bg-popover`, including
-   the copies plugins bundle, so the class is the hook; a native <option>
-   keeps its system dropdown. */
+   the copies plugins bundle, so the class is the hook; the shared slots are
+   hooks too, for a caller that swaps the background class. A native
+   <option> keeps its system dropdown. */
 :root[data-cozy] {
   --cozy-float-glass: color-mix(in srgb, var(--popover) 56%, transparent);
   --cozy-float-shadow: 0 24px 60px -18px rgb(0 0 0 / 0.6);
@@ -502,7 +505,19 @@
   --cozy-float-glass: color-mix(in srgb, var(--popover) 96%, transparent);
 }
 
-:root[data-cozy] .bg-popover:not(option) {
+:root[data-cozy] :is(
+  .bg-popover:not(option),
+  [data-slot="toast"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="leaf-context-menu"],
+  [data-slot="select-content"],
+  [data-slot="popover-content"],
+  [data-slot="dialog-content"],
+  [data-slot="command-palette"],
+  [data-slot="sheet"]
+) {
   border-color: var(--cozy-glass-line);
   background-color: var(--cozy-float-glass);
   -webkit-backdrop-filter: var(--cozy-glass-filter);
