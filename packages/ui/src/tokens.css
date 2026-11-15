@@ -468,6 +468,62 @@
   background: rgb(from var(--color-accent-teal) r g b / 0.7);
 }
 
+/* A panel that fills its card (an app's own list column or page root)
+   lets the card's glass through instead of laying a solid slab inside it.
+   Smaller fills (cards, chips, thumbnails) keep their surface. */
+:root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"])
+  :is(.bg-background, .bg-surface-base, .bg-surface-elevated):is(.h-full, .h-dvh, .h-screen) {
+  background-color: transparent;
+}
+
+/* A card inside a card is a light tint of the glass, not a solid block. */
+:root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"]) [data-slot="card"] {
+  background-color: rgb(from var(--contrast) r g b / 0.05);
+}
+
+/* Floating surfaces (menus, popovers, selects, dialogs, sheets, toasts, the
+   command palette) are glass too, tinted from the popover colour and
+   blurred like the cards. Every one of them paints `bg-popover`, including
+   the copies plugins bundle, so the class is the hook; a native <option>
+   keeps its system dropdown. */
+:root[data-cozy] {
+  --cozy-float-glass: color-mix(in srgb, var(--popover) 56%, transparent);
+  --cozy-float-shadow: 0 24px 60px -18px rgb(0 0 0 / 0.6);
+  --cozy-float-radius: 12px;
+}
+:root:not(.dark)[data-cozy] {
+  --cozy-float-glass: color-mix(in srgb, var(--popover) 76%, transparent);
+  --cozy-float-shadow: 0 24px 60px -22px rgb(31 35 40 / 0.35);
+}
+:root.dark[data-cozy][data-contrast="high"] {
+  --cozy-float-glass: color-mix(in srgb, var(--popover) 94%, transparent);
+}
+:root:not(.dark)[data-cozy][data-contrast="high"] {
+  --cozy-float-glass: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+:root[data-cozy] .bg-popover:not(option) {
+  border-color: var(--cozy-glass-line);
+  background-color: var(--cozy-float-glass);
+  -webkit-backdrop-filter: var(--cozy-glass-filter);
+  backdrop-filter: var(--cozy-glass-filter);
+  box-shadow: var(--cozy-float-shadow);
+}
+:root[data-cozy] :is(
+  [data-slot="toast"],
+  [data-slot="dropdown-menu-content"],
+  [data-slot="dropdown-menu-sub-content"],
+  [data-slot="context-menu-content"],
+  [data-slot="leaf-context-menu"],
+  [data-slot="select-content"],
+  [data-slot="popover-content"]
+) {
+  border-radius: var(--cozy-float-radius);
+}
+:root[data-cozy] :is([data-slot="dialog-content"], [data-slot="command-palette"]) {
+  border-radius: var(--cozy-radius);
+}
+
 /* ── Overlay utilities ─────────────────────────────────────────────── */
 /* Use relative color syntax to apply true alpha to --contrast,
    avoiding Tailwind v4's color-mix-with-transparent which loses
