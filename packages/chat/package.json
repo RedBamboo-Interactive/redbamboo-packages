@@ -17,6 +17,10 @@
       "types": "./src/lib/event-parts.ts",
       "default": "./src/lib/event-parts.ts"
     },
+    "./frieze-markers": {
+      "types": "./src/lib/frieze-markers.ts",
+      "default": "./src/lib/frieze-markers.ts"
+    },
     "./conversation-read-state": {
       "types": "./src/lib/conversation-read-state.ts",
       "default": "./src/lib/conversation-read-state.ts"

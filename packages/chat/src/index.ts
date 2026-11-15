@@ -170,6 +170,8 @@ export {
 } from "./lib/background-work"
 export { BackgroundTaskPanel } from "./components/background-task-view"
 export { EVENT_TOOL_PREFIX, isEventPart, isEventBlock, streamTargetIndex } from "./lib/event-parts"
+export { FRIEZE_TOOL_CATEGORIES, filterFriezeParts, friezeMarkerKey, friezeMarkerNeedsAttention } from "./lib/frieze-markers"
+export type { FriezeMarkerKey, FriezeMarkerVisibility, FriezeToolCategory } from "./lib/frieze-markers"
 export { getEffectiveToolName } from "./lib/tool-semantics"
 export { rebuildBlocks } from "./lib/rebuild-blocks"
 export { MESSAGE_CONTEXT_BLOCK_KEY, parseMessageContextBlock, formatContextSize } from "./lib/message-context"

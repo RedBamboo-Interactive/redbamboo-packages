@@ -1,6 +1,7 @@
 import type { MessageBlock, MessagePart, TurnOrigin } from "../types"
 import { TURN_ORIGIN_KEY, turnOriginOf } from "./background-work.ts"
 import { isEventPart } from "./event-parts.ts"
+import { filterFriezeParts, type FriezeMarkerVisibility } from "./frieze-markers.ts"
 
 /** A turn-origin marker drawn inside an activity frieze, before `parts[before]`. */
 export interface ActivityTurnOrigin {
@@ -59,24 +60,60 @@ function withoutTurnOrigin(block: MessageBlock): MessageBlock {
  * A turn origin (what woke a self-started turn) is turn-level, not segment-level:
  * it joins the frieze once, at the turn's chronological start, and is stripped
  * from the content rows the turn is split into.
+ *
+ * `isMarkerShown` hides frieze markers for display only: a hidden marker (and
+ * the result its call owns) leaves its row, and a row left with nothing to draw
+ * is not emitted, so it leaves no empty padded frieze behind. Row keys keep the
+ * anchor of the unfiltered run, so toggling a preference does not remount rows.
  */
 export function projectActivityTimeline(
   blocks: MessageBlock[],
   indexOffset = 0,
   isEventRow?: (part: MessagePart) => boolean,
+  isMarkerShown?: FriezeMarkerVisibility,
 ): ActivityTimelineRow[] {
   const rows: ActivityTimelineRow[] = []
   let activityParts: MessagePart[] = []
   let activitySources: number[] = []
+  // Parallel to activityParts; activitySources also holds origin blocks.
+  let activityPartSources: number[] = []
+  let activityOriginSources: number[] = []
   let activityFirstBlock: MessageBlock | null = null
   let activityLastBlock: MessageBlock | null = null
   let activityAnchor: string | null = null
   let activityOrigins: ActivityTurnOrigin[] = []
   const placedOrigins = new Set<string>()
 
+  const resetActivity = () => {
+    activityParts = []
+    activityOrigins = []
+    activitySources = []
+    activityPartSources = []
+    activityOriginSources = []
+    activityFirstBlock = null
+    activityLastBlock = null
+    activityAnchor = null
+  }
+
   const flushActivity = () => {
     if ((!activityParts.length && !activityOrigins.length) || !activityFirstBlock || !activityLastBlock || !activityAnchor) return
-    const sourceIndices = uniqueIndexes(activitySources)
+    let parts = activityParts
+    let origins = activityOrigins
+    let sources = activitySources
+    if (isMarkerShown) {
+      const visible = filterFriezeParts(activityParts, isMarkerShown)
+      // An origin keeps its place: before the first kept part at or after it.
+      origins = activityOrigins.map(entry => ({ ...entry, before: visible.kept.filter(index => index < entry.before).length }))
+      parts = visible.parts
+      // Sources follow what is drawn; an origin's own block stays a source.
+      sources = [...activityOriginSources, ...visible.kept.map(index => activityPartSources[index]!)]
+        .sort((a, b) => a - b)
+      if (!parts.some(part => part.type !== "tool_result") && !origins.length) {
+        resetActivity()
+        return
+      }
+    }
+    const sourceIndices = uniqueIndexes(sources)
     rows.push({
       // Anchor the React identity to the first canonical part in this activity
       // run. Appending activity or inserting an unrelated earlier row must not
@@ -86,7 +123,7 @@ export function projectActivityTimeline(
       block: {
         id: `activity:${activityAnchor}`,
         role: "assistant",
-        parts: activityParts,
+        parts,
         timestamp: activityFirstBlock.timestamp,
         senderAgentId: activityLastBlock.senderAgentId,
       },
@@ -94,14 +131,9 @@ export function projectActivityTimeline(
       compactAfter: false,
       ownsActions: false,
       ownsSender: false,
-      ...(activityOrigins.length ? { turnOrigins: activityOrigins } : {}),
+      ...(origins.length ? { turnOrigins: origins } : {}),
     })
-    activityParts = []
-    activityOrigins = []
-    activitySources = []
-    activityFirstBlock = null
-    activityLastBlock = null
-    activityAnchor = null
+    resetActivity()
   }
 
   for (let localIndex = 0; localIndex < blocks.length; localIndex++) {
@@ -135,6 +167,7 @@ export function projectActivityTimeline(
       activityAnchor ??= `${block.id}:0`
       activityLastBlock = block
       activityOrigins.push({ before: activityParts.length, origin, turnKey })
+      activityOriginSources.push(sourceIndex)
       activitySources.push(sourceIndex)
     }
     const contentBlock = withoutTurnOrigin(block)
@@ -191,6 +224,7 @@ export function projectActivityTimeline(
       activityAnchor ??= `${block.id}:${partIndex}`
       activityLastBlock = block
       activityParts.push(part)
+      activityPartSources.push(sourceIndex)
       activitySources.push(sourceIndex)
     }
     flushContent()

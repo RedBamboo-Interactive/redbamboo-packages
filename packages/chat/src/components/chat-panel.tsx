@@ -7,6 +7,7 @@ import { ChatMessage, PartModal, extractPlanFileContent } from "./chat-message"
 import { eventQueueStatus, type EventSendAction, type ResolveEventQueueStatus } from "./event-queue-status"
 import { isEventBlock, eventInputMessageUid } from "../lib/event-parts"
 import { projectActivityTimeline } from "../lib/activity-timeline"
+import { friezeMarkerNeedsAttention, type FriezeMarkerVisibility } from "../lib/frieze-markers"
 import type { SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
 import { Composer, type ComposerHandle } from "./composer"
@@ -20,7 +21,7 @@ import { PART_COLOR, getPartColor } from "../lib/part-colors"
 import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
 import { PermissionApprovalCard } from "./permission-approval-card"
-import { answerableQuestion, isPermissionQuestion, unanchoredApprovals as findUnanchoredApprovals, visibleApprovals } from "../lib/permission-approval"
+import { answerableQuestion, isPermissionQuestion, toolUseIdOf, unanchoredApprovals as findUnanchoredApprovals, visibleApprovals } from "../lib/permission-approval"
 import { MorphSpinner } from "./morph-spinner"
 import { MediaLightbox } from "./streaming-text"
 import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
@@ -233,6 +234,16 @@ export function ChatPanel(props: ChatPanelProps) {
     const uid = eventInputMessageUid(part)
     return uid ? eventQueueStatus(eventQueueByUid.get(uid), messageQueue.cancel, handleSendQueuedEvent, eventSend) : undefined
   }, [eventQueueByUid, messageQueue.cancel, handleSendQueuedEvent, eventSend])
+
+  // The host's marker preference, except where a marker needs attention.
+  const isFriezeMarkerVisible = props.isFriezeMarkerVisible
+  const approvalToolUseIds = useMemo(() => new Set(approvals.flatMap(approval => approval.request.toolUseId ? [approval.request.toolUseId] : [])), [approvals])
+  const isMarkerShown = useMemo<FriezeMarkerVisibility | undefined>(() => isFriezeMarkerVisible
+    ? part => isFriezeMarkerVisible(part) || friezeMarkerNeedsAttention(part, {
+      queued: !!resolveEventQueueStatus(part),
+      approval: part.type === "tool_use" && approvalToolUseIds.has(toolUseIdOf(part) ?? ""),
+    })
+    : undefined, [isFriezeMarkerVisible, resolveEventQueueStatus, approvalToolUseIds])
 
   const renderWaitingEvent = (part: MessagePart) => {
     if (props.eventRows?.isRow(part)) return props.eventRows.render(part, { waiting: true })
@@ -762,7 +773,7 @@ export function ChatPanel(props: ChatPanelProps) {
   }
 
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
-  const timelineRows = projectActivityTimeline(visibleMessages, startIndex, props.eventRows?.isRow)
+  const timelineRows = projectActivityTimeline(visibleMessages, startIndex, props.eventRows?.isRow, isMarkerShown)
   timelineRowsRef.current = timelineRows
   activityRowsRef.current = timelineRows
     .filter(row => row.kind === "activity")

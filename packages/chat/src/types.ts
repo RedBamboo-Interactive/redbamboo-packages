@@ -883,6 +883,15 @@ export interface ChatPanelProps {
   resolveAgentInfo?: ResolveAgentInfo
   eventRows?: EventRowRenderer
   /**
+   * Viewer preference over frieze markers (event dots, tool and thinking squares):
+   * return false to hide one. Display only; classify with `friezeMarkerKey`.
+   * Absent, every marker shows. A marker that needs attention (an error,
+   * anything in flight, a failed or pending queued input, an approval, a
+   * question or plan card) shows regardless, and a row left with nothing to
+   * draw is not rendered. Keep the reference stable.
+   */
+  isFriezeMarkerVisible?: (part: MessagePart) => boolean
+  /**
    * A queued host event behaves like a queued message: it waits below the running turn and enters
    * the conversation where it was processed. Only for a host that sets `inputPlaced` on the event
    * parts it placed from their canonical input records.
