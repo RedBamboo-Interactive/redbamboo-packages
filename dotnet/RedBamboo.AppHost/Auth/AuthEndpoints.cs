@@ -17,13 +17,23 @@ public static class AuthEndpoints
         return returnUrl;
     }
 
-    public static void Map(EndpointRegistry registry)
+    public static void Map(EndpointRegistry registry) => Map(registry, serveLoginPage: true);
+
+    /// <param name="serveLoginPage">
+    /// False when the app renders its own sign-in screen at /login. The built-in page offers only the
+    /// external provider, so an app with password accounts must not let it answer /login: a signed-out
+    /// password user would be sent to a page with no way back in (field report, RedLeaf 0.1.49).
+    /// </param>
+    public static void Map(EndpointRegistry registry, bool serveLoginPage)
     {
-        registry.MapGet("/login", "Login page",
-            (HttpContext context) =>
-            {
-                return Results.Content(LoginPage.Render(), "text/html");
-            });
+        if (serveLoginPage)
+        {
+            registry.MapGet("/login", "Login page",
+                (HttpContext context) =>
+                {
+                    return Results.Content(LoginPage.Render(), "text/html");
+                });
+        }
 
         registry.MapGet("/auth/login", "Initiate OAuth login flow",
             (HttpContext context, IServiceProvider sp, AuthOptions options) =>

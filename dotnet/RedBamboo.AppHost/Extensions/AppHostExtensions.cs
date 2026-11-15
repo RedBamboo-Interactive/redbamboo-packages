@@ -181,6 +181,15 @@ public static class AppHostExtensions
         AuthEndpoints.Map(registry);
     }
 
+    /// <summary>
+    /// Maps the auth endpoints; with <paramref name="serveLoginPage"/> false, /login is left to the
+    /// app's own sign-in screen instead of the built-in provider-only page.
+    /// </summary>
+    public static void MapAuthEndpoints(this EndpointRegistry registry, bool serveLoginPage)
+    {
+        AuthEndpoints.Map(registry, serveLoginPage);
+    }
+
     public static EndpointRegistry CreateEndpointRegistry(this WebApplication app)
         => new EndpointRegistry(app);
 
