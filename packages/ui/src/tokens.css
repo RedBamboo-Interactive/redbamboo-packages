@@ -397,12 +397,14 @@
 /* On a wide screen a chat is a reading column: the chat itself becomes the
    card, centered at reading width, and the wallpaper fills the sides
    instead of empty glass. Wide content (pages, tables, canvases) keeps
-   the full-width card. */
+   the full-width card. Only a chat on screen counts: a chat kept alive
+   under a hidden wrapper (Nova's Live behind the Journal tab) leaves the
+   view its full card. */
 @media (min-width: 1280px) {
   :root[data-cozy] {
     --cozy-reading-width: 980px;
   }
-  :root[data-cozy] [data-slot="dock-center-host"]:has([data-slot="chat-panel"]) {
+  :root[data-cozy] [data-slot="dock-center-host"]:has([data-slot="chat-panel"]:not(:is(.invisible, [hidden], [inert]) *)) {
     border-color: transparent;
     background: transparent;
     -webkit-backdrop-filter: none;
@@ -410,7 +412,7 @@
     box-shadow: none;
   }
   :root[data-cozy] [data-slot="dock-center-host"] [data-slot="chat-panel"],
-  :root[data-cozy] [data-slot="dock-center-host"]:has([data-slot="chat-panel"]) [data-slot="master-detail-sidebar"]:not([data-docked]) {
+  :root[data-cozy] [data-slot="dock-center-host"]:has([data-slot="chat-panel"]:not(:is(.invisible, [hidden], [inert]) *)) [data-slot="master-detail-sidebar"]:not([data-docked]) {
     border: 1px solid var(--cozy-glass-line);
     border-radius: var(--cozy-radius);
     background: var(--cozy-glass);
@@ -424,7 +426,7 @@
     max-width: var(--cozy-reading-width);
     margin-inline: auto;
   }
-  :root[data-cozy] [data-slot="dock-center-host"]:has([data-slot="chat-panel"]) [data-slot="master-detail-sidebar"]:not([data-docked]) {
+  :root[data-cozy] [data-slot="dock-center-host"]:has([data-slot="chat-panel"]:not(:is(.invisible, [hidden], [inert]) *)) [data-slot="master-detail-sidebar"]:not([data-docked]) {
     margin-right: var(--cozy-gap);
   }
 }
