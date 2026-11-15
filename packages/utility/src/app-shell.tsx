@@ -25,7 +25,7 @@ import { useInstallPrompt } from "./use-install-prompt"
 import { ShareDialog } from "./share-dialog"
 import { AppSwitcher } from "./app-switcher"
 import type { SwitcherApp } from "./app-switcher"
-import type { AppShellProps } from "./app-shell-types"
+import type { AppShellLink, AppShellProps } from "./app-shell-types"
 import { SUITE_APPS, currentSuiteApp } from "./suite-registry"
 import { reloadApp } from "./reload-app"
 
@@ -122,6 +122,21 @@ function ShellCommands({
     enabled: switchAppEnabled,
   })
 
+  return null
+}
+
+function openExternalLink(url: string) {
+  window.open(url, "_blank", "noopener,noreferrer")
+}
+
+function LinkCommand({ link }: { link: AppShellLink }) {
+  useCommand(`app-shell:link-${link.id}`, {
+    label: `Open ${link.label}`,
+    description: link.description ?? `Open ${link.label} in a new tab`,
+    group: "Help",
+    keywords: ["help", "docs", "guide", link.label.toLowerCase()],
+    action: () => openExternalLink(link.url),
+  })
   return null
 }
 
@@ -322,6 +337,15 @@ function AppShellInner({
                     Install
                   </DropdownMenuItem>
                 )}
+                {config.links?.map((link) => (
+                  <DropdownMenuItem key={link.id} onClick={() => openExternalLink(link.url)}>
+                    <i className={`${link.icon ?? "ph-bold ph-link"} size-4 text-center`} />
+                    {link.label}
+                    <DropdownMenuShortcut>
+                      <i className="ph-bold ph-arrow-square-out" aria-label="Opens in a new tab" />
+                    </DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                ))}
                 <DropdownMenuItem onClick={openFeedback}>
                   <i className="ph-bold ph-bug size-4 text-center" />
                   Report Feedback
@@ -391,6 +415,7 @@ function AppShellInner({
         install={install}
         switchAppEnabled={appSwitcherEnabled}
       />
+      {config.links?.map((link) => <LinkCommand key={link.id} link={link} />)}
       {switcherApps ? <ProvidedAppCommands apps={switcherApps} /> : <SuiteAppCommands />}
       <CommandPalette />
 

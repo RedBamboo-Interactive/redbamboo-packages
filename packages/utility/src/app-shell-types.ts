@@ -18,6 +18,17 @@ export interface AppShellShare {
   description?: string
 }
 
+/** An external resource (documentation, guides) opened in a new browser tab. */
+export interface AppShellLink {
+  /** Stable id, used for the command palette entry `app-shell:link-<id>`. */
+  id: string
+  label: string
+  url: string
+  /** Phosphor class, e.g. "ph-bold ph-book-open". */
+  icon?: string
+  description?: string
+}
+
 export interface AppShellConfig {
   name: string
   version: string
@@ -35,6 +46,9 @@ export interface AppShellConfig {
   discordInvite?: string
 
   latestVersion?: string
+
+  /** External help resources listed in the shell menu and the command palette. */
+  links?: AppShellLink[]
 
   share?: AppShellShare
 
