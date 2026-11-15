@@ -176,7 +176,7 @@ export { MESSAGE_CONTEXT_BLOCK_KEY, parseMessageContextBlock, formatContextSize 
 export type { MessageContextSection, MessageContextSectionKind, MessageContextView } from "./lib/message-context"
 export { projectActivityTimeline } from "./lib/activity-timeline"
 export type { ActivityTimelineRow } from "./lib/activity-timeline"
-export { isInspectablePart, squarePosition, squareSequence, stepSquare } from "./lib/part-navigation"
+export { isInspectablePart, isVisibleErrorPart, squarePosition, squareSequence, stepSquare } from "./lib/part-navigation"
 export type { SquareRef, SquareRow } from "./lib/part-navigation"
 export { canonicalUserMessageUids } from "./lib/message-queue"
 export { DeferredInvalidationCoordinator } from "./lib/deferred-invalidation-coordinator"

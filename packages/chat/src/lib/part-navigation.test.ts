@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import type { MessagePart } from "../types.ts"
-import { squareSequence, stepSquare, type SquareRow } from "./part-navigation.ts"
+import { isInspectablePart, isVisibleErrorPart, squareSequence, stepSquare, type SquareRow } from "./part-navigation.ts"
 
 const part = (type: MessagePart["type"], toolName?: string): MessagePart => ({ type, content: "", toolName })
 
@@ -41,4 +41,19 @@ test("a live row that appends a square extends the sequence", () => {
   const live: SquareRow[] = [rows[0], { ...rows[1], parts: [...rows[1].parts, part("tool_use", "Bash")] }]
   assert.equal(stepSquare(rows, { rowId: "activity:b", index: 3 }, 1), undefined)
   assert.deepEqual(stepSquare(live, { rowId: "activity:b", index: 3 }, 1), { rowId: "activity:b", index: 4 })
+})
+
+test("an error with the provider's words is a visible row, not a square", () => {
+  // The exact Claude Code message a Fable allowance ended two threads on, 2026-11-15.
+  const limit: MessagePart = { type: "error", content: "You've hit your Fable limit · resets Nov 20, 9pm (Europe/Zurich). Switch to another model, or manage usage credits at https://claude.ai/settings/usage?from=cc_cli_limit_message, to continue." }
+  assert.equal(isVisibleErrorPart(limit), true)
+  assert.equal(isInspectablePart(limit), false)
+  assert.deepEqual(squareSequence([{ id: "activity:a", parts: [part("tool_use", "Read"), part("tool_result"), limit] }]),
+    [{ rowId: "activity:a", index: 0 }])
+})
+
+test("an error without words stays a square", () => {
+  const blank: MessagePart = { type: "error", content: "  " }
+  assert.equal(isVisibleErrorPart(blank), false)
+  assert.equal(isInspectablePart(blank), true)
 })

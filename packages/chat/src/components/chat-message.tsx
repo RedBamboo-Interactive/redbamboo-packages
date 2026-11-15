@@ -47,7 +47,7 @@ import { AttachmentCard } from "./attachment-card"
 import { parseNovaEvent } from "../lib/nova-event"
 import { NovaEventSquare } from "./nova-event-square"
 import { getAgentJobHref } from "../lib/session-resource-links"
-import { squarePosition, squareSequence, stepSquare, type SquareRef, type SquareRow } from "../lib/part-navigation"
+import { isVisibleErrorPart, squarePosition, squareSequence, stepSquare, type SquareRef, type SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 import { messageActionEntries, messageMarkdown, partActionEntries } from "../lib/chat-actions"
@@ -521,6 +521,16 @@ export const ChatMessage = memo(function ChatMessage({
                 resolve={resolveImageSrc}
               />
             </div>
+          ) : group.kind === "error" ? (
+            <div
+              key={i}
+              role="alert"
+              data-chat-turn-error=""
+              className="msg-enter-ai my-1.5 flex items-start gap-1.5 rounded-md border border-red-500-a40 bg-red-500-a10 px-2.5 py-1.5 text-xs leading-relaxed text-red-400"
+            >
+              <i aria-hidden="true" className="ph-bold ph-warning mt-[3px] shrink-0" />
+              <span className="min-w-0 whitespace-pre-wrap break-words">{group.parts[0].content}</span>
+            </div>
           ) : (
             <div key={i} className="msg-enter-ai">
               <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} awaitingApproval={approvals} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
@@ -581,6 +591,7 @@ type PartGroup =
   | { kind: "text"; parts: [MessagePart] }
   | { kind: "audio"; parts: [MessagePart] }
   | { kind: "image"; parts: [MessagePart] }
+  | { kind: "error"; parts: [MessagePart] }
   | { kind: "frieze"; parts: MessagePart[]; isLive?: boolean }
 
 function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
@@ -598,6 +609,9 @@ function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
     if (part.type === "text" || part.type === "audio" || part.type === "image") {
       flushFrieze()
       groups.push({ kind: part.type === "audio" ? "audio" : part.type === "image" ? "image" : "text", parts: [part] })
+    } else if (isVisibleErrorPart(part)) {
+      flushFrieze()
+      groups.push({ kind: "error", parts: [part] })
     } else {
       frieze.push(part)
     }

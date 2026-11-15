@@ -13,11 +13,21 @@ export interface SquareRef {
 }
 
 /**
- * Parts that render as activity squares. Text, audio and images render inline;
- * a tool_result is reached through its tool_use square rather than its own.
+ * An error the turn ended on, with the provider's words, renders as its own
+ * visible row rather than a square: a usage limit drawn as a 10 px red square
+ * left a dead thread looking quiet (2026-11-15, "You've hit your Fable limit").
+ */
+export function isVisibleErrorPart(part: MessagePart): boolean {
+  return part.type === "error" && !!part.content?.trim()
+}
+
+/**
+ * Parts that render as activity squares. Text, audio, images and visible errors
+ * render inline; a tool_result is reached through its tool_use square rather than its own.
  */
 export function isInspectablePart(part: MessagePart): boolean {
   return part.type !== "text" && part.type !== "audio" && part.type !== "image" && part.type !== "tool_result"
+    && !isVisibleErrorPart(part)
 }
 
 /** Every square across `rows`, in timeline order. */

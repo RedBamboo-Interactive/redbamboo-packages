@@ -135,6 +135,12 @@ async function main() {
       const { page, errors, close } = await open(`leaf=${leaf}`, { phone })
       await errorButton(page).waitFor({ state: "visible" })
       assert.equal(await errorButton(page).innerText(), LABEL, label)
+      // The provider's words are on the row itself, not behind a 10 px square.
+      const turnError = page.locator("[data-chat-turn-error]")
+      assert.equal(await turnError.count(), 1, `${label}: one visible error row`)
+      assert.equal(await turnError.getAttribute("role"), "alert", label)
+      assert.equal((await turnError.innerText()).trim(), "API Error: safeguards flagged this message", label)
+      assert(await turnError.isVisible(), `${label}: the error text is visible`)
       await shot(page, `04-refusal-row-${phone ? "phone" : "desktop"}-${leaf ? "on" : "off"}`)
       await errorButton(page).click()
       await expectConfirmation(page)
@@ -145,7 +151,7 @@ async function main() {
       assert.equal(await errorButton(page).count(), 0, `${label}: the row went with it`)
       assert.deepEqual(errors, [])
       await close()
-      check(`refusal row, ${label}: visible, confirmed, rewinds to the message before it`)
+      check(`refusal row, ${label}: its words visible, confirmed, rewinds to the message before it`)
     }
 
     // ── Phone, Leaf menu on: the shared sheet ──────────────────────────────────
