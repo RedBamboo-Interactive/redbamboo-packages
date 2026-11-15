@@ -40,6 +40,23 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
         _logger = logger;
     }
 
+    /// <summary>
+    /// A tunnel whose cloudflared process record lives at <paramref name="stateFilePath"/>, for a host that
+    /// decides where its data lives. The default constructor keeps
+    /// <c>%LOCALAPPDATA%\{entry assembly name}\cloudflared-process.json</c>.
+    /// </summary>
+    public static CloudflareTunnelService WithStateFile(
+        string stateFilePath,
+        ILogger<CloudflareTunnelService>? logger = null)
+    {
+        if (string.IsNullOrWhiteSpace(stateFilePath) || !Path.IsPathFullyQualified(stateFilePath))
+            throw new ArgumentException($"The tunnel state file '{stateFilePath}' is not an absolute path.", nameof(stateFilePath));
+        return new CloudflareTunnelService(stateFilePath, logger);
+    }
+
+    /// <summary>Where the record of the cloudflared process this service started is kept.</summary>
+    public string StateFilePath => _stateFilePath;
+
     public Task<bool> StartAsync(TunnelConfig config)
     {
         lock (_lock)

@@ -798,7 +798,9 @@ public static partial class StartupManager
 
         /// <summary>
         /// A directory schtasks can read the task XML from. TEMP may point at a scratch
-        /// drive the RedLeaf process inherited from an agent session.
+        /// drive the RedLeaf process inherited from an agent session. It stays under
+        /// <c>%LOCALAPPDATA%\RedBamboo\Startup</c> even when a host moves its data: the
+        /// file is transient (written, imported by schtasks, deleted), never data to keep.
         /// </summary>
         private static string ExchangeDirectory()
         {

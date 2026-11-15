@@ -8,13 +8,36 @@ public class FileLogger : IAsyncDisposable
     private StreamWriter? _writer;
     private string? _currentDate;
 
+    /// <summary>Logs to <c>%LOCALAPPDATA%\{appName}\Logs</c>, as every host did before it could choose.</summary>
     public FileLogger(string appName, int maxFiles = 10)
+        : this(DefaultLogDirectory(appName), maxFiles, directoryChosen: true)
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _logDirectory = Path.Combine(localAppData, appName, "Logs");
+    }
+
+    private FileLogger(string logDirectory, int maxFiles, bool directoryChosen)
+    {
+        _ = directoryChosen; // only tells this constructor apart from the public one
+        _logDirectory = logDirectory;
         _maxFiles = maxFiles;
         Directory.CreateDirectory(_logDirectory);
     }
+
+    /// <summary>
+    /// Logs to <paramref name="logDirectory"/>, for a host that decides where its data lives (RedLeaf's
+    /// data location). The folder must be an absolute path; it is created when missing.
+    /// </summary>
+    public static FileLogger ForDirectory(string logDirectory, int maxFiles = 10)
+    {
+        if (string.IsNullOrWhiteSpace(logDirectory) || !Path.IsPathFullyQualified(logDirectory))
+            throw new ArgumentException($"The log directory '{logDirectory}' is not an absolute path.", nameof(logDirectory));
+        return new FileLogger(logDirectory, maxFiles, directoryChosen: true);
+    }
+
+    /// <summary>The folder the daily <c>yyyy-MM-dd.log</c> files go to.</summary>
+    public string LogDirectory => _logDirectory;
+
+    private static string DefaultLogDirectory(string appName)
+        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), appName, "Logs");
 
     public void Write(LogEntry entry)
     {
