@@ -304,8 +304,10 @@ function ImageTiles({ job, resolveImageSrc }: JobBodyProps) {
     : job.state === "done" && job.outputs.length
       ? job.outputs.slice(0, 8).map((output, index) => ({ key: `${job.id}:${index}`, src: output.url, running: false, progress: null }))
       : [{ key: job.id, src: null, running: job.state === "running", progress: job.progress }]
+  // A lone image takes half the card instead of a quarter; two or three share the row; four or more keep four columns.
+  const columns = tiles.length >= 4 ? "grid-cols-4" : tiles.length === 3 ? "grid-cols-3" : "grid-cols-2"
   return (
-    <div className="grid grid-cols-4 gap-1.5">
+    <div data-slot="job-tiles" className={`grid ${columns} gap-1.5`}>
       {tiles.map(({ key, ...tile }) => <ImageTile key={key} {...tile} resolveImageSrc={resolveImageSrc} />)}
     </div>
   )
