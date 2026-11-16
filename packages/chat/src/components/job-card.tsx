@@ -23,6 +23,9 @@ import { AudioPlayerWidget } from "./audio-player-widget"
  * A square's size is fixed from its first frame to its last, so a job
  * progressing never moves the thread. Colour lives only in the ring and the
  * blur; "needs you" and "failed" colour the whole ring. No live region.
+ *
+ * The square's ground follows the appearance: a flat surface normally,
+ * frosted glass in cozy, from the shared tokens (data-slot="job-square").
  */
 
 const KIND: Record<ChatJobKind, { icon: string; color: string; noun: [string, string] }> = {
@@ -96,7 +99,8 @@ export function JobCard({ job, onStop, resolveImageSrc }: JobCardProps) {
         {/* The ring is its own layer, masked to the 3 px band, so it never shows through a translucent square. */}
         <span aria-hidden="true" data-slot="job-ring" className={`absolute inset-0 rounded-xl p-[3px] ${ring.spin ? "job-ring-spin" : ""}`}
           style={{ background: ring.background, ...RING_MASK }} />
-        <span className={`relative block size-full overflow-hidden rounded-[9px] bg-overlay-6 ${job.state === "stopped" ? "opacity-70" : ""}`}>
+        {/* Flat by default, one step above the chat surface; cozy turns it to frosted glass (tokens.css). */}
+        <span data-slot="job-square" className={`relative block size-full overflow-hidden rounded-[9px] bg-surface-elevated ${job.state === "stopped" ? "opacity-70" : ""}`}>
           <JobSquare job={job} resolveImageSrc={resolveImageSrc} />
           <span aria-hidden="true" className="absolute inset-0 transition-colors duration-200 group-hover/job:bg-overlay-6" />
         </span>
@@ -151,18 +155,14 @@ function JobSquare({ job, resolveImageSrc }: JobBodyProps) {
   return JOB_BODY_RENDERERS[job.kind]?.({ job, resolveImageSrc }) ?? <Aura job={job} icon={KIND[job.kind].icon} />
 }
 
-/** The job's icon over a soft blur of its colour; shimmering while it works, a check once it's done. */
+/** The job's icon over its colour (a flat tint, or a soft blur in cozy); shimmering while it works, a check once it's done. */
 function Aura({ job, icon }: { job: ChatJob; icon: string }) {
   const muted = job.state === "queued" || job.state === "stopped"
   const working = job.state === "running" || job.state === "needs-you"
   return (
     <>
-      {!muted && (
-        <span aria-hidden="true" className="absolute -inset-3 blur-lg" style={{
-          background: "radial-gradient(circle at 30% 28%, color-mix(in srgb, var(--job-kind) 42%, transparent), transparent 62%), "
-            + "radial-gradient(circle at 72% 78%, color-mix(in srgb, var(--job-kind) 26%, transparent), transparent 60%)",
-        }} />
-      )}
+      {/* An even tint of the job's colour; cozy blurs it into soft light (tokens.css). */}
+      {!muted && <span aria-hidden="true" data-slot="job-aura" className="absolute inset-0 bg-[color-mix(in_srgb,var(--job-kind)_16%,transparent)]" />}
       {working && <span aria-hidden="true" className="job-shimmer absolute inset-0" />}
       <span aria-hidden="true" className="absolute inset-0 grid place-items-center text-[22px] drop-shadow-sm"
         style={{ color: muted ? "var(--color-text-muted)" : "var(--color-text-primary)" }}>
