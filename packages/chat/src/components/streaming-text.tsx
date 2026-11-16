@@ -41,6 +41,9 @@ const AUTHORED_LINK_CLASS_NAME = "inline-flex max-w-full items-center gap-1 roun
 let lightboxState: { src: string; alt: string; type: "image" | "video" } | null = null
 const listeners = new Set<() => void>()
 function setLightbox(s: typeof lightboxState) { lightboxState = s; listeners.forEach(fn => fn()) }
+
+/** Opens the chat's media lightbox, the one an embed opens on click. */
+export function openMediaLightbox(src: string, type: "image" | "video", alt = "") { setLightbox({ src, alt, type }) }
 function subscribeLightbox(cb: () => void) { listeners.add(cb); return () => { listeners.delete(cb) } }
 function getLightbox() { return lightboxState }
 

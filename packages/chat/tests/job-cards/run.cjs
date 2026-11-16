@@ -193,7 +193,7 @@ async function main() {
       await page.waitForFunction(() => document.querySelector('[data-job-id="early"]')?.getAttribute("data-job-state") === "failed")
       await settle()
       const topAfter = await anchorTop()
-      check(await page.locator('[data-job-id="early"] [data-slot="job-card-body"]').count() === 1, "the card above grew a body")
+      check(await page.locator('[data-job-id="early"]').evaluate(el => Math.round(el.getBoundingClientRect().height)) === 80, "the card above changed state and kept its 80 px")
       check(earlyBelowView, `the growing card is above the reader's viewport: ${JSON.stringify(await page.evaluate(() => ({
         card: document.querySelector('[data-job-id="early"]')?.getBoundingClientRect().bottom,
         scroller: document.querySelector('[data-slot="chat-panel"] .overflow-y-auto').getBoundingClientRect().top,
