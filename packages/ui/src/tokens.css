@@ -1410,6 +1410,25 @@ body {
   animation: job-ring-spin 1.4s linear infinite;
 }
 
+/* A determinate ring eases toward each new value: a lerp-like ease-out, so
+   frequent updates read as one continuous glide. Its colour waits for the
+   sweep, so a finished job fills to the top before it fades to the track. */
+@property --job-ring-p {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@property --job-ring-c {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
+.job-ring {
+  transition: --job-ring-p 1.1s cubic-bezier(0.22, 1, 0.36, 1), --job-ring-c 0.5s ease 0.7s;
+}
+
 /* A job square's ground: flat (a utility on the element) unless cozy, where
    it is frosted glass like the shell's cards: a white frost over the theme's
    glass, its own blur, a hairline and a lit top edge. High contrast trades
@@ -1450,6 +1469,7 @@ body {
   .job-shimmer { animation: none; }
   .job-pulse { animation: none; }
   .job-ring-spin { animation: none; }
+  .job-ring { transition: none; }
 }
 
 /* ── Base layer ────────────────────────────────────────────────────── */

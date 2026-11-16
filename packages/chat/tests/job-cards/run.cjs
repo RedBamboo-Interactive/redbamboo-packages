@@ -156,6 +156,12 @@ async function main() {
       await page.evaluate(() => window.__jobs.store.set("covers", { ...window.__jobs.store.get("covers"), progress: 0.8 }))
       for (let i = 0; i < 6; i++) await frame("job.updated", { id: "covers", status: "Running", progress: 0.99, name: "Injected" })
       await page.waitForFunction(() => document.querySelector('[data-job-id="covers"]')?.getAttribute("data-job-progress") === "80")
+      // The ring glides to the new value instead of jumping, and lands on it.
+      const ringAt = () => page.$eval('[data-job-id="covers"] [data-slot="job-ring"]', el => parseFloat(getComputedStyle(el).getPropertyValue("--job-ring-p")))
+      const midway = await ringAt()
+      check(midway > 61.5 && midway < 79.5, `the ring eases toward 80%: ${midway}`)
+      await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('[data-job-id="covers"] [data-slot="job-ring"]')).getPropertyValue("--job-ring-p")) > 79.9, null, { timeout: 3000 })
+      equal(await page.locator('[data-slot="job-cards"] .job-shimmer').count(), 0, "no shimmer on a square: the ring says it's working")
       const after = (await calls()).slice(before)
       equal(after, ["get covers"], "six frames, one single-job read")
       check(!(await page.locator('[data-job-id="covers"]').getAttribute("aria-label")).includes("Injected"), "never rendered from the payload")

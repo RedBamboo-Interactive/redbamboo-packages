@@ -97,8 +97,8 @@ export function JobCard({ job, onStop, resolveImageSrc }: JobCardProps) {
         style={{ ["--job-kind" as string]: job.state === "failed" ? FAILED_COLOR : KIND[job.kind].color } as CSSProperties}
       >
         {/* The ring is its own layer, masked to the 3 px band, so it never shows through a translucent square. */}
-        <span aria-hidden="true" data-slot="job-ring" className={`absolute inset-0 rounded-xl p-[3px] ${ring.spin ? "job-ring-spin" : ""}`}
-          style={{ background: ring.background, ...RING_MASK }} />
+        <span aria-hidden="true" data-slot="job-ring" className={`job-ring absolute inset-0 rounded-xl p-[3px] ${ring.spin ? "job-ring-spin" : ""}`}
+          style={{ ...ring.style, ...RING_MASK }} />
         {/* Flat by default, one step above the chat surface; cozy turns it to frosted glass (tokens.css). */}
         <span data-slot="job-square" className={`relative block size-full overflow-hidden rounded-[9px] bg-surface-elevated ${job.state === "stopped" ? "opacity-70" : ""}`}>
           <JobSquare job={job} resolveImageSrc={resolveImageSrc} />
@@ -125,21 +125,37 @@ export function JobCards({ jobs, onStop, resolveImageSrc, className }: {
   )
 }
 
-/** The ring: real progress fills clockwise from the top; no real progress spins an arc; "needs you" and "failed" are a full ring. */
-function ringOf(job: ChatJob, progress: number | null): { background: string; spin: boolean } {
+/**
+ * The ring. A determinate ring is a sweep to --job-ring-p in --job-ring-c,
+ * both registered properties that .job-ring eases toward each new target
+ * (tokens.css), so a progress update glides instead of jumping, and a new
+ * target mid-glide carries on from where the ring is. Finishing fills the
+ * ring to the top, then fades it into the track. Needs-you and failed are a
+ * full ring in their colour. No real progress spins an arc instead.
+ */
+function ringOf(job: ChatJob, progress: number | null): { style: CSSProperties; spin: boolean } {
+  const sweep = (percent: number, color: string) => ({
+    spin: false,
+    style: {
+      ["--job-ring-p" as string]: `${percent}%`,
+      ["--job-ring-c" as string]: color,
+      background: `conic-gradient(from -90deg, var(--job-ring-c) var(--job-ring-p), ${RING_TRACK} var(--job-ring-p))`,
+    } as CSSProperties,
+  })
   switch (job.state) {
     case "running":
-      if (progress !== null) {
-        const percent = progress * 100
-        return { background: `conic-gradient(from -90deg, var(--job-kind) ${percent}%, ${RING_TRACK} ${percent}%)`, spin: false }
-      }
-      return { background: `conic-gradient(from var(--job-ring-from, -90deg), var(--job-kind) 0 22%, ${RING_TRACK} 22%)`, spin: true }
+      if (progress !== null) return sweep(progress * 100, "var(--job-kind)")
+      return { spin: true, style: { background: `conic-gradient(from var(--job-ring-from, -90deg), var(--job-kind) 0 22%, ${RING_TRACK} 22%)` } }
     case "needs-you":
-      return { background: NEEDS_COLOR, spin: false }
+      return sweep(100, NEEDS_COLOR)
     case "failed":
-      return { background: `color-mix(in srgb, ${FAILED_COLOR} 70%, transparent)`, spin: false }
+      return sweep(100, `color-mix(in srgb, ${FAILED_COLOR} 70%, transparent)`)
+    case "done":
+      return sweep(100, RING_TRACK)
+    case "stopped":
+      return sweep((job.progress ?? 0) * 100, RING_TRACK)
     default:
-      return { background: RING_TRACK, spin: false }
+      return sweep(0, "var(--job-kind)")
   }
 }
 
@@ -155,15 +171,13 @@ function JobSquare({ job, resolveImageSrc }: JobBodyProps) {
   return JOB_BODY_RENDERERS[job.kind]?.({ job, resolveImageSrc }) ?? <Aura job={job} icon={KIND[job.kind].icon} />
 }
 
-/** The job's icon over its colour (a flat tint, or a soft blur in cozy); shimmering while it works, a check once it's done. */
+/** The job's icon over its colour (a flat tint, or a soft blur in cozy); a check once it's done. The ring says it's working. */
 function Aura({ job, icon }: { job: ChatJob; icon: string }) {
   const muted = job.state === "queued" || job.state === "stopped"
-  const working = job.state === "running" || job.state === "needs-you"
   return (
     <>
       {/* An even tint of the job's colour; cozy blurs it into soft light (tokens.css). */}
       {!muted && <span aria-hidden="true" data-slot="job-aura" className="absolute inset-0 bg-[color-mix(in_srgb,var(--job-kind)_16%,transparent)]" />}
-      {working && <span aria-hidden="true" className="job-shimmer absolute inset-0" />}
       <span aria-hidden="true" className="absolute inset-0 grid place-items-center text-[22px] drop-shadow-sm"
         style={{ color: muted ? "var(--color-text-muted)" : "var(--color-text-primary)" }}>
         <i className={job.state === "stopped" ? "ph-bold ph-stop" : icon} />
@@ -228,7 +242,7 @@ function imageSquare({ job, resolveImageSrc }: JobBodyProps): ReactNode {
   )
 }
 
-/** One picture: shimmers until it arrives, then develops out of a blur (or stays blurred while the job works). */
+/** One picture: develops out of a blur (or stays blurred while the job works). */
 function SquareImage({ src, blurred = false }: { src: string; blurred?: boolean }) {
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -236,7 +250,6 @@ function SquareImage({ src, blurred = false }: { src: string; blurred?: boolean 
   const clear = loaded && !blurred
   return (
     <>
-      {!loaded && <span aria-hidden="true" className="job-shimmer absolute inset-0" />}
       <img
         src={src}
         alt=""
