@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import type { MessageBlock, MessagePart } from "../types.ts"
 import {
   JOB_CARD_RULES, anchorChatJob, anchorChatJobs, capabilityLabel, describeJobActivity, foldJobRecord,
-  formatJobDuration, groupChatJobs, isActiveJob, isExcludedJob, jobCollapses, jobElapsed, jobKind,
+  formatJobDuration, groupChatJobs, isActiveJob, isExcludedJob, jobElapsed, jobKind,
   jobProgress, jobStageWords, jobState, normalizeChatJob, realProgress, type ComputeJobRecord,
 } from "./chat-jobs.ts"
 
@@ -151,33 +151,6 @@ test("anchorChatJobs groups a turn's jobs in launch order and leaves the transcr
   assert.deepEqual([...anchored.byTurn.keys()], ["turn-1"])
   assert.deepEqual(anchored.byTurn.get("turn-1")!.jobs.map(item => item.id), ["covers", "theme"])
   assert.equal(JSON.stringify(messages), snapshot, "projection purity: no message is changed")
-})
-
-test("collapse (heuristic): a done image job becomes a chip once an agent message shows an image", () => {
-  const done = job({ id: "covers", status: "Completed", durationMs: 72000 })
-  const messages = [
-    block("u1", "user", 0),
-    block("a1", "assistant", 2, [tool()], "turn-1"),
-    block("a1b", "assistant", 90, [text("The boss cover is the one: ![boss](/api/assets/boss.png)")], "turn-1"),
-  ]
-  const anchor = anchorChatJob(at(4), messages)!
-  assert.equal(jobCollapses(done, messages, anchor), true)
-  assert.equal(jobCollapses(done, messages.slice(0, 2), anchor), false, "no image shown: the card keeps its result")
-  assert.equal(jobCollapses({ ...done, state: "running" }, messages, anchor), false)
-  const theme = job({ id: "theme", capability: "music-gen", status: "Completed", durationMs: 48000 })
-  assert.equal(jobCollapses(theme, messages, anchor), false, "an image does not collapse a music job")
-  const audioReply = [...messages, block("a1c", "assistant", 95, [{ type: "audio", content: "/api/assets/take1.mp3" }], "turn-1")]
-  assert.equal(jobCollapses(theme, audioReply, anchor), true)
-  const imagePart = [...messages.slice(0, 2), block("a1d", "assistant", 95, [{ type: "image", content: "", url: "/x.png" }], "turn-1")]
-  assert.equal(jobCollapses(done, imagePart, anchor), true)
-  const video = job({ id: "trailer", capability: "video-gen", status: "Completed", durationMs: 300000 })
-  const videoReply = [...messages.slice(0, 2), block("a1e", "assistant", 95, [text("[trailer](/api/assets/trailer.mp4)")], "turn-1")]
-  assert.equal(jobCollapses(video, videoReply, anchor), true)
-  assert.equal(jobCollapses(video, messages, anchor), false, "an image does not collapse a video job")
-  const generic = job({ id: "dl", capability: "model-download", status: "Completed", durationMs: 9000 })
-  assert.equal(jobCollapses(generic, messages, anchor), false, "generic jobs have nothing to match")
-  const before = [block("u1", "user", 0), block("a0", "assistant", 1, [text("![old](/old.png)")], "turn-0"), block("a1", "assistant", 2, [tool()], "turn-1")]
-  assert.equal(jobCollapses(done, before, anchorChatJob(at(4), before)!), false, "only from the anchor on")
 })
 
 test("activity words: one by name and percentage, several by count", () => {

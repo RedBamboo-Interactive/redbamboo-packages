@@ -27,7 +27,7 @@ import { MediaLightbox } from "./streaming-text"
 import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
 import { canOfferRollback, hasErrorPart, restoredDraftText, rollbackMessageEntries, rollbackTargetBefore } from "../lib/conversation-rollback"
 import { RollbackDialog } from "./rollback-dialog"
-import { anchorChatJobs, describeJobActivity, isActiveJob, jobCollapses, turnKeyOf, type ChatJob } from "../lib/chat-jobs"
+import { anchorChatJobs, describeJobActivity, isActiveJob, turnKeyOf, type ChatJob } from "../lib/chat-jobs"
 import { JobCard, JobCards, jobKindColor } from "./job-card"
 
 // Windowed rendering: long conversations are read from the tail, so only the
@@ -455,13 +455,6 @@ export function ChatPanel(props: ChatPanelProps) {
   const anchoredJobs = useMemo(() => jobs?.length ? anchorChatJobs(jobs, messages) : null, [jobs, messages])
   const jobsRef = useRef(!!anchoredJobs)
   jobsRef.current = !!anchoredJobs
-  const collapsedJobs = useMemo(() => {
-    const collapsed = new Set<string>()
-    for (const { anchor, jobs: turnJobs } of anchoredJobs?.byTurn.values() ?? []) {
-      for (const job of turnJobs) if (jobCollapses(job, messages, anchor)) collapsed.add(job.id)
-    }
-    return collapsed
-  }, [anchoredJobs, messages])
   const activeJobs = useMemo(() => anchoredJobs?.all.filter(isActiveJob) ?? [], [anchoredJobs])
   // Running jobs are host-owned work after the host's own (Nova's delegations): shapes after its
   // shapes, words after its words, through the same summary and priority.
@@ -485,7 +478,7 @@ export function ChatPanel(props: ChatPanelProps) {
     }
   }, [activeJobs, hostWork, onStopJob, resolveImageSrc])
   const jobsLayoutKey = anchoredJobs
-    ? anchoredJobs.all.map(job => `${job.id}:${job.state}:${collapsedJobs.has(job.id) ? 1 : 0}:${job.children.length}:${job.outputs.length}:${job.errorMessage ? 1 : 0}`).join("\u0000")
+    ? anchoredJobs.all.map(job => `${job.id}:${job.state}:${job.children.length}:${job.outputs.length}:${job.errorMessage ? 1 : 0}`).join("\u0000")
     : ""
 
   const scrollToEnd = useCallback(() => {
@@ -946,7 +939,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 </div>
                 if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
                 if (visual.kind === "jobs") return (
-                  <JobCards key={visual.key} jobs={visual.jobs} collapsed={collapsedJobs} onStop={onStopJob} resolveImageSrc={resolveImageSrc}
+                  <JobCards key={visual.key} jobs={visual.jobs} onStop={onStopJob} resolveImageSrc={resolveImageSrc}
                     className={visual.compact ? "mt-1.5 mb-2" : "-mt-2.5 mb-4"} />
                 )
                 const row = visual.row

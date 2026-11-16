@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client"
 import { WsEventContext, type WsEventContextValue } from "@redbamboo/utility"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { JobCard } from "../../src/components/job-card"
+import { MediaLightbox } from "../../src/components/streaming-text"
 import { useChatJobs } from "../../src/hooks/use-chat-jobs"
 import { normalizeChatJob, type ComputeJobRecord } from "../../src/lib/chat-jobs"
 import type { ChatJobsTransport } from "../../src/lib/chat-jobs-sync"
@@ -136,13 +137,14 @@ function Gallery() {
   const base = { providerName: "ComfyUI", queuedAt: ts(0), startedAt: ts(0) }
   const href = (id: string) => `/apps/compute/jobs?select=${id}`
   const now = Date.now()
-  const states: Array<[string, ComputeJobRecord, boolean?]> = [
+  const states: Array<[string, ComputeJobRecord]> = [
     ["Queued", { ...base, id: "g-q", capability: "image-gen", name: "Launch covers", status: "Queued", stage: "admitted" }],
     ["Running, no real progress yet", { ...base, id: "g-w", capability: "image-gen", name: "Launch covers", status: "Running", stage: "waiting", progress: 0, startedAt: new Date(now - 14000).toISOString() }],
     ["Running, real progress", { ...base, id: "g-p", capability: "image-gen", name: "Launch covers", status: "Running", stage: "executing", progress: 0.62 }],
     ["Failed", { ...base, id: "g-f", capability: "video-gen", name: "Trailer cut", providerName: "Wan 2.2", status: "Failed", stage: "failed", errorMessage: "CUDA out of memory while decoding frame 34", queuedAt: ts(0), durationMs: 120000 }],
     ["Done, result kept in the card", { ...base, id: "g-d", capability: "image-gen", name: "Launch covers", status: "Completed", durationMs: 72000, outputs: ART.map((url, i) => ({ url, contentType: "image/svg+xml", sizeBytes: i })) }],
-    ["Done, reply shows the result: chip", { ...base, id: "g-c", capability: "image-gen", name: "Launch covers", status: "Completed", durationMs: 72000, outputs: ART.map(url => ({ url, contentType: "image/svg+xml" })) }, true],
+    ["Running, two of four in", { ...base, id: "g-r", capability: "image-gen", name: "Launch covers", status: "Running", stage: "executing", progress: 0.5 }],
+    ["Done, one image", { ...base, id: "g-c", capability: "image-gen", name: "Level map", status: "Completed", durationMs: 38000, prompt: "A top-down level map of a mossy ruin, hand-inked, warm light", outputs: [{ url: ART[2], contentType: "image/svg+xml" }] }],
     ["Stopped", { ...base, id: "g-s", capability: "model-download", name: "Model download", status: "Cancelled", stage: "cancelled" }],
   ]
   const kinds: Array<[string, ComputeJobRecord]> = [
@@ -156,26 +158,32 @@ function Gallery() {
     id: `k-w-${index}`, capability: "workflow-step", name, parentJobId: "k-w", queuedAt: ts(index),
     status: index < 2 ? "Completed" : index === 2 ? "Running" : "Queued", progress: index === 2 ? 0.45 : 0, durationMs: 9000,
   }))
-  const card = (record: ComputeJobRecord, collapsed = false, children: ComputeJobRecord[] = []) => {
+  const batch: ComputeJobRecord[] = ART.map((url, index) => ({
+    id: `g-r-${index}`, capability: "image-gen", name: `Cover ${index + 1}`, parentJobId: "g-r", queuedAt: ts(index),
+    status: index < 2 ? "Completed" : "Running", progress: index < 2 ? 1 : 0, durationMs: 9000,
+    outputs: index < 2 ? [{ url, contentType: "image/svg+xml" }] : [],
+  }))
+  const card = (record: ComputeJobRecord, children: ComputeJobRecord[] = []) => {
     const job = { ...normalizeChatJob(record, { jobHref: href }), children: children.map(child => normalizeChatJob(child)) }
-    return <JobCard job={job} collapsed={collapsed} onStop={() => {}} />
+    return <JobCard job={job} onStop={() => {}} />
   }
-  const section = (title: string, entries: Array<[string, ComputeJobRecord, boolean?]>, extra?: (id: string) => ComputeJobRecord[]) => (
+  const section = (title: string, entries: Array<[string, ComputeJobRecord]>, extra?: (id: string) => ComputeJobRecord[]) => (
     <section className="flex flex-col gap-3">
       <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
       <div className="grid gap-x-6 gap-y-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 440px), 1fr))" }}>
-        {entries.map(([label, job, collapsed]) => (
+        {entries.map(([label, job]) => (
           <div key={job.id} data-gallery={job.id}>
             <div className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-text-muted">{label}</div>
-            {card(job, collapsed, extra?.(job.id) ?? [])}
+            {card(job, extra?.(job.id) ?? [])}
           </div>
         ))}
       </div>
     </section>
   )
   return <div className="flex flex-col gap-8 p-6">
-    {section("One card, every state", states)}
+    {section("One square, every state", states, id => id === "g-r" ? batch : [])}
     {section("It adapts to the job", kinds, id => id === "k-w" ? steps : [])}
+    <MediaLightbox />
   </div>
 }
 

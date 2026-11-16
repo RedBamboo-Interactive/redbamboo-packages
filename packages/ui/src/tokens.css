@@ -1394,10 +1394,27 @@ body {
   animation: job-pulse 1.6s ease-in-out infinite;
 }
 
+/* A job square's ring without real progress: an arc that goes round. The
+   angle is a registered property so the gradient turns, not the square. */
+@property --job-ring-from {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: -90deg;
+}
+
+@keyframes job-ring-spin {
+  to { --job-ring-from: 270deg; }
+}
+
+.job-ring-spin {
+  animation: job-ring-spin 1.4s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .job-hairline-indeterminate { animation: none; width: 100%; opacity: 0.45; }
   .job-shimmer { animation: none; }
   .job-pulse { animation: none; }
+  .job-ring-spin { animation: none; }
 }
 
 /* ── Base layer ────────────────────────────────────────────────────── */

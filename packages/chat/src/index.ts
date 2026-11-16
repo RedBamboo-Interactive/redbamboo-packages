@@ -213,13 +213,13 @@ export { ArtifactsPanel } from "./components/artifacts-panel"
 export type { ArtifactsPanelProps } from "./components/artifacts-panel"
 export { useArtifacts } from "./hooks/use-artifacts"
 
-export { JobCard, JobCards, JobChip, JOB_BODY_RENDERERS, jobKindColor } from "./components/job-card"
+export { JobCard, JobCards, JOB_BODY_RENDERERS, jobKindColor } from "./components/job-card"
 export type { JobBodyProps, JobBodyRenderer, JobCardProps } from "./components/job-card"
 export { useChatJobs } from "./hooks/use-chat-jobs"
 export type { UseChatJobsOptions } from "./hooks/use-chat-jobs"
 export {
   JOB_CARD_RULES, anchorChatJob, anchorChatJobs, capabilityLabel, describeJobActivity, foldJobRecord, formatJobDuration,
-  groupChatJobs, isActiveJob, isExcludedJob, isTerminalJobStatus, jobCapability, jobCollapses, jobKind, jobProgress,
+  groupChatJobs, isActiveJob, isExcludedJob, isTerminalJobStatus, jobCapability, jobKind, jobProgress,
   jobState, normalizeChatJob, realProgress, turnKeyOf,
 } from "./lib/chat-jobs"
 export type { AnchoredChatJobs, ChatJob, ChatJobAnchor, ChatJobKind, ChatJobState, ComputeJobOutput, ComputeJobRecord, NormalizeJobOptions } from "./lib/chat-jobs"

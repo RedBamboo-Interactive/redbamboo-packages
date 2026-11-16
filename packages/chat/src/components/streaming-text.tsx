@@ -90,9 +90,9 @@ export function ImageThumbnail({ src, alt, resolve }: { src?: string; alt?: stri
       data-slot="chat-image-embed"
       data-context-media={resolved ? "image" : undefined}
       data-context-media-src={resolved || undefined}
-      className="inline-block rounded-lg overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1"
+      className="inline-block size-20 rounded-xl overflow-hidden border border-overlay-10 hover:border-overlay-30 transition-colors cursor-pointer my-1 align-top"
     >
-      <img src={resolved} alt={alt || ""} loading="lazy" className="w-20 h-20 object-cover" />
+      <img src={resolved} alt={alt || ""} loading="lazy" className="block size-full object-cover" />
     </button>
   )
 }

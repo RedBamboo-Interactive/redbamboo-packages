@@ -1,6 +1,5 @@
-import type { MessageBlock, MessagePart } from "../types.ts"
+import type { MessageBlock } from "../types.ts"
 import { isEventBlock } from "./event-parts.ts"
-import { isVideoSrc } from "./media-kind.ts"
 
 /**
  * Job cards: async compute jobs an agent starts (images, video, music,
@@ -35,6 +34,8 @@ export interface ComputeJobRecord {
   errorMessage?: string | null
   parentJobId?: string | null
   confidential?: boolean | null
+  /** What was asked for, when the host projects it (a prompt or the main text input). */
+  prompt?: string | null
 }
 
 export interface ComputeJobOutput {
@@ -65,8 +66,10 @@ export interface ChatJob {
   durationMs: number | null
   outputs: ComputeJobOutput[]
   errorMessage: string | null
+  /** What was asked for, when known; the summary shows it. */
+  prompt: string | null
   parentJobId: string | null
-  /** Opens the job; the whole card is this link. */
+  /** The job's page in the Compute app: an expert option in the card's menu, never the click. */
   href: string | null
   /** Children present in the same set, folded under this job (image batches, workflow steps). */
   children: ChatJob[]
@@ -181,6 +184,7 @@ export function normalizeChatJob(record: ComputeJobRecord, options: NormalizeJob
     durationMs: durationOf(record),
     outputs: outputs.map(output => ({ url: output.url, contentType: output.contentType ?? null, sizeBytes: output.sizeBytes ?? null })),
     errorMessage: record.errorMessage?.trim() || null,
+    prompt: record.prompt?.trim() || null,
     parentJobId: record.parentJobId ?? null,
     href: options.jobHref?.(record.id) ?? null,
     children: [],
@@ -323,53 +327,6 @@ export function anchorChatJobs(jobs: readonly ChatJob[], messages: readonly Mess
     all.push(job)
   }
   return { byTurn, all }
-}
-
-const IMAGE_IN_TEXT = /!\[[^\]]*\]\(([^)\s]+)[^)]*\)|<img\s[^>]*src=["']([^"']+)["']/gi
-const AUDIO_EXTENSIONS = /\.(mp3|wav|flac|m4a|aac|opus|oga)(\?.*)?$/i
-
-function textMedia(content: string): { image: boolean; video: boolean; audio: boolean } {
-  const found = { image: false, video: false, audio: false }
-  for (const match of content.matchAll(IMAGE_IN_TEXT)) {
-    const src = match[1] ?? match[2] ?? ""
-    if (isVideoSrc(src)) found.video = true
-    else if (AUDIO_EXTENSIONS.test(src)) found.audio = true
-    else found.image = true
-  }
-  for (const match of content.matchAll(/\]\(([^)\s]+)[^)]*\)|<(?:video|audio)\s[^>]*src=["']([^"']+)["']/gi)) {
-    const src = match[1] ?? match[2] ?? ""
-    if (isVideoSrc(src)) found.video = true
-    if (AUDIO_EXTENSIONS.test(src)) found.audio = true
-  }
-  return found
-}
-
-function partShows(part: MessagePart, kind: ChatJobKind): boolean {
-  if (kind === "image" && part.type === "image") return true
-  if (kind === "audio" && part.type === "audio") return true
-  if (part.type !== "text" || !part.content) return false
-  const media = textMedia(part.content)
-  return kind === "image" ? media.image : kind === "video" ? media.video : kind === "audio" ? media.audio : false
-}
-
-/**
- * Whether a finished job shrinks to a one-line chip: the conversation already
- * shows media of its kind in an agent message from its anchor onward.
- *
- * A HEURISTIC: uploaded Assets carry no link to the job that produced them, so
- * "the reply shows this output" cannot be matched by URL. Any image (video,
- * audio) the agent shows from the launching turn on counts. Workflows and
- * generic jobs have no media to match and never collapse.
- */
-export function jobCollapses(job: ChatJob, messages: readonly MessageBlock[], anchor: ChatJobAnchor): boolean {
-  if (job.state !== "done") return false
-  if (job.kind !== "image" && job.kind !== "video" && job.kind !== "audio") return false
-  for (let index = anchor.blockIndex; index < messages.length; index++) {
-    const block = messages[index]
-    if (block.role !== "assistant") continue
-    if (block.parts.some(part => partShows(part, job.kind))) return true
-  }
-  return false
 }
 
 /** Running or queued, i.e. what the activity row lists. */

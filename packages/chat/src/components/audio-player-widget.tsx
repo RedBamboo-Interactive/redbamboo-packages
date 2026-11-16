@@ -58,15 +58,15 @@ export function AudioPlayerWidget({ src, avatarSrc }: AudioPlayerWidgetProps) {
         className="relative cursor-pointer group/player rounded-xl p-[3px] block"
         style={{ background: ringBg }}
       >
-        <div className="relative w-[46px] h-[46px] rounded-[9px] overflow-hidden">
+        <div className="relative size-[74px] rounded-[9px] overflow-hidden">
           {avatarSrc ? (
             <img src={avatarSrc} alt="" className="absolute inset-0 w-full h-full object-cover object-top" />
           ) : (
             <div className="absolute inset-0 bg-overlay-10 flex items-center justify-center">
-              <i className="ph-bold ph-microphone text-base text-text-muted" />
+              <i className="ph-bold ph-microphone text-[22px] text-text-muted" />
             </div>
           )}
-          <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-center pb-1.5 transition-opacity duration-150 ${
+          <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-center pb-2.5 transition-opacity duration-150 ${
             isPlaying ? "opacity-100" : "opacity-60 group-hover/player:opacity-85"
           }`}>
             {isPlaying ? (
@@ -74,13 +74,13 @@ export function AudioPlayerWidget({ src, avatarSrc }: AudioPlayerWidgetProps) {
                 {BAR_HEIGHTS.map((h, i) => (
                   <div
                     key={i}
-                    className="w-[2px] rounded-full bg-white audio-wave"
+                    className="w-[3px] rounded-full bg-white audio-wave"
                     style={{ height: `${h}px`, animationDelay: `${i * 80}ms` }}
                   />
                 ))}
               </div>
             ) : (
-              <i className="ph-bold ph-play text-[11px] text-white ml-0.5" />
+              <i className="ph-fill ph-play text-base text-white ml-0.5" />
             )}
           </div>
         </div>
