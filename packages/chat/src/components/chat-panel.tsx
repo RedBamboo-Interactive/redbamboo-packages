@@ -27,6 +27,8 @@ import { MediaLightbox } from "./streaming-text"
 import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
 import { canOfferRollback, hasErrorPart, restoredDraftText, rollbackMessageEntries, rollbackTargetBefore } from "../lib/conversation-rollback"
 import { RollbackDialog } from "./rollback-dialog"
+import { anchorChatJobs, describeJobActivity, isActiveJob, jobCollapses, turnKeyOf, type ChatJob } from "../lib/chat-jobs"
+import { JobCard, JobCards, jobKindColor } from "./job-card"
 
 // Windowed rendering: long conversations are read from the tail, so only the
 // last WINDOW blocks are mounted. Scrolling up (or the "earlier messages"
@@ -35,6 +37,7 @@ const WINDOW = 40
 const CHUNK = 80
 const CONVERSATION_ENTRANCE_STAGGER_MS = 180
 const NO_APPROVALS: readonly import("../types").PermissionApproval[] = []
+const NO_JOBS_AFTER = new Map<string, { turnKey: string; jobs: ChatJob[] }>()
 
 function hasExitPlanPart(block: MessageBlockType): boolean {
   return block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
@@ -78,7 +81,7 @@ export function ChatPanel(props: ChatPanelProps) {
     prepareOutgoingMessage,
     speechBackend, handsFreeEnabled, pushToTalkKey, globalPushToTalk,
     renderStatusLine, renderComposerInlineAction, renderComposerAttachments, renderAttachmentActions, renderMessageExtra, renderSideActions, getMessageActions,
-    backgroundTasks, onStopBackgroundTask, hostActivity,
+    backgroundTasks, onStopBackgroundTask, hostActivity: hostWork, jobs, onStopJob,
   } = props
   const runningBackgroundTasks = useMemo(() => filterRunningTasks(backgroundTasks), [backgroundTasks])
 
@@ -447,6 +450,44 @@ export function ChatPanel(props: ChatPanelProps) {
     return -1
   }, [messages])
 
+  // Job cards: a display-only overlay. Absent `jobs`, everything below is null
+  // or the host's own value, so the panel renders as it always has.
+  const anchoredJobs = useMemo(() => jobs?.length ? anchorChatJobs(jobs, messages) : null, [jobs, messages])
+  const jobsRef = useRef(!!anchoredJobs)
+  jobsRef.current = !!anchoredJobs
+  const collapsedJobs = useMemo(() => {
+    const collapsed = new Set<string>()
+    for (const { anchor, jobs: turnJobs } of anchoredJobs?.byTurn.values() ?? []) {
+      for (const job of turnJobs) if (jobCollapses(job, messages, anchor)) collapsed.add(job.id)
+    }
+    return collapsed
+  }, [anchoredJobs, messages])
+  const activeJobs = useMemo(() => anchoredJobs?.all.filter(isActiveJob) ?? [], [anchoredJobs])
+  // Running jobs are host-owned work after the host's own (Nova's delegations): shapes after its
+  // shapes, words after its words, through the same summary and priority.
+  const hostActivity = useMemo<import("../types").ActivityStatusGroup | null | undefined>(() => {
+    if (!activeJobs.length) return hostWork
+    const words = describeJobActivity(activeJobs)!
+    const items: ActivityStatusItem[] = activeJobs.map(job => ({
+      key: `job:${job.id}`,
+      label: `${job.title} (job)`,
+      title: job.title,
+      color: jobKindColor(job.kind),
+      shape: "circle",
+      running: job.state === "running",
+      renderDetails: () => <JobCard job={job} onStop={onStopJob} resolveImageSrc={resolveImageSrc} />,
+    }))
+    return {
+      items: [...(hostWork?.items ?? []), ...items],
+      label: hostWork?.label ? `${hostWork.label} · ${words}` : words,
+      ...(hostWork?.label ? (hostWork.icon ? { icon: hostWork.icon } : {}) : { icon: "ph-bold ph-cube" }),
+      title: [hostWork?.title ?? hostWork?.label, ...activeJobs.map(job => job.title)].filter(Boolean).join("\n"),
+    }
+  }, [activeJobs, hostWork, onStopJob, resolveImageSrc])
+  const jobsLayoutKey = anchoredJobs
+    ? anchoredJobs.all.map(job => `${job.id}:${job.state}:${collapsedJobs.has(job.id) ? 1 : 0}:${job.children.length}:${job.outputs.length}:${job.errorMessage ? 1 : 0}`).join("\u0000")
+    : ""
+
   const scrollToEnd = useCallback(() => {
     if (!shouldAutoScroll.current || !scrollRef.current) return
     requestAnimationFrame(() => {
@@ -469,7 +510,7 @@ export function ChatPanel(props: ChatPanelProps) {
   useLayoutEffect(() => {
     if (!shouldAutoScroll.current || !scrollRef.current) return
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages, isStreaming, outgoingLayoutKey])
+  }, [messages, isStreaming, outgoingLayoutKey, jobsLayoutKey])
 
   useEffect(() => {
     const content = contentRef.current
@@ -491,14 +532,43 @@ export function ChatPanel(props: ChatPanelProps) {
     return () => observer.disconnect()
   }, [scrollToEnd, centreBlock])
 
+  // A reader scrolled up keeps their place while a job card above them appears, grows or
+  // shrinks. Browsers' own scroll anchoring doesn't hold here (and Safari has none), so the
+  // first row in view is remembered on scroll and put back when the cards' layout changes.
+  // Only the residual offset is corrected, so it never doubles a browser's own correction.
+  const readerAnchorRef = useRef<{ element: Element; top: number } | null>(null)
+  const recordReaderAnchor = useCallback(() => {
+    const scroller = scrollRef.current
+    const content = contentRef.current
+    if (!scroller || !content || shouldAutoScroll.current) { readerAnchorRef.current = null; return }
+    const viewTop = scroller.getBoundingClientRect().top
+    for (const child of Array.from(content.children)) {
+      const rect = child.getBoundingClientRect()
+      if (rect.bottom > viewTop && child.getAttribute("data-slot") !== "job-cards") {
+        readerAnchorRef.current = { element: child, top: rect.top - viewTop }
+        return
+      }
+    }
+    readerAnchorRef.current = null
+  }, [])
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current
+    const anchor = readerAnchorRef.current
+    if (!scroller || !anchor || shouldAutoScroll.current || !anchor.element.isConnected) return
+    const drift = anchor.element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - anchor.top
+    if (Math.abs(drift) >= 0.5) scroller.scrollTop += drift
+    recordReaderAnchor()
+  }, [jobsLayoutKey, recordReaderAnchor])
+
   const handleScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
     shouldAutoScroll.current = atBottom
     setShowScrollBtn(!atBottom)
+    if (jobsRef.current) recordReaderAnchor()
     if (!atBottom && el.scrollTop < 300) revealEarlier()
-  }, [revealEarlier])
+  }, [revealEarlier, recordReaderAnchor])
 
   const messageCountRef = useRef(messages.length)
   messageCountRef.current = messages.length
@@ -778,6 +848,22 @@ export function ChatPanel(props: ChatPanelProps) {
   activityRowsRef.current = timelineRows
     .filter(row => row.kind === "activity")
     .map(row => ({ id: row.block.id, parts: row.block.parts }))
+  // A turn's cards follow the frieze holding the block active when they were queued, else the
+  // first row that block (or a later block of that turn) draws. Not rendered: not shown.
+  const jobsAfterRow = anchoredJobs ? new Map<string, { turnKey: string; jobs: ChatJob[] }>() : NO_JOBS_AFTER
+  if (anchoredJobs) {
+    for (const [turnKey, { anchor, jobs: turnJobs }] of anchoredJobs.byTurn) {
+      const sameTurn = (index: number) => index >= anchor.blockIndex && !!messages[index]
+        && messages[index].role !== "user" && turnKeyOf(messages[index]) === turnKey
+      const row = timelineRows.find(candidate => candidate.kind === "activity" && candidate.sourceIndices.includes(anchor.blockIndex))
+        ?? timelineRows.find(candidate => candidate.kind !== "event-row" && candidate.sourceIndices.includes(anchor.blockIndex))
+        ?? timelineRows.find(candidate => candidate.kind !== "event-row" && candidate.sourceIndices.some(sameTurn))
+      if (!row) continue
+      const existing = jobsAfterRow.get(row.key)
+      if (existing) existing.jobs.push(...turnJobs)
+      else jobsAfterRow.set(row.key, { turnKey, jobs: [...turnJobs] })
+    }
+  }
   const inlineOutgoing = visibleOutgoing.filter(item => !eventPlacement?.waiting.has(item.id)
     && (item.appearance === "message" || item.remoteState === "delivered"))
   const waitingOutgoing = messageQueue.queue.filter(item => eventPlacement?.waiting.has(item.id)
@@ -803,7 +889,13 @@ export function ChatPanel(props: ChatPanelProps) {
     return leftTime - rightTime || left.sequence - right.sequence
   })
   const visualTimeline = [
-    ...inlineTimeline,
+    ...(jobsAfterRow.size === 0 ? inlineTimeline : inlineTimeline.flatMap((visual): Array<typeof visual | { kind: "jobs"; key: string; jobs: ChatJob[]; compact: boolean }> => {
+      if (visual.kind !== "message") return [visual]
+      const after = jobsAfterRow.get(visual.row.key)
+      return after
+        ? [visual, { kind: "jobs" as const, key: `jobs:${after.turnKey}`, jobs: after.jobs, compact: visual.row.compactAfter }]
+        : [visual]
+    })),
     { kind: "status" as const, key: "streaming-status" },
     ...waitingOutgoing.map(item => ({ kind: "outgoing" as const, key: `outgoing:${item.id}`, item })),
   ]
@@ -853,6 +945,10 @@ export function ChatPanel(props: ChatPanelProps) {
                   {statusLine}
                 </div>
                 if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
+                if (visual.kind === "jobs") return (
+                  <JobCards key={visual.key} jobs={visual.jobs} collapsed={collapsedJobs} onStop={onStopJob} resolveImageSrc={resolveImageSrc}
+                    className={visual.compact ? "mt-1.5 mb-2" : "-mt-2.5 mb-4"} />
+                )
                 const row = visual.row
                 const block = row.block
                 if (row.kind === "event-row") {

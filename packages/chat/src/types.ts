@@ -754,6 +754,17 @@ export interface ChatPanelProps {
    * of higher priority runs.
    */
   hostActivity?: ActivityStatusGroup | null
+  /**
+   * Async jobs this conversation started (images, video, music, workflows), from
+   * `useChatJobs`. Each gets a card in the agent message active when it was
+   * queued, after that message's frieze, and running ones join the activity row
+   * after `hostActivity`. Display only: the transcript, unread, delivery,
+   * streaming and turn state never depend on it. Absent (the viewer's setting is
+   * off, or the host has none), the panel renders exactly as it does without it.
+   */
+  jobs?: readonly import("./lib/chat-jobs").ChatJob[]
+  /** Stop a running job. Its presence is the capability: the card's Stop only shows with it. */
+  onStopJob?: (job: import("./lib/chat-jobs").ChatJob) => Promise<void> | void
   /** The upstream AI event connection is temporarily unavailable and retrying. */
   isReconnecting?: boolean
   maintenanceStatus?: ChatMaintenanceStatus | null

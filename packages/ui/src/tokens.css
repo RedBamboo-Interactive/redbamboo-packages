@@ -1361,6 +1361,45 @@ body {
   75%      { transform: scale(1.04) rotate(4deg) translate(0.4px, -0.3px); }
 }
 
+/* ── Chat job cards (@redbamboo/chat JobCard) ─────────────────────── */
+/* Here, not in chat.css: hosts only load the UI tokens. Colour comes from
+   the card's --job-kind; nothing here is a fixed hex. */
+
+@keyframes job-hairline-slide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(340%); }
+}
+
+@keyframes job-shimmer {
+  from { background-position: 150% 0; }
+  to   { background-position: -100% 0; }
+}
+
+@keyframes job-pulse {
+  50% { opacity: 0.35; }
+}
+
+.job-hairline-indeterminate {
+  width: 30%;
+  animation: job-hairline-slide 1.6s ease-in-out infinite;
+}
+
+.job-shimmer {
+  background-image: linear-gradient(100deg, transparent 30%, rgb(from var(--contrast) r g b / 0.07) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: job-shimmer 1.4s linear infinite;
+}
+
+.job-pulse {
+  animation: job-pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .job-hairline-indeterminate { animation: none; width: 100%; opacity: 0.45; }
+  .job-shimmer { animation: none; }
+  .job-pulse { animation: none; }
+}
+
 /* ── Base layer ────────────────────────────────────────────────────── */
 
 @layer base {

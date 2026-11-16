@@ -17,6 +17,10 @@
       "types": "./src/lib/event-parts.ts",
       "default": "./src/lib/event-parts.ts"
     },
+    "./chat-jobs": {
+      "types": "./src/lib/chat-jobs.ts",
+      "default": "./src/lib/chat-jobs.ts"
+    },
     "./frieze-markers": {
       "types": "./src/lib/frieze-markers.ts",
       "default": "./src/lib/frieze-markers.ts"
@@ -88,6 +92,7 @@
     "test:part-navigation": "node tests/part-navigation/run.cjs",
     "test:background-work": "node tests/background-work/run.cjs",
     "test:artifacts-panel": "node tests/artifacts-panel/run.cjs",
+    "test:job-cards": "node tests/job-cards/run.cjs",
     "test:leaf-menu": "node tests/leaf-menu/run.cjs",
     "test:rollback": "node tests/rollback/run.cjs",
     "test:access-levels": "node tests/access-levels/run.cjs",
