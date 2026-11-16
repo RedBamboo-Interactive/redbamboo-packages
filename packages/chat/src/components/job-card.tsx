@@ -66,10 +66,10 @@ export function JobCard({ job, collapsed = false, onStop, resolveImageSrc }: Job
     : JOB_BODY_RENDERERS[job.kind]?.({ job, resolveImageSrc }) ?? null
   const cardStyle: CSSProperties = {
     ["--job-kind" as string]: color,
-    ...(job.state === "failed" ? { borderColor: `color-mix(in srgb, ${FAILED_COLOR} 45%, var(--color-border-subtle))` } : {}),
+    ...(job.state === "failed" ? { borderColor: `color-mix(in srgb, ${FAILED_COLOR} 45%, rgb(from var(--contrast) r g b / 0.10))` } : {}),
     ...(job.state === "needs-you" ? {
-      borderColor: `color-mix(in srgb, ${NEEDS_COLOR} 55%, var(--color-border-subtle))`,
-      background: `color-mix(in srgb, ${NEEDS_COLOR} 6%, var(--color-surface-elevated))`,
+      borderColor: `color-mix(in srgb, ${NEEDS_COLOR} 55%, rgb(from var(--contrast) r g b / 0.10))`,
+      background: `color-mix(in srgb, ${NEEDS_COLOR} 8%, rgb(from var(--contrast) r g b / 0.04))`,
     } : {}),
   }
   return (
@@ -78,7 +78,7 @@ export function JobCard({ job, collapsed = false, onStop, resolveImageSrc }: Job
       data-job-id={job.id}
       data-job-kind={job.kind}
       data-job-state={job.state}
-      className="group/job relative grid w-full max-w-[440px] grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-x-2.5 overflow-hidden rounded-[11px] border border-border-subtle bg-surface-elevated pt-[9px] pr-[11px] pb-[11px] pl-2.5 text-[13px] leading-[1.4] transition-colors duration-200 hover:border-[color-mix(in_srgb,var(--job-kind)_45%,var(--color-border-subtle))] focus-within:border-[color-mix(in_srgb,var(--job-kind)_45%,var(--color-border-subtle))]"
+      className="group/job relative grid w-full max-w-[440px] grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-x-2.5 overflow-hidden rounded-[11px] border border-overlay-10 bg-overlay-4 hover:bg-overlay-6 pt-[9px] pr-[11px] pb-[11px] pl-2.5 text-[13px] leading-[1.4] transition-colors duration-200 hover:border-[color-mix(in_srgb,var(--job-kind)_45%,rgb(from_var(--contrast)_r_g_b_/_0.10))] focus-within:border-[color-mix(in_srgb,var(--job-kind)_45%,rgb(from_var(--contrast)_r_g_b_/_0.10))]"
       style={cardStyle}
     >
       <KindTile job={job} />
@@ -316,7 +316,7 @@ function ImageTile({ src, running, progress, resolveImageSrc }: { src: string | 
   const [failed, setFailed] = useState(false)
   const resolved = src ? resolveImageSrc?.(src) ?? src : null
   return (
-    <div data-slot="job-tile" data-developed={loaded || undefined} className="relative aspect-[16/10] overflow-hidden rounded-md bg-surface-deep">
+    <div data-slot="job-tile" data-developed={loaded || undefined} className="relative aspect-[16/10] overflow-hidden rounded-md bg-overlay-6">
       {(!resolved || !loaded || failed) && <span aria-hidden="true" className="job-shimmer absolute inset-0" />}
       {resolved && !failed && (
         <img
@@ -344,13 +344,13 @@ function VideoBody({ job }: JobBodyProps) {
         src={src}
         controls
         preload="metadata"
-        className="relative z-10 block h-[120px] max-w-full rounded-[7px] bg-surface-deep"
+        className="relative z-10 block h-[120px] max-w-full rounded-[7px] bg-overlay-6"
       />
     )
   }
   const filled = Math.round((jobProgress(job) ?? 0) * 24)
   return (
-    <div className="relative h-[74px] overflow-hidden rounded-[7px] bg-surface-deep">
+    <div className="relative h-[74px] overflow-hidden rounded-[7px] bg-overlay-6">
       <span aria-hidden="true" className="job-shimmer absolute inset-0" />
       <div aria-hidden="true" className="absolute inset-x-2 bottom-2 grid grid-cols-[repeat(24,minmax(0,1fr))] gap-0.5">
         {Array.from({ length: 24 }, (_, index) => (
@@ -468,7 +468,7 @@ export function JobChip({ job }: { job: ChatJob }) {
       {job.href && <i aria-hidden="true" className="ph-bold ph-arrow-up-right shrink-0 text-xs opacity-70" />}
     </>
   )
-  const className = `inline-flex max-w-full min-w-0 items-center gap-[7px] rounded-full border border-border-subtle bg-surface-elevated py-1 pr-2.5 pl-1.5 text-xs whitespace-nowrap text-text-muted no-underline transition-colors hover:border-[color-mix(in_srgb,var(--job-kind)_45%,var(--color-border-subtle))] ${stopped ? "opacity-75" : ""}`
+  const className = `inline-flex max-w-full min-w-0 items-center gap-[7px] rounded-full border border-overlay-10 bg-overlay-4 hover:bg-overlay-6 py-1 pr-2.5 pl-1.5 text-xs whitespace-nowrap text-text-muted no-underline transition-colors hover:border-[color-mix(in_srgb,var(--job-kind)_45%,rgb(from_var(--contrast)_r_g_b_/_0.10))] ${stopped ? "opacity-75" : ""}`
   const style = { ["--job-kind" as string]: kind.color } as CSSProperties
   const data = { "data-slot": "job-chip", "data-job-id": job.id, "data-job-kind": job.kind, "data-job-state": job.state }
   return job.href
