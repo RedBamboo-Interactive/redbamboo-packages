@@ -33,6 +33,7 @@
     "test:dock": "node tests/dock/run.mjs",
     "test:context-menu": "node tests/context-menu/run.mjs",
     "test:toast": "node tests/toast/run.mjs",
+    "test:run-on-choice": "node tests/run-on-choice/run.mjs",
     "clean": "rimraf dist"
   },
   "peerDependencies": {

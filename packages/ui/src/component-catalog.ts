@@ -215,6 +215,29 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
       '[data-revealed]',
     ],
   },
+  {
+    id: "run-on-choice",
+    packageName: "@redbamboo/ui",
+    exports: ["RunOnChoice", "fetchRunOnNodes", "runOnView", "runOnUnavailableReason", "parseRunOnNodes", "RUN_ON_AUTOMATIC"],
+    description: "\"Run on\" node choice for a job, a session or a discussion: a read-only \"Runs on <name>\" row when one node can run the work, a picker with Automatic first from two up, with offline, ineligible, unconfirmed and revoked nodes disabled with their reason.",
+    tags: ["node", "nodes", "run-on", "placement", "compute", "machine", "where", "select"],
+    useWhen: [
+      "A form starts work (a job, an AI session, a discussion's sessions) and the person may choose the node it runs on.",
+      "Send placement {nodeId} only when the value is not null; null is Automatic and sends nothing.",
+    ],
+    avoidWhen: [
+      "Showing where finished work ran; read the job or session's nodeId and show its name.",
+    ],
+    variants: ["mode:loading", "mode:single", "mode:picker", "mode:none", "mode:unavailable"],
+    selectors: [
+      '[data-slot="run-on-choice"]',
+      '[data-slot="run-on-choice-trigger"]',
+      '[data-slot="run-on-choice-list"]',
+      '[data-mode]',
+      '[data-node-id]',
+      '[data-reason]',
+    ],
+  },
 ]
 
 /**
