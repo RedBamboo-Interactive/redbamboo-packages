@@ -93,13 +93,26 @@ export type { UiComponentDescriptor } from "./component-catalog"
 export { Input } from "./components/input"
 export { Label } from "./components/label"
 export { ProtectedValueField } from "./components/protected-value-field"
-export { fetchRunOnNodes, RunOnChoice } from "./components/run-on-choice"
-export type { RunOnChoiceProps } from "./components/run-on-choice"
+export { fetchRunOnNodes, NodeIcon, RunOnChoice } from "./components/run-on-choice"
+export type { NodeIconProps, RunOnChoiceProps } from "./components/run-on-choice"
+export {
+  isNodeIcon,
+  NODE_AUTOMATIC_ICON,
+  NODE_COLORS,
+  NODE_ICONS,
+  nodeColor,
+  nodeIconClass,
+  nodeIdentity,
+  platformNodeIcon,
+} from "./components/node-identity"
+export type { NodeColorChoice, NodeIconChoice, NodeIdentity, NodeLook } from "./components/node-identity"
 export {
   parseRunOnNodes,
   RUN_ON_AUTOMATIC,
   RUN_ON_NODES_PATH,
   RUN_ON_SINGLE_HINT,
+  runOnCompactLabel,
+  runOnStatusWords,
   runOnUnavailableReason,
   runOnView,
 } from "./components/run-on-choice-core"

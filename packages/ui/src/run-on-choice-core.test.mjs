@@ -3,6 +3,8 @@ import { test } from "node:test"
 import {
   parseRunOnNodes,
   RUN_ON_AUTOMATIC,
+  runOnCompactLabel,
+  runOnStatusWords,
   runOnUnavailableReason,
   runOnView,
 } from "./components/run-on-choice-core.ts"
@@ -99,4 +101,33 @@ test("RunOnChoice is discoverable in the component catalog", () => {
   assert.equal(found?.id, "run-on-choice")
   assert.ok(found.selectors.includes('[data-slot="run-on-choice"]'))
   assert.equal(findUiComponents("placement")[0]?.id, "run-on-choice")
+})
+
+test("the node's icon, colour and platform travel to the options; an older RedCompute's list has none", () => {
+  const nodes = parseRunOnNodes({ nodes: [
+    { ...zero, icon: "desktop-tower", color: "blue", os: "windows" },
+    { ...studio, platform: { os: "linux" } },
+  ] })
+  assert.deepEqual([nodes[0].icon, nodes[0].color, nodes[0].os], ["desktop-tower", "blue", "windows"])
+  assert.deepEqual([nodes[1].icon, nodes[1].color, nodes[1].os], [null, null, "linux"])
+  const view = runOnView(nodes, { slug: "tts" })
+  assert.equal(view.mode, "picker")
+  assert.deepEqual(view.options.map(o => [o.id, o.icon, o.color, o.os, o.status]), [
+    ["local", "desktop-tower", "blue", "windows", "online"],
+    ["node_01STUDIO", null, null, "linux", "online"],
+  ])
+})
+
+test("the compact control's label names the chosen node and its status", () => {
+  const nodes = parseRunOnNodes({ nodes: [zero, studio, laptop] })
+  const view = runOnView(nodes, { slug: "tts" })
+  assert.equal(runOnCompactLabel(view, null), "Run on: Automatic (LAURENT-PC)")
+  assert.equal(runOnCompactLabel(view, "node_01STUDIO"), "Run on: STUDIO (Online)")
+  assert.equal(runOnCompactLabel(runOnView(nodes, { slug: "tts" }, "node_01LAPTOP"), "node_01LAPTOP"), "Run on: LAPTOP (Offline)")
+  assert.equal(runOnCompactLabel(runOnView(parseRunOnNodes({ nodes: [zero] })), null), "Runs on LAURENT-PC (Online)")
+  const none = runOnView(parseRunOnNodes({ nodes: [laptop] }), { slug: "tts", name: "Text to speech" })
+  assert.equal(runOnCompactLabel(none, null), "No node can run Text to speech right now")
+  assert.equal(runOnStatusWords("needs-update"), "Needs an update")
+  assert.equal(runOnStatusWords("some_new_state"), "Some new state")
+  assert.equal(runOnStatusWords(null), null)
 })

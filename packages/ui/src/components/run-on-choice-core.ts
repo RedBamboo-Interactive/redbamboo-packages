@@ -16,6 +16,11 @@ export interface RunOnNode {
   placement?: { eligible: boolean; reason?: string | null }
   /** What the node runs (node zero: every configured capability). */
   capabilities?: ReadonlyArray<{ slug: string }>
+  /** Its look (see node-identity): absent from an older kernel or RedCompute. */
+  icon?: string | null
+  color?: string | null
+  /** windows | linux | macos: the fallback icon when it has none. */
+  os?: string | null
 }
 
 /** The capability the work needs, to grey out nodes that do not have it. */
@@ -34,6 +39,11 @@ export interface RunOnOption {
   selectable: boolean
   /** Why it cannot be picked, in words; null when it can. */
   reason: string | null
+  /** online | offline | … as the node list says; null for a choice the list no longer has. */
+  status: string | null
+  icon?: string | null
+  color?: string | null
+  os?: string | null
 }
 
 /** What the control shows once the node list is read (while it loads, or when it cannot be read, it shows a muted row). */
@@ -53,6 +63,20 @@ export const RUN_ON_AUTOMATIC = "automatic"
 
 /** The tooltip on the read-only row. */
 export const RUN_ON_SINGLE_HINT = "Work runs on this node. Add nodes from Compute › Nodes."
+
+const STATUS_WORDS: Record<string, string> = {
+  online: "Online",
+  offline: "Offline",
+  "needs-update": "Needs an update",
+  revoked: "Revoked",
+  "pending-confirmation": "Not confirmed yet",
+}
+
+/** A node status in words ("Online"); unknown statuses are humanized, null stays null. */
+export function runOnStatusWords(status: string | null | undefined): string | null {
+  if (!status) return null
+  return STATUS_WORDS[status] ?? words(status)
+}
 
 const REASON_WORDS: Record<string, string> = {
   revoked: "Revoked",
@@ -93,6 +117,10 @@ export function parseRunOnNodes(body: unknown): RunOnNode[] {
       capabilities: Array.isArray(item.capabilities)
         ? item.capabilities.filter(isRecord).filter(c => typeof c.slug === "string").map(c => ({ slug: c.slug as string }))
         : undefined,
+      icon: typeof item.icon === "string" ? item.icon : null,
+      color: typeof item.color === "string" ? item.color : null,
+      os: typeof item.os === "string" ? item.os
+        : isRecord(item.platform) && typeof item.platform.os === "string" ? item.platform.os : null,
     })
   }
   return nodes
@@ -126,10 +154,13 @@ export function runOnUnavailableReason(node: RunOnNode, capability?: RunOnCapabi
 export function runOnView(nodes: readonly RunOnNode[], capability?: RunOnCapability, value: string | null = null): RunOnView {
   const options: RunOnOption[] = nodes.map(node => {
     const reason = runOnUnavailableReason(node, capability)
-    return { id: node.id, name: node.name, isLocal: node.isLocal, selectable: reason === null, reason }
+    return {
+      id: node.id, name: node.name, isLocal: node.isLocal, selectable: reason === null, reason,
+      status: node.status, icon: node.icon ?? null, color: node.color ?? null, os: node.os ?? null,
+    }
   })
   if (value !== null && !options.some(o => o.id === value))
-    options.push({ id: value, name: value, isLocal: false, selectable: false, reason: "No longer listed" })
+    options.push({ id: value, name: value, isLocal: false, selectable: false, reason: "No longer listed", status: null })
   const selectable = options.filter(o => o.selectable)
     .sort((a, b) => Number(b.isLocal) - Number(a.isLocal) || a.name.localeCompare(b.name))
   const strandedChoice = value !== null && !selectable.some(o => o.id === value)
@@ -141,4 +172,20 @@ export function runOnView(nodes: readonly RunOnNode[], capability?: RunOnCapabil
     automaticLabel: selectable[0] ? `Automatic (${selectable[0].name})` : "Automatic",
     options: [...selectable, ...options.filter(o => !o.selectable)],
   }
+}
+
+/**
+ * What the compact (icon-only) control says it is, for its tooltip and aria-label: it names the
+ * chosen node, with its status, because the trigger shows only an icon.
+ */
+export function runOnCompactLabel(view: RunOnView, value: string | null): string {
+  if (view.mode === "none") return view.message
+  const described = (option: RunOnOption) => {
+    const status = runOnStatusWords(option.status)
+    const state = option.reason ?? status
+    return state ? `${option.name} (${state})` : option.name
+  }
+  if (view.mode === "single") return `Runs on ${described(view.node)}`
+  const chosen = value === null ? null : view.options.find(o => o.id === value)
+  return `Run on: ${chosen ? described(chosen) : view.automaticLabel}`
 }

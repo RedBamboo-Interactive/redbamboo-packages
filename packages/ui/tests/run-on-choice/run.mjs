@@ -43,6 +43,7 @@ try {
         nodes: [{
           id: "local", name: "LAURENT-PC", kind: "local", isLocal: true, status: "online", confirmed: true,
           placement: { eligible: true, reason: null }, capabilities: [{ slug: "tts" }],
+          icon: "desktop-tower", color: "blue", os: "windows",
         }],
         legacyNodeId: "legacy",
       }),
@@ -57,7 +58,8 @@ try {
   assert.equal(await single.textContent(), "Runs on LAURENT-PC")
   assert.equal(await single.getAttribute("data-node-id"), "local")
   assert.equal(await page.getByTestId("single").getByRole("combobox").count(), 0, "one node is never a dropdown")
-  assert.equal(nodeRequests.length, 1)
+  assert.equal(await single.locator('[data-slot="node-icon"]').getAttribute("data-icon"), "desktop-tower", "the node's own icon")
+  assert.equal(nodeRequests.length, 2, "the plain and the compact one-node rows each read the list once")
   assert.equal(nodeRequests[0].method, "GET")
   assert.match(nodeRequests[0].cookie, /leaf_session=person/, "the node list is read with the person's cookie")
   assert.equal(nodeRequests[0].authorization, null, "never with a bearer")
@@ -99,12 +101,81 @@ try {
   await list.waitFor({ state: "hidden" })
   assert.equal((await state(page)).picked, "node_01STUDIO")
   assert.equal((await trigger.textContent()).trim(), "STUDIO")
+  assert.equal(await trigger.locator('[data-slot="node-icon"]').getAttribute("data-color"), "violet")
 
   // Back to Automatic: null, so the caller sends nothing new.
   await trigger.click()
   await list.locator('[data-node-id=""]').click()
   await list.waitFor({ state: "hidden" })
   assert.equal((await state(page)).picked, null)
+
+  // Compact, one node: the node's icon in its colour, focusable, a tooltip, never a button or a list.
+  const compactSingle = page.getByTestId("compact-single").locator('[data-slot="run-on-choice"]')
+  await compactSingle.and(page.locator('[data-mode="single"]')).waitFor()
+  const singleIcon = compactSingle.locator('[data-slot="run-on-choice-trigger"]')
+  assert.equal(await singleIcon.getAttribute("aria-label"), "Runs on LAURENT-PC (Online). Work runs on this node. Add nodes from Compute › Nodes.")
+  assert.equal((await singleIcon.textContent()).trim(), "", "no visible text")
+  assert.equal(await page.getByTestId("compact-single").getByRole("combobox").count(), 0)
+  assert.equal(await page.getByTestId("compact-single").locator("button").count(), 0)
+  assert.equal(await singleIcon.locator('[data-slot="node-icon"]').evaluate(el => getComputedStyle(el).color), "rgb(59, 130, 246)")
+  assert.equal(await singleIcon.getAttribute("tabindex"), "0", "reachable by Tab")
+  await singleIcon.hover()
+  await page.locator('[data-slot="tooltip-content"]', { hasText: "Runs on LAURENT-PC (Online)" }).waitFor()
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: path.join(outputDir, "compact-single.png") })
+  await singleIcon.focus()
+  await page.keyboard.press("Enter")
+  assert.equal(await page.locator('[data-slot="run-on-choice-list"]:visible').count(), 0, "Enter on one node opens nothing")
+  await page.keyboard.press("Escape")
+  await page.mouse.move(0, 0)
+
+  // Compact, three nodes: an icon button named by the choice; the keyboard opens, moves and closes the clist.
+  const compactTrigger = page.getByTestId("compact-picker").locator('[data-slot="run-on-choice-trigger"]')
+  await compactTrigger.waitFor()
+  // The plain picker's list stays mounted, closed: the compact one is the last.
+  const clist = page.locator('[data-slot="run-on-choice-list"]').last()
+  assert.equal(await compactTrigger.getAttribute("aria-label"), "Run on: Automatic (LAURENT-PC)")
+  assert.equal((await compactTrigger.textContent()).trim(), "", "no visible text")
+  assert.equal(await compactTrigger.locator('[data-slot="node-icon"]').first().getAttribute("data-icon"), "signpost")
+  await compactTrigger.focus()
+  await page.keyboard.press("Enter")
+  await clist.waitFor()
+  const compactItems = clist.locator('[data-slot="select-item"]')
+  assert.deepEqual(await compactItems.evaluateAll((els) => els.map((el) => [el.getAttribute("data-node-id"), el.textContent.trim()])), [
+    ["", "Automatic (LAURENT-PC)"],
+    ["local", "LAURENT-PC"],
+    ["node_01STUDIO", "STUDIO"],
+    ["node_01LAPTOP", "LAPTOPOffline"],
+  ])
+  assert.deepEqual(await clist.locator('[data-slot="node-icon"]').evaluateAll(els => els.map(el => el.getAttribute("data-icon"))),
+    ["signpost", "desktop-tower", "graphics-card", "laptop"])
+  await page.waitForTimeout(200)
+  await page.screenshot({ path: path.join(outputDir, "compact-picker-open.png") })
+  await page.keyboard.press("Escape")
+  await clist.waitFor({ state: "hidden" })
+  assert.equal((await state(page)).compactPicked, null, "Escape changes nothing")
+  await compactTrigger.focus()
+  await page.keyboard.press(" ")
+  await clist.waitFor()
+  // The list opens on the choice (Automatic); arrows move. The offline laptop can be read but Enter does not pick it.
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("ArrowDown")
+  assert.equal(await clist.locator("[data-highlighted]").getAttribute("data-node-id"), "node_01LAPTOP")
+  await page.keyboard.press("Enter")
+  assert.equal((await state(page)).compactPicked, null, "a disabled node is never picked")
+  await page.keyboard.press("ArrowUp")
+  assert.equal(await clist.locator("[data-highlighted]").getAttribute("data-node-id"), "node_01STUDIO")
+  await page.keyboard.press("Enter")
+  await clist.waitFor({ state: "hidden" })
+  assert.equal((await state(page)).compactPicked, "node_01STUDIO")
+  assert.equal(await compactTrigger.getAttribute("aria-label"), "Run on: STUDIO (Online)")
+  assert.equal(await compactTrigger.locator('[data-slot="node-icon"]').first().getAttribute("data-color"), "violet")
+
+  // Compact, unreadable list: Automatic's icon, the reason in the label.
+  const compactFailed = page.getByTestId("compact-failed").locator('[data-slot="run-on-choice-trigger"]')
+  assert.equal(await compactFailed.getAttribute("aria-label"),
+    "Runs automatically. The node list could not be read (The node list answered 502)")
 
   assert.deepEqual(errors, [])
   console.log(`run-on choice story passed; screenshots in ${outputDir}`)

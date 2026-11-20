@@ -8,14 +8,17 @@ import "./story.css"
 const zero = {
   id: "local", name: "LAURENT-PC", kind: "local", isLocal: true, status: "online", confirmed: true,
   placement: { eligible: true, reason: null }, capabilities: [{ slug: "tts" }],
+  icon: "desktop-tower", color: "blue", os: "windows",
 }
 const studio = {
   id: "node_01STUDIO", name: "STUDIO", kind: "remote", isLocal: false, status: "online", confirmed: true,
   placement: { eligible: true, reason: null }, capabilities: [{ slug: "tts" }],
+  icon: "graphics-card", color: "violet", os: "linux",
 }
 const laptop = {
   id: "node_01LAPTOP", name: "LAPTOP", kind: "remote", isLocal: false, status: "offline", confirmed: true,
   placement: { eligible: false, reason: "offline" }, capabilities: [],
+  icon: "laptop", color: "amber", os: "windows",
 }
 
 const threeNodes = async () => ({ nodes: [zero, studio, laptop], legacyNodeId: "legacy" })
@@ -25,6 +28,8 @@ function Story() {
   const [single, setSingle] = React.useState<string | null>(null)
   const [picked, setPicked] = React.useState<string | null>(null)
   const [failed, setFailed] = React.useState<string | null>(null)
+  const [compactSingle, setCompactSingle] = React.useState<string | null>(null)
+  const [compactPicked, setCompactPicked] = React.useState<string | null>(null)
 
   React.useEffect(() => { document.documentElement.classList.add("dark") }, [])
 
@@ -47,7 +52,26 @@ function Story() {
             <RunOnChoice value={failed} onChange={setFailed} loadNodes={unreadable} />
           </div>
         </SettingRow>
-        <pre data-testid="state" className="mt-4 text-xs text-text-muted">{JSON.stringify({ single, picked, failed })}</pre>
+        <SectionHeader>Compact</SectionHeader>
+        <SettingRow label="One node, compact" hint="The icon alone, a tooltip, no button.">
+          <div data-testid="compact-single" className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground">Claude · High</span>
+            <RunOnChoice compact value={compactSingle} onChange={setCompactSingle} capability={{ slug: "tts", name: "Text to speech" }} />
+          </div>
+        </SettingRow>
+        <SettingRow label="Three nodes, compact" hint="An icon button; the list has the names.">
+          <div data-testid="compact-picker" className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground">Claude · High</span>
+            <RunOnChoice compact value={compactPicked} onChange={setCompactPicked} loadNodes={threeNodes}
+              capability={{ slug: "tts", name: "Text to speech" }} />
+          </div>
+        </SettingRow>
+        <SettingRow label="Unreadable list, compact" hint="Automatic's icon, the reason in the tooltip.">
+          <div data-testid="compact-failed">
+            <RunOnChoice compact value={null} onChange={() => {}} loadNodes={unreadable} />
+          </div>
+        </SettingRow>
+        <pre data-testid="state" className="mt-4 text-xs text-text-muted">{JSON.stringify({ single, picked, failed, compactSingle, compactPicked })}</pre>
       </div>
     </main>
   )

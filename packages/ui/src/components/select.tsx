@@ -45,15 +45,17 @@ function SelectContent({
   children,
   side = "bottom",
   align = "start",
+  alignItemWithTrigger,
   ...props
 }: SelectPrimitive.Popup.Props &
-  Pick<SelectPrimitive.Positioner.Props, "align" | "side">) {
+  Pick<SelectPrimitive.Positioner.Props, "align" | "side" | "alignItemWithTrigger">) {
   const environment = useUiEnvironment()
   return (
     <SelectPrimitive.Portal container={environment.portalContainer}>
       <SelectPrimitive.Positioner
         align={align}
         side={side}
+        alignItemWithTrigger={alignItemWithTrigger}
         sideOffset={4}
         className="z-50"
       >

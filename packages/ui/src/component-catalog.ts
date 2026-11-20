@@ -218,8 +218,8 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
   {
     id: "run-on-choice",
     packageName: "@redbamboo/ui",
-    exports: ["RunOnChoice", "fetchRunOnNodes", "runOnView", "runOnUnavailableReason", "parseRunOnNodes", "RUN_ON_AUTOMATIC"],
-    description: "\"Run on\" node choice for a job, a session or a discussion: a read-only \"Runs on <name>\" row when one node can run the work, a picker with Automatic first from two up, with offline, ineligible, unconfirmed and revoked nodes disabled with their reason.",
+    exports: ["RunOnChoice", "fetchRunOnNodes", "runOnView", "runOnUnavailableReason", "runOnCompactLabel", "parseRunOnNodes", "RUN_ON_AUTOMATIC"],
+    description: "\"Run on\" node choice for a job, a session or a discussion: a read-only \"Runs on <name>\" row when one node can run the work, a picker with Automatic first from two up, with offline, ineligible, unconfirmed and revoked nodes disabled with their reason. Each node shows its icon in its colour. compact draws it as an icon for a toolbar line (name and status in the tooltip and aria-label).",
     tags: ["node", "nodes", "run-on", "placement", "compute", "machine", "where", "select"],
     useWhen: [
       "A form starts work (a job, an AI session, a discussion's sessions) and the person may choose the node it runs on.",
@@ -228,7 +228,7 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
     avoidWhen: [
       "Showing where finished work ran; read the job or session's nodeId and show its name.",
     ],
-    variants: ["mode:loading", "mode:single", "mode:picker", "mode:none", "mode:unavailable"],
+    variants: ["mode:loading", "mode:single", "mode:picker", "mode:none", "mode:unavailable", "compact"],
     selectors: [
       '[data-slot="run-on-choice"]',
       '[data-slot="run-on-choice-trigger"]',
@@ -236,7 +236,24 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
       '[data-mode]',
       '[data-node-id]',
       '[data-reason]',
+      '[data-compact]',
     ],
+  },
+  {
+    id: "node-icon",
+    packageName: "@redbamboo/ui",
+    exports: ["NodeIcon", "NODE_ICONS", "NODE_COLORS", "nodeIdentity", "platformNodeIcon", "NODE_AUTOMATIC_ICON"],
+    description: "A node's icon in its colour: an icon from the curated NODE_ICONS set and a token from the NODE_COLORS palette (one hex per token, readable in light and dark themes), as the kernel's node entity stores them. A node without them shows its platform's logo, muted.",
+    tags: ["node", "nodes", "icon", "color", "machine", "identity"],
+    useWhen: [
+      "Showing which node something runs on, next to or instead of its name.",
+      "An icon or colour picker for a node: offer exactly NODE_ICONS and NODE_COLORS (the kernel accepts nothing else).",
+    ],
+    avoidWhen: [
+      "Showing a node's status; pair the icon with a status badge instead of recolouring it.",
+    ],
+    variants: ["fallback:platform", "muted"],
+    selectors: ['[data-slot="node-icon"]', '[data-icon]', '[data-color]'],
   },
 ]
 
