@@ -32,9 +32,11 @@ public static class WebSocketEndpoints
                 return;
             }
 
+            var allowsLogEvents = WebSocketLogRelay.AllowsLogEvents(ctx);
+            WebSocketLogRelay.AcknowledgeSuppression(ctx);
             var ws = await ctx.WebSockets.AcceptWebSocketAsync();
             var id = Guid.NewGuid().ToString();
-            broadcaster.AddClient(id, ws);
+            broadcaster.AddClient(id, ws, allowsLogEvents);
 
             var relayCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
             var relayTasks = new List<Task>();
@@ -53,7 +55,8 @@ public static class WebSocketEndpoints
                             .TrimEnd('/') + "/ws");
 
                     relayTasks.Add(Task.Run(
-                        () => RelayWithReconnect(ws, broadcaster, id, wsUri, authHeader, cookie, relayCts.Token),
+                        () => RelayWithReconnect(ws, broadcaster, id, wsUri, authHeader, cookie,
+                            allowsLogEvents, relayCts.Token),
                         relayCts.Token));
                 }
             }
@@ -120,9 +123,9 @@ public static class WebSocketEndpoints
         Uri upstreamUri,
         string? authHeader,
         string? authCookie,
+        bool allowsLogEvents,
         CancellationToken ct)
     {
-        var buf = new byte[8192];
         var retryDelay = TimeSpan.FromSeconds(2);
         const double maxRetrySeconds = 15;
 
@@ -135,6 +138,8 @@ public static class WebSocketEndpoints
                     upstream.Options.SetRequestHeader("Authorization", authHeader);
                 else if (authCookie != null)
                     upstream.Options.SetRequestHeader("Authorization", $"Bearer {authCookie}");
+                if (!allowsLogEvents && upstreamUri.IsLoopback)
+                    WebSocketLogRelay.RequestSuppression(upstream.Options);
 
                 await upstream.ConnectAsync(upstreamUri, ct);
                 retryDelay = TimeSpan.FromSeconds(2);
@@ -143,14 +148,10 @@ public static class WebSocketEndpoints
                         new ArraySegment<byte>(UpstreamConnectedMsg), WebSocketMessageType.Text, true, ct))
                     return;
 
-                while (upstream.State == WebSocketState.Open && browser.State == WebSocketState.Open)
+                var relay = new WebSocketLogRelay.MessageReader(upstream, restrictLogEvents: !allowsLogEvents);
+                while (browser.State == WebSocketState.Open && await relay.ReadMessageStartAsync(ct))
                 {
-                    var result = await upstream.ReceiveAsync(buf, ct);
-                    if (result.MessageType == WebSocketMessageType.Close) break;
-                    if (!await broadcaster.SendToClientAsync(browserId,
-                            new ArraySegment<byte>(buf, 0, result.Count),
-                            result.MessageType, result.EndOfMessage, ct))
-                        return;
+                    if (!await broadcaster.SendToClientAsync(browserId, relay, ct)) return;
                 }
             }
             catch (OperationCanceledException) { return; }

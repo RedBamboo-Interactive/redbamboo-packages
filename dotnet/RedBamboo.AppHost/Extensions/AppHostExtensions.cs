@@ -268,15 +268,17 @@ public static class AppHostExtensions
 
         if (broadcaster is not null)
         {
-            var alreadyRegistered = broadcaster.GetEventSchemas().Any(s => s.Type == "log.entry");
+            var alreadyRegistered = broadcaster.GetEventSchemas()
+                .Any(s => s.Type == WebSocketBroadcaster.LogEntryEventType);
             if (logService is not null && !alreadyRegistered)
             {
                 broadcaster.RegisterEvent(new WsEventSchema(
-                    "log.entry",
+                    WebSocketBroadcaster.LogEntryEventType,
                     "Fired for every new log entry",
                     DataSchema: "LogEntry",
                     Fields: ["id", "timestamp", "level", "category", "source", "message"]));
-                logService.OnLogEntry += entry => broadcaster.Broadcast("log.entry", entry.ToWireFormat());
+                logService.OnLogEntry += entry =>
+                    broadcaster.Broadcast(WebSocketBroadcaster.LogEntryEventType, entry.ToWireFormat());
             }
 
             if (telemetry is not null)

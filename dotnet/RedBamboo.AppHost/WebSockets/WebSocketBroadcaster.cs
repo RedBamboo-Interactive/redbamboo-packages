@@ -14,7 +14,29 @@ public record WsEventSchema(
 
 public class WebSocketBroadcaster
 {
-    private sealed record ClientConnection(WebSocket Socket, SemaphoreSlim SendGate);
+    internal const string LogEntryEventType = "log.entry";
+
+    private sealed record ClientConnection(WebSocket Socket, bool AllowsLogEvents)
+    {
+        public SemaphoreSlim MessageGate { get; } = new(1, 1);
+        public SemaphoreSlim SendGate { get; } = new(1, 1);
+
+        public async ValueTask SendFrameAsync(ReadOnlyMemory<byte> payload, WebSocketMessageType messageType,
+            bool endOfMessage, CancellationToken ct)
+        {
+            await SendGate.WaitAsync(ct);
+            try
+            {
+                if (Socket.State != WebSocketState.Open)
+                    throw new WebSocketException(WebSocketError.InvalidState);
+                await Socket.SendAsync(payload, messageType, endOfMessage, ct);
+            }
+            finally
+            {
+                SendGate.Release();
+            }
+        }
+    }
 
     private readonly ConcurrentDictionary<string, ClientConnection> _clients = new();
     private readonly List<WsEventSchema> _schemas = new();
@@ -36,27 +58,40 @@ public class WebSocketBroadcaster
         var bytes = Encoding.UTF8.GetBytes(message);
         var segment = new ArraySegment<byte>(bytes);
 
-        foreach (var id in _clients.Keys)
+        foreach (var (id, client) in _clients)
         {
+            if (type == LogEntryEventType && !client.AllowsLogEvents) continue;
             _ = SendToClientAsync(id, segment, WebSocketMessageType.Text, true, CancellationToken.None);
         }
     }
 
     /// <summary>
-    /// Send a local or relayed frame through the client's single writer. System.Net.WebSockets
-    /// supports only one concurrent send; without this gate a kernel event racing a Compute
-    /// stream frame can fault the upstream relay and strand the browser on a local-only socket.
+    /// Send a local message or relay notification through the client's single writer.
     /// </summary>
-    internal async Task<bool> SendToClientAsync(
+    internal Task<bool> SendToClientAsync(
         string id,
         ArraySegment<byte> payload,
         WebSocketMessageType messageType,
         bool endOfMessage,
         CancellationToken ct)
+        => SendToClientAsync(id, (payload, messageType, endOfMessage),
+            static (client, frame, token) =>
+                client.SendFrameAsync(frame.payload.AsMemory(), frame.messageType, frame.endOfMessage, token), ct);
+
+    // Keep continuations together so a local event or another relay cannot enter mid-message.
+    internal Task<bool> SendToClientAsync(string id, WebSocketLogRelay.MessageReader relay, CancellationToken ct)
+        => SendToClientAsync(id, relay, static (client, reader, token) =>
+            reader.SendMessageAsync(client.Socket, client.SendFrameAsync, token), ct);
+
+    private async Task<bool> SendToClientAsync<T>(
+        string id,
+        T message,
+        Func<ClientConnection, T, CancellationToken, ValueTask> send,
+        CancellationToken ct)
     {
         if (!_clients.TryGetValue(id, out var client)) return false;
 
-        await client.SendGate.WaitAsync(ct);
+        await client.MessageGate.WaitAsync(ct);
         try
         {
             if (client.Socket.State != WebSocketState.Open)
@@ -65,7 +100,7 @@ public class WebSocketBroadcaster
                 return false;
             }
 
-            await client.Socket.SendAsync(payload, messageType, endOfMessage, ct);
+            await send(client, message, ct);
             return true;
         }
         catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or ObjectDisposedException)
@@ -75,13 +110,13 @@ public class WebSocketBroadcaster
         }
         finally
         {
-            client.SendGate.Release();
+            client.MessageGate.Release();
         }
     }
 
     /// <summary>
     /// Start the close handshake through the client's single writer (a close frame is a send),
-    /// so it never races a broadcast. False when the client is gone or its socket is not open.
+    /// including between fragments of a relayed message. False when the client is gone or closed.
     /// </summary>
     internal async Task<bool> CloseClientAsync(
         string id,
@@ -115,8 +150,8 @@ public class WebSocketBroadcaster
         }
     }
 
-    internal void AddClient(string id, WebSocket ws)
-        => _clients[id] = new ClientConnection(ws, new SemaphoreSlim(1, 1));
+    internal void AddClient(string id, WebSocket ws, bool allowsLogEvents)
+        => _clients[id] = new ClientConnection(ws, allowsLogEvents);
 
     internal bool RemoveClient(string id) => _clients.TryRemove(id, out _);
 
