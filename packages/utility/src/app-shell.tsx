@@ -9,15 +9,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   Toaster,
-  useToast,
 } from "@redbamboo/ui"
 import { AuthProvider, useAuth } from "./auth-provider"
 import { AppHeader, AppHeaderBrand } from "./app-header"
 import { AppMenu } from "./app-menu"
 import { AboutDialog } from "./about-dialog"
-import { FeedbackDialog } from "./feedback-dialog"
-import type { FeedbackSubmission } from "./feedback-types"
-import { submitExternalFeedback } from "./submit-feedback"
 import { CommandProvider } from "./command-provider"
 import { CommandPalette, openCommandPalette } from "./command-palette"
 import { useCommand } from "./use-command"
@@ -34,21 +30,17 @@ const isMac =
 
 function ShellCommands({
   onAbout,
-  onFeedback,
   onShare,
   onSwitchApp,
   shareEnabled,
-  feedbackEnabled,
   canInstall,
   install,
   switchAppEnabled,
 }: {
   onAbout: () => void
-  onFeedback: () => void
   onShare: () => void
   onSwitchApp: () => void
   shareEnabled: boolean
-  feedbackEnabled: boolean
   canInstall: boolean
   install: () => void
   switchAppEnabled: boolean
@@ -68,15 +60,6 @@ function ShellCommands({
     description: "Show app version and details",
     group: "App",
     action: onAbout,
-  })
-
-  useCommand("app-shell:feedback", {
-    label: "Report Feedback",
-    description: "Report a problem or suggest an improvement",
-    group: "App",
-    shortcut: "Ctrl+F4",
-    action: onFeedback,
-    enabled: feedbackEnabled,
   })
 
   useCommand("app-shell:command-palette", {
@@ -209,9 +192,7 @@ function AppShellInner({
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [appMenuOpen, setAppMenuOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
-  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
-  const { toast, update } = useToast()
   const { canInstall, install } = useInstallPrompt()
 
   // The active app owns interaction colour across the whole document. Menus,
@@ -249,40 +230,7 @@ function AppShellInner({
     [dropdownSwitcher],
   )
   const openAbout = useCallback(() => setAboutOpen(true), [])
-  const openFeedback = useCallback(() => setFeedbackOpen(true), [])
   const openShare = useCallback(() => setShareOpen(true), [])
-
-  const feedbackHandler = config.onFeedbackSubmit
-    ?? (config.feedback
-      ? (submission: FeedbackSubmission) => submitExternalFeedback(config.feedback!, submission)
-      : undefined)
-
-  const handleFeedbackSubmit = useCallback(
-    async (submission: FeedbackSubmission) => {
-      if (!feedbackHandler) {
-        throw new Error("No external feedback destination is configured.")
-      }
-      const id = toast({ title: "Preparing feedback...", variant: "loading" })
-
-      try {
-        const result = await feedbackHandler(submission)
-        update(id, {
-          title: "Feedback received",
-          description: result.reportId ?? result.title,
-          variant: "success",
-        })
-        return result
-      } catch (err) {
-        update(id, {
-          title: "Feedback failed",
-          description: err instanceof Error ? err.message : "Unknown error",
-          variant: "error",
-        })
-        throw err
-      }
-    },
-    [feedbackHandler, toast, update],
-  )
 
   return (
     <>
@@ -346,13 +294,6 @@ function AppShellInner({
                     </DropdownMenuShortcut>
                   </DropdownMenuItem>
                 ))}
-                <DropdownMenuItem onClick={openFeedback}>
-                  <i className="ph-bold ph-bug size-4 text-center" />
-                  Report Feedback
-                  <DropdownMenuShortcut>
-                    Ctrl+F4
-                  </DropdownMenuShortcut>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={openCommandPalette}>
                   <i className="ph-bold ph-terminal size-4 text-center" />
                   Command Palette
@@ -406,11 +347,9 @@ function AppShellInner({
 
       <ShellCommands
         onAbout={openAbout}
-        onFeedback={openFeedback}
         onShare={openShare}
         onSwitchApp={openSwitcher}
         shareEnabled={!!shareUrl}
-        feedbackEnabled={true}
         canInstall={canInstall}
         install={install}
         switchAppEnabled={appSwitcherEnabled}
@@ -433,14 +372,6 @@ function AppShellInner({
         open={aboutOpen}
         onOpenChange={setAboutOpen}
         banner={aboutBanner}
-      />
-
-      <FeedbackDialog
-        app={{ name: config.name, version: config.version }}
-        customMetadata={config.feedbackMetadata}
-        onSubmit={handleFeedbackSubmit}
-        open={feedbackOpen}
-        onOpenChange={setFeedbackOpen}
       />
 
       {shareUrl && (
