@@ -2,6 +2,7 @@ import React from "react"
 import { createRoot } from "react-dom/client"
 import { configureContextMenu, ContextMenuHost, type ContextMenuEntry } from "@redbamboo/ui"
 import { ChatPanel } from "../../src/components/chat-panel"
+import { normalizeChatJob } from "../../src/lib/chat-jobs"
 import type { MessageBlock, MessagePart } from "../../src/types"
 import "./fixture.css"
 
@@ -54,6 +55,9 @@ const getMessageActions = host === "nova"
   }]
   : undefined
 
+const JOBS = [normalizeChatJob({ id: "covers", capability: "image-gen", name: "Launch covers", status: "Running", stage: "executing",
+  progress: 0.62, queuedAt: "2026-10-31T09:00:30Z", startedAt: "2026-10-31T09:00:30Z" })]
+
 function App() {
   return <div style={{ width: "100%", height: "100vh" }}>
     {leaf && <ContextMenuHost />}
@@ -65,6 +69,8 @@ function App() {
       resolveFileLink={(path, opts) => () => { window.__events.push(`open-file:${path}:${opts?.line ?? ""}`) }}
       renderSideActions={renderSideActions}
       getMessageActions={getMessageActions}
+      // ?jobs=1 (89efca37): a job's twin at the end of the message's frieze row.
+      jobs={params.get("jobs") === "1" ? JOBS : undefined}
     />
   </div>
 }

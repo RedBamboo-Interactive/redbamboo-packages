@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import type { MessagePart } from "../types.ts"
-import { isInspectablePart, isVisibleErrorPart, squareSequence, stepSquare, type SquareRow } from "./part-navigation.ts"
+import { isInspectablePart, isVisibleErrorPart, squarePosition, squareSequence, stepSquare, type SquareRow } from "./part-navigation.ts"
 
 const part = (type: MessagePart["type"], toolName?: string): MessagePart => ({ type, content: "", toolName })
 
@@ -56,4 +56,41 @@ test("an error without words stays a square", () => {
   const blank: MessagePart = { type: "error", content: "  " }
   assert.equal(isVisibleErrorPart(blank), false)
   assert.equal(isInspectablePart(blank), true)
+})
+
+// Job twins (89efca37): a row's twins follow its squares, wherever the row sits.
+const withJobs: SquareRow[] = [
+  rows[0],
+  { ...rows[1], jobIds: ["covers", "theme"] },
+  { id: "activity:c", parts: [part("tool_use", "Bash"), part("tool_result")] },
+]
+
+test("a row's job twins are stops after its squares", () => {
+  assert.deepEqual(squareSequence(withJobs).slice(3), [
+    { rowId: "activity:b", index: 0 },
+    { rowId: "activity:b", index: 3 },
+    { rowId: "activity:b", index: 4, jobId: "covers" },
+    { rowId: "activity:b", index: 5, jobId: "theme" },
+    { rowId: "activity:c", index: 0 },
+  ])
+})
+
+test("stepping walks from a square onto a twin, past it, and back", () => {
+  assert.deepEqual(stepSquare(withJobs, { rowId: "activity:b", index: 3 }, 1), { rowId: "activity:b", index: 4, jobId: "covers" })
+  assert.deepEqual(stepSquare(withJobs, { rowId: "activity:b", index: 4, jobId: "covers" }, 1), { rowId: "activity:b", index: 5, jobId: "theme" })
+  assert.deepEqual(stepSquare(withJobs, { rowId: "activity:b", index: 5, jobId: "theme" }, 1), { rowId: "activity:c", index: 0 })
+  assert.deepEqual(stepSquare(withJobs, { rowId: "activity:c", index: 0 }, -1), { rowId: "activity:b", index: 5, jobId: "theme" })
+  assert.deepEqual(stepSquare(withJobs, { rowId: "activity:b", index: 4, jobId: "covers" }, -1), { rowId: "activity:b", index: 3 })
+})
+
+test("a twin keeps its place when its row grows a square, and an index never matches a twin", () => {
+  const grown = withJobs.map(row => row.id === "activity:b" ? { ...row, parts: [...row.parts, part("tool_use", "Bash")] } : row)
+  const sequence = squareSequence(grown)
+  assert.equal(squarePosition(sequence, { rowId: "activity:b", index: 4, jobId: "covers" }), 6)
+  assert.deepEqual(sequence[squarePosition(sequence, { rowId: "activity:b", index: 4 })], { rowId: "activity:b", index: 4 })
+  assert.equal(squarePosition(squareSequence(withJobs), { rowId: "activity:b", index: 4 }), -1)
+})
+
+test("rows without jobs step exactly as before", () => {
+  assert.deepEqual(squareSequence(rows.map(row => ({ ...row, jobIds: [] }))), squareSequence(rows))
 })

@@ -1,7 +1,8 @@
 import React from "react"
 import { createRoot } from "react-dom/client"
 import { ChatPanel } from "../../src/components/chat-panel"
-import type { MessageBlock, MessagePart } from "../../src/types"
+import { normalizeChatJob } from "../../src/lib/chat-jobs"
+import type { MessageBlock, MessagePart, PermissionApprovals } from "../../src/types"
 import "./fixture.css"
 
 const stamp = "2026-10-19T07:10:00Z"
@@ -53,10 +54,37 @@ const messages: MessageBlock[] = [
   ] },
 ]
 
+// `?jobs` (89efca37): the same turn launched two jobs, drawn as twins after its
+// last frieze (Edit, Bash), and a woken second turn follows with an origin dot,
+// an inline event label and a Bash waiting for approval, so stepping crosses
+// squares -> twins -> squares and the second row's markers can be compared with
+// jobs on and off (`?jobs&off`). The default page is unchanged.
+const params = new URLSearchParams(location.search)
+const later = "2026-10-19T07:21:00Z"
+const secondTurn: MessageBlock[] = [
+  { id: "user-2", role: "user", timestamp: "2026-10-19T07:20:00Z", parts: [{ type: "text", content: "And the covers?" }] },
+  { id: "assistant-2", role: "assistant", timestamp: later, metadata: { messageUid: "turn-2", turnOrigin: { kind: "background-task", taskId: "task-covers" } }, parts: [
+    { type: "tool_use", toolName: "event:weather", messageId: "ev-1", toolInput: JSON.stringify({ event: "Rain expected at 16:00", label: "Rain at 4pm", inlineLabel: true }), content: "" },
+    { ...tool("Read", { file_path: "T:/covers/brief.md" }, "Four covers, one boss.")[0], toolUseId: "toolu_r2" },
+    { ...tool("Read", { file_path: "T:/covers/brief.md" }, "Four covers, one boss.")[1], toolUseId: "toolu_r2" },
+    { type: "tool_use", toolName: "Bash", toolUseId: "toolu_b2", toolInput: JSON.stringify({ command: "rm -rf T:/covers/old" }), content: "" },
+    { type: "text", content: "Clearing the old covers once you approve." },
+  ] },
+]
+const approvals: PermissionApprovals = {
+  toolu_b2: { key: "toolu_b2", requestId: "req-1", request: { toolName: "Bash", toolUseId: "toolu_b2", summary: "rm -rf T:/covers/old" }, outcome: null },
+}
+const jobs = [
+  normalizeChatJob({ id: "covers", capability: "image-gen", providerName: "ComfyUI", name: "Launch covers", status: "Running", stage: "executing", progress: 0.62, queuedAt: "2026-10-19T07:12:00Z", startedAt: "2026-10-19T07:12:00Z" }),
+  normalizeChatJob({ id: "theme", capability: "music-gen", providerName: "Suno", name: "Mossbound theme", status: "Queued", stage: "admitted", queuedAt: "2026-10-19T07:13:00Z" }),
+]
+
 function App() {
+  const withJobs = params.has("jobs")
   return <div style={{ width: "100%", height: "100vh" }}>
-    <ChatPanel messages={messages} isStreaming={false} sessionId="part-navigation" persistQueue={false}
-      resolveFileLink={() => () => {}} />
+    <ChatPanel messages={withJobs ? [...messages, ...secondTurn] : messages} isStreaming={false} sessionId="part-navigation" persistQueue={false}
+      resolveFileLink={() => () => {}}
+      {...(withJobs ? { permissionApprovals: approvals, ...(params.has("off") ? {} : { jobs, onStopJob: () => {} }) } : {})} />
   </div>
 }
 

@@ -195,6 +195,34 @@ async function main() {
       await close()
     }
 
+    // ── A job's twin in the frieze row (89efca37): squares keep their menu, a twin offers no square items ──
+    {
+      const { page, errors, close } = await open("leaf=1&host=nova&jobs=1")
+      const menu = page.locator('[data-slot="leaf-context-menu"]')
+      const twin = page.locator('[data-slot="job-twin"]')
+      await twin.waitFor()
+      const read = page.getByRole("button", { name: "Read", exact: true })
+      await read.click({ button: "right", position: { x: 4, y: 4 } })
+      await menu.waitFor()
+      assert.deepEqual((await menuIds(menu)).filter(id => !id.startsWith("page-")), ["part-open-details", "part-open-file"], "a square beside a twin keeps its menu")
+      await page.keyboard.press("Escape")
+      await menu.waitFor({ state: "detached" })
+      await twin.click({ button: "right", position: { x: 4, y: 4 }, force: true })
+      await page.waitForTimeout(300)
+      const twinIds = await menu.count() ? await menuIds(menu) : []
+      assert.deepEqual(twinIds.filter(id => id.startsWith("part-") || id.startsWith("message-")), [], `a twin offers no square or message items: ${twinIds.join(",")}`)
+      await shot(page, "09-twin-context-menu")
+      if (await menu.count()) { await page.keyboard.press("Escape"); await menu.waitFor({ state: "detached" }) }
+      assert.equal(await page.locator('[role="dialog"]').count(), 0, "and opens nothing")
+      await twin.click({ force: true })
+      await page.locator('[data-slot="job-summary"]').waitFor()
+      await page.keyboard.press("Escape")
+      await page.locator('[data-slot="job-summary"]').waitFor({ state: "detached" })
+      assert.deepEqual(errors, [], "no page errors with a twin")
+      await close()
+      check("twin in the frieze: squares keep their menu, the twin has none of theirs, its click opens the summary")
+    }
+
     // ── Markdown parity: on adds only the Copy button and the pre's hooks ─────
     {
       const off = await open("host=nova")

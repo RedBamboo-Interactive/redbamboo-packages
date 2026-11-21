@@ -101,6 +101,96 @@ async function main() {
       await page.keyboard.press("Escape")
       await dialog.waitFor({ state: "detached" })
 
+      // ── Job twins (89efca37): stops in the same sequence, in their visual place ──
+      // Row markers with jobs off, to prove a twin changes nothing else in any row.
+      const friezeMarkers = () => page.$$eval('[data-message-uid^="activity:"] .flex.flex-wrap', friezes => friezes.map(frieze =>
+        [...frieze.children].filter(node => node.getAttribute("data-slot") !== "job-twin").map(node => node.outerHTML).join("")))
+      await page.goto(`${origin}?jobs&off`)
+      await page.locator('[data-message-uid^="activity:"]').first().waitFor()
+      await settle()
+      const markersOff = await friezeMarkers()
+      const heightsOff = await page.$$eval('[data-message-uid]', nodes => nodes.map(node => Math.round(node.getBoundingClientRect().height)))
+      assert.equal(await page.locator('[data-slot="job-twin"]').count(), 0, "jobs off: no twin")
+      await page.goto(`${origin}?jobs`)
+      await page.locator('[data-slot="job-twin"]').first().waitFor()
+      await settle()
+      assert.deepEqual(await friezeMarkers(), markersOff, "squares, origin dot, inline label and approval ring are unchanged beside twins")
+      assert.deepEqual(await page.$$eval('[data-message-uid]', nodes => nodes.map(node => Math.round(node.getBoundingClientRect().height))), heightsOff,
+        "twins change no row's height")
+      assert.equal(await page.locator('[data-awaiting-approval]').count(), 1, "the approval ring is still on its square")
+      const twinRow = await page.$$eval('[data-slot="job-twin"]', nodes => nodes.map(node => {
+        const frieze = node.parentElement
+        const kids = [...frieze.children]
+        return { at: kids.indexOf(node), of: kids.length, squaresBefore: kids.slice(0, kids.indexOf(node)).filter(kid => kid.hasAttribute("data-part-index")).length,
+          size: [node.offsetWidth, node.offsetHeight] }
+      }))
+      assert.deepEqual(twinRow, [{ at: 2, of: 4, squaresBefore: 2, size: [23, 10] }, { at: 3, of: 4, squaresBefore: 2, size: [23, 10] }],
+        `twins trail Edit and Bash in the turn's last frieze: ${JSON.stringify(twinRow)}`)
+      const at = async (position, title, { job = false } = {}) => {
+        await counter.getByText(`${position} / 11`, { exact: true }).waitFor()
+        if (job) await page.locator(`[role="dialog"][data-slot="job-summary"]`).getByRole("heading", { name: title, exact: true }).waitFor()
+        else await dialog.getByRole("heading", { name: title, exact: true }).waitFor()
+      }
+      const anyDialog = page.locator('[role="dialog"]')
+      const jobCounter = anyDialog.getByRole("group", { name: "Activity navigation" })
+      // Open a square in the first row; the twins live in the second.
+      await page.getByRole("button", { name: "Read", exact: true }).first().click()
+      await counter.getByText("2 / 11", { exact: true }).waitFor()
+      await anyDialog.evaluate(node => { node.__navMark = true })
+      for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight")
+      await counter.getByText("6 / 11", { exact: true }).waitFor()
+      const squareHeight = (await anyDialog.boundingBox()).height
+      await page.keyboard.press("ArrowRight")
+      await jobCounter.getByText("7 / 11", { exact: true }).waitFor()
+      await anyDialog.getByRole("heading", { name: "Launch covers", exact: true }).waitFor()
+      assert.equal(await anyDialog.getAttribute("data-slot"), "job-summary", "stepping onto a twin shows the job's summary")
+      assert.ok(await anyDialog.evaluate(node => node.__navMark === true), "in the same dialog: it was not closed or remounted")
+      assert.ok((await anyDialog.locator("[data-job-summary-status]").innerText()).includes("62% done"), "the summary's own content")
+      assert.ok(await anyDialog.locator("[data-job-stop]").isVisible(), "Stop, from a dialog opened on another row's square")
+      await settle()
+      assert.ok((await anyDialog.boundingBox()).height >= squareHeight - 1, "stepping onto a twin holds the dialog height")
+      await shot("06-twin-covers")
+      // Arrow keys belong to an open menu, not to stepping. (This job has no Compute link, so its ⋯ is absent here.)
+      await page.keyboard.press("ArrowRight")
+      await jobCounter.getByText("8 / 11", { exact: true }).waitFor()
+      await anyDialog.getByRole("heading", { name: "Mossbound theme", exact: true }).waitFor()
+      assert.ok((await anyDialog.locator("[data-job-summary-status]").innerText()).includes("Waiting to start"))
+      // Past the twins: back onto squares, the next row's event first.
+      await jobCounter.getByRole("button", { name: "Next activity" }).click()
+      await jobCounter.getByText("9 / 11", { exact: true }).waitFor()
+      assert.notEqual(await anyDialog.getAttribute("data-slot"), "job-summary", "stepping off a twin returns to squares")
+      assert.ok(await anyDialog.evaluate(node => node.__navMark === true), "still the same dialog")
+      await page.keyboard.press("ArrowRight")
+      await page.keyboard.press("ArrowRight")
+      await counter.getByText("11 / 11", { exact: true }).waitFor()
+      await dialog.getByRole("heading", { name: "Bash", exact: true }).waitFor()
+      // Back from the next row onto the twins.
+      for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowLeft")
+      await jobCounter.getByText("8 / 11", { exact: true }).waitFor()
+      await jobCounter.getByRole("button", { name: "Previous activity" }).click()
+      await jobCounter.getByText("7 / 11", { exact: true }).waitFor()
+      await page.keyboard.press("ArrowLeft")
+      await counter.getByText("6 / 11", { exact: true }).waitFor()
+      await dialog.getByRole("heading", { name: "Bash", exact: true }).waitFor()
+      await page.keyboard.press("Escape")
+      await anyDialog.waitFor({ state: "detached" })
+      // A twin opens its summary at its own place in the sequence.
+      await page.locator('[data-slot="job-twin"][data-job-id="theme"]').click()
+      await jobCounter.getByText("8 / 11", { exact: true }).waitFor()
+      await shot("07-twin-theme-direct")
+      await page.keyboard.press("Escape")
+      await anyDialog.waitFor({ state: "detached" })
+      // The inline label and the squares beside twins keep their own click targets.
+      await page.locator('[data-slot="event-inline-label"]').click()
+      await counter.getByText("9 / 11", { exact: true }).waitFor()
+      await page.keyboard.press("Escape")
+      await anyDialog.waitFor({ state: "detached" })
+      // Right-click on a twin: no square's details, no error (no Leaf menu here; the leaf-menu fixture covers that).
+      await page.locator('[data-slot="job-twin"][data-job-id="covers"]').click({ button: "right", force: true })
+      await page.waitForTimeout(150)
+      assert.equal(await anyDialog.count(), 0, "a right-click on a twin opens nothing")
+      await page.keyboard.press("Escape")
+
       assert.deepEqual(errors, [], `browser exceptions at ${width}px`)
       results.push({ width, passed: true })
       await page.close()

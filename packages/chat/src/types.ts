@@ -756,14 +756,14 @@ export interface ChatPanelProps {
   hostActivity?: ActivityStatusGroup | null
   /**
    * Async jobs this conversation started (images, video, music, workflows), from
-   * `useChatJobs`. Each gets a card in the agent message active when it was
-   * queued, after that message's frieze, and running ones join the activity row
-   * after `hostActivity`. Display only: the transcript, unread, delivery,
+   * `useChatJobs`. Each is a twin (two squares and their gap) at the end of the
+   * frieze row of the agent message active when it was queued, and running ones
+   * join the activity row after `hostActivity`. Display only: the transcript, unread, delivery,
    * streaming and turn state never depend on it. Absent (the viewer's setting is
    * off, or the host has none), the panel renders exactly as it does without it.
    */
   jobs?: readonly import("./lib/chat-jobs").ChatJob[]
-  /** Stop a running job. Its presence is the capability: the card's Stop only shows with it. */
+  /** Stop a running job. Its presence is the capability: the summary's Stop only shows with it. */
   onStopJob?: (job: import("./lib/chat-jobs").ChatJob) => Promise<void> | void
   /** The upstream AI event connection is temporarily unavailable and retrying. */
   isReconnecting?: boolean
@@ -962,8 +962,8 @@ export interface ActivityStatusItem {
   /** Title of its details dialog. */
   title: string
   color: string
-  /** Circles read as events (a delegation is one); squares as tool work. */
-  shape?: "square" | "circle"
+  /** Circles read as events (a delegation is one); squares as tool work; a twin is a job. */
+  shape?: "square" | "circle" | "twin"
   /** Moves while true; waiting, blocked or unknown work stays still. */
   running: boolean
   /** Body of the details dialog; `close` dismisses it, e.g. before navigating away. */

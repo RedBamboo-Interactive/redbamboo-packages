@@ -4,8 +4,9 @@ import type { MessageBlock, MessagePart } from "../types.ts"
 import {
   JOB_CARD_RULES, anchorChatJob, anchorChatJobs, capabilityLabel, describeJobActivity, foldJobRecord,
   formatJobDuration, groupChatJobs, isActiveJob, isExcludedJob, jobElapsed, jobKind,
-  jobProgress, jobStageWords, jobState, normalizeChatJob, realProgress, type ComputeJobRecord,
+  jobProgress, jobStageWords, jobState, jobsByTimelineRow, normalizeChatJob, realProgress, type ComputeJobRecord,
 } from "./chat-jobs.ts"
+import { projectActivityTimeline } from "./activity-timeline.ts"
 
 const at = (second: number) => new Date(Date.UTC(2026, 10, 16, 14, 0, second)).toISOString()
 const record = (fields: Partial<ComputeJobRecord> & Pick<ComputeJobRecord, "id">): ComputeJobRecord => ({
@@ -186,4 +187,56 @@ test("durations, elapsed and stage words", () => {
   assert.equal(jobStageWords({ state: "running", stage: "waiting" }), "starting up")
   assert.equal(jobStageWords({ state: "queued", stage: "admitted" }), "waiting to start")
   assert.equal(jobStageWords({ state: "done", stage: "completed" }), null)
+})
+
+// Twins (89efca37): which rendered row a job's twin joins.
+const rowsFor = (messages: MessageBlock[], hide?: (part: MessagePart) => boolean) =>
+  projectActivityTimeline(messages, 0, undefined, hide ? part => !hide(part) : undefined)
+const placed = (messages: MessageBlock[], jobs: ReturnType<typeof job>[], hide?: (part: MessagePart) => boolean) => {
+  const rows = rowsFor(messages, hide)
+  const byRow = jobsByTimelineRow(rows, anchorChatJobs(jobs, messages), messages)
+  return Object.fromEntries([...byRow].map(([key, list]) => [key, list.map(item => item.id)]))
+}
+
+test("twins join the anchored block's last frieze row, in launch order", () => {
+  // One block, split by commentary into two friezes: the twin trails the second.
+  const messages = [
+    block("u1", "user", 0),
+    block("a1", "assistant", 2, [tool("Read"), text("Found it."), tool("Bash"), text("Both are on your GPU.")], "turn-1"),
+  ]
+  assert.deepEqual(placed(messages, [job({ id: "theme", queuedAt: at(6) }), job({ id: "covers", queuedAt: at(4) })]),
+    { "activity:a1:2": ["covers", "theme"] })
+})
+
+test("a block with no frieze gives its twins to its last content row", () => {
+  const messages = [
+    block("u1", "user", 0),
+    block("a1", "assistant", 2, [text("On it."), text("Started the render.")], "turn-1"),
+  ]
+  const rows = rowsFor(messages)
+  assert.equal(rows.filter(row => row.kind === "activity").length, 0)
+  assert.deepEqual(placed(messages, [job({ id: "covers", queuedAt: at(4) })]), { [rows.at(-1)!.key]: ["covers"] })
+})
+
+test("hidden markers move nothing but the row that holds the twin; the twin stays", () => {
+  const messages = [
+    block("u1", "user", 0),
+    block("a1", "assistant", 2, [tool("Bash"), text("Started the render.")], "turn-1"),
+  ]
+  assert.deepEqual(placed(messages, [job({ id: "covers", queuedAt: at(4) })]), { "activity:a1:0": ["covers"] })
+  assert.deepEqual(placed(messages, [job({ id: "covers", queuedAt: at(4) })], part => part.toolName === "Bash"), { "message:a1:0": ["covers"] })
+})
+
+test("jobs of two turns sharing a merged row keep launch order; unrendered turns show nothing", () => {
+  // Two turns with no text between them render as one frieze row.
+  const messages = [
+    block("u1", "user", 0),
+    block("a1", "assistant", 2, [tool("Bash")], "turn-1"),
+    block("a2", "assistant", 8, [tool("Bash")], "turn-2"),
+  ]
+  const jobs = [job({ id: "first", queuedAt: at(3) }), job({ id: "second", queuedAt: at(9) }), job({ id: "between", queuedAt: at(5) })]
+  assert.deepEqual(placed(messages, jobs), { "activity:a1:0": ["first", "between", "second"] })
+  const anchored = anchorChatJobs(jobs, messages)
+  assert.equal(jobsByTimelineRow(projectActivityTimeline(messages.slice(0, 1), 0), anchored, messages).size, 0,
+    "a turn outside the rendered rows has no twin")
 })

@@ -59,9 +59,16 @@ export interface ActivityShape {
   key: string
   label: string
   color: string
-  shape: "square" | "circle"
+  /** A twin (two squares and their gap) is a job. */
+  shape: "square" | "circle" | "twin"
   running: boolean
   onOpen: () => void
+}
+
+/** The shape's footprint: a twin is as wide as two squares and their gap, and never scales up on hover. */
+function shapeClass(shape: ActivityShape["shape"]): string {
+  if (shape === "twin") return "w-[23px] h-2.5 rounded-[2px] hover:brightness-125"
+  return `w-2.5 h-2.5 ${shape === "circle" ? "rounded-full" : "rounded-[2px]"} hover:brightness-125 hover:scale-[1.5]`
 }
 
 /** One clickable shape per running agent, background task and host item, in priority order. */
@@ -74,7 +81,7 @@ export function ActivityShapes({ shapes }: { shapes: readonly ActivityShape[] })
           key={shape.key}
           type="button"
           onClick={shape.onOpen}
-          className={`w-2.5 h-2.5 ${shape.shape === "circle" ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${shape.running ? " square-wobble" : ""}`}
+          className={`${shapeClass(shape.shape)} transition-colors duration-100 cursor-pointer${shape.running ? " square-wobble" : ""}`}
           style={{ backgroundColor: shape.color }}
           title={shape.label}
           aria-label={shape.label}
@@ -93,7 +100,7 @@ export function ActivityItemDialog({ item, onClose }: { item: ActivityStatusItem
       {item && (
         <DialogContent motion="snappy" className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
-            <div className={`w-3 h-3 shrink-0 ${item.shape === "circle" ? "rounded-full" : "rounded-[2px]"}`} style={{ backgroundColor: item.color }} />
+            <div className={`h-3 shrink-0 ${item.shape === "twin" ? "w-[27px] rounded-[2px]" : item.shape === "circle" ? "w-3 rounded-full" : "w-3 rounded-[2px]"}`} style={{ backgroundColor: item.color }} />
             <DialogTitle className="text-sm truncate">{item.title}</DialogTitle>
           </DialogHeader>
           <div className="overflow-y-auto p-4 flex-1 min-h-0">{item.renderDetails(onClose)}</div>

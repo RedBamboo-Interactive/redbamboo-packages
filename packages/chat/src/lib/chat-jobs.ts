@@ -1,4 +1,5 @@
 import type { MessageBlock } from "../types.ts"
+import type { ActivityTimelineRow } from "./activity-timeline.ts"
 import { isEventBlock } from "./event-parts.ts"
 
 /**
@@ -327,6 +328,43 @@ export function anchorChatJobs(jobs: readonly ChatJob[], messages: readonly Mess
     all.push(job)
   }
   return { byTurn, all }
+}
+
+/**
+ * The rendered row each anchored job's twin joins, keyed by row key, jobs in
+ * launch order. A job is a twin at the end of the anchored block's LAST frieze
+ * row (the most recent activity of that block at or before it was queued).
+ * A block that draws no frieze row gets one in its last content row, holding
+ * only twins. A block not rendered at all hands its twins to the first row of
+ * a later block of the same turn. A job whose turn isn't rendered (outside
+ * the render window) isn't shown.
+ */
+export function jobsByTimelineRow(
+  rows: readonly ActivityTimelineRow[],
+  anchored: AnchoredChatJobs,
+  messages: readonly MessageBlock[],
+): Map<string, ChatJob[]> {
+  const byRow = new Map<string, ChatJob[]>()
+  const launchOrder = new Map(anchored.all.map((job, index) => [job.id, index] as const))
+  for (const [turnKey, { anchor, jobs }] of anchored.byTurn) {
+    const sameTurn = (index: number) => index >= anchor.blockIndex && !!messages[index]
+      && messages[index].role !== "user" && turnKeyOf(messages[index]) === turnKey
+    const holds = (row: ActivityTimelineRow) => row.sourceIndices.includes(anchor.blockIndex)
+    const row = lastOf(rows, candidate => candidate.kind === "activity" && holds(candidate))
+      ?? lastOf(rows, candidate => candidate.kind === "message" && holds(candidate))
+      ?? rows.find(candidate => candidate.kind !== "event-row" && candidate.sourceIndices.some(sameTurn))
+    if (!row) continue
+    const list = byRow.get(row.key)
+    if (list) list.push(...jobs)
+    else byRow.set(row.key, [...jobs])
+  }
+  for (const list of byRow.values()) list.sort((a, b) => (launchOrder.get(a.id) ?? 0) - (launchOrder.get(b.id) ?? 0))
+  return byRow
+}
+
+function lastOf<T>(items: readonly T[], matches: (item: T) => boolean): T | undefined {
+  for (let index = items.length - 1; index >= 0; index--) if (matches(items[index])) return items[index]
+  return undefined
 }
 
 /** Running or queued, i.e. what the activity row lists. */

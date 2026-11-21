@@ -27,8 +27,9 @@ import { MediaLightbox } from "./streaming-text"
 import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
 import { canOfferRollback, hasErrorPart, restoredDraftText, rollbackMessageEntries, rollbackTargetBefore } from "../lib/conversation-rollback"
 import { RollbackDialog } from "./rollback-dialog"
-import { anchorChatJobs, describeJobActivity, isActiveJob, turnKeyOf, type ChatJob } from "../lib/chat-jobs"
-import { JobCard, JobCards, jobKindColor } from "./job-card"
+import { anchorChatJobs, describeJobActivity, isActiveJob, jobsByTimelineRow, type ChatJob } from "../lib/chat-jobs"
+import { JobSummary } from "./job-summary"
+import { ChatJobsContext, createChatJobsStore } from "./job-twin"
 
 // Windowed rendering: long conversations are read from the tail, so only the
 // last WINDOW blocks are mounted. Scrolling up (or the "earlier messages"
@@ -37,7 +38,7 @@ const WINDOW = 40
 const CHUNK = 80
 const CONVERSATION_ENTRANCE_STAGGER_MS = 180
 const NO_APPROVALS: readonly import("../types").PermissionApproval[] = []
-const NO_JOBS_AFTER = new Map<string, { turnKey: string; jobs: ChatJob[] }>()
+const NO_JOBS: readonly ChatJob[] = []
 
 function hasExitPlanPart(block: MessageBlockType): boolean {
   return block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
@@ -283,6 +284,7 @@ export function ChatPanel(props: ChatPanelProps) {
   }
 
   const activityRowsRef = useRef<SquareRow[]>([])
+  const rowJobsRef = useRef<ReadonlyMap<string, readonly ChatJob[]>>(new Map())
   const getActivityRows = useCallback(() => activityRowsRef.current, [])
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -450,33 +452,29 @@ export function ChatPanel(props: ChatPanelProps) {
     return -1
   }, [messages])
 
-  // Job cards: a display-only overlay. Absent `jobs`, everything below is null
-  // or the host's own value, so the panel renders as it always has.
+  // Jobs: a display-only overlay, each a twin in its launching message's frieze
+  // row. Absent `jobs`, everything below is null or the host's own value, so
+  // the panel renders as it always has.
   const anchoredJobs = useMemo(() => jobs?.length ? anchorChatJobs(jobs, messages) : null, [jobs, messages])
   const jobsRef = useRef(!!anchoredJobs)
   jobsRef.current = !!anchoredJobs
+  // A squares' dialog stepping onto another row's twin reads the job live from here.
+  const [jobsStore] = useState(createChatJobsStore)
+  jobsStore.update(anchoredJobs?.all ?? NO_JOBS, onStopJob)
+  useLayoutEffect(() => { jobsStore.notify() }, [jobsStore, anchoredJobs, onStopJob])
   const activeJobs = useMemo(() => anchoredJobs?.all.filter(isActiveJob) ?? [], [anchoredJobs])
-  // Running jobs are host-owned work after the host's own (Nova's delegations): shapes after its
+  // Running jobs are host-owned work after the host's own (Nova's delegations): twins after its
   // shapes, words after its words, through the same summary and priority.
   const hostActivity = useMemo<import("../types").ActivityStatusGroup | null | undefined>(() => {
     if (!activeJobs.length) return hostWork
     const words = describeJobActivity(activeJobs)!
-    const items: ActivityStatusItem[] = activeJobs.map(job => ({
-      key: `job:${job.id}`,
-      label: `${job.title} (job)`,
-      title: job.title,
-      color: jobKindColor(job.kind),
-      shape: "circle",
-      running: job.state === "running",
-      renderDetails: () => <JobCard job={job} onStop={onStopJob} resolveImageSrc={resolveImageSrc} />,
-    }))
     return {
-      items: [...(hostWork?.items ?? []), ...items],
+      items: hostWork?.items ?? [],
       label: hostWork?.label ? `${hostWork.label} · ${words}` : words,
       ...(hostWork?.label ? (hostWork.icon ? { icon: hostWork.icon } : {}) : { icon: "ph-bold ph-cube" }),
       title: [hostWork?.title ?? hostWork?.label, ...activeJobs.map(job => job.title)].filter(Boolean).join("\n"),
     }
-  }, [activeJobs, hostWork, onStopJob, resolveImageSrc])
+  }, [activeJobs, hostWork])
   const jobsLayoutKey = anchoredJobs
     ? anchoredJobs.all.map(job => `${job.id}:${job.state}:${job.children.length}:${job.outputs.length}:${job.errorMessage ? 1 : 0}`).join("\u0000")
     : ""
@@ -537,7 +535,7 @@ export function ChatPanel(props: ChatPanelProps) {
     const viewTop = scroller.getBoundingClientRect().top
     for (const child of Array.from(content.children)) {
       const rect = child.getBoundingClientRect()
-      if (rect.bottom > viewTop && child.getAttribute("data-slot") !== "job-cards") {
+      if (rect.bottom > viewTop) {
         readerAnchorRef.current = { element: child, top: rect.top - viewTop }
         return
       }
@@ -690,10 +688,12 @@ export function ChatPanel(props: ChatPanelProps) {
   // work leaves it, and never follow the panel to another session.
   const [detachedTaskId, setDetachedTaskId] = useState<string | null>(null)
   const [openHostKey, setOpenHostKey] = useState<string | null>(null)
+  const [openJobId, setOpenJobId] = useState<string | null>(null)
   const [taskListOpen, setTaskListOpen] = useState(false)
   useEffect(() => {
     setDetachedTaskId(null)
     setOpenHostKey(null)
+    setOpenJobId(null)
     setTaskListOpen(false)
   }, [sessionId])
   // The turn itself is over: what still runs was left behind, not waited on.
@@ -730,7 +730,18 @@ export function ChatPanel(props: ChatPanelProps) {
       running: item.running,
       onOpen: () => setOpenHostKey(item.key),
     })),
+    // A running job is a twin here too, and opens the same summary as its twin in the thread.
+    ...activeJobs.map(job => ({
+      key: `host:job:${job.id}`,
+      label: `${job.title} (job)`,
+      color: PART_COLOR.delegation,
+      shape: "twin" as const,
+      running: job.state === "running",
+      onOpen: () => setOpenJobId(job.id),
+    })),
   ]
+  // The summary follows its job to the end, and closes if the job leaves the conversation.
+  const shownJob = openJobId ? anchoredJobs?.all.find(job => job.id === openJobId) ?? null : null
   // Open details always read the current item, so they never show a stale state.
   const shownHostItem: ActivityStatusItem | null = openHostKey ? hostItems.find(item => item.key === openHostKey) ?? null : null
   const taskListItem: ActivityStatusItem | null = taskListOpen && orderedTasks.length > 0 ? {
@@ -764,7 +775,8 @@ export function ChatPanel(props: ChatPanelProps) {
     ? hostItems[0]?.color ?? PART_COLOR.delegation
     : orderedTasks[0] ? taskColor(orderedTasks[0]) : PART_COLOR.delegation
   // Host work that is only waiting, blocked or unknown keeps the spinner still, like its shapes.
-  const backgroundPaused = backgroundSummary?.paused || backgroundSummary?.source === "host" && !hostItems.some(item => item.running)
+  const backgroundPaused = backgroundSummary?.paused || backgroundSummary?.source === "host"
+    && !hostItems.some(item => item.running) && !activeJobs.some(job => job.state === "running")
   const alsoRunning = sessionLine ? describeAlsoRunning(orderedTasks) : null
   const statusLine = (
     <div data-slot="activity-status-row" className="min-w-0">
@@ -782,6 +794,7 @@ export function ChatPanel(props: ChatPanelProps) {
         loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
       <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostKey(null)} />
       <ActivityItemDialog item={taskListItem} onClose={() => setTaskListOpen(false)} />
+      {shownJob && <JobSummary job={shownJob} onStop={onStopJob} resolveImageSrc={resolveImageSrc} onClose={() => setOpenJobId(null)} />}
     </div>
   )
 
@@ -838,25 +851,23 @@ export function ChatPanel(props: ChatPanelProps) {
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
   const timelineRows = projectActivityTimeline(visibleMessages, startIndex, props.eventRows?.isRow, isMarkerShown)
   timelineRowsRef.current = timelineRows
-  activityRowsRef.current = timelineRows
-    .filter(row => row.kind === "activity")
-    .map(row => ({ id: row.block.id, parts: row.block.parts }))
-  // A turn's cards follow the frieze holding the block active when they were queued, else the
-  // first row that block (or a later block of that turn) draws. Not rendered: not shown.
-  const jobsAfterRow = anchoredJobs ? new Map<string, { turnKey: string; jobs: ChatJob[] }>() : NO_JOBS_AFTER
-  if (anchoredJobs) {
-    for (const [turnKey, { anchor, jobs: turnJobs }] of anchoredJobs.byTurn) {
-      const sameTurn = (index: number) => index >= anchor.blockIndex && !!messages[index]
-        && messages[index].role !== "user" && turnKeyOf(messages[index]) === turnKey
-      const row = timelineRows.find(candidate => candidate.kind === "activity" && candidate.sourceIndices.includes(anchor.blockIndex))
-        ?? timelineRows.find(candidate => candidate.kind !== "event-row" && candidate.sourceIndices.includes(anchor.blockIndex))
-        ?? timelineRows.find(candidate => candidate.kind !== "event-row" && candidate.sourceIndices.some(sameTurn))
-      if (!row) continue
-      const existing = jobsAfterRow.get(row.key)
-      if (existing) existing.jobs.push(...turnJobs)
-      else jobsAfterRow.set(row.key, { turnKey, jobs: [...turnJobs] })
-    }
+  // A turn's jobs are twins at the end of the anchored block's last frieze row (a row with
+  // none gets one). Not rendered: not shown. A row's list keeps its reference while its
+  // jobs are the same, so the row's memo holds while unrelated rows stream.
+  const placedJobs = anchoredJobs ? jobsByTimelineRow(timelineRows, anchoredJobs, messages) : null
+  const previousRowJobs = rowJobsRef.current
+  const rowJobs = new Map<string, readonly ChatJob[]>()
+  for (const [key, list] of placedJobs ?? []) {
+    const previous = previousRowJobs.get(key)
+    rowJobs.set(key, previous && previous.length === list.length && previous.every((job, index) => job === list[index]) ? previous : list)
   }
+  rowJobsRef.current = rowJobs
+  activityRowsRef.current = timelineRows
+    .filter(row => row.kind === "activity" || rowJobs.has(row.key))
+    .map(row => {
+      const twins = rowJobs.get(row.key)
+      return twins ? { id: row.block.id, parts: row.block.parts, jobIds: twins.map(job => job.id) } : { id: row.block.id, parts: row.block.parts }
+    })
   const inlineOutgoing = visibleOutgoing.filter(item => !eventPlacement?.waiting.has(item.id)
     && (item.appearance === "message" || item.remoteState === "delivered"))
   const waitingOutgoing = messageQueue.queue.filter(item => eventPlacement?.waiting.has(item.id)
@@ -882,13 +893,7 @@ export function ChatPanel(props: ChatPanelProps) {
     return leftTime - rightTime || left.sequence - right.sequence
   })
   const visualTimeline = [
-    ...(jobsAfterRow.size === 0 ? inlineTimeline : inlineTimeline.flatMap((visual): Array<typeof visual | { kind: "jobs"; key: string; jobs: ChatJob[]; compact: boolean }> => {
-      if (visual.kind !== "message") return [visual]
-      const after = jobsAfterRow.get(visual.row.key)
-      return after
-        ? [visual, { kind: "jobs" as const, key: `jobs:${after.turnKey}`, jobs: after.jobs, compact: visual.row.compactAfter }]
-        : [visual]
-    })),
+    ...inlineTimeline,
     { kind: "status" as const, key: "streaming-status" },
     ...waitingOutgoing.map(item => ({ kind: "outgoing" as const, key: `outgoing:${item.id}`, item })),
   ]
@@ -927,6 +932,7 @@ export function ChatPanel(props: ChatPanelProps) {
             )}
             <BackgroundWorkContext.Provider value={backgroundWork}>
             <ActivityRowsContext.Provider value={getActivityRows}>
+            <ChatJobsContext.Provider value={jobsStore}>
               {visualTimeline.map((visual) => {
                 if (visual.kind === "status") return <div key={visual.key}>
                   {standaloneApprovals.map(approval => (
@@ -938,10 +944,6 @@ export function ChatPanel(props: ChatPanelProps) {
                   {statusLine}
                 </div>
                 if (visual.kind === "outgoing") return renderQueuedGhost(visual.item)
-                if (visual.kind === "jobs") return (
-                  <JobCards key={visual.key} jobs={visual.jobs} onStop={onStopJob} resolveImageSrc={resolveImageSrc}
-                    className={visual.compact ? "mt-1.5 mb-2" : "-mt-2.5 mb-4"} />
-                )
                 const row = visual.row
                 const block = row.block
                 if (row.kind === "event-row") {
@@ -1009,9 +1011,11 @@ export function ChatPanel(props: ChatPanelProps) {
                       ? rollbackTargetBefore(messages, index) ?? undefined
                       : undefined}
                     onRewind={setRollbackTarget}
+                    jobs={rowJobs.get(row.key)}
                   />
                 )
               })}
+            </ChatJobsContext.Provider>
             </ActivityRowsContext.Provider>
             </BackgroundWorkContext.Provider>
           </div>

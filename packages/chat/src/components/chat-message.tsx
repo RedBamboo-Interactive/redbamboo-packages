@@ -52,6 +52,9 @@ import { ActivityRowsContext } from "./activity-rows-context"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 import { messageActionEntries, messageMarkdown, partActionEntries } from "../lib/chat-actions"
 import { REWIND_ICON, REWIND_LABEL } from "../lib/conversation-rollback"
+import type { ChatJob } from "../lib/chat-jobs"
+import { JobTwin, useChatJobsStore, useLiveJob } from "./job-twin"
+import { JobSummaryBody, jobSummaryContentProps } from "./job-summary"
 
 interface TaskNotification {
   taskId: string
@@ -185,6 +188,13 @@ interface ChatMessageProps {
    */
   errorRewindTarget?: string
   onRewind?: (messageUid: string) => void
+  /**
+   * Jobs this row draws as twins, in launch order, at the end of its last
+   * frieze (one is created when the row has none). Keep the reference stable.
+   */
+  jobs?: readonly ChatJob[]
+  /** Stop a running job from its summary, when no ChatPanel provides it. */
+  onStopJob?: (job: ChatJob) => Promise<void> | void
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -225,6 +235,8 @@ export const ChatMessage = memo(function ChatMessage({
   turnOrigins,
   errorRewindTarget,
   onRewind,
+  jobs,
+  onStopJob,
 }: ChatMessageProps) {
   // Entrance is a mount-time decision. Queue reconciliation can remove the
   // outgoing bridge immediately after this row mounts; changing the prop then
@@ -458,9 +470,12 @@ export const ChatMessage = memo(function ChatMessage({
   }
 
   const groups = groupParts(block.parts, isLiveBlock)
-  // A turn can start with visible text, leaving its origin alone in a row.
-  if (turnOrigins?.length && !groups.some(group => group.kind === "frieze"))
+  // A turn can start with visible text, leaving its origin alone in a row;
+  // a job launched by a message without squares is alone in its row too.
+  const twins = jobs?.length ? jobs : undefined
+  if ((turnOrigins?.length || twins) && !groups.some(group => group.kind === "frieze"))
     groups.push({ kind: "frieze", parts: [], isLive: isLiveBlock })
+  const lastFrieze = twins ? groups.map(group => group.kind).lastIndexOf("frieze") : -1
   const hasExitPlanMode = block.parts.some(p => p.type === "tool_use" && p.toolName === "ExitPlanMode")
 
   const askQuestionPart = block.parts.find(p => p.type === "tool_use" && p.toolName === "AskUserQuestion")
@@ -533,7 +548,8 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} awaitingApproval={approvals} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} awaitingApproval={approvals}
+                {...(twins ? { rowJobs: twins, drawsJobs: i === lastFrieze, onStopJob } : {})} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
               {friezeApprovals(group.parts).map(approvalCard)}
             </div>
           )
@@ -633,13 +649,20 @@ function partLabel(part: MessagePart): string {
 }
 
 
-function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApproval, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+type FriezeSelection = { part?: MessagePart; result?: MessagePart; rowId: string; index: number; jobId?: string }
+
+function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApproval, rowJobs, drawsJobs = false, onStopJob, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
   parts: MessagePart[]
   allParts: MessagePart[]
   /** Positions index `allParts`; an origin past the last part trails the frieze. */
   turnOrigins?: readonly ActivityTurnOrigin[]
   isLive?: boolean
+  /** Every job this row draws as a twin: stops after the row's squares. */
+  rowJobs?: readonly ChatJob[]
+  /** This frieze is the row's last: it draws the twins, after its squares and trailing origins. */
+  drawsJobs?: boolean
+  onStopJob?: (job: ChatJob) => Promise<void> | void
   /** Approvals on this row's tool calls; a waiting one rings its square. */
   awaitingApproval?: ReadonlyMap<string, PermissionApproval>
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
@@ -650,10 +673,17 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
-  const [selected, setSelected] = useState<{ part: MessagePart; result?: MessagePart; rowId: string; index: number } | null>(null)
+  const [selected, setSelected] = useState<FriezeSelection | null>(null)
   const retainedSelection = useRef<typeof selected>(null)
   if (selected) retainedSelection.current = selected
   const modalSelection = selected ?? retainedSelection.current
+  // A twin's job is read live, wherever its row is, so its summary follows it.
+  const selectedJob = useLiveJob(modalSelection?.jobId, rowJobs)
+  const jobsStore = useChatJobsStore()
+  const stopJob = jobsStore ? jobsStore.stop : onStopJob
+  // A job that leaves (setting off, a clear) closes its summary rather than reopening it on return.
+  const jobGone = !!selected?.jobId && !selectedJob
+  useEffect(() => { if (jobGone) setSelected(null) }, [jobGone])
   // The dialog is centred, so a shorter part would pull the arrows out from
   // under the pointer. Ratchet the height up while stepping; reset on reopen.
   const [minHeight, setMinHeight] = useState(0)
@@ -661,21 +691,25 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   // Stepping walks every square the panel renders, past commentary into the
   // neighbouring activity rows. This row always reads its own current parts.
   const getActivityRows = useContext(ActivityRowsContext)
+  const ownRow = (): SquareRow => rowJobs?.length
+    ? { id: blockId, parts: allParts, jobIds: rowJobs.map(job => job.id) }
+    : { id: blockId, parts: allParts }
   const squareRows = (): readonly SquareRow[] => {
     const rows = getActivityRows?.() ?? []
     return rows.some(row => row.id === blockId)
-      ? rows.map(row => row.id === blockId ? { id: blockId, parts: allParts } : row)
-      : [{ id: blockId, parts: allParts }]
+      ? rows.map(row => row.id === blockId ? ownRow() : row)
+      : [ownRow()]
   }
   const rowParts = (rowId: string): readonly MessagePart[] =>
     rowId === blockId ? allParts : squareRows().find(row => row.id === rowId)?.parts ?? []
 
   // An opened thinking detail must follow immutable live item updates.
-  const currentThinking = modalSelection?.part.type === "thinking" ? rowParts(modalSelection.rowId)[modalSelection.index] : undefined
-  const selectedPart = currentThinking?.type === "thinking" && currentThinking.messageId === modalSelection?.part.messageId
+  const currentThinking = modalSelection?.part?.type === "thinking" ? rowParts(modalSelection.rowId)[modalSelection.index] : undefined
+  const selectedPart = currentThinking?.type === "thinking" && currentThinking.messageId === modalSelection?.part?.messageId
     ? currentThinking : modalSelection?.part
 
-  const select = ({ rowId, index }: SquareRef) => {
+  const select = ({ rowId, index, jobId }: SquareRef) => {
+    if (jobId !== undefined) { setSelected({ rowId, index, jobId }); return }
     const parts = rowParts(rowId)
     const part = parts[index]
     setSelected({ part, result: part.type === "tool_use" ? findPairedResult(parts, part) : undefined, rowId, index })
@@ -683,6 +717,10 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   const handleClick = (part: MessagePart) => {
     setMinHeight(0)
     select({ rowId: blockId, index: allParts.indexOf(part) })
+  }
+  const openJob = (job: ChatJob) => {
+    setMinHeight(0)
+    select({ rowId: blockId, index: allParts.length + (rowJobs?.indexOf(job) ?? 0), jobId: job.id })
   }
 
   const sequence = modalSelection ? squareSequence(squareRows()) : []
@@ -787,9 +825,12 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
         })}
         {trailingOrigins.map(entry =>
           <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)}
+        {drawsJobs && rowJobs?.map(job => <JobTwin key={`job:${job.id}`} job={job} onOpen={() => openJob(job)} />)}
       </div>
 
-      <PartModal part={selectedPart} pairedResult={modalSelection?.result} open={!!selected} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+      <PartModal part={modalSelection?.jobId ? undefined : selectedPart} pairedResult={modalSelection?.jobId ? undefined : modalSelection?.result}
+        job={modalSelection?.jobId ? selectedJob : undefined} onStopJob={stopJob}
+        open={!!selected && !jobGone} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
     </>
   )
 }
@@ -848,7 +889,7 @@ function PartNavigationControls({ navigation }: { navigation: PartNavigation }) 
 }
 
 function dialogHeightOf(element: HTMLElement): number {
-  return element.closest<HTMLElement>("[data-slot=\"dialog-content\"]")?.offsetHeight ?? 0
+  return element.closest<HTMLElement>("[role=\"dialog\"]")?.offsetHeight ?? 0
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -856,8 +897,16 @@ function isEditableTarget(target: EventTarget | null): boolean {
     && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")
 }
 
+/** A menu opened from the dialog (a job summary's ⋯) owns its arrow keys; React bubbles them through its portal. */
+function isInMenu(target: EventTarget | null): boolean {
+  return target instanceof Element && !!target.closest("[role=\"menu\"]")
+}
+
 interface PartModalProps {
   part?: MessagePart
+  /** A job's twin: the dialog shows the job's summary instead of a part. */
+  job?: ChatJob
+  onStopJob?: (job: ChatJob) => Promise<void> | void
   pairedResult?: MessagePart
   open: boolean
   onClose: () => void
@@ -892,6 +941,7 @@ export function PartModal(props: PartModalProps) {
     setPath([])
   }
   useEffect(() => { if (!open) setPath([]) }, [open])
+  if (props.job) return <PartModalView {...props} />
   if (!part) return null
 
   const chain: MessagePart[] = [part]
@@ -948,10 +998,33 @@ export function PartModal(props: PartModalProps) {
     navigation={effectiveNavigation} breadcrumb={breadcrumb} background={background} />
 }
 
-function PartModalView({ part, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
+function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
   breadcrumb?: React.ReactNode
   background?: React.ReactNode
 }) {
+  const onKeyDown = navigation ? (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || isEditableTarget(e.target) || isInMenu(e.target)) return
+    e.preventDefault()
+    navigation.onStep(e.key === "ArrowLeft" ? -1 : 1, e.currentTarget.offsetHeight)
+  } : undefined
+  const heldHeight = (maxHeight: string) => minHeight ? `min(${minHeight}px, ${maxHeight})` : undefined
+
+  // A twin: the job's summary, in the same Dialog and DialogContent as a
+  // square's details, so stepping between them never closes or remounts it.
+  if (job) {
+    const content = jobSummaryContentProps(job)
+    return (
+      <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
+        <DialogContent motion="snappy" onKeyDown={onKeyDown} data-slot={content["data-slot"]} data-job-id={content["data-job-id"]}
+          className={content.className} style={{ ...content.style, minHeight: heldHeight("82vh") }}>
+          <JobSummaryBody job={job} onStop={onStopJob} resolveImageSrc={resolveImageSrc} onClose={onClose}
+            navigation={navigation ? <PartNavigationControls navigation={navigation} /> : undefined} />
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   if (!part) return null
   const event = parseEventPart(part)
   const category = toolCategory(part)
@@ -963,14 +1036,6 @@ function PartModalView({ part, pairedResult, open, onClose, navigation, minHeigh
 
   const toolFile = resolveFileLink ? extractToolFile(part) : null
   const openFile = toolFile ? resolveFileLink?.(toolFile.path, { line: toolFile.line }) : undefined
-
-  const onKeyDown = navigation ? (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return
-    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || isEditableTarget(e.target)) return
-    e.preventDefault()
-    navigation.onStep(e.key === "ArrowLeft" ? -1 : 1, e.currentTarget.offsetHeight)
-  } : undefined
-  const heldHeight = (maxHeight: string) => minHeight ? `min(${minHeight}px, ${maxHeight})` : undefined
 
   if (event) {
     const sender = eventSender(event, resolveAgentInfo)
