@@ -867,7 +867,7 @@ export function ChatPanel(props: ChatPanelProps) {
     .map(row => {
       const twins = rowJobs.get(row.key)
       return twins
-        ? { id: row.block.id, parts: row.block.parts, jobs: twins.map(job => ({ id: job.id, after: jobLaunchIndex(job.id, row.block.parts) })) }
+        ? { id: row.block.id, parts: row.block.parts, jobs: twins.map(job => ({ id: job.id, after: jobLaunchIndex(job, row.block.parts) })) }
         : { id: row.block.id, parts: row.block.parts }
     })
   const inlineOutgoing = visibleOutgoing.filter(item => !eventPlacement?.waiting.has(item.id)

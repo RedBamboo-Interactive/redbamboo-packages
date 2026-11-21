@@ -222,12 +222,35 @@ const GUID = "9b0edfb3-0bb6-49f7-b1be-451f917448e1"
 test("a job's launch is the first call whose result names it, by jobId field or printed GUID", () => {
   const parts = [call("t1", "Read"), answer("t1", "brief"), call("t2"), answer("t2", '{"jobId":"covers","status":"running"}'),
     call("t3"), answer("t3", `started ${GUID.toUpperCase()}`), call("t4"), answer("t4", '{"jobId":"covers","status":"completed"}')]
-  assert.equal(jobLaunchIndex("covers", parts), 2, "the launch, not the later poll")
-  assert.equal(jobLaunchIndex(GUID, parts), 4, "a printed GUID, any case")
-  assert.equal(jobLaunchIndex("theme", parts), -1, "no result names it")
-  assert.equal(jobLaunchIndex("cover", parts), -1, "a field matches whole, not as a prefix")
+  assert.equal(jobLaunchIndex({ id: "covers", queuedAt: null }, parts), 2, "the launch, not the later poll")
+  assert.equal(jobLaunchIndex({ id: GUID, queuedAt: null }, parts), 4, "a printed GUID, any case")
+  assert.equal(jobLaunchIndex({ id: "theme", queuedAt: null }, parts), -1, "no result names it")
+  assert.equal(jobLaunchIndex({ id: "cover", queuedAt: null }, parts), -1, "a field matches whole, not as a prefix")
   // Without toolUseId, a result answers the nearest call before it.
-  assert.equal(jobLaunchIndex("x", [tool("Read"), tool("Bash"), { type: "tool_result", content: '{"job_id":"x"}' }]), 1)
+  assert.equal(jobLaunchIndex({ id: "x", queuedAt: null }, [tool("Read"), tool("Bash"), { type: "tool_result", content: '{"job_id":"x"}' }]), 1)
+})
+
+test("results the browser hasn't loaded: the twin follows the last call made by the time the job was queued", () => {
+  // Real Nova history: results are payloads with no text (89efca37), so only the calls' times are known.
+  const timed = (id: string, second: number, toolName = "Bash"): MessagePart => ({ ...call(id, toolName), startedAt: at(second) })
+  const payload = (id: string): MessagePart => ({ type: "tool_result", toolUseId: id, content: "", payloadRef: { recordId: 1, kind: "tool-output", length: 1247 } as never })
+  const parts = [timed("t1", 1, "Read"), payload("t1"), timed("t2", 3), payload("t2"), timed("t3", 7), payload("t3")]
+  assert.equal(jobLaunchIndex({ id: GUID, queuedAt: at(4) }, parts), 2, "queued while the second call ran")
+  assert.equal(jobLaunchIndex({ id: GUID, queuedAt: at(3) }, parts), 2, "at the call's own second")
+  assert.equal(jobLaunchIndex({ id: GUID, queuedAt: at(0) }, parts), -1, "before every call: the end of the row")
+  assert.equal(jobLaunchIndex({ id: GUID, queuedAt: null }, parts), -1)
+  // A loaded result that names the job wins over the clock.
+  assert.equal(jobLaunchIndex({ id: "covers", queuedAt: at(9) }, [...parts.slice(0, 3), answer("t2", '{"jobId":"covers"}'), ...parts.slice(4)]), 2)
+})
+
+test("by the clock alone, a twin joins the row holding the call made by then, not the block's last row", () => {
+  const timed = (id: string, second: number): MessagePart => ({ ...call(id), startedAt: at(second) })
+  const messages = [
+    block("u1", "user", 0),
+    block("a1", "assistant", 2, [timed("t1", 2), answer("t1", ""), text("Rendering."), timed("t2", 8), answer("t2", ""), text("Done.")], "turn-1"),
+  ]
+  assert.deepEqual(placed(messages, [job({ id: "covers", queuedAt: at(3) }), job({ id: "late", queuedAt: at(9) })]),
+    { "activity:a1:0": ["covers"], "activity:a1:3": ["late"] })
 })
 
 test("the launching call beats the clock: a twin joins the row that drew its launch square", () => {

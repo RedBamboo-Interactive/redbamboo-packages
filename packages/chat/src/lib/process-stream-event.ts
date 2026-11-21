@@ -403,6 +403,7 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
     phase: event.phase || undefined,
     ...((event.type === "thinking" || toolUseId) && event.messageId ? { messageId: event.messageId } : {}),
     ...(toolUseId ? { toolUseId } : {}),
+    ...(event.type === "tool_use" && event.timestamp ? { startedAt: event.timestamp } : {}),
     ...(event.type === "thinking" && event.isPartial !== undefined
       ? { thinkingState: event.isPartial ? "active" : "completed" } : {}),
   }

@@ -163,6 +163,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       ...(rec.eventType === "thinking" && rec.messageId
         ? { messageId: rec.messageId, thinkingState: "completed" } : {}),
       ...(toolUseId ? { toolUseId, ...(rec.messageId ? { messageId: rec.messageId } : {}) } : {}),
+      ...(rec.eventType === "tool_use" && rec.timestamp ? { startedAt: rec.timestamp } : {}),
     }
 
     if (rec.eventType === "text" && currentBlock.parts.length > 0) {

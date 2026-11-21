@@ -695,7 +695,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   // neighbouring activity rows. This row always reads its own current parts.
   const getActivityRows = useContext(ActivityRowsContext)
   // Where each twin sits: after its launching call's square, or -1 for the end of the row.
-  const launchAt = new Map((rowJobs ?? []).map(job => [job.id, jobLaunchIndex(job.id, allParts)] as const))
+  const launchAt = new Map((rowJobs ?? []).map(job => [job.id, jobLaunchIndex(job, allParts)] as const))
   const ownRow = (): SquareRow => rowJobs?.length
     ? { id: blockId, parts: allParts, jobs: rowJobs.map(job => ({ id: job.id, after: launchAt.get(job.id) ?? -1 })) }
     : { id: blockId, parts: allParts }

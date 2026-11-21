@@ -73,6 +73,11 @@ export interface MessagePart {
   children?: MessagePart[]
   /** State of the background task this tool call launched, folded from `task` records. */
   task?: BackgroundTaskState
+  /**
+   * When a tool call was made (its record's or event's timestamp). Display
+   * only: a job's twin sits after the last call made by the time it was queued.
+   */
+  startedAt?: string
   /** Native reasoning identity, distinct from the logical turn uid. */
   messageId?: string
   /** Survives visual segment finalization around ambient events. */
