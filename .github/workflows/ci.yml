@@ -21,3 +21,110 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm test
+
+  # Release Manager builds every component against origin/main of redbamboo-packages; nothing pins
+  # an older commit. This gate makes following main safe: the pushed packages are checked against
+  # origin/main of their consumers, laid out as siblings exactly as their link: dependencies and
+  # project references expect, so a breaking change fails at push instead of at the Nightly.
+  # Typecheck and locked restore only, on Windows like the release recipes; no consumer test suite.
+  consumers:
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    steps:
+      # RedLeaf and Code (codered) are private: a fine-grained token with Contents read on both.
+      - name: Require the consumer checkout token
+        shell: pwsh
+        env:
+          CONSUMER_CHECKOUT_TOKEN: ${{ secrets.CONSUMER_CHECKOUT_TOKEN }}
+        run: |
+          if (-not $env:CONSUMER_CHECKOUT_TOKEN) {
+            throw 'Secret CONSUMER_CHECKOUT_TOKEN is missing: add a fine-grained token with Contents read-only on RedBamboo-Interactive/redleaf and RedBamboo-Interactive/codered.'
+          }
+      - uses: actions/checkout@v7
+        with:
+          path: redbamboo-packages
+      - uses: actions/checkout@v7
+        with:
+          repository: RedBamboo-Interactive/redleaf
+          ref: main
+          path: redleaf
+          token: ${{ secrets.CONSUMER_CHECKOUT_TOKEN }}
+      - uses: actions/checkout@v7
+        with:
+          repository: RedBamboo-Interactive/codered
+          ref: main
+          path: codered
+          token: ${{ secrets.CONSUMER_CHECKOUT_TOKEN }}
+      - uses: actions/checkout@v7
+        with:
+          repository: RedBamboo-Interactive/nova
+          ref: main
+          path: nova
+      - uses: actions/checkout@v7
+        with:
+          repository: RedBamboo-Interactive/redcompute
+          ref: main
+          path: redcompute
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: redcompute/global.json
+      - name: Consumer commits
+        shell: pwsh
+        run: |
+          foreach ($repository in 'redbamboo-packages', 'redleaf', 'nova', 'codered', 'redcompute') {
+            "| $repository | $(git -C $repository rev-parse HEAD) |" | Add-Content $env:GITHUB_STEP_SUMMARY
+          }
+      # Each directory runs the pnpm its packageManager names, as the recipes do through corepack.
+      - name: Build the pushed packages
+        shell: pwsh
+        working-directory: redbamboo-packages
+        run: |
+          corepack pnpm install --frozen-lockfile
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          corepack pnpm build
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Typecheck RedLeaf web
+        shell: pwsh
+        working-directory: redleaf/web
+        run: |
+          corepack pnpm install --frozen-lockfile
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          corepack pnpm exec tsc -b
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Typecheck Nova web
+        shell: pwsh
+        working-directory: nova/web
+        run: |
+          corepack pnpm install --frozen-lockfile
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          corepack pnpm run typecheck
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Typecheck Code web
+        shell: pwsh
+        working-directory: codered/web
+        run: |
+          corepack pnpm install --frozen-lockfile
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          corepack pnpm run typecheck
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      # RedCompute's own gate, as its release recipe runs it: every committed lock, AppHost's included,
+      # restores in locked mode against the pushed AppHost and none changes.
+      - name: Locked restore of RedCompute against the pushed AppHost
+        shell: pwsh
+        run: |
+          ./redcompute/release/Test-LockedRestoreModes.ps1 -ArtifactsPath "$env:RUNNER_TEMP/locked-restore" -RedBambooPackagesRoot "$env:GITHUB_WORKSPACE/redbamboo-packages"
+      - name: Locked restore of RedLeaf.App against the pushed AppHost
+        shell: pwsh
+        working-directory: redleaf
+        run: |
+          dotnet restore src/RedLeaf.App/RedLeaf.App.csproj --locked-mode --nologo
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet restore src/RedLeaf.App/RedLeaf.App.csproj --locked-mode --nologo -p:LeafTargetOs=linux
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
