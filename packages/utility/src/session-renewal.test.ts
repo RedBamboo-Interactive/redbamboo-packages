@@ -299,3 +299,72 @@ test("an expired session still ends with reason expired", async () => {
   assert.equal(await s.r.renewSession(), "gone")
   assert.deepEqual(s.reasons, ["expired"])
 })
+
+test("fetch interceptor: a server that keeps answering session_upgrade_required gets at most one rotation", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())  // a failed assertion must not leave a renewal timer running
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))  // start() has nothing to renew
+  s.r.start()
+  let calls = 0
+  const base = (async () => {
+    calls++
+    return json(401, { error: "session_upgrade_required" })
+  }) as unknown as typeof fetch
+  const wrapped = s.r.wrapFetch(base)
+
+  const statuses: number[] = []
+  for (let i = 0; i < 5; i++) statuses.push((await wrapped("/api/entities")).status)
+
+  assert.deepEqual(statuses, [401, 401, 401, 401, 401])
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)
+  assert.equal(calls, 6)  // the first request and its one replay, then four requests answered as they came
+  assert.notEqual(s.deps.storage!.getItem("redsuite:session:renewedAt"), null)  // never cleared again
+  assert.deepEqual(s.reasons, [])
+})
+
+test("fetch interceptor: upgrade on loopback with no refresh cookie accepts LocalDefault, never /login", async (t) => {
+  const s = lostReasons({}, (url) =>
+    url === "/auth/refresh" ? json(401, { error: "no_token" }) : json(200, { id: "local-user" }))
+  t.after(() => s.r.stop())  // a failed assertion must not leave a renewal timer running
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+  let calls = 0
+  const base = (async () => {
+    calls++
+    return calls === 1 ? json(401, { error: "session_upgrade_required" }) : json(200, { ok: true })
+  }) as unknown as typeof fetch
+
+  const res = await s.r.wrapFetch(base)("/api/entities")
+
+  assert.equal(res.status, 200)  // replayed as LocalDefault: the server deleted the old badge
+  assert.equal(calls, 2)
+  assert.deepEqual(s.reasons, [])  // so the browser singleton never navigates to /login
+  assert.equal(s.r.isActive(), false)  // nothing left to renew
+  assert.equal(s.deps.storage!.getItem("redsuite:session:renewedAt"), null)
+})
+
+test("only an upgrade accepts LocalDefault: an ordinary renewal that finds it still ends the session", async (t) => {
+  const s = lostReasons({}, (url) =>
+    url === "/auth/refresh" ? json(401, { error: "invalid_token" }) : json(200, { id: "local-user" }))
+  t.after(() => s.r.stop())  // a failed assertion must not leave a renewal timer running
+  s.r.start()
+  assert.equal(await s.r.renewSession(), "gone")
+  assert.deepEqual(s.reasons, ["expired"])
+})
+
+test("fetch interceptor: session_revoked counts only from this origin, outside /auth", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())  // a failed assertion must not leave a renewal timer running
+  s.r.start()
+  await s.r.renewSession()
+  const base = (async () => json(401, { error: "session_revoked" })) as unknown as typeof fetch
+  const wrapped = s.r.wrapFetch(base)
+
+  assert.equal((await wrapped("https://elsewhere.example/api/x")).status, 401)
+  assert.equal((await wrapped("/auth/me")).status, 401)
+  assert.deepEqual(s.reasons, [])
+  assert.equal(s.r.isActive(), true)
+
+  await wrapped("/api/entities")
+  assert.deepEqual(s.reasons, ["revoked"])
+})

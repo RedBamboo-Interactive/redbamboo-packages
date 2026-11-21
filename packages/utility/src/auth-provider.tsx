@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import {
+  announceSignedIn,
   clearSessionRenewalStamp,
   hasSessionRenewalStamp,
   renewSession,
@@ -39,7 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     // Transient failures keep the session; only a confirmed-gone session ends it.
     await renewSession()
-    return (await fetchUser()) !== null
+    const current = await fetchUser()
+    if (current && current.id !== LOCAL_IDENTITY_ID) {
+      // Also after a sign-in without a reload: renewal restarts (idempotent when it runs) and
+      // whatever stopped at sign-out, like a socket closed with 4401, starts again.
+      startSessionRenewal()
+      announceSignedIn()
+    }
+    return current !== null
   }, [fetchUser])
 
   const logout = useCallback(async () => {

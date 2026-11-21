@@ -1,5 +1,5 @@
 import type { AuthUser } from "./auth-types"
-import type { RenewalResult } from "./session-renewal"
+import type { RenewalResult, RenewOptions } from "./session-renewal"
 
 // Mirrors session-renewal's constants; kept literal so this module needs no runtime import.
 const SESSION_REVOKED_ERROR = "session_revoked"
@@ -11,7 +11,7 @@ export interface AuthBootstrapDependencies {
   fetch: (input: string, init?: RequestInit) => Promise<Response>
   hasRenewalStamp: () => boolean
   clearRenewalStamp: () => void
-  renewSession: () => Promise<RenewalResult>
+  renewSession: (options?: RenewOptions) => Promise<RenewalResult>
 }
 
 /**
@@ -36,20 +36,24 @@ export async function bootstrapAuthUser(
   // Ended on the server: renewing would only be refused.
   if (code === SESSION_REVOKED_ERROR) return null
   // A badge from before device sessions is replaced by one renewal, stamp or not.
-  const needsRecovery = code === SESSION_UPGRADE_REQUIRED_ERROR || (hadUserSession
+  const upgrade = code === SESSION_UPGRADE_REQUIRED_ERROR
+  const needsRecovery = upgrade || (hadUserSession
     && (response.status === 401 || user?.id === LOCAL_IDENTITY_ID))
 
   if (needsRecovery) {
     // A recent stamp can otherwise make renewal incorrectly skip the network
     // call even though /auth/me has already proved the access badge unusable.
     dependencies.clearRenewalStamp()
-    if ((await dependencies.renewSession()) !== "renewed") return null
+    // The server deleted the old badge; on loopback without a refresh cookie the
+    // browser is LocalDefault now, as before sessions (design 5.3), not signed out.
+    const result = await dependencies.renewSession(upgrade ? { acceptLocal: true } : undefined)
+    if (result !== "renewed" && result !== "local") return null
     response = await fetch("/auth/me", {
       credentials: "include",
       cache: "no-store",
     })
     user = response.ok ? (await response.json()) as AuthUser : null
-    if (user?.id === LOCAL_IDENTITY_ID) return null
+    if (user?.id === LOCAL_IDENTITY_ID && result !== "local") return null
   }
 
   return user

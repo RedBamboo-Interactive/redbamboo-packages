@@ -113,13 +113,15 @@ export {
   stopSessionRenewal,
   ensureFreshSession,
   reportSessionRevoked,
+  announceSignedIn,
   installSessionFetchInterceptor,
   uninstallSessionFetchInterceptor,
   SIGNED_OUT_EVENT,
+  SIGNED_IN_EVENT,
   SESSION_REVOKED_ERROR,
   SESSION_UPGRADE_REQUIRED_ERROR,
 } from "./session-renewal"
-export type { RenewalResult, SessionLostReason, SessionRenewal, SessionRenewalDeps } from "./session-renewal"
+export type { RenewalResult, RenewOptions, SessionLostReason, SessionRenewal, SessionRenewalDeps } from "./session-renewal"
 
 export { useServiceDiscovery } from "./use-service-discovery"
 export type { ServiceManifest, CapabilityInfo, EndpointInfo, ParameterInfo, ProxyInfo } from "./use-service-discovery"
@@ -164,7 +166,7 @@ export type { UseLogStreamOptions, UseLogStreamReturn } from "./use-log-stream"
 export { LogPanel } from "./log-panel"
 export type { LogPanelProps } from "./log-panel"
 
-export { createWebSocket, SESSION_REVOKED_CLOSE_CODE } from "./create-websocket"
+export { createWebSocket, reconnectDelay, MAX_RECONNECT_MS, SESSION_REVOKED_CLOSE_CODE } from "./create-websocket"
 export type {
   WsEvent,
   CreateWebSocketOptions,

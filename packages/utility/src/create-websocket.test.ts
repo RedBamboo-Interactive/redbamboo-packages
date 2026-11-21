@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createWebSocket } from "./create-websocket.ts"
+import { createWebSocket, MAX_RECONNECT_MS, reconnectDelay } from "./create-websocket.ts"
 
 class FakeWebSocket {
   static readonly CONNECTING = 0
@@ -172,6 +172,76 @@ test("any other close code still reconnects", async () => {
     assert.equal(FakeWebSocket.instances.length, 2)
     handle.close()
   } finally {
+    browser.restore()
+  }
+})
+
+test("a handle stopped by 4401 re-arms after a sign-in without a reload", async () => {
+  const browser = installBrowserFakes()
+  try {
+    const handle = createWebSocket({ url: "ws://leaf/ws", reconnectMs: 1, onEvent: () => {} })
+    const socket = FakeWebSocket.instances[0] as FakeWebSocket & { onclose: ((e?: { code: number; reason: string }) => void) | null }
+    socket.open()
+    socket.readyState = FakeWebSocket.CLOSED
+    socket.onclose?.({ code: 4401, reason: "session_revoked" })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    assert.equal(FakeWebSocket.instances.length, 1)
+
+    handle.rearm()
+    assert.equal(FakeWebSocket.instances.length, 2)
+    handle.rearm()  // already armed: nothing more
+    assert.equal(FakeWebSocket.instances.length, 2)
+    handle.close()
+    handle.rearm()  // closed for good
+    assert.equal(FakeWebSocket.instances.length, 2)
+  } finally {
+    browser.restore()
+  }
+})
+
+test("rearm does nothing to a socket that was never revoked", () => {
+  const browser = installBrowserFakes()
+  try {
+    const handle = createWebSocket({ url: "ws://leaf/ws", onEvent: () => {} })
+    FakeWebSocket.instances[0].open()
+    handle.rearm()
+    assert.equal(FakeWebSocket.instances.length, 1)
+    handle.close()
+  } finally {
+    browser.restore()
+  }
+})
+
+test("reconnect delays double from the base up to a minute while connects keep failing", () => {
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map((n) => reconnectDelay(3000, n)),
+    [3000, 6000, 12_000, 24_000, 48_000, 60_000, 60_000, 60_000])
+  assert.equal(reconnectDelay(3000, 0), 3000)
+  assert.equal(reconnectDelay(3000, 10_000), MAX_RECONNECT_MS)
+  assert.equal(reconnectDelay(120_000, 3), 120_000)  // a base above the cap is kept as is
+})
+
+test("a refused socket backs off, and one that opens starts again from the base", async () => {
+  const browser = installBrowserFakes()
+  const realSetTimeout = globalThis.setTimeout
+  const delays: number[] = []
+  globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+    delays.push(ms ?? 0)
+    return realSetTimeout(fn, 0)
+  }) as typeof setTimeout
+  try {
+    const handle = createWebSocket({ url: "ws://leaf/ws", reconnectMs: 100, onEvent: () => {} })
+    for (let i = 0; i < 4; i++) {
+      FakeWebSocket.instances.at(-1)!.serverClose()  // the upgrade is refused: never opens
+      await new Promise((resolve) => realSetTimeout(resolve, 5))
+    }
+    FakeWebSocket.instances.at(-1)!.open()
+    FakeWebSocket.instances.at(-1)!.serverClose()
+    await new Promise((resolve) => realSetTimeout(resolve, 5))
+    handle.close()
+
+    assert.deepEqual(delays.filter((ms) => ms >= 100), [100, 200, 400, 800, 100])
+  } finally {
+    globalThis.setTimeout = realSetTimeout
     browser.restore()
   }
 })

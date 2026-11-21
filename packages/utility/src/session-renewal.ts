@@ -9,7 +9,8 @@
  * - a 401 from /auth/refresh is final only after /auth/me confirms the session is gone;
  * - a session the server ended (`session_revoked`: signed out from another device, rejected,
  *   refresh-token reuse) is final at once: no retry, one `onSessionLost("revoked")`;
- * - `session_upgrade_required` (a badge from before device sessions) renews once and replays;
+ * - `session_upgrade_required` (a badge from before device sessions) renews once per session and
+ *   replays; on loopback with no refresh cookie that renewal ends in LocalDefault, which is accepted;
  * - network errors and 5xx are transient and never end the session;
  * - a global fetch interceptor renews and replays a request that came back 401, once;
  * - proactive renewal about once an hour per browser, also on focus/visibility/online.
@@ -19,7 +20,20 @@
  * Deliberately dependency-free (no relative imports) so it runs under `node --test`.
  */
 
-export type RenewalResult = "renewed" | "gone" | "revoked" | "transient"
+/**
+ * `local`: there was nothing to renew and the browser is now the loopback LocalDefault identity, which the
+ * caller asked to accept ({@link RenewOptions.acceptLocal}). Renewal stops; the session is not "lost".
+ */
+export type RenewalResult = "renewed" | "gone" | "revoked" | "transient" | "local"
+
+export interface RenewOptions {
+  /**
+   * The server deleted a badge from before device sessions (`session_upgrade_required`). On loopback a
+   * browser without a refresh cookie then falls back to LocalDefault, as before sessions (design 5.3):
+   * accept that instead of treating it as a lost session.
+   */
+  acceptLocal?: boolean
+}
 
 /** Why the session ended: it could not be renewed, or the server ended it. */
 export type SessionLostReason = "expired" | "revoked"
@@ -34,6 +48,12 @@ export const SESSION_UPGRADE_REQUIRED_ERROR = "session_upgrade_required"
  * shows its own signed-out screen calls `preventDefault()`; otherwise the page goes to /login.
  */
 export const SIGNED_OUT_EVENT = "redsuite:signed-out"
+
+/**
+ * Dispatched on `window` after someone signed in again without a reload (for example from a shell's own
+ * signed-out screen). A WebSocket stopped by a 4401 close re-arms on it.
+ */
+export const SIGNED_IN_EVENT = "redsuite:signed-in"
 
 export interface SessionRenewalDeps {
   fetch: (input: string, init?: RequestInit) => Promise<Response>
@@ -55,7 +75,7 @@ const RETRY_BACKOFF_MS = [1_000, 2_000, 4_000]
 const TRANSIENT_RETRY_MS = 60_000
 
 export interface SessionRenewal {
-  renewSession(): Promise<RenewalResult>
+  renewSession(options?: RenewOptions): Promise<RenewalResult>
   /** Begin tracking a real (non-local) session: proactive timer + lifecycle listeners. */
   start(): void
   stop(): void
@@ -77,6 +97,11 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
   let timer: ReturnType<typeof setTimeout> | null = null
   let renewAfterMs = PROACTIVE_AFTER_MS
   let teardown: (() => void) | null = null
+  // Set while some caller of the in-flight renewal accepts ending in LocalDefault.
+  let acceptLocal = false
+  // session_upgrade_required renews once per session: a server that kept answering it would otherwise
+  // rotate the refresh token on every request.
+  let upgradeAttempted = false
 
   const readStamp = (): number | null => {
     try {
@@ -120,8 +145,9 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
             if (me.ok) {
               const user = (await me.json().catch(() => null)) as { id?: string } | null
               // LocalDefault is a successful anonymous loopback fallback, not proof
-              // that the prior durable user session still exists.
-              if (user?.id === "local-user") return "gone"
+              // that the prior durable user session still exists, unless the caller
+              // knows the badge was just deleted and accepts it.
+              if (user?.id === "local-user") return acceptLocal ? "local" : "gone"
             }
           } catch {}
           // Session still valid (or unknown) but refresh did not work: try again later, don't stamp.
@@ -176,7 +202,8 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
     deps.onSessionLost(reason)
   }
 
-  const renewSession = (): Promise<RenewalResult> => {
+  const renewSession = (options?: RenewOptions): Promise<RenewalResult> => {
+    if (options?.acceptLocal) acceptLocal = true
     if (inflight) return inflight
     inflight = (async () => {
       try {
@@ -191,10 +218,15 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
         })
         if (result === "gone") loseSession("expired")
         else if (result === "revoked") loseSession("revoked")
-        else if (active) schedule(result === "transient" ? TRANSIENT_RETRY_MS : undefined)
+        else if (result === "local") {
+          // Nothing left to renew: stop quietly, without onSessionLost.
+          stopInternal()
+          clearStampOnly()
+        } else if (active) schedule(result === "transient" ? TRANSIENT_RETRY_MS : undefined)
         return result
       } finally {
         inflight = null
+        acceptLocal = false
       }
     })()
     return inflight
@@ -247,6 +279,7 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
       if (active) return
       active = true
       lost = false
+      upgradeAttempted = false
       const onVisible = () => {
         if (typeof document === "undefined" || document.visibilityState === "visible") renewIfStale()
       }
@@ -291,7 +324,8 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
           }
         }
         const res = await base(input, init)
-        if (res.status !== 401 || !active) return res
+        // Only this origin's own API speaks for this session: another origin's 401 says nothing about it.
+        if (res.status !== 401 || !eligible || !active) return res
         const code = await errorCode(res.clone())
         if (code === SESSION_REVOKED_ERROR) {
           // Ended on the server: renewing would only be refused. Final, once.
@@ -299,10 +333,18 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
           return res
         }
         if (!replay) return res
-        // A badge from before device sessions: a fresh renewal, even right after another one.
-        if (code === SESSION_UPGRADE_REQUIRED_ERROR) clearStampOnly()
-        const result = await renewSession()
-        if (result === "renewed") return replay()
+        let options: RenewOptions | undefined
+        if (code === SESSION_UPGRADE_REQUIRED_ERROR) {
+          // Once per session. Repeated, it is final for that request: no second rotation, no stamp cleared.
+          if (upgradeAttempted) return res
+          upgradeAttempted = true
+          // A badge from before device sessions: a fresh renewal, even right after another one.
+          clearStampOnly()
+          options = { acceptLocal: true }
+        }
+        const result = await renewSession(options)
+        // "local": the server deleted the old badge and this loopback browser is LocalDefault now.
+        if (result === "renewed" || result === "local") return replay()
         if (result === "transient") {
           // Not a logout: surface a retryable error rather than a 401.
           return new Response(JSON.stringify({ error: "session_renewal_unavailable" }), {
@@ -374,7 +416,7 @@ function browserRenewal(): SessionRenewal {
   return singleton
 }
 
-export const renewSession = () => browserRenewal().renewSession()
+export const renewSession = (options?: RenewOptions) => browserRenewal().renewSession(options)
 export const startSessionRenewal = () => {
   installSessionFetchInterceptor()
   browserRenewal().start()
@@ -384,6 +426,11 @@ export const ensureFreshSession = () => browserRenewal().ensureFresh()
 export const clearSessionRenewalStamp = () => browserRenewal().clearStamp()
 /** The server ended this browser's session (for example a 4401 WebSocket close). */
 export const reportSessionRevoked = () => browserRenewal().reportRevoked()
+/** Someone signed in again without a reload: tell what stopped on sign-out (a 4401 WebSocket) to start again. */
+export const announceSignedIn = () => {
+  if (typeof window === "undefined") return
+  window.dispatchEvent(new CustomEvent(SIGNED_IN_EVENT))
+}
 export const hasSessionRenewalStamp = () => {
   try {
     return !!localStorage.getItem(STAMP_KEY)

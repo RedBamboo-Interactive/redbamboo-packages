@@ -14,7 +14,7 @@ const owner = { id: "user-1", email: "owner@example.test", name: "Owner", roles:
 
 function dependencies(
   responses: Response[],
-  renewal: "renewed" | "gone" | "transient",
+  renewal: "renewed" | "gone" | "transient" | "local",
   stamped = true,
 ) {
   const calls: string[] = []
@@ -119,4 +119,33 @@ test("/auth/me's device session is passed through", async () => {
   const user = await bootstrapAuthUser(fixture.deps)
 
   assert.deepEqual(user?.device, { sessionId: "dev_01JZ0000000000000000000000", status: "pending" })
+})
+
+test("an upgrade on loopback with no refresh cookie lands on LocalDefault instead of signing out", async () => {
+  const fixture = dependencies([json(401, { error: "session_upgrade_required" }), json(200, local)], "local", false)
+  const asked: unknown[] = []
+  const renew = fixture.deps.renewSession
+  fixture.deps.renewSession = (options) => {
+    asked.push(options)
+    return renew(options)
+  }
+
+  const user = await bootstrapAuthUser(fixture.deps)
+
+  assert.deepEqual(user, local)
+  assert.deepEqual(asked, [{ acceptLocal: true }])
+  assert.deepEqual(fixture.calls, ["/auth/me", "/auth/me"])
+})
+
+test("a stamped session that lands on LocalDefault without an upgrade is still not downgraded", async () => {
+  const fixture = dependencies([json(200, local)], "gone")
+  const asked: unknown[] = []
+  const renew = fixture.deps.renewSession
+  fixture.deps.renewSession = (options) => {
+    asked.push(options)
+    return renew(options)
+  }
+
+  assert.equal(await bootstrapAuthUser(fixture.deps), null)
+  assert.deepEqual(asked, [undefined])
 })

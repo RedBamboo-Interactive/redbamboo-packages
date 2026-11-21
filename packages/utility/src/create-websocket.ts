@@ -1,6 +1,18 @@
 /** The close code the server sends to a device whose session ended. The socket is not reopened. */
 export const SESSION_REVOKED_CLOSE_CODE = 4401
 
+/** The longest wait between reconnect attempts that keep failing (signed out, server down). */
+export const MAX_RECONNECT_MS = 60_000
+
+/**
+ * The wait before reconnect attempt number `failures` (1 for the first) since the socket was last open:
+ * `baseMs`, then doubling up to {@link MAX_RECONNECT_MS}. A socket that opens resets the count.
+ */
+export function reconnectDelay(baseMs: number, failures: number): number {
+  const doublings = Math.min(Math.max(failures - 1, 0), 16)
+  return Math.min(baseMs * 2 ** doublings, Math.max(baseMs, MAX_RECONNECT_MS))
+}
+
 export interface WsEvent {
   type: string
   data: unknown
@@ -21,13 +33,18 @@ export interface CreateWebSocketOptions {
   beforeReconnect?: () => Promise<unknown> | undefined | void
   /**
    * The server closed the socket with {@link SESSION_REVOKED_CLOSE_CODE}: this device was signed out.
-   * The handle stops reconnecting for good, including on resume.
+   * The handle stops reconnecting, including on resume, until {@link WebSocketHandle.rearm}.
    */
   onSessionRevoked?: (reason: string) => void
 }
 
 export interface WebSocketHandle {
   close: () => void
+  /**
+   * Someone signed in again without a reload: a handle a 4401 close stopped connects again. Does
+   * nothing on a handle that was not stopped that way, or that was closed.
+   */
+  rearm: () => void
 }
 
 export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
@@ -39,6 +56,9 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   let hasConnected = false
   let lastResumeReconnectAt = 0
   let reconnectEpoch = 0
+  // Closes since the socket was last open: a socket the server keeps refusing (signed out, or down)
+  // is retried less and less often instead of every few seconds.
+  let failures = 0
 
   function cleanup() {
     if (ws) {
@@ -62,6 +82,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
     ws = new WebSocket(url)
 
     ws.onopen = () => {
+      failures = 0
       if (hasConnected && opts.onReconnect) opts.onReconnect()
       hasConnected = true
       opts.onConnect?.()
@@ -84,7 +105,8 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
         return
       }
       if (!closed) {
-        reconnectTimeout = setTimeout(reconnect, reconnectMs)
+        failures++
+        reconnectTimeout = setTimeout(reconnect, reconnectDelay(reconnectMs, failures))
       }
     }
 
@@ -143,6 +165,12 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   connect()
 
   return {
+    rearm() {
+      if (closed || !revoked) return
+      revoked = false
+      failures = 0
+      connect()
+    },
     close() {
       closed = true
       cleanup()
