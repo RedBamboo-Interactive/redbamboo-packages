@@ -1,4 +1,7 @@
+using System.Net;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +26,9 @@ public class DeviceSessionTests
         public HashSet<string> EndedSessions { get; } = [];
         public DeviceSessionStatus StartAs { get; set; } = DeviceSessionStatus.Approved;
 
+        /// <summary>Runs inside EndAsync, before it returns (to see what the store still holds then).</summary>
+        public Action? OnEnd { get; set; }
+
         public Task<DeviceSessionStatus> BeginAsync(HttpContext context, AuthUser user, string method, string sessionId)
         {
             Begun.Add((method, sessionId));
@@ -36,8 +42,41 @@ public class DeviceSessionTests
         {
             Ended.Add((sessionId, reason));
             EndedSessions.Add(sessionId);
+            OnEnd?.Invoke();
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>
+    /// A store that lets a test act in the middle of a renewal: around the replacement being stored, and by
+    /// slowing that store down so two renewals overlap.
+    /// </summary>
+    private sealed class InterleavingStore(IRefreshTokenStore inner) : IRefreshTokenStore
+    {
+        public Func<Task>? BeforeStore { get; set; }
+        public Func<Task>? AfterStore { get; set; }
+        public TimeSpan StoreDelay { get; set; }
+
+        public Task StoreAsync(string token, string userId, DateTimeOffset expiresAt)
+            => StoreAsync(token, userId, expiresAt, null);
+
+        public async Task StoreAsync(string token, string userId, DateTimeOffset expiresAt, string? familyId)
+        {
+            if (BeforeStore is not null) await BeforeStore();
+            if (StoreDelay > TimeSpan.Zero) await Task.Delay(StoreDelay);
+            await inner.StoreAsync(token, userId, expiresAt, familyId);
+            if (AfterStore is not null) await AfterStore();
+        }
+
+        public Task<RefreshTokenValidation?> ValidateAsync(string token) => inner.ValidateAsync(token);
+        public Task<RefreshTokenValidation?> FindAsync(string token) => inner.FindAsync(token);
+        public Task<RefreshTokenValidation?> FindByHashAsync(string tokenHash) => inner.FindByHashAsync(tokenHash);
+        public Task<RotationMark> MarkRotatedAsync(string entityId, string replacedByHash, DateTimeOffset rotatedAt,
+            string? familyId = null) => inner.MarkRotatedAsync(entityId, replacedByHash, rotatedAt, familyId);
+        public Task RevokeByIdAsync(string entityId) => inner.RevokeByIdAsync(entityId);
+        public Task RevokeByTokenAsync(string token) => inner.RevokeByTokenAsync(token);
+        public Task<bool> RevokeFamilyAsync(string familyId) => inner.RevokeFamilyAsync(familyId);
+        public Task<bool> RevokeAllForUserAsync(string userId) => inner.RevokeAllForUserAsync(userId);
     }
 
     private sealed class Clock : TimeProvider
@@ -51,10 +90,11 @@ public class DeviceSessionTests
         public required JwtService Jwt { get; init; }
         public required FakeBadgeVault Vault { get; init; }
         public required AuthOptions Options { get; init; }
-        public InMemoryRefreshTokenStore Tokens { get; } = new();
+        public Clock Clock { get; } = new();
+        public InMemoryRefreshTokenStore Tokens => _tokens ??= new InMemoryRefreshTokenStore(Clock);
+        private InMemoryRefreshTokenStore? _tokens;
         public InMemoryUserStore Users { get; } = new();
         public RecordingHooks Hooks { get; } = new();
-        public Clock Clock { get; } = new();
         public AuthUser User { get; set; } = null!;
     }
 
@@ -115,10 +155,11 @@ public class DeviceSessionTests
         return (session!.SessionId, SetCookieValue(ctx, f.Options.CookieName)!, SetCookieValue(ctx, f.Options.RefreshCookieName)!);
     }
 
-    private static async Task<(int Status, string? Error, DefaultHttpContext Ctx)> Refresh(Fixture f, string cookie)
+    private static async Task<(int Status, string? Error, DefaultHttpContext Ctx)> Refresh(Fixture f, string cookie,
+        IRefreshTokenStore? store = null)
     {
         var ctx = Context(f, cookie);
-        var result = await AuthEndpoints.RefreshAsync(ctx, f.Tokens, f.Users, f.Jwt, f.Options, f.Hooks, f.Clock);
+        var result = await AuthEndpoints.RefreshAsync(ctx, store ?? f.Tokens, f.Users, f.Jwt, f.Options, f.Hooks, f.Clock);
         var status = ((IStatusCodeHttpResult)result).StatusCode ?? 200;
         string? error = null;
         if (result is IValueHttpResult { Value: { } value })
@@ -226,23 +267,98 @@ public class DeviceSessionTests
     }
 
     [Fact]
-    public async Task A_rotated_token_used_after_the_grace_ends_the_whole_family()
+    public async Task A_lost_refresh_response_keeps_the_session_through_retries_at_1_2_4_and_60_seconds()
+    {
+        var f = await Setup();
+        var (session, _, first) = await SignIn(f);
+        var start = f.Clock.Now;
+        var (lostStatus, _, lost) = await Refresh(f, first);  // rotated, but the answer never reaches the browser
+        Assert.Equal(200, lostStatus);
+        var neverArrived = SetCookieValue(lost, f.Options.RefreshCookieName)!;
+
+        foreach (var seconds in new[] { 1, 2, 4 })
+        {
+            f.Clock.Now = start + TimeSpan.FromSeconds(seconds);
+            var (status, error, ctx) = await Refresh(f, first);
+            Assert.Equal((401, "invalid_token"), (status, error));
+            Assert.Empty(ctx.Response.Headers.SetCookie.ToArray());
+        }
+
+        f.Clock.Now = start + TimeSpan.FromSeconds(60);
+        var (retryStatus, _, retry) = await Refresh(f, first);
+
+        Assert.Equal(200, retryStatus);
+        var renewed = SetCookieValue(retry, f.Options.RefreshCookieName)!;
+        Assert.Equal(session, f.Jwt.ValidateToken(SetCookieValue(retry, f.Options.CookieName)!)!.FindFirstValue(SessionClaims.SessionId));
+        Assert.Equal(session, (await f.Tokens.FindAsync(renewed))!.FamilyId);
+        Assert.Null(await f.Tokens.FindAsync(neverArrived));  // the successor nobody received is revoked
+        Assert.Empty(f.Hooks.Ended);
+
+        f.Clock.Now += TimeSpan.FromMinutes(5);
+        Assert.Equal(200, (await Refresh(f, renewed)).Status);
+        Assert.Empty(f.Hooks.Ended);
+    }
+
+    [Fact]
+    public async Task A_token_two_or_more_generations_old_ends_the_whole_family()
     {
         var f = await Setup();
         var (session, _, first) = await SignIn(f);
         var (_, _, rotation) = await Refresh(f, first);
         var second = SetCookieValue(rotation, f.Options.RefreshCookieName)!;
+        f.Clock.Now += TimeSpan.FromMinutes(5);
+        var (_, _, victim) = await Refresh(f, second);  // the browser carries on with the successor
+        var third = SetCookieValue(victim, f.Options.RefreshCookieName)!;
 
-        f.Clock.Now += AuthEndpoints.RotationGrace + TimeSpan.FromSeconds(1);
-        var (status, error, ctx) = await Refresh(f, first);
+        f.Clock.Now += TimeSpan.FromMinutes(1);
+        var (status, error, ctx) = await Refresh(f, first);  // a copy of the first token turns up
 
         Assert.Equal((401, "session_revoked"), (status, error));
         Assert.True(ClearsCookie(ctx, f.Options.CookieName));
         Assert.True(ClearsCookie(ctx, f.Options.RefreshCookieName));
         Assert.Equal([(session, SessionEndReasons.RefreshReused)], f.Hooks.Ended);
-        // The successor dies with the family: the thief and the victim are both signed out.
-        Assert.Null(await f.Tokens.FindAsync(second));
-        Assert.Equal(401, (await Refresh(f, second)).Status);
+        // The live token dies with the family: the thief and the victim are both signed out.
+        Assert.Null(await f.Tokens.FindAsync(third));
+        Assert.Equal(401, (await Refresh(f, third)).Status);
+        Assert.Equal(0, f.Tokens.Count);
+    }
+
+    [Fact]
+    public async Task A_rotated_token_is_marked_at_the_time_of_the_mark_not_of_the_request()
+    {
+        var f = await Setup();
+        var (_, _, first) = await SignIn(f);
+        var slowStore = new InterleavingStore(f.Tokens) { AfterStore = () => { f.Clock.Now += TimeSpan.FromSeconds(10); return Task.CompletedTask; } };
+
+        await Refresh(f, first, slowStore);
+
+        Assert.Equal((DateTimeOffset?)f.Clock.Now, (await f.Tokens.FindAsync(first))!.RotatedAt);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    public async Task A_session_that_ends_during_its_renewal_keeps_no_live_token(bool afterStore, bool hostKnows)
+    {
+        var f = await Setup();
+        var (session, _, first) = await SignIn(f);
+        // Signed out from another device while this renewal is in flight. Without host records (RedCompute),
+        // only the family revoke happens.
+        Func<Task> signOutElsewhere = hostKnows
+            ? () => AuthEndpoints.EndSessionAsync(f.Tokens, f.Hooks, session, f.User.Id, SessionEndReasons.SignedOut, null)
+            : () => f.Tokens.RevokeFamilyAsync(session);
+        var store = afterStore
+            ? new InterleavingStore(f.Tokens) { AfterStore = signOutElsewhere }
+            : new InterleavingStore(f.Tokens) { BeforeStore = signOutElsewhere };
+
+        var (status, error, ctx) = await Refresh(f, first, store);
+
+        Assert.Equal((401, "session_revoked"), (status, error));
+        Assert.Equal(0, f.Tokens.Count);
+        Assert.Null(SetCookieValue(ctx, f.Options.RefreshCookieName));
+        Assert.True(ClearsCookie(ctx, f.Options.CookieName));
     }
 
     [Fact]
@@ -273,6 +389,41 @@ public class DeviceSessionTests
         Assert.Equal(SignInMethods.Adopted, method);
         Assert.Equal(session, f.Jwt.ValidateToken(SetCookieValue(ctx, f.Options.CookieName)!)!.FindFirstValue(SessionClaims.SessionId));
         Assert.Equal(session, (await f.Tokens.FindAsync(SetCookieValue(ctx, f.Options.RefreshCookieName)!))!.FamilyId);
+        // The old row joins the family, so a later reuse of it ends this session.
+        Assert.Equal(session, (await f.Tokens.FindAsync(legacy))!.FamilyId);
+    }
+
+    [Fact]
+    public async Task Two_tabs_renewing_a_token_from_before_sessions_adopt_one_family()
+    {
+        var f = await Setup();
+        var legacy = f.Jwt.GenerateRefreshToken();
+        await f.Tokens.StoreAsync(legacy, f.User.Id, DateTimeOffset.UtcNow.AddDays(30));
+        var slow = new InterleavingStore(f.Tokens) { StoreDelay = TimeSpan.FromMilliseconds(150) };
+
+        var results = await Task.WhenAll(Refresh(f, legacy, slow), Refresh(f, legacy, slow));
+
+        var (method, session) = Assert.Single(f.Hooks.Begun);
+        Assert.Equal(SignInMethods.Adopted, method);
+        Assert.Equal([200, 401], results.Select(r => r.Status).Order());
+        Assert.Equal("invalid_token", results.Single(r => r.Status == 401).Error);  // the other tab's race answer
+        Assert.Equal(session, (await f.Tokens.FindAsync(legacy))!.FamilyId);
+        Assert.Equal(2, f.Tokens.Count);
+    }
+
+    [Fact]
+    public async Task A_token_from_before_sessions_the_host_refuses_to_adopt_is_revoked()
+    {
+        var f = await Setup();
+        f.Hooks.StartAs = DeviceSessionStatus.Ended;
+        var legacy = f.Jwt.GenerateRefreshToken();
+        await f.Tokens.StoreAsync(legacy, f.User.Id, DateTimeOffset.UtcNow.AddDays(30));
+
+        var (status, error, ctx) = await Refresh(f, legacy);
+
+        Assert.Equal((401, "session_revoked"), (status, error));
+        Assert.True(ClearsCookie(ctx, f.Options.RefreshCookieName));
+        Assert.Equal(0, f.Tokens.Count);
     }
 
     [Fact]
@@ -289,6 +440,64 @@ public class DeviceSessionTests
         Assert.Equal([(session, SessionEndReasons.SignedOut)], f.Hooks.Ended);
         Assert.Equal(0, f.Tokens.Count);  // the live token and the rotated one
         Assert.True(ClearsCookie(ctx, f.Options.CookieName));
+    }
+
+    [Fact]
+    public async Task Logout_with_only_the_badge_ends_its_session_host_first()
+    {
+        var f = await Setup();
+        var (session, access, _) = await SignIn(f);
+        var tokensWhenTheHostHeard = -1;
+        f.Hooks.OnEnd = () => tokensWhenTheHostHeard = f.Tokens.Count;
+
+        var ctx = Context(f);
+        ctx.Request.Headers.Cookie = $"{f.Options.CookieName}={access}";
+        await AuthEndpoints.LogoutAsync(ctx, f.Tokens, f.Options, f.Hooks, f.Jwt);
+
+        Assert.Equal([(session, SessionEndReasons.SignedOut)], f.Hooks.Ended);
+        Assert.Equal(1, tokensWhenTheHostHeard);  // design 3.3: the host records the end before the tokens go
+        Assert.Equal(0, f.Tokens.Count);
+        Assert.True(ClearsCookie(ctx, f.Options.CookieName));
+    }
+
+    [Fact]
+    public async Task Logout_from_a_real_browser_cookie_jar_ends_the_session()
+    {
+        var f = await Setup(legacy: true);
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        await using var app = builder.Build();
+        // Typed as Func<..., Task<IResult>>: a bare HttpContext lambda would bind as a RequestDelegate and drop the result.
+        app.MapPost("/sign-in", (Func<HttpContext, Task<IResult>>)(async ctx =>
+        {
+            var (session, failure) = await SignInSessions.IssueAsync(ctx, f.User, SignInMethods.Google, f.Jwt, f.Tokens,
+                f.Options, f.Hooks);
+            return failure ?? Results.Ok(new { sessionId = session!.SessionId });
+        }));
+        app.MapPost("/auth/logout", (Func<HttpContext, Task<IResult>>)(ctx => AuthEndpoints.LogoutAsync(ctx, f.Tokens, f.Options, f.Hooks, f.Jwt)));
+        app.MapPost("/auth/refresh", (Func<HttpContext, Task<IResult>>)(ctx =>
+            AuthEndpoints.RefreshAsync(ctx, f.Tokens, f.Users, f.Jwt, f.Options, f.Hooks, f.Clock)));
+        await app.StartAsync();
+        var origin = new Uri(app.Urls.Single());
+
+        var jar = new CookieContainer();
+        using var browser = new HttpClient(new HttpClientHandler { CookieContainer = jar, UseCookies = true }) { BaseAddress = origin };
+        (await browser.PostAsync("/sign-in", null)).EnsureSuccessStatusCode();
+        var session = Assert.Single(f.Hooks.Begun).Session;
+        var refreshCopy = jar.GetCookies(new Uri(origin, "/auth/refresh"))[f.Options.RefreshCookieName]!.Value;
+        // The jar keeps the refresh cookie to its path: the logout request never carries it.
+        Assert.Null(jar.GetCookies(new Uri(origin, "/auth/logout"))[f.Options.RefreshCookieName]);
+
+        (await browser.PostAsync("/auth/logout", null)).EnsureSuccessStatusCode();
+
+        Assert.Equal([(session, SessionEndReasons.SignedOut)], f.Hooks.Ended);
+        Assert.Equal(0, f.Tokens.Count);
+        // A copy of the refresh token kept from before the logout renews nothing.
+        using var copy = new HttpClient { BaseAddress = origin };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/auth/refresh");
+        request.Headers.Add("Cookie", $"{f.Options.RefreshCookieName}={refreshCopy}");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await copy.SendAsync(request)).StatusCode);
+        await app.StopAsync();
     }
 
     [Fact]

@@ -158,6 +158,49 @@ public class WebSocketSessionTests
         }
     }
 
+    /// <summary>An open socket whose writer never completes a close until it is cancelled.</summary>
+    private sealed class StuckSocket : WebSocket
+    {
+        public override WebSocketCloseStatus? CloseStatus => null;
+        public override string? CloseStatusDescription => null;
+        public override WebSocketState State => WebSocketState.Open;
+        public override string? SubProtocol => null;
+        public override void Abort() { }
+        public override Task CloseAsync(WebSocketCloseStatus status, string? description, CancellationToken ct)
+            => Task.Delay(Timeout.Infinite, ct);
+        public override Task CloseOutputAsync(WebSocketCloseStatus status, string? description, CancellationToken ct)
+            => Task.Delay(Timeout.Infinite, ct);
+        public override void Dispose() { }
+        public override Task<WebSocketReceiveResult> ReceiveAsync(ArraySegment<byte> buffer, CancellationToken ct)
+            => Task.Delay(Timeout.Infinite, ct).ContinueWith(_ => new WebSocketReceiveResult(0, WebSocketMessageType.Close, true));
+        public override Task SendAsync(ArraySegment<byte> buffer, WebSocketMessageType type, bool end, CancellationToken ct)
+            => Task.Delay(Timeout.Infinite, ct);
+    }
+
+    [Fact]
+    public async Task Closing_many_slow_sockets_of_a_session_takes_one_grace_not_one_each()
+    {
+        var broadcaster = new WebSocketBroadcaster();
+        var lifetimes = new List<CancellationTokenSource>();
+        for (var i = 0; i < 6; i++)
+        {
+            var lifetime = new CancellationTokenSource();
+            lifetimes.Add(lifetime);
+            broadcaster.AddClientFor($"stuck-{i}", new StuckSocket(), false,
+                new WebSocketPrincipal(WebSocketPrincipalKind.Person, "user-1", "dev_A"), lifetime);
+        }
+
+        var watch = Stopwatch.StartNew();
+        var closing = await broadcaster.CloseSessionAsync("dev_A");
+        watch.Stop();
+
+        Assert.Equal(0, closing);  // none could send its close frame
+        // One at a time this would take 6 x 2 s.
+        Assert.True(watch.Elapsed < WebSocketBroadcaster.SessionCloseGrace + TimeSpan.FromSeconds(1),
+            $"closing took {watch.ElapsedMilliseconds} ms");
+        Assert.All(lifetimes, lifetime => Assert.True(lifetime.IsCancellationRequested));  // receive loops abandoned
+    }
+
     [Fact]
     public async Task Events_for_a_user_reach_only_that_users_browsers()
     {

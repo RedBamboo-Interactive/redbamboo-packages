@@ -97,7 +97,9 @@ public class WebSocketBroadcaster
     /// Closes every connection of device session <paramref name="sessionId"/> with
     /// <see cref="SessionRevokedCloseStatus"/>, so the browser knows it was signed out rather than cut off.
     /// A connection that does not acknowledge within <see cref="SessionCloseGrace"/> has its receive loop
-    /// abandoned, which also ends its upstream relays. Returns how many connections were closing.
+    /// abandoned, which also ends its upstream relays. The connections close in parallel and the whole call
+    /// takes at most <see cref="SessionCloseGrace"/>, however many there are and however slow their writers.
+    /// Returns how many connections were closing.
     /// </summary>
     public async Task<int> CloseSessionAsync(string sessionId, string description = "session_revoked",
         CancellationToken ct = default)
@@ -105,24 +107,25 @@ public class WebSocketBroadcaster
         var targets = _clients
             .Where(c => string.Equals(c.Value.Principal.SessionId, sessionId, StringComparison.Ordinal))
             .ToList();
-        var closing = 0;
-        foreach (var (id, client) in targets)
+        if (targets.Count == 0) return 0;
+
+        using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        sendTimeout.CancelAfter(SessionCloseGrace);
+        var results = await Task.WhenAll(targets.Select(async target =>
         {
+            var (id, client) = target;
             bool sent;
-            using (var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
-            {
-                sendTimeout.CancelAfter(SessionCloseGrace);
-                sent = await CloseClientAsync(id, SessionRevokedCloseStatus, description, sendTimeout.Token);
-            }
+            try { sent = await CloseClientAsync(id, SessionRevokedCloseStatus, description, sendTimeout.Token); }
+            catch (Exception) { sent = false; }
             try
             {
                 if (sent) client.Lifetime?.CancelAfter(SessionCloseGrace);
                 else client.Lifetime?.Cancel();
             }
             catch (ObjectDisposedException) { }
-            if (sent) closing++;
-        }
-        return closing;
+            return sent;
+        }));
+        return results.Count(sent => sent);
     }
 
     private static ArraySegment<byte> Serialize<T>(string type, T data)

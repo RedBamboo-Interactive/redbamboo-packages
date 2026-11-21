@@ -97,8 +97,10 @@ public static class AuthEndpoints
                     sp.GetService<IDeviceSessionHooks>(), logger: sp.GetService<ILoggerFactory>()?.CreateLogger("auth")));
 
         registry.MapPost("/auth/logout", "Log out and clear tokens",
-            (HttpContext context, IRefreshTokenStore refreshTokenStore, AuthOptions options, IServiceProvider sp) =>
-                LogoutAsync(context, refreshTokenStore, options, sp.GetService<IDeviceSessionHooks>()));
+            (HttpContext context, IRefreshTokenStore refreshTokenStore, AuthOptions options, JwtService jwtService,
+                IServiceProvider sp) =>
+                LogoutAsync(context, refreshTokenStore, options, sp.GetService<IDeviceSessionHooks>(), jwtService,
+                    sp.GetService<ILoggerFactory>()?.CreateLogger("auth")));
 
         registry.MapGet("/auth/me", "Get current user info",
             async (HttpContext context, IServiceProvider sp) =>
@@ -317,22 +319,26 @@ public static class AuthEndpoints
     /// Rotating refresh: a valid refresh cookie is swapped for a new one in the same family (device session)
     /// and a fresh browser access badge carrying that session (one hour in vault mode). The replacement is
     /// stored before the old token is marked, so a failure in between never leaves the browser holding a dead
-    /// cookie. The old token is kept, marked rotated:
+    /// cookie. The old token is kept, marked rotated, and when it comes back:
     /// <list type="bullet">
     /// <item>within <see cref="RotationGrace"/> it is a 401 <c>invalid_token</c> that leaves the cookies alone
-    /// (the browser already holds its successor; the web client treats it as a multi-tab race);</item>
-    /// <item>after it, presenting it again is reuse: the whole family ends, the cookies are cleared, and the
-    /// answer is 401 <c>session_revoked</c>.</item>
+    /// (another tab renewed at the same moment, or the response is still on its way);</item>
+    /// <item>after it, when its successor was never presented, the response carrying the successor was lost:
+    /// the token rotates again and the unused successor is revoked;</item>
+    /// <item>after it, when its successor was used (so the token is two or more generations old), it is reuse:
+    /// the whole family ends, the cookies are cleared, and the answer is 401 <c>session_revoked</c>.</item>
     /// </list>
-    /// A family the host says has ended is refused the same way. A token stored before sessions existed is
-    /// adopted into a new family. An expired or unknown token is a 401 <c>invalid_token</c> and the cookie is cleared.
+    /// A family the host says has ended is refused the same way, including one that ends while this renewal
+    /// is in flight. A token stored before sessions existed is adopted into a new family, once even when the
+    /// device renews from two tabs at once. An expired or unknown token is a 401 <c>invalid_token</c> and the
+    /// cookie is cleared. Renewals of one token are serialized in this process.
     /// </summary>
     internal static async Task<IResult> RefreshAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
         IUserStore userStore, JwtService jwtService, AuthOptions options, IDeviceSessionHooks? hooks = null,
         TimeProvider? clock = null, ILogger? logger = null)
     {
         hooks ??= DefaultDeviceSessionHooks.Instance;
-        var now = (clock ?? TimeProvider.System).GetUtcNow();
+        var time = clock ?? TimeProvider.System;
 
         // Every refresh cookie the browser sent, not only the first (see AuthMiddleware.CookieValues).
         var refreshTokens = AuthMiddleware.CookieValues(context.Request, options.RefreshCookieName);
@@ -343,44 +349,54 @@ public static class AuthEndpoints
         }
 
         // A live token wins over a rotated one sent alongside it.
-        RefreshTokenValidation? validation = null;
-        RefreshTokenValidation? rotated = null;
+        string? presented = null;
         foreach (var candidate in refreshTokens)
         {
             var found = await refreshTokenStore.FindAsync(candidate);
             if (found is null) continue;
-            if (found.RotatedAt is null) { validation = found; break; }
-            rotated ??= found;
+            presented ??= candidate;
+            if (found.RotatedAt is null) { presented = candidate; break; }
         }
+        if (presented is null) return UnknownToken(context, options);
 
-        if (validation is null && rotated is { RotatedAt: { } rotatedAt })
+        using var _ = await RefreshLocks.AcquireAsync(RefreshTokenHash.Of(presented));
+
+        // Read again under the lock: a renewal of the same token that just finished has rotated or revoked it.
+        var current = await refreshTokenStore.FindAsync(presented);
+        if (current is null) return UnknownToken(context, options);
+        var now = time.GetUtcNow();
+
+        string? unusedSuccessor = null;
+        if (current.RotatedAt is { } rotatedAt)
         {
             if (now - rotatedAt <= RotationGrace)
                 return Results.Json(new { error = "invalid_token" }, statusCode: 401);
 
-            // Reuse: whoever holds this token is not the browser that rotated it, or that browser lost its successor.
-            if (rotated.FamilyId is { } reusedFamily)
+            var successor = current.ReplacedByHash is { } successorHash
+                ? await refreshTokenStore.FindByHashAsync(successorHash)
+                : null;
+            if (successor is { RotatedAt: null } && current.FamilyId is not null
+                && string.Equals(successor.FamilyId, current.FamilyId, StringComparison.Ordinal))
             {
-                await refreshTokenStore.RevokeFamilyAsync(reusedFamily);
-                await hooks.EndAsync(reusedFamily, rotated.UserId, SessionEndReasons.RefreshReused);
+                // The browser never received its successor: renew from this token again.
+                unusedSuccessor = successor.EntityId;
+                logger?.LogInformation("Refresh token of session {Session} came back {Age} s after rotation with its successor unused: rotating again",
+                    current.FamilyId, (int)(now - rotatedAt).TotalSeconds);
             }
             else
             {
-                await refreshTokenStore.RevokeByIdAsync(rotated.EntityId);
+                // Reuse: the successor was used, so whoever holds this token is not the browser that rotated it.
+                if (current.FamilyId is { } reusedFamily)
+                    await EndSessionAsync(refreshTokenStore, hooks, reusedFamily, current.UserId, SessionEndReasons.RefreshReused, logger);
+                else
+                    await refreshTokenStore.RevokeByIdAsync(current.EntityId);
+                logger?.LogWarning("A rotated refresh token was used again {Age} s after rotation: session {Session} of {Sub} ended",
+                    (int)(now - rotatedAt).TotalSeconds, current.FamilyId ?? "(none)", current.UserId);
+                return SessionRevoked(context, options, SessionEndReasons.RefreshReused);
             }
-            logger?.LogWarning("A rotated refresh token was used again {Age} s after rotation: session {Session} of {Sub} ended",
-                (int)(now - rotatedAt).TotalSeconds, rotated.FamilyId ?? "(none)", rotated.UserId);
-            return ClearAuthCookiesAndReturn(context, options,
-                Results.Json(new { error = "session_revoked", reason = SessionEndReasons.RefreshReused }, statusCode: 401));
         }
 
-        if (validation is null)
-        {
-            context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
-            return Results.Json(new { error = "invalid_token" }, statusCode: 401);
-        }
-
-        var user = await userStore.FindByIdAsync(validation.UserId);
+        var user = await userStore.FindByIdAsync(current.UserId);
         if (user is null)
         {
             return ClearAuthCookiesAndReturn(context, options,
@@ -389,28 +405,23 @@ public static class AuthEndpoints
         if (!user.IsActive)
         {
             // A disabled account loses its sessions: this session dies with the refusal.
-            if (validation.FamilyId is { } disabledFamily)
-            {
-                await refreshTokenStore.RevokeFamilyAsync(disabledFamily);
-                await hooks.EndAsync(disabledFamily, user.Id, SessionEndReasons.AccountDisabled);
-            }
+            if (current.FamilyId is { } disabledFamily)
+                await EndSessionAsync(refreshTokenStore, hooks, disabledFamily, user.Id, SessionEndReasons.AccountDisabled, logger);
             else
-            {
-                await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
-            }
+                await refreshTokenStore.RevokeByIdAsync(current.EntityId);
             return ClearAuthCookiesAndReturn(context, options,
                 Results.Json(new { error = "account_disabled" }, statusCode: 401));
         }
 
-        if (validation.FamilyId is { } family
+        if (current.FamilyId is { } family
             && await hooks.StatusAsync(family, user.Id) == DeviceSessionStatus.Ended)
         {
-            await refreshTokenStore.RevokeFamilyAsync(family);
-            return ClearAuthCookiesAndReturn(context, options,
-                Results.Json(new { error = "session_revoked", reason = "ended" }, statusCode: 401));
+            await RevokeFamilyAsync(refreshTokenStore, family, logger);
+            return SessionRevoked(context, options, "ended");
         }
 
-        var sessionId = validation.FamilyId ?? DeviceSessionIds.New(now);
+        var adopted = current.FamilyId is null;
+        var sessionId = current.FamilyId ?? DeviceSessionIds.New(now);
         string newAccessToken;
         try
         {
@@ -422,8 +433,13 @@ public static class AuthEndpoints
         {
             return SignInSessions.VaultUnavailable();
         }
-        if (validation.FamilyId is null)
-            await hooks.BeginAsync(context, user, SignInMethods.Adopted, sessionId);
+        if (adopted
+            && await hooks.BeginAsync(context, user, SignInMethods.Adopted, sessionId) == DeviceSessionStatus.Ended)
+        {
+            // The host refuses to start a session for this device: the old token goes with it.
+            await refreshTokenStore.RevokeByIdAsync(current.EntityId);
+            return SessionRevoked(context, options, "ended");
+        }
 
         var newRefreshToken = jwtService.GenerateRefreshToken();
 
@@ -431,12 +447,75 @@ public static class AuthEndpoints
         // first means any failure past that point (a store that throws, a dropped
         // response) leaves the client holding a cookie whose token no longer
         // works, and the session is dead with no way back but a re-login.
-        var refreshExpiry = now.Add(options.Jwt!.RefreshTokenLifetime);
-        await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry, sessionId);
-        await refreshTokenStore.MarkRotatedAsync(validation.EntityId, RefreshTokenHash.Of(newRefreshToken), now);
+        await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, now.Add(options.Jwt!.RefreshTokenLifetime), sessionId);
+        var mark = await refreshTokenStore.MarkRotatedAsync(current.EntityId, RefreshTokenHash.Of(newRefreshToken),
+            time.GetUtcNow(), adopted ? sessionId : null);
+
+        // The session ended while this renewal was in flight (signed out elsewhere, Not me, reuse): the old row
+        // went with its family, or the host already reports it ended. The replacement must not outlive it.
+        if (mark == RotationMark.Missing || await hooks.StatusAsync(sessionId, user.Id) == DeviceSessionStatus.Ended)
+        {
+            await refreshTokenStore.RevokeByTokenAsync(newRefreshToken);
+            logger?.LogInformation("Session {Session} of {Sub} ended during its renewal: the new refresh token was withdrawn",
+                sessionId, user.Id);
+            return SessionRevoked(context, options, "ended");
+        }
+        if (unusedSuccessor is not null) await refreshTokenStore.RevokeByIdAsync(unusedSuccessor);
 
         SignInSessions.AppendCookies(context, options, jwtService, newAccessToken, newRefreshToken);
         return Results.Ok(new { expiresIn = jwtService.BrowserAccessTokenLifetime.TotalSeconds });
+    }
+
+    private static IResult UnknownToken(HttpContext context, AuthOptions options)
+    {
+        context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+        return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+    }
+
+    private static IResult SessionRevoked(HttpContext context, AuthOptions options, string reason)
+        => ClearAuthCookiesAndReturn(context, options,
+            Results.Json(new { error = "session_revoked", reason }, statusCode: 401));
+
+    /// <summary>
+    /// Ends a device session in the order of design §3.3: the host records it ended first, so a renewal racing
+    /// with the revoke sees it ended once its replacement is stored; then every refresh token of the family goes.
+    /// </summary>
+    internal static async Task EndSessionAsync(IRefreshTokenStore store, IDeviceSessionHooks hooks, string sessionId,
+        string userId, string reason, ILogger? logger)
+    {
+        await hooks.EndAsync(sessionId, userId, reason);
+        await RevokeFamilyAsync(store, sessionId, logger);
+    }
+
+    private static async Task RevokeFamilyAsync(IRefreshTokenStore store, string sessionId, ILogger? logger)
+    {
+        if (!await store.RevokeFamilyAsync(sessionId))
+            logger?.LogWarning("Session {Session} ended, but some of its refresh tokens could not be deleted; they cannot renew it",
+                sessionId);
+    }
+
+    /// <summary>
+    /// One renewal at a time per refresh token, so two tabs renewing together cannot both rotate it (or both
+    /// adopt a token from before sessions). Striped by token hash; held only for one renewal.
+    /// </summary>
+    private static class RefreshLocks
+    {
+        private static readonly SemaphoreSlim[] Stripes =
+            Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1)).ToArray();
+
+        public static async Task<Releaser> AcquireAsync(string tokenHash)
+        {
+            var stripe = Stripes[Convert.ToInt32(tokenHash[..2], 16) % Stripes.Length];
+            await stripe.WaitAsync();
+            return new Releaser(stripe);
+        }
+
+        public readonly struct Releaser : IDisposable
+        {
+            private readonly SemaphoreSlim _stripe;
+            public Releaser(SemaphoreSlim stripe) => _stripe = stripe;
+            public void Dispose() => _stripe.Release();
+        }
     }
 
     /// <summary>
@@ -448,29 +527,51 @@ public static class AuthEndpoints
     {
         var sessionId = context.User.FindFirstValue(SessionClaims.SessionId);
         if (string.IsNullOrEmpty(sessionId)) return null;
-        if (string.Equals(context.User.FindFirstValue(ExecutionIdentityClaims.TokenUseClaim), ExecutionIdentityClaims.TokenUse,
-                StringComparison.OrdinalIgnoreCase))
-            return null;
+        if (IsExecutionToken(context.User)) return null;
         var status = await (hooks ?? DefaultDeviceSessionHooks.Instance).StatusAsync(sessionId, sub);
         return new { sessionId, status = status.ToString().ToLowerInvariant() };
     }
 
+    private static bool IsExecutionToken(ClaimsPrincipal principal)
+        => string.Equals(principal.FindFirstValue(ExecutionIdentityClaims.TokenUseClaim), ExecutionIdentityClaims.TokenUse,
+            StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
-    /// Ends this browser's session: every refresh token of its family, and the host is told. A token stored
-    /// before sessions existed is revoked on its own. The cookies are cleared either way.
+    /// Ends this browser's session and clears its cookies. A browser sends only the access badge here: the
+    /// refresh cookie's path is <c>/auth/refresh</c>. So the session is the <c>sid</c> of each valid badge
+    /// cookie, ended for that badge's <c>sub</c>: the host is told, then every refresh token of the family goes.
+    /// A refresh cookie that does arrive (a client without path rules) ends its family too, or, from before
+    /// sessions, is revoked on its own.
     /// </summary>
     internal static async Task<IResult> LogoutAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
-        AuthOptions options, IDeviceSessionHooks? hooks = null)
+        AuthOptions options, IDeviceSessionHooks? hooks = null, JwtService? jwt = null, ILogger? logger = null)
     {
         hooks ??= DefaultDeviceSessionHooks.Instance;
+        var ended = new HashSet<string>(StringComparer.Ordinal);
+
+        if (jwt is not null)
+        {
+            foreach (var badge in AuthMiddleware.CookieValues(context.Request, options.CookieName))
+            {
+                ClaimsPrincipal? principal;
+                try { principal = jwt.ValidateToken(badge); }
+                catch (Exception) { principal = null; }
+                if (principal is null || IsExecutionToken(principal)) continue;
+                var sessionId = principal.FindFirstValue(SessionClaims.SessionId);
+                var sub = principal.FindFirstValue("sub");
+                if (!DeviceSessionIds.IsSessionId(sessionId) || string.IsNullOrEmpty(sub) || !ended.Add(sessionId!)) continue;
+                await EndSessionAsync(refreshTokenStore, hooks, sessionId!, sub, SessionEndReasons.SignedOut, logger);
+            }
+        }
+
         foreach (var refreshToken in AuthMiddleware.CookieValues(context.Request, options.RefreshCookieName))
         {
             if (string.IsNullOrEmpty(refreshToken)) continue;
             var found = await refreshTokenStore.FindAsync(refreshToken);
             if (found?.FamilyId is { } family)
             {
-                await refreshTokenStore.RevokeFamilyAsync(family);
-                await hooks.EndAsync(family, found.UserId, SessionEndReasons.SignedOut);
+                if (ended.Add(family))
+                    await EndSessionAsync(refreshTokenStore, hooks, family, found.UserId, SessionEndReasons.SignedOut, logger);
             }
             else
             {
