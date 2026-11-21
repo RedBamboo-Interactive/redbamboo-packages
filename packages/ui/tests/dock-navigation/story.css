@@ -1,0 +1,3 @@
+@import "../dock/story.css";
+@source "./story.tsx";
+.ph-arrow-left::before { content: "\2190"; }

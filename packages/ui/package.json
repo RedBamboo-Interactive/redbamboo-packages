@@ -31,6 +31,7 @@
     "test:entity-picker": "node tests/entity-picker/run.mjs",
     "test:protected-value-field": "node tests/protected-value-field/run.mjs",
     "test:dock": "node tests/dock/run.mjs",
+    "test:dock-navigation": "node tests/dock-navigation/run.mjs",
     "test:context-menu": "node tests/context-menu/run.mjs",
     "test:toast": "node tests/toast/run.mjs",
     "test:run-on-choice": "node tests/run-on-choice/run.mjs",

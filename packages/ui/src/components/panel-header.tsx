@@ -19,6 +19,12 @@ const panelHeaderVariants = cva(
 
 export interface PanelHeaderProps
   extends VariantProps<typeof panelHeaderVariants> {
+  /**
+   * The pane's own Back control, rendered first. Unlike `leading`, which is the
+   * pane's identity and is hidden when a dock tab names the pane, Back stays in
+   * the header row in a tab group too. Omit it when there is nowhere to go back to.
+   */
+  back?: ReactNode
   leading?: ReactNode
   title?: string
   children?: ReactNode
@@ -31,7 +37,18 @@ export function PanelHeader(props: PanelHeaderProps) {
   return useIsInDockPanel() ? <DockedPanelHeader {...props} /> : <StaticPanelHeader {...props} />
 }
 
+/** Wraps the Back control so it keeps the row's spacing; in a tab group it sits at the start, beside the tabs. */
+function BackSlot({ back, tab }: { back: ReactNode; tab: boolean }) {
+  if (back == null || back === false) return null
+  return (
+    <div data-slot="panel-header-back" className={cn("flex shrink-0 items-center", tab && "mr-auto")}>
+      {back}
+    </div>
+  )
+}
+
 function StaticPanelHeader({
+  back,
   leading,
   title,
   children,
@@ -43,6 +60,7 @@ function StaticPanelHeader({
       data-slot="panel-header"
       className={cn(panelHeaderVariants({ variant }), className)}
     >
+      <BackSlot back={back} tab={false} />
       {leading}
       {title && (
         <span className="text-[14px] font-medium text-contrast flex-1">
@@ -57,10 +75,12 @@ function StaticPanelHeader({
 /**
  * The panel's first header becomes the dock group's header row: its content
  * moves into that row and the in-place header is hidden, so a docked panel
- * shows one header. In a tab group the tab names the panel and only the
- * header's actions join the row. Other headers in the panel stay in place.
+ * shows one header. In a tab group the tab names the panel, so the identity
+ * (`leading`, `title`) is left out and only the header's Back and actions join
+ * the row. Other headers in the panel stay in place.
  */
 function DockedPanelHeader({
+  back,
   leading,
   title,
   children,
@@ -71,7 +91,8 @@ function DockedPanelHeader({
   // The dock's header row takes on these classes, so a docked header keeps its
   // height, padding and spacing.
   const header = useDockedHeader(rowClassName)!
-  const showIdentity = !(header.primary && header.mode === "tab")
+  const tab = header.primary && header.mode === "tab"
+  const showIdentity = !tab
   return (
     <>
       <div
@@ -84,6 +105,7 @@ function DockedPanelHeader({
       {createPortal(
         header.wrap(
           <>
+            <BackSlot back={back} tab={tab} />
             {showIdentity ? leading : null}
             {showIdentity && title ? (
               <span className="text-[14px] font-medium text-contrast flex-1">
