@@ -75,6 +75,11 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: redcompute/global.json
+      # Package scripts call plain `pnpm` (for example the root build's `pnpm -r build`), so the
+      # corepack shims must be on PATH; each directory still gets the pnpm its packageManager names.
+      - name: Enable corepack shims
+        shell: pwsh
+        run: corepack enable
       - name: Consumer commits
         shell: pwsh
         run: |
