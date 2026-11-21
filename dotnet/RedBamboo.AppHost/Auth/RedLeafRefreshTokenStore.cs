@@ -91,9 +91,9 @@ public sealed class RedLeafRefreshTokenStore : IRefreshTokenStore
     }
 
     public async Task<RotationMark> MarkRotatedAsync(string entityId, string replacedByHash, DateTimeOffset rotatedAt,
-        string? familyId = null)
+        string? familyId = null, string? tokenHash = null)
     {
-        if (!Guid.TryParse(entityId, out var id)) return RotationMark.Missing;
+        if (!Guid.TryParse(entityId, out var id)) return RotationMark.Deleted;
         var fields = new Dictionary<string, string>
         {
             ["rotated_at"] = Stamp(rotatedAt),
@@ -108,10 +108,30 @@ public sealed class RedLeafRefreshTokenStore : IRefreshTokenStore
         }
         catch (HttpRequestException) { }
         if (response is { IsSuccessStatusCode: true }) return RotationMark.Marked;
-        if (response?.StatusCode == System.Net.HttpStatusCode.NotFound) return RotationMark.Missing;
+        // A 404 can also come from the route (an older kernel, a path mismatch, a proxy): only a lookup that
+        // no longer finds the row makes it Missing. Anything else would end every session at every renewal.
+        if (response?.StatusCode == System.Net.HttpStatusCode.NotFound && tokenHash is not null
+            && await RowIsGoneAsync(id, tokenHash))
+            return RotationMark.Missing;
         // An unmarked old token would stay usable with no reuse detection: delete it instead, as before families.
         await DeleteEntityAsync(id);
         return RotationMark.Deleted;
+    }
+
+    /// <summary>True only when the list route answered and the row with this hash is not among its rows.</summary>
+    private async Task<bool> RowIsGoneAsync(Guid id, string tokenHash)
+    {
+        try
+        {
+            var response = await _http.GetAsync($"api/entities?type=refresh-token&data.token_hash={Uri.EscapeDataString(tokenHash)}&limit=1");
+            if (!response.IsSuccessStatusCode) return false;
+            var list = JsonSerializer.Deserialize<EntityListResponse>(await response.Content.ReadAsStringAsync(), JsonOpts);
+            return list?.Items is not null && list.Items.All(item => item.Id != id);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            return false;
+        }
     }
 
     public async Task RevokeByIdAsync(string entityId)

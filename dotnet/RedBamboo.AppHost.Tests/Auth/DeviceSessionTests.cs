@@ -72,10 +72,13 @@ public class DeviceSessionTests
         public Task<RefreshTokenValidation?> FindAsync(string token) => inner.FindAsync(token);
         public Task<RefreshTokenValidation?> FindByHashAsync(string tokenHash) => inner.FindByHashAsync(tokenHash);
         public Task<RotationMark> MarkRotatedAsync(string entityId, string replacedByHash, DateTimeOffset rotatedAt,
-            string? familyId = null) => inner.MarkRotatedAsync(entityId, replacedByHash, rotatedAt, familyId);
+            string? familyId = null, string? tokenHash = null)
+            => inner.MarkRotatedAsync(entityId, replacedByHash, rotatedAt, familyId, tokenHash);
         public Task RevokeByIdAsync(string entityId) => inner.RevokeByIdAsync(entityId);
         public Task RevokeByTokenAsync(string token) => inner.RevokeByTokenAsync(token);
-        public Task<bool> RevokeFamilyAsync(string familyId) => inner.RevokeFamilyAsync(familyId);
+        public bool FailRevokes { get; set; }
+        public Task<bool> RevokeFamilyAsync(string familyId)
+            => FailRevokes ? throw new HttpRequestException("store down") : inner.RevokeFamilyAsync(familyId);
         public Task<bool> RevokeAllForUserAsync(string userId) => inner.RevokeAllForUserAsync(userId);
     }
 
@@ -156,9 +159,13 @@ public class DeviceSessionTests
     }
 
     private static async Task<(int Status, string? Error, DefaultHttpContext Ctx)> Refresh(Fixture f, string cookie,
-        IRefreshTokenStore? store = null)
+        IRefreshTokenStore? store = null, params string[] moreCookies)
     {
         var ctx = Context(f, cookie);
+        // A browser can hold more than one refresh cookie (an older path or domain); it sends them all.
+        if (moreCookies.Length > 0)
+            ctx.Request.Headers.Cookie = string.Join("; ", new[] { cookie }.Concat(moreCookies)
+                .Select(value => $"{f.Options.RefreshCookieName}={value}"));
         var result = await AuthEndpoints.RefreshAsync(ctx, store ?? f.Tokens, f.Users, f.Jwt, f.Options, f.Hooks, f.Clock);
         var status = ((IStatusCodeHttpResult)result).StatusCode ?? 200;
         string? error = null;
@@ -296,6 +303,56 @@ public class DeviceSessionTests
 
         f.Clock.Now += TimeSpan.FromMinutes(5);
         Assert.Equal(200, (await Refresh(f, renewed)).Status);
+        Assert.Empty(f.Hooks.Ended);
+    }
+
+    [Fact]
+    public async Task A_stale_duplicate_cookie_does_not_turn_a_lost_response_into_reuse()
+    {
+        var f = await Setup();
+        var (session, _, r0) = await SignIn(f);
+        var (_, _, first) = await Refresh(f, r0);
+        var r1 = SetCookieValue(first, f.Options.RefreshCookieName)!;
+        f.Clock.Now += TimeSpan.FromMinutes(10);
+        var (_, _, second) = await Refresh(f, r1);
+        var r2 = SetCookieValue(second, f.Options.RefreshCookieName)!;
+        f.Clock.Now += TimeSpan.FromMinutes(10);
+        var start = f.Clock.Now;
+        Assert.Equal(200, (await Refresh(f, r0, null, r2)).Status);  // R2 rotates to R3; that response is lost
+
+        // The browser still sends the stale R0 next to its own R2. R0's successor was used; R2's never was.
+        f.Clock.Now = start + TimeSpan.FromSeconds(2);
+        var (graceStatus, graceError, graceCtx) = await Refresh(f, r0, null, r2);
+        Assert.Equal((401, "invalid_token"), (graceStatus, graceError));
+        Assert.Empty(graceCtx.Response.Headers.SetCookie.ToArray());
+
+        f.Clock.Now = start + TimeSpan.FromSeconds(60);
+        var (status, _, retry) = await Refresh(f, r0, null, r2);
+
+        Assert.Equal(200, status);
+        Assert.Empty(f.Hooks.Ended);
+        Assert.Equal(session, (await f.Tokens.FindAsync(SetCookieValue(retry, f.Options.RefreshCookieName)!))!.FamilyId);
+    }
+
+    [Fact]
+    public async Task Two_tabs_racing_inside_the_grace_with_a_duplicate_cookie_keep_the_session()
+    {
+        var f = await Setup();
+        var (_, _, r0) = await SignIn(f);
+        var (_, _, first) = await Refresh(f, r0);
+        var r1 = SetCookieValue(first, f.Options.RefreshCookieName)!;
+        f.Clock.Now += TimeSpan.FromMinutes(10);
+        var slow = new InterleavingStore(f.Tokens) { StoreDelay = TimeSpan.FromMilliseconds(150) };
+
+        var results = await Task.WhenAll(Refresh(f, r0, slow, r1), Refresh(f, r1, slow, r0));
+
+        Assert.Equal([200, 401], results.Select(r => r.Status).Order());
+        Assert.Equal("invalid_token", results.Single(r => r.Status == 401).Error);
+        Assert.Empty(results.Single(r => r.Status == 401).Ctx.Response.Headers.SetCookie.ToArray());
+        Assert.Empty(f.Hooks.Ended);
+        var renewed = SetCookieValue(results.Single(r => r.Status == 200).Ctx, f.Options.RefreshCookieName)!;
+        f.Clock.Now += TimeSpan.FromMinutes(10);
+        Assert.Equal(200, (await Refresh(f, renewed, null, r0, r1)).Status);
         Assert.Empty(f.Hooks.Ended);
     }
 
@@ -458,6 +515,23 @@ public class DeviceSessionTests
         Assert.Equal(1, tokensWhenTheHostHeard);  // design 3.3: the host records the end before the tokens go
         Assert.Equal(0, f.Tokens.Count);
         Assert.True(ClearsCookie(ctx, f.Options.CookieName));
+    }
+
+    [Fact]
+    public async Task Logout_clears_the_cookies_even_when_the_store_throws()
+    {
+        var f = await Setup();
+        var (_, access, _) = await SignIn(f);
+        var broken = new InterleavingStore(f.Tokens) { FailRevokes = true };
+
+        var ctx = Context(f);
+        ctx.Request.Headers.Cookie = $"{f.Options.CookieName}={access}";
+        var result = await AuthEndpoints.LogoutAsync(ctx, broken, f.Options, f.Hooks, f.Jwt);
+
+        Assert.Equal(503, ((IStatusCodeHttpResult)result).StatusCode);
+        Assert.True(ClearsCookie(ctx, f.Options.CookieName));
+        Assert.True(ClearsCookie(ctx, f.Options.RefreshCookieName));
+        Assert.Single(f.Hooks.Ended);  // the host recorded the end first, so the gate refuses the sid anyway
     }
 
     [Fact]

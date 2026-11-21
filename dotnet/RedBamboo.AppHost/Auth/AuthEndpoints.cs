@@ -348,14 +348,21 @@ public static class AuthEndpoints
             return Results.Json(new { error = "no_token" }, statusCode: 401);
         }
 
-        // A live token wins over a rotated one sent alongside it.
+        // A live token wins over a rotated one sent alongside it. Among rotated ones the most recently rotated
+        // speaks for the browser: a stale duplicate cookie (an older path or domain) must not turn this
+        // browser's own lost response into reuse.
         string? presented = null;
+        DateTimeOffset? latestRotation = null;
         foreach (var candidate in refreshTokens)
         {
             var found = await refreshTokenStore.FindAsync(candidate);
             if (found is null) continue;
-            presented ??= candidate;
             if (found.RotatedAt is null) { presented = candidate; break; }
+            if (latestRotation is null || found.RotatedAt > latestRotation)
+            {
+                presented = candidate;
+                latestRotation = found.RotatedAt;
+            }
         }
         if (presented is null) return UnknownToken(context, options);
 
@@ -449,7 +456,7 @@ public static class AuthEndpoints
         // works, and the session is dead with no way back but a re-login.
         await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, now.Add(options.Jwt!.RefreshTokenLifetime), sessionId);
         var mark = await refreshTokenStore.MarkRotatedAsync(current.EntityId, RefreshTokenHash.Of(newRefreshToken),
-            time.GetUtcNow(), adopted ? sessionId : null);
+            time.GetUtcNow(), adopted ? sessionId : null, RefreshTokenHash.Of(presented));
 
         // The session ended while this renewal was in flight (signed out elsewhere, Not me, reuse): the old row
         // went with its family, or the host already reports it ended. The replacement must not outlive it.
@@ -541,12 +548,33 @@ public static class AuthEndpoints
     /// refresh cookie's path is <c>/auth/refresh</c>. So the session is the <c>sid</c> of each valid badge
     /// cookie, ended for that badge's <c>sub</c>: the host is told, then every refresh token of the family goes.
     /// A refresh cookie that does arrive (a client without path rules) ends its family too, or, from before
-    /// sessions, is revoked on its own.
+    /// sessions, is revoked on its own. The cookies are cleared whatever the store does: a store that throws
+    /// is logged and answered 503 <c>logout_incomplete</c>, never left to the exception handler, which would
+    /// discard the cookie deletions with the rest of the response.
     /// </summary>
     internal static async Task<IResult> LogoutAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
         AuthOptions options, IDeviceSessionHooks? hooks = null, JwtService? jwt = null, ILogger? logger = null)
     {
-        hooks ??= DefaultDeviceSessionHooks.Instance;
+        try
+        {
+            await EndPresentedSessionsAsync(context, refreshTokenStore, options, hooks ?? DefaultDeviceSessionHooks.Instance,
+                jwt, logger);
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning("Logout could not end every session it was shown: {Error}", ex.GetType().Name);
+            return Results.Json(new { error = "logout_incomplete" }, statusCode: 503);
+        }
+        finally
+        {
+            SignInSessions.ClearCookies(context, options);
+        }
+        return Results.Ok(new { ok = true });
+    }
+
+    private static async Task EndPresentedSessionsAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
+        AuthOptions options, IDeviceSessionHooks hooks, JwtService? jwt, ILogger? logger)
+    {
         var ended = new HashSet<string>(StringComparer.Ordinal);
 
         if (jwt is not null)
@@ -578,9 +606,6 @@ public static class AuthEndpoints
                 await refreshTokenStore.RevokeByTokenAsync(refreshToken);
             }
         }
-
-        SignInSessions.ClearCookies(context, options);
-        return Results.Ok(new { ok = true });
     }
 
     private static IResult ClearAuthCookiesAndReturn(HttpContext context, AuthOptions options, IResult result)

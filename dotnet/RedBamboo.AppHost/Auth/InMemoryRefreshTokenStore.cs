@@ -60,7 +60,7 @@ public sealed class InMemoryRefreshTokenStore : IRefreshTokenStore
     }
 
     public Task<RotationMark> MarkRotatedAsync(string entityId, string replacedByHash, DateTimeOffset rotatedAt,
-        string? familyId = null)
+        string? familyId = null, string? tokenHash = null)
     {
         foreach (var kvp in _tokens)
         {

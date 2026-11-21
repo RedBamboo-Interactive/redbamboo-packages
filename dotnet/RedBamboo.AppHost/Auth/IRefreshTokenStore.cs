@@ -24,7 +24,10 @@ public enum RotationMark
     /// <summary>The store could not mark it and deleted it instead (reuse then looks like an unknown token).</summary>
     Deleted,
 
-    /// <summary>The row was already gone: its family was revoked while the renewal was in flight.</summary>
+    /// <summary>
+    /// The row is confirmed gone: its family was revoked while the renewal was in flight. A store reports this
+    /// only when it knows the row no longer exists, never from an error that could mean anything else.
+    /// </summary>
     Missing,
 }
 
@@ -52,9 +55,11 @@ public interface IRefreshTokenStore
     /// The token was exchanged: keep it, marked, so a second use is recognised as reuse. A store that cannot
     /// mark it deletes it instead. <paramref name="familyId"/>, when given, is written on the row too: the
     /// family a token from before sessions was adopted into, so its own reuse ends that family.
+    /// <paramref name="tokenHash"/> is the marked token's own hash, for a store that must confirm a row is gone
+    /// before it reports <see cref="RotationMark.Missing"/>.
     /// </summary>
     Task<RotationMark> MarkRotatedAsync(string entityId, string replacedByHash, DateTimeOffset rotatedAt,
-        string? familyId = null);
+        string? familyId = null, string? tokenHash = null);
 
     Task RevokeByIdAsync(string entityId);
     Task RevokeByTokenAsync(string token);

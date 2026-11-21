@@ -20,6 +20,8 @@ public class RedLeafRefreshTokenStoreTests
         public HashSet<Guid> UndeletableIds { get; } = [];
         public bool RefusePatch { get; set; }
         public bool FailLists { get; set; }
+        /// <summary>The PATCH route itself answers 404 (an older kernel, a path mismatch, a proxy).</summary>
+        public bool PatchRouteMissing { get; set; }
         public int ListCalls { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -55,7 +57,7 @@ public class RedLeafRefreshTokenStoreTests
             }
             if (request.Method == HttpMethod.Patch && path.EndsWith("/data"))
             {
-                if (index < 0) return new HttpResponseMessage(HttpStatusCode.NotFound);
+                if (index < 0 || PatchRouteMissing) return new HttpResponseMessage(HttpStatusCode.NotFound);
                 if (RefusePatch) return new HttpResponseMessage(HttpStatusCode.Forbidden);
                 var patch = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();
                 foreach (var (key, value) in patch) Rows[index].Data[key] = value?.DeepClone();
@@ -182,9 +184,48 @@ public class RedLeafRefreshTokenStoreTests
         var stored = (await store.FindAsync("token-1"))!;
         await store.RevokeFamilyAsync("dev_A");
 
-        Assert.Equal(RotationMark.Missing,
-            await store.MarkRotatedAsync(stored.EntityId, RefreshTokenHash.Of("token-2"), DateTimeOffset.UtcNow));
+        Assert.Equal(RotationMark.Missing, await store.MarkRotatedAsync(stored.EntityId, RefreshTokenHash.Of("token-2"),
+            DateTimeOffset.UtcNow, tokenHash: RefreshTokenHash.Of("token-1")));
         Assert.Empty(api.Rows);
+    }
+
+    [Fact]
+    public async Task A_404_from_the_route_while_the_row_still_exists_is_not_missing()
+    {
+        var (api, store) = Create();
+        await store.StoreAsync("token-1", "owner", DateTimeOffset.UtcNow.AddDays(30), "dev_A");
+        var stored = (await store.FindAsync("token-1"))!;
+        api.PatchRouteMissing = true;
+
+        // Missing would withdraw the new token and sign the device out at every renewal (the 10-25 class).
+        Assert.Equal(RotationMark.Deleted, await store.MarkRotatedAsync(stored.EntityId, RefreshTokenHash.Of("token-2"),
+            DateTimeOffset.UtcNow, tokenHash: RefreshTokenHash.Of("token-1")));
+        Assert.Empty(api.Rows);  // deleted rather than left usable and unmarked, as before families
+    }
+
+    [Fact]
+    public async Task A_404_with_no_hash_to_confirm_it_is_never_reported_missing()
+    {
+        var (api, store) = Create();
+        await store.StoreAsync("token-1", "owner", DateTimeOffset.UtcNow.AddDays(30), "dev_A");
+        var stored = (await store.FindAsync("token-1"))!;
+        await store.RevokeFamilyAsync("dev_A");
+
+        Assert.Equal(RotationMark.Deleted,
+            await store.MarkRotatedAsync(stored.EntityId, RefreshTokenHash.Of("token-2"), DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public async Task A_404_whose_confirming_lookup_fails_is_not_missing()
+    {
+        var (api, store) = Create();
+        await store.StoreAsync("token-1", "owner", DateTimeOffset.UtcNow.AddDays(30), "dev_A");
+        var stored = (await store.FindAsync("token-1"))!;
+        api.PatchRouteMissing = true;
+        api.FailLists = true;
+
+        Assert.Equal(RotationMark.Deleted, await store.MarkRotatedAsync(stored.EntityId, RefreshTokenHash.Of("token-2"),
+            DateTimeOffset.UtcNow, tokenHash: RefreshTokenHash.Of("token-1")));
     }
 
     [Fact]
