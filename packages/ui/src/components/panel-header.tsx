@@ -20,9 +20,10 @@ const panelHeaderVariants = cva(
 export interface PanelHeaderProps
   extends VariantProps<typeof panelHeaderVariants> {
   /**
-   * The pane's own Back control, rendered first. Unlike `leading`, which is the
-   * pane's identity and is hidden when a dock tab names the pane, Back stays in
-   * the header row in a tab group too. Omit it when there is nowhere to go back to.
+   * The pane's own Back control, rendered first in the header row. In a dock tab
+   * group the shared row belongs to every tab, so Back moves into the pane
+   * instead: a compact row at the header's place, `[Back] title`. Omit it when
+   * there is nowhere to go back to.
    */
   back?: ReactNode
   leading?: ReactNode
@@ -37,11 +38,13 @@ export function PanelHeader(props: PanelHeaderProps) {
   return useIsInDockPanel() ? <DockedPanelHeader {...props} /> : <StaticPanelHeader {...props} />
 }
 
-/** Wraps the Back control so it keeps the row's spacing; in a tab group it sits at the start, beside the tabs. */
-function BackSlot({ back, tab }: { back: ReactNode; tab: boolean }) {
-  if (back == null || back === false) return null
+const hasBack = (back: ReactNode) => back != null && back !== false
+
+/** Wraps the Back control so it keeps the row's spacing. */
+function BackSlot({ back }: { back: ReactNode }) {
+  if (!hasBack(back)) return null
   return (
-    <div data-slot="panel-header-back" className={cn("flex shrink-0 items-center", tab && "mr-auto")}>
+    <div data-slot="panel-header-back" className="flex shrink-0 items-center">
       {back}
     </div>
   )
@@ -60,7 +63,7 @@ function StaticPanelHeader({
       data-slot="panel-header"
       className={cn(panelHeaderVariants({ variant }), className)}
     >
-      <BackSlot back={back} tab={false} />
+      <BackSlot back={back} />
       {leading}
       {title && (
         <span className="text-[14px] font-medium text-contrast flex-1">
@@ -75,9 +78,10 @@ function StaticPanelHeader({
 /**
  * The panel's first header becomes the dock group's header row: its content
  * moves into that row and the in-place header is hidden, so a docked panel
- * shows one header. In a tab group the tab names the panel, so the identity
- * (`leading`, `title`) is left out and only the header's Back and actions join
- * the row. Other headers in the panel stay in place.
+ * shows one header. In a tab group the tab names the panel, so only the
+ * header's actions join the row. A header with Back then keeps a compact row of
+ * its own inside the pane, `[Back] title`, so Back stays with the tab it walks
+ * and the pane's current title is not lost. Other headers stay in place.
  */
 function DockedPanelHeader({
   back,
@@ -102,10 +106,22 @@ function DockedPanelHeader({
         className={rowClassName}
         style={header.primary ? { display: "none" } : undefined}
       />
+      {tab && hasBack(back) ? (
+        // Rendered in place: it scrolls, hides and goes inert with its own tab.
+        <div
+          data-slot="panel-header-back-row"
+          className="flex h-9 shrink-0 items-center gap-2 border-b border-overlay-6 px-3"
+        >
+          <BackSlot back={back} />
+          {title ? (
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-contrast">{title}</span>
+          ) : leading}
+        </div>
+      ) : null}
       {createPortal(
         header.wrap(
           <>
-            <BackSlot back={back} tab={tab} />
+            {tab ? null : <BackSlot back={back} />}
             {showIdentity ? leading : null}
             {showIdentity && title ? (
               <span className="text-[14px] font-medium text-contrast flex-1">

@@ -1,6 +1,8 @@
 // A docked pane keeps its own working Back through every dock move: standalone,
 // as a tab in a group, across tab switches, and split back out. Each pane's
-// history is its own; Back in one tab never walks another's.
+// history is its own; Back in one tab never walks another's. Standalone, Back is
+// first in the dock's header row; in a tab group that row is shared by every
+// tab, so Back moves into the pane: a compact `[Back] title` row of its own.
 import assert from "node:assert/strict"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
@@ -48,11 +50,16 @@ const groupOf = (page, panelId) => page.locator("[data-dock-group]", { has: page
 const rowOf = (page, panelId) => groupOf(page, panelId).locator("[data-dock-group-header]")
 const location = (page, panelId) => page.getByTestId(`${panelId}-pane`).getAttribute("data-location")
 const mounts = (page) => page.evaluate(() => ({ ...window.__mounts }))
-const backIn = (page, panelId) => rowOf(page, panelId).getByRole("button", { name: /^Back in / })
+const BACK = { name: /^Back in / }
+const FIRST_PAGE = { pages: "Alpha", bookmarks: "Inbox" }
+const paneRow = (page, panelId) => page.locator(`[data-dock-panel="${panelId}"] [data-slot="panel-header-back-row"]`)
+/** Standalone, Back is in the dock row; in a tab group, in the pane's own row. */
+const backIn = (page, panelId) => rowOf(page, panelId).getByRole("button", BACK).or(paneRow(page, panelId).getByRole("button", BACK))
 
-/** The header row shows exactly the active pane's Back (or none), never another pane's. */
-async function assertBack(page, panelId, title, expected, step) {
-  const back = backIn(page, panelId)
+/** A standalone pane's Back is first in its header row (or absent without history). */
+async function assertRowBack(page, panelId, title, expected, step) {
+  const back = rowOf(page, panelId).getByRole("button", BACK)
+  assert.equal(await paneRow(page, panelId).count(), 0, `${step}: no in-pane row when standalone`)
   if (!expected) {
     assert.equal(await back.count(), 0, `${step}: no Back without history`)
     return
@@ -60,6 +67,30 @@ async function assertBack(page, panelId, title, expected, step) {
   assert.equal(await back.count(), 1, `${step}: one Back in the header row`)
   assert.equal(await back.getAttribute("aria-label"), `Back in ${title}`, `${step}: the Back is ${title}'s own`)
   assert.ok(await back.isVisible(), `${step}: Back is visible`)
+}
+
+/**
+ * A tabbed pane: the shared dock row never carries a Back. With history the
+ * active pane shows `[Back] current` at the top of its own content; without, no row.
+ */
+async function assertTabBack(page, panelId, title, current, step) {
+  assert.equal(await rowOf(page, panelId).getByRole("button", BACK).count(), 0, `${step}: no Back in the shared tab row`)
+  const row = paneRow(page, panelId)
+  if (!current) {
+    assert.equal(await row.count(), 0, `${step}: no Back row without history`)
+    return
+  }
+  assert.equal(await row.count(), 1, `${step}: one Back row in the pane`)
+  const back = row.getByRole("button", BACK)
+  assert.equal(await back.getAttribute("aria-label"), `Back in ${title}`, `${step}: the Back is ${title}'s own`)
+  assert.ok(await back.isVisible(), `${step}: Back is visible`)
+  assert.equal(await row.getByText(current, { exact: true }).count(), 1, `${step}: the row names the current page`)
+  assert.equal(await rowOf(page, panelId).getByText(current, { exact: true }).count(), 0, `${step}: the page title is not in the shared row`)
+  // The row tops the pane's content, before the page itself.
+  const rowBox = await box(row)
+  const hostBox = await box(page.locator(`[data-dock-panel="${panelId}"]`))
+  const bodyBox = await box(page.getByTestId(`${panelId}-open-${FIRST_PAGE[panelId]}`))
+  assert.ok(Math.abs(rowBox.y - hostBox.y) <= 1 && rowBox.y + rowBox.height <= bodyBox.y, `${step}: the row tops the pane`)
 }
 
 let browser
@@ -86,17 +117,17 @@ try {
   // --- standalone: Back appears with history and walks it -----------------
   await open()
   assert.notEqual(await groupOf(page, "pages").getAttribute("data-dock-group"), await groupOf(page, "bookmarks").getAttribute("data-dock-group"), "two standalone panes")
-  await assertBack(page, "pages", "Pages", false, "standalone, no history")
+  await assertRowBack(page, "pages", "Pages", false, "standalone, no history")
   await page.getByTestId("pages-open-Alpha").click()
   await page.getByTestId("pages-open-Beta").click()
   await page.getByTestId("pages-open-Gamma").click()
   assert.equal(await location(page, "pages"), "Alpha/Beta/Gamma")
-  await assertBack(page, "pages", "Pages", true, "standalone")
+  await assertRowBack(page, "pages", "Pages", true, "standalone")
   await backIn(page, "pages").click()
   assert.equal(await location(page, "pages"), "Alpha/Beta", "standalone Back pops one entry")
   assert.equal(await rowOf(page, "pages").getByText("Beta", { exact: true }).count(), 1, "standalone shows the current page title")
   await page.getByTestId("bookmarks-open-Inbox").click()
-  await assertBack(page, "bookmarks", "Bookmarks", true, "second standalone")
+  await assertRowBack(page, "bookmarks", "Bookmarks", true, "second standalone")
   await page.screenshot({ path: path.join(outputDir, "01-standalone.png") })
   const baseline = await mounts(page)
   assert.deepEqual(baseline, { pages: 1, bookmarks: 1 })
@@ -111,7 +142,7 @@ try {
   assert.deepEqual(await mounts(page), baseline, "merge: no remount")
   assert.equal(await location(page, "pages"), "Alpha/Beta", "merge: Pages keeps its history")
   assert.equal(await location(page, "bookmarks"), "Inbox", "merge: Bookmarks keeps its history")
-  await assertBack(page, "pages", "Pages", true, "tab after merge")
+  await assertTabBack(page, "pages", "Pages", "Beta", "tab after merge")
   await page.screenshot({ path: path.join(outputDir, "02-tabbed.png") })
   await backIn(page, "pages").click()
   assert.equal(await location(page, "pages"), "Alpha", "tab Back pops the active pane")
@@ -120,20 +151,17 @@ try {
 
   // --- switch tabs: each tab shows its own Back -------------------------
   await tablist.getByRole("tab", { name: "Bookmarks" }).click()
-  await assertBack(page, "bookmarks", "Bookmarks", true, "after switching to Bookmarks")
+  await assertTabBack(page, "bookmarks", "Bookmarks", "Inbox", "after switching to Bookmarks")
+  // The inactive tab keeps its own row, hidden and inert with its pane.
+  assert.equal(await paneRow(page, "pages").count(), 1, "Pages keeps its row while inactive")
+  assert.equal(await paneRow(page, "pages").isVisible(), false, "an inactive tab's Back is not shown")
   await backIn(page, "bookmarks").click()
   assert.equal(await location(page, "bookmarks"), "", "Bookmarks Back pops Bookmarks")
   assert.equal(await location(page, "pages"), "Alpha", "Bookmarks Back leaves Pages alone")
   // A tab without history behaves like a standalone pane without history.
-  await assertBack(page, "bookmarks", "Bookmarks", false, "tab without history")
+  await assertTabBack(page, "bookmarks", "Bookmarks", null, "tab without history")
   await tablist.getByRole("tab", { name: "Pages" }).click()
-  await assertBack(page, "pages", "Pages", true, "after switching back to Pages")
-  // In a tab group the tab names the pane: the page title stays out of the row.
-  assert.equal(await rowOf(page, "pages").getByText("Alpha", { exact: true }).count(), 0, "tab: identity hidden, Back kept")
-  // Back sits at the start of the header slot, next to the tabs.
-  const backBox = await box(backIn(page, "pages"))
-  const tabsBox = await box(tablist)
-  assert.ok(backBox.x >= tabsBox.x + tabsBox.width && backBox.x - (tabsBox.x + tabsBox.width) <= 16, "tab: Back follows the tabs")
+  await assertTabBack(page, "pages", "Pages", "Alpha", "after switching back to Pages")
   await page.getByTestId("pages-open-Gamma").click()
   assert.equal(await location(page, "pages"), "Alpha/Gamma")
 
@@ -142,22 +170,23 @@ try {
   assert.match(split, /^split:.*:after$/)
   assert.notEqual(await groupOf(page, "pages").getAttribute("data-dock-group"), await groupOf(page, "bookmarks").getAttribute("data-dock-group"), "split: two groups again")
   assert.deepEqual(await mounts(page), baseline, "split: no remount")
-  await assertBack(page, "pages", "Pages", true, "split")
-  await assertBack(page, "bookmarks", "Bookmarks", false, "split, no history")
+  await assertRowBack(page, "pages", "Pages", true, "split")
+  await assertRowBack(page, "bookmarks", "Bookmarks", false, "split, no history")
   assert.equal(await rowOf(page, "pages").getByText("Gamma", { exact: true }).count(), 1, "split: the title is back in the row")
   await backIn(page, "pages").click()
   assert.equal(await location(page, "pages"), "Alpha", "split Back pops one entry")
   await backIn(page, "pages").click()
   assert.equal(await location(page, "pages"), "")
-  await assertBack(page, "pages", "Pages", false, "split, history emptied")
+  await assertRowBack(page, "pages", "Pages", false, "split, history emptied")
   await page.screenshot({ path: path.join(outputDir, "04-split.png") })
 
   // --- the identity slot is what a tab group hides --------------------------
   await open("leading")
   await page.getByTestId("pages-open-Alpha").click()
-  await assertBack(page, "pages", "Pages", true, "leading, standalone")
+  await assertRowBack(page, "pages", "Pages", true, "leading, standalone")
   await drag(page, rowOf(page, "pages"), await pointIn(groupOf(page, "bookmarks"), 0.5, 0.5))
   assert.equal(await backIn(page, "pages").count(), 0, "leading is identity: a tab group hides it")
+  assert.equal(await paneRow(page, "pages").count(), 0, "without `back` a tab gets no extra row")
 
   assert.deepEqual(errors, [])
   console.log(`dock navigation story passed; screenshots in ${outputDir}`)
