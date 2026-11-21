@@ -109,6 +109,8 @@ export type { AuthDevice, AuthUser, AuthContextValue } from "./auth-types"
 export {
   createSessionRenewal,
   renewSession,
+  renewSessionForUpgrade,
+  isKernelRoute,
   startSessionRenewal,
   stopSessionRenewal,
   ensureFreshSession,

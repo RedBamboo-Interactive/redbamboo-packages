@@ -76,6 +76,12 @@ const TRANSIENT_RETRY_MS = 60_000
 
 export interface SessionRenewal {
   renewSession(options?: RenewOptions): Promise<RenewalResult>
+  /**
+   * The renewal a `session_upgrade_required` answer calls for, once per session for every caller (the fetch
+   * wrapper and `bootstrapAuthUser`): it clears the stamp and renews, accepting LocalDefault. Callers that
+   * arrive while it runs share it; after it, `"spent"`. A renewal that only failed transiently spends nothing.
+   */
+  renewForUpgrade(): Promise<RenewalResult | "spent">
   /** Begin tracking a real (non-local) session: proactive timer + lifecycle listeners. */
   start(): void
   stop(): void
@@ -100,8 +106,9 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
   // Set while some caller of the in-flight renewal accepts ending in LocalDefault.
   let acceptLocal = false
   // session_upgrade_required renews once per session: a server that kept answering it would otherwise
-  // rotate the refresh token on every request.
-  let upgradeAttempted = false
+  // rotate the refresh token on every request. Only a session that was lost and started again re-arms it.
+  let upgradeSpent = false
+  let upgradeInflight: Promise<RenewalResult> | null = null
 
   const readStamp = (): number | null => {
     try {
@@ -232,6 +239,24 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
     return inflight
   }
 
+  const renewForUpgrade = (): Promise<RenewalResult | "spent"> => {
+    if (upgradeInflight) return upgradeInflight
+    if (upgradeSpent) return Promise.resolve("spent")
+    upgradeSpent = true
+    // A badge from before device sessions: a fresh renewal, even right after another one.
+    clearStampOnly()
+    upgradeInflight = renewSession({ acceptLocal: true })
+      .then((result) => {
+        // The server could not be reached: nothing was upgraded, so the next answer may try again.
+        if (result === "transient") upgradeSpent = false
+        return result
+      })
+      .finally(() => {
+        upgradeInflight = null
+      })
+    return upgradeInflight
+  }
+
   function schedule(delayOverride?: number) {
     if (timer) clearTimeout(timer)
     timer = null
@@ -275,11 +300,13 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
 
   return {
     renewSession,
+    renewForUpgrade,
     start() {
       if (active) return
       active = true
+      // A new session after a lost one (signed in again without a reload) may upgrade once more.
+      if (lost) upgradeSpent = false
       lost = false
-      upgradeAttempted = false
       const onVisible = () => {
         if (typeof document === "undefined" || document.visibilityState === "visible") renewIfStale()
       }
@@ -327,22 +354,24 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
         // Only this origin's own API speaks for this session: another origin's 401 says nothing about it.
         if (res.status !== 401 || !eligible || !active) return res
         const code = await errorCode(res.clone())
-        if (code === SESSION_REVOKED_ERROR) {
+        if (code === SESSION_REVOKED_ERROR && isKernelRoute(input)) {
           // Ended on the server: renewing would only be refused. Final, once.
           loseSession("revoked")
           return res
         }
-        if (!replay) return res
-        let options: RenewOptions | undefined
+        // From a route an extension answers (or the Compute proxy), session_revoked could be anyone's
+        // words: it is confirmed by a renewal instead, since /auth/refresh answers session_revoked itself.
+        const confirmRevoked = code === SESSION_REVOKED_ERROR
+        if (!replay && !confirmRevoked) return res
+        let result: RenewalResult | "spent"
         if (code === SESSION_UPGRADE_REQUIRED_ERROR) {
           // Once per session. Repeated, it is final for that request: no second rotation, no stamp cleared.
-          if (upgradeAttempted) return res
-          upgradeAttempted = true
-          // A badge from before device sessions: a fresh renewal, even right after another one.
-          clearStampOnly()
-          options = { acceptLocal: true }
+          result = await renewForUpgrade()
+          if (result === "spent") return res
+        } else {
+          result = await renewSession()
         }
-        const result = await renewSession(options)
+        if (!replay) return res
         // "local": the server deleted the old badge and this loopback browser is LocalDefault now.
         if (result === "renewed" || result === "local") return replay()
         if (result === "transient") {
@@ -374,6 +403,27 @@ function isReplayableBody(body: BodyInit | null | undefined): boolean {
   if (body === undefined || body === null) return true
   if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) return false
   return true
+}
+
+/**
+ * A route the kernel itself answers, so its `session_revoked` is the server's word: `/auth/*`, and `/api/*`
+ * outside the extension namespaces. Extension routes live under `/api/apps/<id>`, `/api/extensions/<id>`
+ * (the SDK allows no other namespace) and `/api/public/<id>`; the kernel's own `/api/extensions/{id}/...`
+ * routes share that prefix, so it is not trusted as a whole. Same origin only.
+ */
+export function isKernelRoute(input: RequestInfo | URL): boolean {
+  try {
+    const raw = typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+    const base = typeof location !== "undefined" ? location.href : "http://localhost/"
+    const url = new URL(raw, base)
+    if (url.origin !== new URL(base).origin) return false
+    const path = url.pathname
+    if (path.startsWith("/auth/")) return true
+    if (!path.startsWith("/api/")) return false
+    return !["/api/apps/", "/api/extensions/", "/api/public/"].some((prefix) => path.startsWith(prefix))
+  } catch {
+    return false
+  }
 }
 
 function isRenewable(input: RequestInfo | URL): boolean {
@@ -417,6 +467,8 @@ function browserRenewal(): SessionRenewal {
 }
 
 export const renewSession = (options?: RenewOptions) => browserRenewal().renewSession(options)
+/** The once-per-session upgrade renewal ({@link SessionRenewal.renewForUpgrade}). */
+export const renewSessionForUpgrade = () => browserRenewal().renewForUpgrade()
 export const startSessionRenewal = () => {
   installSessionFetchInterceptor()
   browserRenewal().start()

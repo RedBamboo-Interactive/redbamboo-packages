@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createSessionRenewal, type SessionRenewalDeps } from "./session-renewal.ts"
+import { createSessionRenewal, isKernelRoute, type SessionRenewalDeps } from "./session-renewal.ts"
 import { createWebSocket } from "./create-websocket.ts"
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>
@@ -367,4 +367,135 @@ test("fetch interceptor: session_revoked counts only from this origin, outside /
 
   await wrapped("/api/entities")
   assert.deepEqual(s.reasons, ["revoked"])
+})
+
+// ---- ND-F4: the upgrade path ----------------------------------------------------------
+
+test("ND-F4: an upgrade renewal that failed transiently is not spent; the next answer upgrades", async (t) => {
+  let refreshes = 0
+  const s = lostReasons({}, (url) => {
+    if (url !== "/auth/refresh") return json(200, { id: "u1" })
+    refreshes++
+    // The first upgrade meets an unreachable server (every retry); the next one succeeds.
+    return refreshes <= 4 ? json(503) : json(200, { expiresIn: 3600 })
+  })
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+  let calls = 0
+  const base = (async () => {
+    calls++
+    return calls <= 2 ? json(401, { error: "session_upgrade_required" }) : json(200, { ok: true })
+  }) as unknown as typeof fetch
+  const wrapped = s.r.wrapFetch(base)
+
+  const first = await wrapped("/api/entities")
+  assert.equal(first.status, 503)  // session_renewal_unavailable: retryable
+  const second = await wrapped("/api/entities")
+  assert.equal(second.status, 200)  // upgraded on the second answer, then replayed
+  assert.ok(refreshes >= 5)
+  assert.deepEqual(s.reasons, [])
+
+  // Spent now: a third upgrade answer rotates nothing.
+  const before = refreshes
+  calls = 0
+  const third = await s.r.wrapFetch((async () => json(401, { error: "session_upgrade_required" })) as unknown as typeof fetch)("/api/entities")
+  assert.equal(third.status, 401)
+  assert.equal(refreshes, before)
+})
+
+test("ND-F4: renewForUpgrade is once per session across callers and shares an upgrade in flight", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+
+  const [a, b] = await Promise.all([s.r.renewForUpgrade(), s.r.renewForUpgrade()])
+  assert.deepEqual([a, b], ["renewed", "renewed"])
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)
+  const stamp = s.deps.storage!.getItem("redsuite:session:renewedAt")
+
+  // The bootstrap spent it; the fetch wrapper then gets no second rotation and clears no stamp.
+  assert.equal(await s.r.renewForUpgrade(), "spent")
+  const res = await s.r.wrapFetch((async () => json(401, { error: "session_upgrade_required" })) as unknown as typeof fetch)("/api/entities")
+  assert.equal(res.status, 401)
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)
+  assert.equal(s.deps.storage!.getItem("redsuite:session:renewedAt"), stamp)
+})
+
+test("ND-F4: start() after the bootstrap's upgrade does not re-arm it; only a lost session does", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  assert.equal(await s.r.renewForUpgrade(), "renewed")  // bootstrap, before start()
+  s.r.start()
+  assert.equal(await s.r.renewForUpgrade(), "spent")
+  s.r.stop()
+  s.r.start()
+  assert.equal(await s.r.renewForUpgrade(), "spent")
+
+  s.r.reportRevoked()  // lost; signing in again without a reload starts a new session
+  s.r.start()
+  assert.equal(await s.r.renewForUpgrade(), "renewed")
+})
+
+test("ND-F4: session_revoked from an extension route is confirmed by a renewal, never taken on its word", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+  for (const route of ["/api/apps/notes/items", "/api/extensions/x/data", "/api/public/x/hook", "/compute/api/jobs"]) {
+    let calls = 0
+    const base = (async () => {
+      calls++
+      return calls === 1 ? json(401, { error: "session_revoked" }) : json(200, { ok: true })
+    }) as unknown as typeof fetch
+    const res = await s.r.wrapFetch(base)(route)
+    assert.equal(res.status, 200, route)  // the refresh succeeded: the session is alive, the request replayed
+    assert.equal(calls, 2, route)
+  }
+  assert.deepEqual(s.reasons, [])
+  assert.equal(s.r.isActive(), true)
+})
+
+test("ND-F4: an extension's session_revoked that the refresh confirms ends the session once", async (t) => {
+  const s = lostReasons({}, (url) =>
+    url === "/auth/refresh" ? json(401, { error: "session_revoked", reason: "signed-out" }) : json(200, { id: "u1" }))
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+  s.advance(60_000)  // past the skip window: the confirmation asks the server
+  let calls = 0
+  const base = (async () => {
+    calls++
+    return json(401, { error: "session_revoked" })
+  }) as unknown as typeof fetch
+  const res = await s.r.wrapFetch(base)("/api/apps/notes/items")
+  assert.equal(res.status, 401)
+  assert.equal(calls, 1)  // not replayed
+  assert.deepEqual(s.reasons, ["revoked"])
+})
+
+test("ND-F4: a non-replayable request's extension session_revoked is still confirmed, not trusted", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+  s.advance(60_000)  // past the skip window: the confirmation asks the server
+  const base = (async () => json(401, { error: "session_revoked" })) as unknown as typeof fetch
+  const body = new ReadableStream({ start(c) { c.close() } })
+  const res = await s.r.wrapFetch(base)("/api/apps/notes/upload", { method: "POST", body, duplex: "half" } as RequestInit)
+  assert.equal(res.status, 401)
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)
+  assert.deepEqual(s.reasons, [])
+  assert.equal(s.r.isActive(), true)
+})
+
+test("ND-F4: isKernelRoute trusts /auth and the kernel API, not extension namespaces or other origins", () => {
+  for (const ok of ["/auth/me", "/api/entities", "/api/entity-types/x/fields", "/api/extensions"])
+    assert.equal(isKernelRoute(ok), true, ok)
+  for (const no of ["/api/apps/notes", "/api/extensions/x/settings", "/api/public/x", "/compute/api/jobs",
+    "/assets/x.js", "https://elsewhere.example/api/entities", new URL("http://localhost/api/apps/x")])
+    assert.equal(isKernelRoute(no), false, String(no))
+  assert.equal(isKernelRoute(new URL("http://localhost/api/entities")), true)
 })

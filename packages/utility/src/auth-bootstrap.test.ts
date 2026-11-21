@@ -149,3 +149,28 @@ test("a stamped session that lands on LocalDefault without an upgrade is still n
   assert.equal(await bootstrapAuthUser(fixture.deps), null)
   assert.deepEqual(asked, [undefined])
 })
+
+test("ND-F4: an upgrade goes through the shared once-per-session renewal and clears nothing itself", async () => {
+  const fixture = dependencies([json(401, { error: "session_upgrade_required" }), json(200, owner)], "renewed", false)
+  let upgrades = 0
+  let plain = 0
+  fixture.deps.renewSession = async () => (plain++, "renewed")
+  fixture.deps.renewForUpgrade = async () => (upgrades++, "renewed")
+
+  assert.deepEqual(await bootstrapAuthUser(fixture.deps), owner)
+  assert.equal(upgrades, 1)
+  assert.equal(plain, 0)
+  assert.equal(fixture.cleared(), 0)
+})
+
+test("ND-F4: once the upgrade is spent, the bootstrap signs out instead of rotating again", async () => {
+  const fixture = dependencies([json(401, { error: "session_upgrade_required" }), json(200, owner)], "renewed", true)
+  let plain = 0
+  fixture.deps.renewSession = async () => (plain++, "renewed")
+  fixture.deps.renewForUpgrade = async () => "spent"
+
+  assert.equal(await bootstrapAuthUser(fixture.deps), null)
+  assert.equal(plain, 0)
+  assert.equal(fixture.cleared(), 0)
+  assert.deepEqual(fixture.calls, ["/auth/me"])
+})

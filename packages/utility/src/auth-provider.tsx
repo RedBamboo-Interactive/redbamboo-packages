@@ -4,6 +4,7 @@ import {
   clearSessionRenewalStamp,
   hasSessionRenewalStamp,
   renewSession,
+  renewSessionForUpgrade,
   startSessionRenewal,
   stopSessionRenewal,
 } from "./session-renewal"
@@ -28,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasRenewalStamp: hasSessionRenewalStamp,
         clearRenewalStamp: clearSessionRenewalStamp,
         renewSession,
+        renewForUpgrade: renewSessionForUpgrade,
       })
       setUser(current)
       return current

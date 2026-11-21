@@ -12,6 +12,11 @@ export interface AuthBootstrapDependencies {
   hasRenewalStamp: () => boolean
   clearRenewalStamp: () => void
   renewSession: (options?: RenewOptions) => Promise<RenewalResult>
+  /**
+   * The once-per-session upgrade renewal shared with the fetch wrapper (`renewSessionForUpgrade`). Without it,
+   * an upgrade clears the stamp and renews on every call.
+   */
+  renewForUpgrade?: () => Promise<RenewalResult | "spent">
 }
 
 /**
@@ -41,12 +46,19 @@ export async function bootstrapAuthUser(
     && (response.status === 401 || user?.id === LOCAL_IDENTITY_ID))
 
   if (needsRecovery) {
-    // A recent stamp can otherwise make renewal incorrectly skip the network
-    // call even though /auth/me has already proved the access badge unusable.
-    dependencies.clearRenewalStamp()
-    // The server deleted the old badge; on loopback without a refresh cookie the
-    // browser is LocalDefault now, as before sessions (design 5.3), not signed out.
-    const result = await dependencies.renewSession(upgrade ? { acceptLocal: true } : undefined)
+    let result: RenewalResult | "spent"
+    if (upgrade && dependencies.renewForUpgrade) {
+      // Once per session, shared with the fetch wrapper: a server that keeps answering
+      // session_upgrade_required gets one rotation, however often the identity is read.
+      result = await dependencies.renewForUpgrade()
+    } else {
+      // A recent stamp can otherwise make renewal incorrectly skip the network
+      // call even though /auth/me has already proved the access badge unusable.
+      dependencies.clearRenewalStamp()
+      // The server deleted the old badge; on loopback without a refresh cookie the
+      // browser is LocalDefault now, as before sessions (design 5.3), not signed out.
+      result = await dependencies.renewSession(upgrade ? { acceptLocal: true } : undefined)
+    }
     if (result !== "renewed" && result !== "local") return null
     response = await fetch("/auth/me", {
       credentials: "include",
