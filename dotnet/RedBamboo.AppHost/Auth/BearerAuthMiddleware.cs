@@ -6,6 +6,12 @@ namespace RedBamboo.AppHost.Auth;
 
 public sealed class BearerAuthMiddleware
 {
+    /// <summary>Set on a request whose shared secret passed the door in <see cref="BearerAuthOptions.DoorOnly"/> mode.</summary>
+    public const string DoorPassedItemKey = "redsuite.tunnel_door_passed";
+
+    public static bool DoorPassed(HttpContext context)
+        => context.Items.TryGetValue(DoorPassedItemKey, out var value) && value is true;
+
     private readonly RequestDelegate _next;
     private readonly BearerAuthOptions _options;
 
@@ -60,7 +66,8 @@ public sealed class BearerAuthMiddleware
 
         provided ??= context.Request.Cookies[_options.CookieName];
 
-        if (provided == null && _options.AllowQueryParamToken)
+        // Door mode keeps the secret out of page URLs, so it never lands in history, logs or a shared link.
+        if (provided == null && _options.AllowQueryParamToken && !(_options.DoorOnly && IsPageRequest(context)))
             provided = context.Request.Query["token"].FirstOrDefault();
 
         if (provided == null || !string.Equals(provided, accessToken, StringComparison.Ordinal))
@@ -78,6 +85,13 @@ public sealed class BearerAuthMiddleware
                 error = "unauthorized",
                 message = "Valid access token required. Provide via Authorization: Bearer <token>"
             });
+            return;
+        }
+
+        if (_options.DoorOnly)
+        {
+            context.Items[DoorPassedItemKey] = true;
+            await _next(context);
             return;
         }
 
@@ -103,4 +117,7 @@ public sealed class BearerAuthMiddleware
     }
 
     private static bool IsLocalRequest(HttpContext context) => RequestOrigin.IsLocal(context);
+
+    private static bool IsPageRequest(HttpContext context)
+        => context.Request.Headers.Accept.ToString().Contains("text/html", StringComparison.OrdinalIgnoreCase);
 }

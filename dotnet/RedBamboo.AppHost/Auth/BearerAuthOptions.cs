@@ -22,4 +22,11 @@ public class BearerAuthOptions
     public List<string> ExactBypassPaths { get; init; } = ["/discover", "/openapi.json"];
     public bool AllowQueryParamToken { get; init; } = true;
     public bool FallThroughOnFailure { get; init; } = false;
+
+    /// <summary>
+    /// Door mode: the shared secret only lets a request through to the sign-in check; it no longer makes the
+    /// request a <c>service</c> admin. A page request may not carry it in <c>?token=</c>. Off by default, so
+    /// hosts behave as before until they turn it on.
+    /// </summary>
+    public bool DoorOnly { get; init; } = false;
 }

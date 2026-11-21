@@ -140,6 +140,8 @@ public static class AppHostExtensions
 
         services.AddSingleton<IUserStore, RedLeafUserStore>();
         services.AddSingleton<IRefreshTokenStore, RedLeafRefreshTokenStore>();
+        // A host that keeps device-session records registers its own; without one every session is approved.
+        services.TryAddSingleton<IDeviceSessionHooks>(DefaultDeviceSessionHooks.Instance);
 
         services.AddSingleton(new PermissionDataSourceOptions());
         services.AddHttpClient<HttpPermissionDataSource>();

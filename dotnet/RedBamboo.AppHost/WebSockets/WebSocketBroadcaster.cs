@@ -16,7 +16,14 @@ public class WebSocketBroadcaster
 {
     internal const string LogEntryEventType = "log.entry";
 
-    private sealed record ClientConnection(WebSocket Socket, bool AllowsLogEvents)
+    /// <summary>The close code a device's sockets get when its session ends (4000-4999 are the app's own).</summary>
+    public const WebSocketCloseStatus SessionRevokedCloseStatus = (WebSocketCloseStatus)4401;
+
+    /// <summary>How long a closed socket may take to acknowledge before its receive loop is abandoned.</summary>
+    public static readonly TimeSpan SessionCloseGrace = TimeSpan.FromSeconds(2);
+
+    private sealed record ClientConnection(WebSocket Socket, bool AllowsLogEvents, WebSocketPrincipal Principal,
+        CancellationTokenSource? Lifetime)
     {
         public SemaphoreSlim MessageGate { get; } = new(1, 1);
         public SemaphoreSlim SendGate { get; } = new(1, 1);
@@ -54,9 +61,7 @@ public class WebSocketBroadcaster
 
     public void Broadcast<T>(string type, T data)
     {
-        var message = JsonSerializer.Serialize(new { type, data }, JsonOptions);
-        var bytes = Encoding.UTF8.GetBytes(message);
-        var segment = new ArraySegment<byte>(bytes);
+        var segment = Serialize(type, data);
 
         foreach (var (id, client) in _clients)
         {
@@ -64,6 +69,64 @@ public class WebSocketBroadcaster
             _ = SendToClientAsync(id, segment, WebSocketMessageType.Text, true, CancellationToken.None);
         }
     }
+
+    /// <summary>
+    /// Sends an event only to <paramref name="userId"/>'s own browsers: person connections of that user and,
+    /// when <paramref name="includeLocalAccess"/>, tokenless loopback ones (the host decides whether the
+    /// person at this computer is that user). Agent, execution and service connections never receive it.
+    /// Returns how many connections it was sent to.
+    /// </summary>
+    public int SendToUser<T>(string userId, string type, T data, bool includeLocalAccess = false)
+    {
+        var segment = Serialize(type, data);
+        var sent = 0;
+        foreach (var (id, client) in _clients)
+        {
+            var principal = client.Principal;
+            var mine = principal.Kind == WebSocketPrincipalKind.Person
+                && string.Equals(principal.UserId, userId, StringComparison.Ordinal);
+            if (!mine && !(includeLocalAccess && principal.Kind == WebSocketPrincipalKind.LocalAccess)) continue;
+            if (type == LogEntryEventType && !client.AllowsLogEvents) continue;
+            _ = SendToClientAsync(id, segment, WebSocketMessageType.Text, true, CancellationToken.None);
+            sent++;
+        }
+        return sent;
+    }
+
+    /// <summary>
+    /// Closes every connection of device session <paramref name="sessionId"/> with
+    /// <see cref="SessionRevokedCloseStatus"/>, so the browser knows it was signed out rather than cut off.
+    /// A connection that does not acknowledge within <see cref="SessionCloseGrace"/> has its receive loop
+    /// abandoned, which also ends its upstream relays. Returns how many connections were closing.
+    /// </summary>
+    public async Task<int> CloseSessionAsync(string sessionId, string description = "session_revoked",
+        CancellationToken ct = default)
+    {
+        var targets = _clients
+            .Where(c => string.Equals(c.Value.Principal.SessionId, sessionId, StringComparison.Ordinal))
+            .ToList();
+        var closing = 0;
+        foreach (var (id, client) in targets)
+        {
+            bool sent;
+            using (var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                sendTimeout.CancelAfter(SessionCloseGrace);
+                sent = await CloseClientAsync(id, SessionRevokedCloseStatus, description, sendTimeout.Token);
+            }
+            try
+            {
+                if (sent) client.Lifetime?.CancelAfter(SessionCloseGrace);
+                else client.Lifetime?.Cancel();
+            }
+            catch (ObjectDisposedException) { }
+            if (sent) closing++;
+        }
+        return closing;
+    }
+
+    private static ArraySegment<byte> Serialize<T>(string type, T data)
+        => new(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type, data }, JsonOptions)));
 
     /// <summary>
     /// Send a local message or relay notification through the client's single writer.
@@ -151,7 +214,19 @@ public class WebSocketBroadcaster
     }
 
     internal void AddClient(string id, WebSocket ws, bool allowsLogEvents)
-        => _clients[id] = new ClientConnection(ws, allowsLogEvents);
+        => AddClientFor(id, ws, allowsLogEvents, WebSocketPrincipal.Anonymous, null);
+
+    /// <summary>
+    /// <see cref="AddClient"/> with who holds the connection. A separate name on purpose: consumers' tests find
+    /// <c>AddClient</c> by reflection, and an overload would make that lookup ambiguous.
+    /// </summary>
+    /// <param name="lifetime">Cancelled to abandon the connection's receive loop (session revoked).</param>
+    internal void AddClientFor(string id, WebSocket ws, bool allowsLogEvents, WebSocketPrincipal principal,
+        CancellationTokenSource? lifetime)
+        => _clients[id] = new ClientConnection(ws, allowsLogEvents, principal, lifetime);
+
+    /// <summary>Who holds connection <paramref name="id"/> (tests).</summary>
+    internal WebSocketPrincipal? PrincipalOf(string id) => _clients.TryGetValue(id, out var c) ? c.Principal : null;
 
     internal bool RemoveClient(string id) => _clients.TryRemove(id, out _);
 

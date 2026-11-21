@@ -36,7 +36,9 @@ public static class WebSocketEndpoints
             WebSocketLogRelay.AcknowledgeSuppression(ctx);
             var ws = await ctx.WebSockets.AcceptWebSocketAsync();
             var id = Guid.NewGuid().ToString();
-            broadcaster.AddClient(id, ws, allowsLogEvents);
+            // The receive loop ends when the request is aborted, on shutdown, or when the session is revoked.
+            using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
+            broadcaster.AddClientFor(id, ws, allowsLogEvents, WebSocketPrincipal.From(ctx.User), receiveCts);
 
             var relayCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
             var relayTasks = new List<Task>();
@@ -65,7 +67,6 @@ public static class WebSocketEndpoints
             // fires once its shutdown timeout (30 s) runs out. So on ApplicationStopping, close
             // the socket ourselves (1001, the browser reconnects to the next server) and give
             // the client a moment to acknowledge before the receive is abandoned.
-            using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted);
             using var onStopping = app.Lifetime.ApplicationStopping.Register(
                 () => _ = CloseForShutdownAsync(broadcaster, id, receiveCts));
 

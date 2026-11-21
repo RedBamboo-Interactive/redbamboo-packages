@@ -52,6 +52,11 @@ public sealed class JwtService
         if (_vault is not null)
             return _vault.SignCached(UserClaims(userId, email, name, roles, avatarUrl), BadgeNet.Local, _options.AccessTokenLifetime);
 
+        return LegacyUserToken(userId, email, name, roles, avatarUrl, sessionId: null);
+    }
+
+    private string LegacyUserToken(string userId, string email, string? name, string[] roles, string? avatarUrl, string? sessionId)
+    {
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, userId),
@@ -64,6 +69,9 @@ public sealed class JwtService
 
         if (avatarUrl is not null)
             claims.Add(new("picture", avatarUrl));
+
+        if (sessionId is not null)
+            claims.Add(new(SessionClaims.SessionId, sessionId));
 
         var credentials = new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256);
         var token = new JwtSecurityToken(
@@ -82,11 +90,18 @@ public sealed class JwtService
     /// A badge for a person logging in from a browser. Vault mode: <c>net: remote</c>, lasting
     /// <see cref="JwtOptions.BrowserAccessTokenLifetime"/> (the vault caps remote badges at an hour),
     /// renewed by the rotating refresh cookie. Legacy mode: identical to <see cref="GenerateAccessToken"/>.
+    /// <paramref name="sessionId"/> is the device session (the <c>sid</c> claim); sign-ins issue it through
+    /// <see cref="SignInSessions"/>, never by calling this directly.
     /// </summary>
-    public string GenerateBrowserAccessToken(string userId, string email, string? name, string[] roles, string? avatarUrl = null)
-        => _vault is null
-            ? GenerateAccessToken(userId, email, name, roles, avatarUrl)
-            : _vault.Sign(UserClaims(userId, email, name, roles, avatarUrl), BadgeNet.Remote, _options.BrowserAccessTokenLifetime);
+    public string GenerateBrowserAccessToken(string userId, string email, string? name, string[] roles,
+        string? avatarUrl = null, string? sessionId = null)
+    {
+        if (_vault is null)
+            return LegacyUserToken(userId, email, name, roles, avatarUrl, sessionId);
+        var claims = UserClaims(userId, email, name, roles, avatarUrl);
+        if (sessionId is not null) claims[SessionClaims.SessionId] = sessionId;
+        return _vault.Sign(claims, BadgeNet.Remote, _options.BrowserAccessTokenLifetime);
+    }
 
     private Dictionary<string, object?> BaseClaims(string sub) => new()
     {

@@ -92,24 +92,16 @@ public static class AuthEndpoints
 
         registry.MapPost("/auth/refresh", "Refresh access token",
             (HttpContext context, IRefreshTokenStore refreshTokenStore,
-                IUserStore userStore, JwtService jwtService, AuthOptions options) =>
-                RefreshAsync(context, refreshTokenStore, userStore, jwtService, options));
+                IUserStore userStore, JwtService jwtService, AuthOptions options, IServiceProvider sp) =>
+                RefreshAsync(context, refreshTokenStore, userStore, jwtService, options,
+                    sp.GetService<IDeviceSessionHooks>(), logger: sp.GetService<ILoggerFactory>()?.CreateLogger("auth")));
 
         registry.MapPost("/auth/logout", "Log out and clear tokens",
-            async (HttpContext context, IRefreshTokenStore refreshTokenStore, AuthOptions options) =>
-            {
-                var refreshToken = context.Request.Cookies[options.RefreshCookieName];
-                if (!string.IsNullOrEmpty(refreshToken))
-                    await refreshTokenStore.RevokeByTokenAsync(refreshToken);
-
-                context.Response.Cookies.Delete(options.CookieName, new CookieOptions { Path = "/" });
-                context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
-
-                return Results.Ok(new { ok = true });
-            });
+            (HttpContext context, IRefreshTokenStore refreshTokenStore, AuthOptions options, IServiceProvider sp) =>
+                LogoutAsync(context, refreshTokenStore, options, sp.GetService<IDeviceSessionHooks>()));
 
         registry.MapGet("/auth/me", "Get current user info",
-            (HttpContext context) =>
+            async (HttpContext context, IServiceProvider sp) =>
             {
                 var sub = context.User.FindFirstValue("sub");
                 if (sub is null)
@@ -127,8 +119,9 @@ public static class AuthEndpoints
                     roles = [];
 
                 var avatarUrl = context.User.FindFirst("picture")?.Value;
+                var device = await DeviceAsync(context, sub, sp.GetService<IDeviceSessionHooks>());
 
-                return Results.Ok(new { id = sub, email, name, roles, avatarUrl });
+                return Results.Ok(new { id = sub, email, name, roles, avatarUrl, device });
             });
 
         registry.MapGet("/auth/execution-context",
@@ -274,42 +267,18 @@ public static class AuthEndpoints
             }
         }
 
-        string accessToken;
-        try { accessToken = jwtService.GenerateBrowserAccessToken(userId, user.Email, user.Name, user.Roles, user.AvatarUrl); }
-        catch (Vault.VaultUnavailableException) { return VaultUnavailable(); }
-        var refreshToken = jwtService.GenerateRefreshToken();
-
-        var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
-        try { await refreshTokenStore.StoreAsync(refreshToken, userId, refreshExpiry); }
-        catch { /* refresh won't work but login still proceeds */ }
-
+        var (session, failure) = await SignInSessions.IssueAsync(context, user, SignInMethods.Google,
+            jwtService, refreshTokenStore, options, sp.GetService<IDeviceSessionHooks>(), logger);
+        if (failure is not null) return failure;
         var isSecure = context.Request.IsHttps;
-
-        context.Response.Cookies.Append(options.CookieName, accessToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = isSecure,
-            SameSite = SameSiteMode.Lax,
-            Path = "/",
-            MaxAge = jwtService.BrowserAccessTokenLifetime
-        });
-
-        context.Response.Cookies.Append(options.RefreshCookieName, refreshToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = isSecure,
-            SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
-            Path = "/auth/refresh",
-            MaxAge = options.Jwt.RefreshTokenLifetime
-        });
 
         context.Response.Cookies.Delete("redsuite_auth_state");
         context.Response.Cookies.Delete("redsuite_auth_return");
 
         var returnUrl = SanitizeReturnUrl(context.Request.Cookies["redsuite_auth_return"]);
         logger?.LogInformation(
-            "Google sign-in issued a session for {Sub} on {Host} (https={Https}, tunnel={Tunnel}, return={Return})",
-            userId, host, isSecure, throughTunnel, returnUrl);
+            "Google sign-in issued session {Session} ({Status}) for {Sub} on {Host} (https={Https}, tunnel={Tunnel}, return={Return})",
+            session!.SessionId, session.Status, userId, host, isSecure, throughTunnel, returnUrl);
         return Results.Redirect(returnUrl);
     }
 
@@ -340,15 +309,31 @@ public static class AuthEndpoints
         return Results.Content(html, "text/html; charset=utf-8", System.Text.Encoding.UTF8, statusCode);
     }
 
+    /// <summary>How long after a rotation the token it replaced may still arrive without counting as reuse:
+    /// tabs that renew at the same moment, or a response lost on the way back.</summary>
+    public static readonly TimeSpan RotationGrace = TimeSpan.FromSeconds(30);
+
     /// <summary>
-    /// Rotating refresh: a valid refresh cookie is swapped for a new one and a fresh browser access badge
-    /// (one hour in vault mode). The replacement is stored before the old token is revoked, so a failure
-    /// in between never leaves the browser holding a dead cookie. A revoked, expired or unknown token is
-    /// a 401 and the cookies are cleared.
+    /// Rotating refresh: a valid refresh cookie is swapped for a new one in the same family (device session)
+    /// and a fresh browser access badge carrying that session (one hour in vault mode). The replacement is
+    /// stored before the old token is marked, so a failure in between never leaves the browser holding a dead
+    /// cookie. The old token is kept, marked rotated:
+    /// <list type="bullet">
+    /// <item>within <see cref="RotationGrace"/> it is a 401 <c>invalid_token</c> that leaves the cookies alone
+    /// (the browser already holds its successor; the web client treats it as a multi-tab race);</item>
+    /// <item>after it, presenting it again is reuse: the whole family ends, the cookies are cleared, and the
+    /// answer is 401 <c>session_revoked</c>.</item>
+    /// </list>
+    /// A family the host says has ended is refused the same way. A token stored before sessions existed is
+    /// adopted into a new family. An expired or unknown token is a 401 <c>invalid_token</c> and the cookie is cleared.
     /// </summary>
     internal static async Task<IResult> RefreshAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
-        IUserStore userStore, JwtService jwtService, AuthOptions options)
+        IUserStore userStore, JwtService jwtService, AuthOptions options, IDeviceSessionHooks? hooks = null,
+        TimeProvider? clock = null, ILogger? logger = null)
     {
+        hooks ??= DefaultDeviceSessionHooks.Instance;
+        var now = (clock ?? TimeProvider.System).GetUtcNow();
+
         // Every refresh cookie the browser sent, not only the first (see AuthMiddleware.CookieValues).
         var refreshTokens = AuthMiddleware.CookieValues(context.Request, options.RefreshCookieName);
         if (refreshTokens.Count == 0)
@@ -357,12 +342,38 @@ public static class AuthEndpoints
             return Results.Json(new { error = "no_token" }, statusCode: 401);
         }
 
+        // A live token wins over a rotated one sent alongside it.
         RefreshTokenValidation? validation = null;
+        RefreshTokenValidation? rotated = null;
         foreach (var candidate in refreshTokens)
         {
-            validation = await refreshTokenStore.ValidateAsync(candidate);
-            if (validation is not null) break;
+            var found = await refreshTokenStore.FindAsync(candidate);
+            if (found is null) continue;
+            if (found.RotatedAt is null) { validation = found; break; }
+            rotated ??= found;
         }
+
+        if (validation is null && rotated is { RotatedAt: { } rotatedAt })
+        {
+            if (now - rotatedAt <= RotationGrace)
+                return Results.Json(new { error = "invalid_token" }, statusCode: 401);
+
+            // Reuse: whoever holds this token is not the browser that rotated it, or that browser lost its successor.
+            if (rotated.FamilyId is { } reusedFamily)
+            {
+                await refreshTokenStore.RevokeFamilyAsync(reusedFamily);
+                await hooks.EndAsync(reusedFamily, rotated.UserId, SessionEndReasons.RefreshReused);
+            }
+            else
+            {
+                await refreshTokenStore.RevokeByIdAsync(rotated.EntityId);
+            }
+            logger?.LogWarning("A rotated refresh token was used again {Age} s after rotation: session {Session} of {Sub} ended",
+                (int)(now - rotatedAt).TotalSeconds, rotated.FamilyId ?? "(none)", rotated.UserId);
+            return ClearAuthCookiesAndReturn(context, options,
+                Results.Json(new { error = "session_revoked", reason = SessionEndReasons.RefreshReused }, statusCode: 401));
+        }
+
         if (validation is null)
         {
             context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
@@ -377,63 +388,103 @@ public static class AuthEndpoints
         }
         if (!user.IsActive)
         {
-            // A disabled account loses its sessions: this refresh token dies with the refusal.
-            await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
+            // A disabled account loses its sessions: this session dies with the refusal.
+            if (validation.FamilyId is { } disabledFamily)
+            {
+                await refreshTokenStore.RevokeFamilyAsync(disabledFamily);
+                await hooks.EndAsync(disabledFamily, user.Id, SessionEndReasons.AccountDisabled);
+            }
+            else
+            {
+                await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
+            }
             return ClearAuthCookiesAndReturn(context, options,
                 Results.Json(new { error = "account_disabled" }, statusCode: 401));
         }
 
+        if (validation.FamilyId is { } family
+            && await hooks.StatusAsync(family, user.Id) == DeviceSessionStatus.Ended)
+        {
+            await refreshTokenStore.RevokeFamilyAsync(family);
+            return ClearAuthCookiesAndReturn(context, options,
+                Results.Json(new { error = "session_revoked", reason = "ended" }, statusCode: 401));
+        }
+
+        var sessionId = validation.FamilyId ?? DeviceSessionIds.New(now);
         string newAccessToken;
         try
         {
-            // Signed before anything is stored or revoked: a vault outage leaves the session exactly as it was.
-            newAccessToken = jwtService.GenerateBrowserAccessToken(user.Id, user.Email, user.Name, user.Roles, user.AvatarUrl);
+            // Signed before anything is stored or retired: a vault outage leaves the session exactly as it was.
+            newAccessToken = jwtService.GenerateBrowserAccessToken(user.Id, user.Email, user.Name, user.Roles,
+                user.AvatarUrl, sessionId);
         }
         catch (Vault.VaultUnavailableException)
         {
-            return VaultUnavailable();
+            return SignInSessions.VaultUnavailable();
         }
+        if (validation.FamilyId is null)
+            await hooks.BeginAsync(context, user, SignInMethods.Adopted, sessionId);
+
         var newRefreshToken = jwtService.GenerateRefreshToken();
 
-        // Store the replacement before revoking the token it replaces. Revoking
-        // first means any failure past that point — a store that throws, a dropped
-        // response — leaves the client holding a cookie whose token no longer
-        // exists, and the session is dead with no way back but a re-login.
-        var refreshExpiry = DateTimeOffset.UtcNow.Add(options.Jwt!.RefreshTokenLifetime);
-        await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry);
-        await refreshTokenStore.RevokeByIdAsync(validation.EntityId);
+        // Store the replacement before retiring the token it replaces. Retiring
+        // first means any failure past that point (a store that throws, a dropped
+        // response) leaves the client holding a cookie whose token no longer
+        // works, and the session is dead with no way back but a re-login.
+        var refreshExpiry = now.Add(options.Jwt!.RefreshTokenLifetime);
+        await refreshTokenStore.StoreAsync(newRefreshToken, user.Id, refreshExpiry, sessionId);
+        await refreshTokenStore.MarkRotatedAsync(validation.EntityId, RefreshTokenHash.Of(newRefreshToken), now);
 
-        var isSecure = context.Request.IsHttps;
-
-        context.Response.Cookies.Append(options.CookieName, newAccessToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = isSecure,
-            SameSite = isSecure ? SameSiteMode.Lax : SameSiteMode.Lax,
-            Path = "/",
-            MaxAge = jwtService.BrowserAccessTokenLifetime
-        });
-
-        context.Response.Cookies.Append(options.RefreshCookieName, newRefreshToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = isSecure,
-            SameSite = isSecure ? SameSiteMode.Strict : SameSiteMode.Lax,
-            Path = "/auth/refresh",
-            MaxAge = options.Jwt.RefreshTokenLifetime
-        });
-
+        SignInSessions.AppendCookies(context, options, jwtService, newAccessToken, newRefreshToken);
         return Results.Ok(new { expiresIn = jwtService.BrowserAccessTokenLifetime.TotalSeconds });
     }
 
-    /// <summary>Plain words, and a 5xx so the web client treats it as transient rather than as a logout.</summary>
-    private static IResult VaultUnavailable()
-        => Results.Json(new { error = "vault_unavailable", message = "Leaf Vault unavailable. Sign-in works again as soon as it is back." }, statusCode: 503);
+    /// <summary>
+    /// The device session of a browser badge, for <c>/auth/me</c>: <c>{sessionId, status}</c> with status
+    /// <c>approved</c>, <c>pending</c> or <c>ended</c> as the host reports it. Null for anything without a
+    /// session (LocalDefault, services, Agents, execution badges, badges issued before sessions).
+    /// </summary>
+    internal static async Task<object?> DeviceAsync(HttpContext context, string sub, IDeviceSessionHooks? hooks)
+    {
+        var sessionId = context.User.FindFirstValue(SessionClaims.SessionId);
+        if (string.IsNullOrEmpty(sessionId)) return null;
+        if (string.Equals(context.User.FindFirstValue(ExecutionIdentityClaims.TokenUseClaim), ExecutionIdentityClaims.TokenUse,
+                StringComparison.OrdinalIgnoreCase))
+            return null;
+        var status = await (hooks ?? DefaultDeviceSessionHooks.Instance).StatusAsync(sessionId, sub);
+        return new { sessionId, status = status.ToString().ToLowerInvariant() };
+    }
+
+    /// <summary>
+    /// Ends this browser's session: every refresh token of its family, and the host is told. A token stored
+    /// before sessions existed is revoked on its own. The cookies are cleared either way.
+    /// </summary>
+    internal static async Task<IResult> LogoutAsync(HttpContext context, IRefreshTokenStore refreshTokenStore,
+        AuthOptions options, IDeviceSessionHooks? hooks = null)
+    {
+        hooks ??= DefaultDeviceSessionHooks.Instance;
+        foreach (var refreshToken in AuthMiddleware.CookieValues(context.Request, options.RefreshCookieName))
+        {
+            if (string.IsNullOrEmpty(refreshToken)) continue;
+            var found = await refreshTokenStore.FindAsync(refreshToken);
+            if (found?.FamilyId is { } family)
+            {
+                await refreshTokenStore.RevokeFamilyAsync(family);
+                await hooks.EndAsync(family, found.UserId, SessionEndReasons.SignedOut);
+            }
+            else
+            {
+                await refreshTokenStore.RevokeByTokenAsync(refreshToken);
+            }
+        }
+
+        SignInSessions.ClearCookies(context, options);
+        return Results.Ok(new { ok = true });
+    }
 
     private static IResult ClearAuthCookiesAndReturn(HttpContext context, AuthOptions options, IResult result)
     {
-        context.Response.Cookies.Delete(options.CookieName, new CookieOptions { Path = "/" });
-        context.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions { Path = "/auth/refresh" });
+        SignInSessions.ClearCookies(context, options);
         return result;
     }
 }
