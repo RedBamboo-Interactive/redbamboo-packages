@@ -140,8 +140,21 @@ async function main() {
       for (let i = 0; i < 4; i++) await page.keyboard.press("ArrowRight")
       await counter.getByText("6 / 11", { exact: true }).waitFor()
       const squareHeight = (await anyDialog.boundingBox()).height
+      // Relative to the dialog: it stays centred and may ratchet taller while stepping, as between squares.
+      const arrowsAt = async () => {
+        const box = await jobCounter.boundingBox()
+        const frame = await anyDialog.boundingBox()
+        return { fromRight: frame.x + frame.width - (box.x + box.width), fromTop: box.y - frame.y }
+      }
+      const samePlace = (actual, expected, message) => assert.ok(
+        Math.abs(actual.fromRight - expected.fromRight) <= 1 && Math.abs(actual.fromTop - expected.fromTop) <= 1,
+        `${message}: ${JSON.stringify({ actual, expected })}`)
+      await settle()
+      const squareArrows = await arrowsAt()
       await page.keyboard.press("ArrowRight")
       await jobCounter.getByText("7 / 11", { exact: true }).waitFor()
+      await settle()
+      samePlace(await arrowsAt(), squareArrows, "the arrows and counter stay where the squares' dialog has them")
       await anyDialog.getByRole("heading", { name: "Launch covers", exact: true }).waitFor()
       assert.equal(await anyDialog.getAttribute("data-slot"), "job-summary", "stepping onto a twin shows the job's summary")
       assert.ok(await anyDialog.evaluate(node => node.__navMark === true), "in the same dialog: it was not closed or remounted")
@@ -154,6 +167,8 @@ async function main() {
       await page.keyboard.press("ArrowRight")
       await jobCounter.getByText("8 / 11", { exact: true }).waitFor()
       await anyDialog.getByRole("heading", { name: "Mossbound theme", exact: true }).waitFor()
+      await settle()
+      samePlace(await arrowsAt(), squareArrows, "from one twin to the next, the arrows stay put")
       assert.ok((await anyDialog.locator("[data-job-summary-status]").innerText()).includes("Waiting to start"))
       // Past the twins: back onto squares, the next row's event first.
       await jobCounter.getByRole("button", { name: "Next activity" }).click()

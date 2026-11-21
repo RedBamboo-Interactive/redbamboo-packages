@@ -23,7 +23,7 @@ async function main() {
   const { createServer } = await import(pathToFileURL(require.resolve("vite")))
   const tailwind = (await import(pathToFileURL(require.resolve("@tailwindcss/vite", { paths: [path.resolve(packageRoot, "../ui")] })))).default
   const server = await createServer({ configFile: false, root: __dirname, plugins: [tailwind()],
-    cacheDir: path.join(scratch, "job-cards-vite-cache"),
+    cacheDir: path.join(scratch, "job-twins-vite-cache"),
     resolve: { alias: {
       react: path.join(packageRoot, "node_modules/react"), "react-dom": path.join(packageRoot, "node_modules/react-dom"),
     } },
@@ -440,6 +440,8 @@ async function main() {
       equal(await gallery("g-w").getAttribute("data-job-progress"), null, "no real progress: no percentage")
       equal(await gallery("g-w").locator(".job-twin-sweep").count(), 1, "and the sweep")
       equal(await gallery("g-p").getAttribute("data-job-progress"), "62")
+      // Mounted already stopped (a reload): the cancelled record's kept progress, not an empty twin.
+      check(Math.abs(await gallery("g-s").evaluate(el => parseFloat(getComputedStyle(el).getPropertyValue("--job-twin-p"))) - 30) < 0.5, "a stopped job loaded fresh shows how far it got")
       check((await gallery("g-w").getAttribute("aria-label")).includes("Starting up"), "stage in words while waiting")
       equal(await gallery("g-n").evaluate(el => getComputedStyle(el).animationName), "square-spawn, job-twin-pulse", "needs you: a soft pulse")
       equal(await gallery("g-n").evaluate(el => getComputedStyle(el).getPropertyValue("--job-twin-c").trim()), await token("--color-accent-gold"), "needs you: gold")

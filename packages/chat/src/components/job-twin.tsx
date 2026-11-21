@@ -36,11 +36,11 @@ export function jobTwinLabel(job: ChatJob, now = Date.now()): string {
 
 export function JobTwin({ job, onOpen }: { job: ChatJob; onOpen: () => void }) {
   const progress = jobProgress(job)
-  // A stopped job keeps the fill it reached while it was in view (a stopped read carries no progress).
+  // A stopped job keeps the fill it reached: the cancelled record's kept progress, else what this twin last showed.
   const reached = useRef(0)
   if (job.state === "running" && progress !== null) reached.current = progress * 100
   const fill = job.state === "running" ? (progress ?? 0) * 100
-    : job.state === "stopped" ? reached.current
+    : job.state === "stopped" ? (job.stoppedProgress != null ? job.stoppedProgress * 100 : reached.current)
       : job.state === "queued" ? 0
         : 100
   const label = jobTwinLabel(job)

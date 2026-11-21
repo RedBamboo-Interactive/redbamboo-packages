@@ -218,7 +218,7 @@ export type { UseChatJobsOptions } from "./hooks/use-chat-jobs"
 export {
   JOB_CARD_RULES, anchorChatJob, anchorChatJobs, capabilityLabel, describeJobActivity, foldJobRecord, formatJobDuration,
   groupChatJobs, isActiveJob, isExcludedJob, isTerminalJobStatus, jobCapability, jobKind, jobProgress,
-  jobState, jobsByTimelineRow, normalizeChatJob, realProgress, turnKeyOf,
+  jobState, jobsByTimelineRow, normalizeChatJob, realProgress, stoppedProgress, turnKeyOf,
 } from "./lib/chat-jobs"
 export type { AnchoredChatJobs, ChatJob, ChatJobAnchor, ChatJobKind, ChatJobState, ComputeJobOutput, ComputeJobRecord, NormalizeJobOptions } from "./lib/chat-jobs"
 export { ChatJobsSync } from "./lib/chat-jobs-sync"

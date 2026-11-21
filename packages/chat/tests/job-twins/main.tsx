@@ -126,7 +126,7 @@ function App() {
     ? (part: MessagePart) => !(part.type === "tool_use" && part.toolName === "Bash")
     : undefined, [hideShell])
   return <div style={{ width: "100%", height: "100vh", display: "flex", flexDirection: "column" }}>
-    <ChatPanel messages={messages} isStreaming={false} sessionId="job-cards" persistQueue={false}
+    <ChatPanel messages={messages} isStreaming={false} sessionId="job-twins" persistQueue={false}
       hasEarlierMessages={hasEarlier}
       jobs={jobs}
       onStopJob={job => { stops.current.push(job.id); store.set(job.id, { ...store.get(job.id)!, status: "Cancelled", stage: "cancelled" }) }}
@@ -150,7 +150,7 @@ function Gallery() {
     ["Done", { ...base, id: "g-d", status: "Completed", durationMs: 72000, outputs: ART.map((url, i) => ({ url, contentType: "image/svg+xml", sizeBytes: i })) }],
     ["Done, one image", { ...base, id: "g-c", name: "Level map", status: "Completed", durationMs: 38000, prompt: "A top-down level map of a mossy ruin, hand-inked, warm light", outputs: [{ url: ART[2], contentType: "image/svg+xml" }] }],
     ["Failed", { ...base, id: "g-f", capability: "video-gen", name: "Trailer cut", providerName: "Wan 2.2", status: "Failed", stage: "failed", errorMessage: "CUDA out of memory while decoding frame 34", durationMs: 120000 }],
-    ["Stopped", { ...base, id: "g-s", capability: "model-download", name: "Model download", status: "Cancelled", stage: "cancelled" }],
+    ["Stopped", { ...base, id: "g-s", capability: "model-download", name: "Model download", status: "Cancelled", stage: "cancelled", progress: 0.3 }],
     ["Workflow, 56%", { ...base, id: "k-w", capability: "workflow", name: "Monday support digest", providerName: "RedLeaf Workflow Engine", status: "Running", progress: 0.56 }],
   ]
   const steps: ComputeJobRecord[] = ["Read inbox", "Group", "Summarize", "Send"].map((name, index) => ({

@@ -60,6 +60,11 @@ export interface ChatJob {
   state: ChatJobState
   /** 0..1 only when the job reports real progress; null means "don't draw a percentage". */
   progress: number | null
+  /**
+   * 0..1, how far a stopped job got before it was stopped: RedCompute keeps the
+   * last reported progress on a cancelled record. Null otherwise.
+   */
+  stoppedProgress?: number | null
   stage: string | null
   queuedAt: string | null
   startedAt: string | null
@@ -131,6 +136,13 @@ export function realProgress(record: Pick<ComputeJobRecord, "status" | "progress
   return value > 0 && value < 1 ? value : null
 }
 
+/** How far a stopped job got: the last progress a cancelled or skipped record kept, past 0. */
+export function stoppedProgress(record: Pick<ComputeJobRecord, "status" | "progress">): number | null {
+  const value = record.progress
+  if (jobState(record.status) !== "stopped" || typeof value !== "number" || !Number.isFinite(value)) return null
+  return value > 0 ? Math.min(value, 1) : null
+}
+
 function durationOf(record: ComputeJobRecord): number | null {
   if (typeof record.durationMs === "number" && Number.isFinite(record.durationMs)) return record.durationMs
   const started = Date.parse(record.startedAt ?? record.queuedAt ?? "")
@@ -178,6 +190,7 @@ export function normalizeChatJob(record: ComputeJobRecord, options: NormalizeJob
     provider: record.providerName?.trim() || null,
     state: jobState(record.status),
     progress: realProgress(record),
+    stoppedProgress: stoppedProgress(record),
     stage: record.stage ?? null,
     queuedAt: record.queuedAt ?? null,
     startedAt: record.startedAt ?? null,

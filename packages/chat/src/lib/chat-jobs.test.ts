@@ -4,7 +4,7 @@ import type { MessageBlock, MessagePart } from "../types.ts"
 import {
   JOB_CARD_RULES, anchorChatJob, anchorChatJobs, capabilityLabel, describeJobActivity, foldJobRecord,
   formatJobDuration, groupChatJobs, isActiveJob, isExcludedJob, jobElapsed, jobKind,
-  jobProgress, jobStageWords, jobState, jobsByTimelineRow, normalizeChatJob, realProgress, type ComputeJobRecord,
+  jobProgress, jobStageWords, jobState, jobsByTimelineRow, normalizeChatJob, realProgress, stoppedProgress, type ComputeJobRecord,
 } from "./chat-jobs.ts"
 import { projectActivityTimeline } from "./activity-timeline.ts"
 
@@ -45,6 +45,12 @@ test("progress is real only while running and past zero", () => {
   assert.equal(realProgress({ status: "Queued", progress: 0.5 }), null)
   assert.equal(realProgress({ status: "Completed", progress: 1 }), null)
   assert.equal(realProgress({ status: "Running", progress: null }), null)
+  // A cancelled record keeps its last reported progress: the twin shows how far it got.
+  assert.equal(stoppedProgress({ status: "Cancelled", progress: 0.42 }), 0.42)
+  assert.equal(stoppedProgress({ status: "Skipped", progress: 0 }), null, "stopped before any progress")
+  assert.equal(stoppedProgress({ status: "Cancelled", progress: null }), null)
+  assert.equal(stoppedProgress({ status: "Running", progress: 0.42 }), null, "only a stopped job")
+  assert.equal(normalizeChatJob({ id: "s", capability: "image-gen", status: "Cancelled", progress: 0.42 } as never).stoppedProgress, 0.42)
 })
 
 test("exclusions: chat turns, voice lines, dictation and sub-2 s successes; failures always show", () => {

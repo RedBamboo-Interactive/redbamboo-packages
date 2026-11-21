@@ -998,6 +998,9 @@ export function PartModal(props: PartModalProps) {
     navigation={effectiveNavigation} breadcrumb={breadcrumb} background={background} />
 }
 
+/** The squares' dialog width, shared by a twin's summary while stepping. */
+const SQUARE_DIALOG_MAX_WIDTH = "min(42rem, calc(100vw - 2rem))"
+
 function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
   breadcrumb?: React.ReactNode
   background?: React.ReactNode
@@ -1017,7 +1020,9 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
     return (
       <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
         <DialogContent motion="snappy" onKeyDown={onKeyDown} data-slot={content["data-slot"]} data-job-id={content["data-job-id"]}
-          className={content.className} style={{ ...content.style, minHeight: heldHeight("82vh") }}>
+          className={content.className}
+          // A square's width, so the header's arrows and counter stay put when stepping onto or off a twin.
+          style={{ ...content.style, maxWidth: SQUARE_DIALOG_MAX_WIDTH, minHeight: heldHeight("82vh") }}>
           <JobSummaryBody job={job} onStop={onStopJob} resolveImageSrc={resolveImageSrc} onClose={onClose}
             navigation={navigation ? <PartNavigationControls navigation={navigation} /> : undefined} />
         </DialogContent>
@@ -1100,7 +1105,7 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
         motion="snappy"
         onKeyDown={onKeyDown}
         className="flex flex-col p-0 gap-0"
-        style={{ maxWidth: "min(42rem, calc(100vw - 2rem))", maxHeight: "82vh", minHeight: heldHeight("82vh") }}
+        style={{ maxWidth: SQUARE_DIALOG_MAX_WIDTH, maxHeight: "82vh", minHeight: heldHeight("82vh") }}
       >
         <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0">
           <div

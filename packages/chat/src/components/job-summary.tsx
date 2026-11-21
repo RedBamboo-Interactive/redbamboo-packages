@@ -168,7 +168,6 @@ export function JobSummaryBody({ job, onStop, resolveImageSrc, onClose, navigati
             {summarySentence(job, progress, now)}
           </p>
         </div>
-        {navigation && <div className="shrink-0">{navigation}</div>}
         {menu.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -184,6 +183,8 @@ export function JobSummaryBody({ job, onStop, resolveImageSrc, onClose, navigati
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        {/* Last and top-aligned, so stepping between a square and a job keeps the arrows exactly where the squares' dialog has them. */}
+        {navigation && <div data-slot="job-summary-navigation" className="shrink-0 self-start">{navigation}</div>}
       </DialogHeader>
       {job.state === "running" && (
         <span aria-hidden="true" className="relative block h-[2px] shrink-0 overflow-hidden" style={{ background: "color-mix(in srgb, var(--job-kind) 14%, transparent)" }}>
