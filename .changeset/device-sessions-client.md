@@ -14,5 +14,5 @@ Device sessions, the browser's part.
   - `bootstrapAuthUser` does the same at load, with or without a renewal stamp.
 - **WebSocket.** `createWebSocket` stops reconnecting after a `4401` close (`SESSION_REVOKED_CLOSE_CODE`) and calls `onSessionRevoked`; the WebSocket provider reports it through `reportSessionRevoked()`.
   - `handle.rearm()` starts it again after a sign-in without a reload. `AuthProvider.refresh` dispatches `SIGNED_IN_EVENT` (`announceSignedIn()`) and the provider re-arms on it.
-  - Reconnects that keep failing back off from `reconnectMs`, doubling up to 60 s (`reconnectDelay`, `MAX_RECONNECT_MS`).
+  - Reconnects that keep failing back off from `reconnectMs`, doubling up to 15 s, the server relay's own maximum (`reconnectDelay`, `MAX_RECONNECT_MS`).
 - **Device on the user.** `AuthUser.device` (`{ sessionId, status }`) is what `/auth/me` now reports.

@@ -1,8 +1,12 @@
 /** The close code the server sends to a device whose session ended. The socket is not reopened. */
 export const SESSION_REVOKED_CLOSE_CODE = 4401
 
-/** The longest wait between reconnect attempts that keep failing (signed out, server down). */
-export const MAX_RECONNECT_MS = 60_000
+/**
+ * The longest wait between reconnect attempts that keep failing (signed out, server down). The same as the
+ * /ws upstream relay's own maximum (AppHost WebSocketEndpoints, maxRetrySeconds), so a browser is never
+ * slower to come back than the relay behind it.
+ */
+export const MAX_RECONNECT_MS = 15_000
 
 /**
  * The wait before reconnect attempt number `failures` (1 for the first) since the socket was last open:

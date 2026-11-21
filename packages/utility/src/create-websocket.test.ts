@@ -212,12 +212,13 @@ test("rearm does nothing to a socket that was never revoked", () => {
   }
 })
 
-test("reconnect delays double from the base up to a minute while connects keep failing", () => {
-  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map((n) => reconnectDelay(3000, n)),
-    [3000, 6000, 12_000, 24_000, 48_000, 60_000, 60_000, 60_000])
+test("reconnect delays double from the base up to 15 s while connects keep failing", () => {
+  assert.equal(MAX_RECONNECT_MS, 15_000)  // the server relay's own maximum
+  assert.deepEqual([1, 2, 3, 4, 5, 6].map((n) => reconnectDelay(3000, n)),
+    [3000, 6000, 12_000, 15_000, 15_000, 15_000])
   assert.equal(reconnectDelay(3000, 0), 3000)
   assert.equal(reconnectDelay(3000, 10_000), MAX_RECONNECT_MS)
-  assert.equal(reconnectDelay(120_000, 3), 120_000)  // a base above the cap is kept as is
+  assert.equal(reconnectDelay(30_000, 3), 30_000)  // a base above the cap is kept as is
 })
 
 test("a refused socket backs off, and one that opens starts again from the base", async () => {
