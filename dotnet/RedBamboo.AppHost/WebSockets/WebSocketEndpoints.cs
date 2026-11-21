@@ -2,6 +2,8 @@ using System.Net.WebSockets;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using RedBamboo.AppHost.Auth;
 using RedBamboo.AppHost.Proxy;
 
 namespace RedBamboo.AppHost.WebSockets;
@@ -14,11 +16,19 @@ public static class WebSocketEndpoints
     private static readonly byte[] UpstreamDisconnectedMsg =
         Encoding.UTF8.GetBytes("{\"type\":\"upstream.disconnected\",\"data\":{}}");
 
+    /// <summary>The close a relay sends when the badge it was opened with stopped validating: reconnect with a fresh one.</summary>
+    internal const string CredentialsExpiredReason = "credentials_expired";
+
+    /// <summary>Whether a relay may (re)connect upstream with the credentials captured at the upgrade.</summary>
+    internal enum RelayAuth { Valid, SessionEnded, CredentialsExpired }
+
     public static void MapWebSocketEndpoints(
         this WebApplication app,
         WebSocketBroadcaster broadcaster,
         IReadOnlyList<ProxyRouteConfig>? wsProxyRoutes = null)
     {
+        var hooks = app.Services.GetService<IDeviceSessionHooks>() ?? DefaultDeviceSessionHooks.Instance;
+        var jwt = app.Services.GetService<JwtService>();
         broadcaster.RegisterEvent(new WsEventSchema("upstream.connected",
             "Fired when the upstream WebSocket relay (re)connects to a proxy target"));
         broadcaster.RegisterEvent(new WsEventSchema("upstream.disconnected",
@@ -47,6 +57,22 @@ public static class WebSocketEndpoints
             {
                 var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
                 var cookie = authHeader == null ? ctx.Request.Cookies["redsuite_token"] : null;
+                var principal = WebSocketPrincipal.From(ctx.User);
+                var badge = authHeader is not null && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? authHeader["Bearer ".Length..]
+                    : cookie;
+                // Only a badge that validated at the upgrade is re-checked: a tunnel secret or LocalDefault has none.
+                var recheckBadge = jwt is not null && badge is not null && jwt.ValidateToken(badge) is not null;
+                // Every reconnect reuses what the upgrade carried, so it is checked again first: a session that
+                // ended never reconnects, and a badge that expired makes the browser reconnect with its fresh one.
+                async Task<RelayAuth> CheckAsync()
+                {
+                    if (principal is { Kind: WebSocketPrincipalKind.Person, SessionId: { } sid, UserId: { } user }
+                        && await hooks.StatusAsync(sid, user) == DeviceSessionStatus.Ended)
+                        return RelayAuth.SessionEnded;
+                    if (recheckBadge && jwt!.ValidateToken(badge!) is null) return RelayAuth.CredentialsExpired;
+                    return RelayAuth.Valid;
+                }
 
                 foreach (var route in wsProxyRoutes)
                 {
@@ -58,7 +84,7 @@ public static class WebSocketEndpoints
 
                     relayTasks.Add(Task.Run(
                         () => RelayWithReconnect(ws, broadcaster, id, wsUri, authHeader, cookie,
-                            allowsLogEvents, relayCts.Token),
+                            allowsLogEvents, CheckAsync, receiveCts, relayCts.Token),
                         relayCts.Token));
                 }
             }
@@ -125,6 +151,8 @@ public static class WebSocketEndpoints
         string? authHeader,
         string? authCookie,
         bool allowsLogEvents,
+        Func<Task<RelayAuth>> checkAuth,
+        CancellationTokenSource browserLifetime,
         CancellationToken ct)
     {
         var retryDelay = TimeSpan.FromSeconds(2);
@@ -132,6 +160,15 @@ public static class WebSocketEndpoints
 
         while (browser.State == WebSocketState.Open && !ct.IsCancellationRequested)
         {
+            RelayAuth auth;
+            try { auth = await checkAuth(); }
+            catch (Exception) { auth = RelayAuth.Valid; }  // a host that cannot answer: as before, the upstream decides
+            if (auth != RelayAuth.Valid)
+            {
+                await EndBrowserAsync(broadcaster, browserId, browserLifetime, auth);
+                return;
+            }
+
             var upstream = new ClientWebSocket();
             try
             {
@@ -180,5 +217,27 @@ public static class WebSocketEndpoints
             retryDelay = TimeSpan.FromSeconds(
                 Math.Min(retryDelay.TotalSeconds * 1.5, maxRetrySeconds));
         }
+    }
+
+    /// <summary>
+    /// The relay may not go on: close the browser's socket so it stops waiting on a relay that will not come
+    /// back. An ended session closes with 4401 (the browser stops reconnecting); expired credentials with
+    /// 1008 <see cref="CredentialsExpiredReason"/>, so the browser reconnects with its current badge.
+    /// </summary>
+    private static async Task EndBrowserAsync(WebSocketBroadcaster broadcaster, string browserId,
+        CancellationTokenSource browserLifetime, RelayAuth auth)
+    {
+        var (status, reason) = auth == RelayAuth.SessionEnded
+            ? (WebSocketBroadcaster.SessionRevokedCloseStatus, "session_revoked")
+            : (WebSocketCloseStatus.PolicyViolation, CredentialsExpiredReason);
+        bool sent;
+        using (var timeout = new CancellationTokenSource(WebSocketBroadcaster.SessionCloseGrace))
+            sent = await broadcaster.CloseClientAsync(browserId, status, reason, timeout.Token);
+        try
+        {
+            if (sent) browserLifetime.CancelAfter(WebSocketBroadcaster.SessionCloseGrace);
+            else browserLifetime.Cancel();
+        }
+        catch (ObjectDisposedException) { }
     }
 }

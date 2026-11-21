@@ -68,6 +68,36 @@ public sealed class AuthMiddleware
         var cookieTokens = CookieValues(context.Request, _options.CookieName);
         var cookieToken = cookieTokens.FirstOrDefault();
 
+        // A badge in the Authorization header speaks for the request on its own. When it is expired or
+        // invalid the request is refused, never re-read as the cookie's session: an Agent's expired
+        // execution badge sent from a signed-in browser must not quietly become that person's request.
+        // A header that is not a badge (the tunnel secret, read by BearerAuthMiddleware) changes nothing.
+        if (headerToken is not null && LooksLikeBadge(headerToken))
+        {
+            var principal = _jwtService.ValidateToken(headerToken);
+            if (principal is not null && !RequestOrigin.BadgeReachAllows(principal, context))
+                principal = null;
+            if (principal is not null)
+            {
+                context.User = principal;
+                await ContinueAsync(context);
+                return;
+            }
+            if (optional)
+            {
+                await _next(context);
+                return;
+            }
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "invalid_token",
+                message = "The Bearer badge is expired or invalid.",
+            });
+            return;
+        }
+
         foreach (var token in cookieTokens.Prepend(headerToken))
         {
             if (token is null) continue;
@@ -182,6 +212,13 @@ public sealed class AuthMiddleware
     }
 
     private static bool IsLocalRequest(HttpContext context) => RequestOrigin.IsLocal(context);
+
+    /// <summary>A compact JWS: three non-empty dot-separated parts. Shared secrets are never shaped like this.</summary>
+    internal static bool LooksLikeBadge(string token)
+    {
+        var parts = token.Split('.');
+        return parts.Length == 3 && parts.All(part => part.Length > 0);
+    }
 
     internal static List<string> CookieValues(HttpRequest request, string name)
     {
