@@ -1,4 +1,4 @@
-import type { MessageBlock } from "../types.ts"
+import type { MessageBlock, MessagePart } from "../types.ts"
 import type { ActivityTimelineRow } from "./activity-timeline.ts"
 import { isEventBlock } from "./event-parts.ts"
 
@@ -7,8 +7,8 @@ import { isEventBlock } from "./event-parts.ts"
  * workflows) shown as a small card in the agent message that launched them.
  *
  * Display only. Nothing here reads or writes transcript records, unread,
- * delivery, streaming or turn state: a job is matched to a message by time,
- * and the messages are never changed. Hosts fetch jobs through their own
+ * delivery, streaming or turn state: a job is matched to the tool call whose
+ * result names it, else to a message by time, and the messages are never changed. Hosts fetch jobs through their own
  * authorized endpoint (never from a broadcast payload) and hand the records
  * to `normalizeChatJob`; ChatPanel anchors, groups and draws them.
  */
@@ -319,17 +319,93 @@ export function anchorChatJob(
 export interface AnchoredChatJobs {
   /** turnKey -> grouped jobs for that turn, in launch order. */
   byTurn: Map<string, { anchor: ChatJobAnchor; jobs: ChatJob[] }>
+  /**
+   * Each job's own block: the one holding the tool call that launched it when
+   * a loaded result names it, else the block active when it was queued.
+   */
+  blockOf: Map<string, number>
   /** Every anchored top-level job, in launch order. */
   all: ChatJob[]
 }
 
+/*
+ * Where a job was launched. An agent starts a job with a tool call whose result
+ * names it (`{"jobId": "..."}`, or the id printed by a script), so the twin
+ * belongs right after that call's square: exact, not a guess from the clock.
+ * The first result that names the job is the launch; later ones (a poll, a
+ * download) come after it. A job no loaded result names (a plugin started it,
+ * or the call's page isn't loaded) falls back to time: the block active when
+ * it was queued, at the end of that block's row.
+ *
+ * Ids are pulled out of each result once and cached by the part object, so a
+ * long transcript isn't rescanned on every streaming update.
+ */
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi
+const JOB_ID_FIELD = /"(?:jobId|job_id)"\s*:\s*"([^"\\]{1,200})"/g
+const namedIds = new WeakMap<MessagePart, ReadonlySet<string>>()
+
+/** Every job id a tool result names: GUIDs and `jobId`/`job_id` fields. */
+export function idsNamedBy(result: MessagePart): ReadonlySet<string> {
+  const cached = namedIds.get(result)
+  if (cached) return cached
+  const ids = new Set<string>()
+  const text = result.content ?? ""
+  for (const match of text.matchAll(UUID)) ids.add(match[0].toLowerCase())
+  for (const match of text.matchAll(JOB_ID_FIELD)) ids.add(match[1].toLowerCase())
+  namedIds.set(result, ids)
+  return ids
+}
+
+/** The tool call a result answers: the same `toolUseId`, else the nearest call before it. */
+function callAnswered(parts: readonly MessagePart[], resultIndex: number): number {
+  const result = parts[resultIndex]
+  if (result.toolUseId) {
+    const byId = parts.findIndex(part => part.type === "tool_use" && part.toolUseId === result.toolUseId)
+    if (byId !== -1) return byId
+  }
+  for (let index = resultIndex - 1; index >= 0; index--) {
+    const part = parts[index]
+    if (part.type !== "tool_use") continue
+    if (result.messageId && part.messageId && part.messageId !== result.messageId) continue
+    return index
+  }
+  return -1
+}
+
+/** Index in `parts` of the tool call that launched `jobId`, or -1 when no result there names it. */
+export function jobLaunchIndex(jobId: string, parts: readonly MessagePart[]): number {
+  const id = jobId.toLowerCase()
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index]
+    if (part.type !== "tool_result" || !idsNamedBy(part).has(id)) continue
+    const call = callAnswered(parts, index)
+    if (call !== -1) return call
+  }
+  return -1
+}
+
+/** The block holding the tool call that launched `jobId`, or -1. */
+export function jobLaunchBlock(jobId: string, messages: readonly MessageBlock[]): number {
+  for (let index = 0; index < messages.length; index++) {
+    const block = messages[index]
+    if (block.role === "user" || isEventBlock(block)) continue
+    if (jobLaunchIndex(jobId, block.parts) !== -1) return index
+  }
+  return -1
+}
+
 export function anchorChatJobs(jobs: readonly ChatJob[], messages: readonly MessageBlock[]): AnchoredChatJobs {
   const byTurn = new Map<string, { anchor: ChatJobAnchor; jobs: ChatJob[] }>()
+  const blockOf = new Map<string, number>()
   const all: ChatJob[] = []
   const ordered = [...groupChatJobs(jobs)].sort((a, b) => time(a.queuedAt) - time(b.queuedAt) || a.id.localeCompare(b.id))
   for (const job of ordered) {
-    const anchor = anchorChatJob(job.queuedAt, messages)
+    const launched = jobLaunchBlock(job.id, messages)
+    const anchor = launched !== -1
+      ? { turnKey: turnKeyOf(messages[launched]), blockIndex: launched }
+      : anchorChatJob(job.queuedAt, messages)
     if (!anchor) continue
+    blockOf.set(job.id, anchor.blockIndex)
     const entry = byTurn.get(anchor.turnKey)
     if (entry) {
       entry.jobs.push(job)
@@ -340,7 +416,7 @@ export function anchorChatJobs(jobs: readonly ChatJob[], messages: readonly Mess
     }
     all.push(job)
   }
-  return { byTurn, all }
+  return { byTurn, blockOf, all }
 }
 
 /**
@@ -359,17 +435,23 @@ export function jobsByTimelineRow(
 ): Map<string, ChatJob[]> {
   const byRow = new Map<string, ChatJob[]>()
   const launchOrder = new Map(anchored.all.map((job, index) => [job.id, index] as const))
+  // Each job in its own block's row: the launching call's, else the block active when it was queued.
   for (const [turnKey, { anchor, jobs }] of anchored.byTurn) {
-    const sameTurn = (index: number) => index >= anchor.blockIndex && !!messages[index]
-      && messages[index].role !== "user" && turnKeyOf(messages[index]) === turnKey
-    const holds = (row: ActivityTimelineRow) => row.sourceIndices.includes(anchor.blockIndex)
-    const row = lastOf(rows, candidate => candidate.kind === "activity" && holds(candidate))
-      ?? lastOf(rows, candidate => candidate.kind === "message" && holds(candidate))
-      ?? rows.find(candidate => candidate.kind !== "event-row" && candidate.sourceIndices.some(sameTurn))
-    if (!row) continue
-    const list = byRow.get(row.key)
-    if (list) list.push(...jobs)
-    else byRow.set(row.key, [...jobs])
+    for (const job of jobs) {
+      const blockIndex = anchored.blockOf.get(job.id) ?? anchor.blockIndex
+      const sameTurn = (index: number) => index >= blockIndex && !!messages[index]
+        && messages[index].role !== "user" && turnKeyOf(messages[index]) === turnKey
+      const holds = (row: ActivityTimelineRow) => row.sourceIndices.includes(blockIndex)
+      // The row drawing the launching square, when one does; a block can project to several rows.
+      const row = rows.find(candidate => candidate.kind !== "event-row" && holds(candidate) && jobLaunchIndex(job.id, candidate.block.parts) !== -1)
+        ?? lastOf(rows, candidate => candidate.kind === "activity" && holds(candidate))
+        ?? lastOf(rows, candidate => candidate.kind === "message" && holds(candidate))
+        ?? rows.find(candidate => candidate.kind !== "event-row" && candidate.sourceIndices.some(sameTurn))
+      if (!row) continue
+      const list = byRow.get(row.key)
+      if (list) list.push(job)
+      else byRow.set(row.key, [job])
+    }
   }
   for (const list of byRow.values()) list.sort((a, b) => (launchOrder.get(a.id) ?? 0) - (launchOrder.get(b.id) ?? 0))
   return byRow

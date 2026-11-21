@@ -27,7 +27,7 @@ import { MediaLightbox } from "./streaming-text"
 import { findFocusBlockIndex, findFocusRow, pulseMessageHighlight } from "../lib/focus-message"
 import { canOfferRollback, hasErrorPart, restoredDraftText, rollbackMessageEntries, rollbackTargetBefore } from "../lib/conversation-rollback"
 import { RollbackDialog } from "./rollback-dialog"
-import { anchorChatJobs, describeJobActivity, isActiveJob, jobsByTimelineRow, type ChatJob } from "../lib/chat-jobs"
+import { anchorChatJobs, describeJobActivity, isActiveJob, jobLaunchIndex, jobsByTimelineRow, type ChatJob } from "../lib/chat-jobs"
 import { JobSummary } from "./job-summary"
 import { ChatJobsContext, createChatJobsStore } from "./job-twin"
 
@@ -851,8 +851,8 @@ export function ChatPanel(props: ChatPanelProps) {
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
   const timelineRows = projectActivityTimeline(visibleMessages, startIndex, props.eventRows?.isRow, isMarkerShown)
   timelineRowsRef.current = timelineRows
-  // A turn's jobs are twins at the end of the anchored block's last frieze row (a row with
-  // none gets one). Not rendered: not shown. A row's list keeps its reference while its
+  // A job is a twin right after the square of the tool call that launched it; one no loaded
+  // result names sits at the end of its block's last frieze row (a row with none gets one). Not rendered: not shown. A row's list keeps its reference while its
   // jobs are the same, so the row's memo holds while unrelated rows stream.
   const placedJobs = anchoredJobs ? jobsByTimelineRow(timelineRows, anchoredJobs, messages) : null
   const previousRowJobs = rowJobsRef.current
@@ -866,7 +866,9 @@ export function ChatPanel(props: ChatPanelProps) {
     .filter(row => row.kind === "activity" || rowJobs.has(row.key))
     .map(row => {
       const twins = rowJobs.get(row.key)
-      return twins ? { id: row.block.id, parts: row.block.parts, jobIds: twins.map(job => job.id) } : { id: row.block.id, parts: row.block.parts }
+      return twins
+        ? { id: row.block.id, parts: row.block.parts, jobs: twins.map(job => ({ id: job.id, after: jobLaunchIndex(job.id, row.block.parts) })) }
+        : { id: row.block.id, parts: row.block.parts }
     })
   const inlineOutgoing = visibleOutgoing.filter(item => !eventPlacement?.waiting.has(item.id)
     && (item.appearance === "message" || item.remoteState === "delivered"))

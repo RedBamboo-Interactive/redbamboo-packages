@@ -5,10 +5,17 @@ export interface SquareRow {
   id: string
   parts: readonly MessagePart[]
   /**
-   * Jobs this row draws as twins, in order. They sit at the end of the row's
-   * last frieze, after every square, so they step after the row's squares.
+   * Jobs this row draws as twins, in order. `after` is the index in `parts` of
+   * the tool call that launched the job: its twin sits right after that square
+   * and steps right after it. -1 (no loaded result names the job): at the end
+   * of the row's last frieze, after every square.
    */
-  jobIds?: readonly string[]
+  jobs?: readonly RowJob[]
+}
+
+export interface RowJob {
+  id: string
+  after: number
 }
 
 /**
@@ -39,12 +46,28 @@ export function isInspectablePart(part: MessagePart): boolean {
     && !isVisibleErrorPart(part)
 }
 
-/** Every square across `rows`, in timeline order, each row's job twins after its squares. */
+/**
+ * Every square across `rows`, in timeline order, as drawn: a twin right after
+ * the square that launched its job, the rest after the row's squares.
+ */
 export function squareSequence(rows: readonly SquareRow[]): SquareRef[] {
   const sequence: SquareRef[] = []
   for (const row of rows) {
-    row.parts.forEach((part, index) => { if (isInspectablePart(part)) sequence.push({ rowId: row.id, index }) })
-    row.jobIds?.forEach((jobId, index) => sequence.push({ rowId: row.id, index: row.parts.length + index, jobId }))
+    const jobs = row.jobs ?? []
+    const placed = new Set<string>()
+    const twinsAfter = (index: number) => jobs.forEach((job, order) => {
+      if (job.after !== index) return
+      placed.add(job.id)
+      sequence.push({ rowId: row.id, index: row.parts.length + order, jobId: job.id })
+    })
+    row.parts.forEach((part, index) => {
+      if (!isInspectablePart(part)) return
+      sequence.push({ rowId: row.id, index })
+      twinsAfter(index)
+    })
+    jobs.forEach((job, order) => {
+      if (!placed.has(job.id)) sequence.push({ rowId: row.id, index: row.parts.length + order, jobId: job.id })
+    })
   }
   return sequence
 }

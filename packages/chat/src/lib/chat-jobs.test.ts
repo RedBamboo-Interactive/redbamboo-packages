@@ -4,7 +4,7 @@ import type { MessageBlock, MessagePart } from "../types.ts"
 import {
   JOB_CARD_RULES, anchorChatJob, anchorChatJobs, capabilityLabel, describeJobActivity, foldJobRecord,
   formatJobDuration, groupChatJobs, isActiveJob, isExcludedJob, jobElapsed, jobKind,
-  jobProgress, jobStageWords, jobState, jobsByTimelineRow, normalizeChatJob, realProgress, stoppedProgress, type ComputeJobRecord,
+  jobLaunchIndex, jobProgress, jobStageWords, jobState, jobsByTimelineRow, normalizeChatJob, realProgress, stoppedProgress, type ComputeJobRecord,
 } from "./chat-jobs.ts"
 import { projectActivityTimeline } from "./activity-timeline.ts"
 
@@ -212,6 +212,42 @@ test("twins join the anchored block's last frieze row, in launch order", () => {
   ]
   assert.deepEqual(placed(messages, [job({ id: "theme", queuedAt: at(6) }), job({ id: "covers", queuedAt: at(4) })]),
     { "activity:a1:2": ["covers", "theme"] })
+})
+
+// Placement by launch (89efca37, "within the row, where they were started").
+const call = (id: string, toolName = "Bash"): MessagePart => ({ type: "tool_use", toolName, toolUseId: id, content: "" })
+const answer = (id: string, content: string): MessagePart => ({ type: "tool_result", toolUseId: id, content })
+const GUID = "9b0edfb3-0bb6-49f7-b1be-451f917448e1"
+
+test("a job's launch is the first call whose result names it, by jobId field or printed GUID", () => {
+  const parts = [call("t1", "Read"), answer("t1", "brief"), call("t2"), answer("t2", '{"jobId":"covers","status":"running"}'),
+    call("t3"), answer("t3", `started ${GUID.toUpperCase()}`), call("t4"), answer("t4", '{"jobId":"covers","status":"completed"}')]
+  assert.equal(jobLaunchIndex("covers", parts), 2, "the launch, not the later poll")
+  assert.equal(jobLaunchIndex(GUID, parts), 4, "a printed GUID, any case")
+  assert.equal(jobLaunchIndex("theme", parts), -1, "no result names it")
+  assert.equal(jobLaunchIndex("cover", parts), -1, "a field matches whole, not as a prefix")
+  // Without toolUseId, a result answers the nearest call before it.
+  assert.equal(jobLaunchIndex("x", [tool("Read"), tool("Bash"), { type: "tool_result", content: '{"job_id":"x"}' }]), 1)
+})
+
+test("the launching call beats the clock: a twin joins the row that drew its launch square", () => {
+  // Split by commentary into two friezes. covers was launched in the first row; the clock alone would put it in the second.
+  const messages = [
+    block("u1", "user", 0),
+    block("a1", "assistant", 2, [call("t1"), answer("t1", '{"jobId":"covers"}'), text("Rendering."), call("t2"), answer("t2", "ok"), text("Done.")], "turn-1"),
+  ]
+  assert.deepEqual(placed(messages, [job({ id: "covers", queuedAt: at(4) }), job({ id: "theme", queuedAt: at(5) })]),
+    { "activity:a1:0": ["covers"], "activity:a1:3": ["theme"] })
+})
+
+test("a launch in another turn's block wins over a queuedAt that skews into the next turn", () => {
+  const messages = [
+    block("u1", "user", 0),
+    block("a1", "assistant", 2, [call("t1"), answer("t1", '{"jobId":"covers"}')], "turn-1"),
+    block("u2", "user", 6),
+    block("a2", "assistant", 8, [tool("Read")], "turn-2"),
+  ]
+  assert.deepEqual(placed(messages, [job({ id: "covers", queuedAt: at(9) })]), { "activity:a1:0": ["covers"] })
 })
 
 test("a block with no frieze gives its twins to its last content row", () => {

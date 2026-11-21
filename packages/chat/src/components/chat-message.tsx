@@ -52,7 +52,7 @@ import { ActivityRowsContext } from "./activity-rows-context"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 import { messageActionEntries, messageMarkdown, partActionEntries } from "../lib/chat-actions"
 import { REWIND_ICON, REWIND_LABEL } from "../lib/conversation-rollback"
-import type { ChatJob } from "../lib/chat-jobs"
+import { jobLaunchIndex, type ChatJob } from "../lib/chat-jobs"
 import { JobTwin, useChatJobsStore, useLiveJob } from "./job-twin"
 import { JobSummaryBody, jobSummaryContentProps } from "./job-summary"
 
@@ -658,9 +658,12 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   /** Positions index `allParts`; an origin past the last part trails the frieze. */
   turnOrigins?: readonly ActivityTurnOrigin[]
   isLive?: boolean
-  /** Every job this row draws as a twin: stops after the row's squares. */
+  /**
+   * Every job this row draws as a twin. A twin sits right after the square of
+   * the tool call that launched its job, in whichever frieze draws that square.
+   */
   rowJobs?: readonly ChatJob[]
-  /** This frieze is the row's last: it draws the twins, after its squares and trailing origins. */
+  /** This frieze is the row's last: it also draws the twins no square launched, after its squares and trailing origins. */
   drawsJobs?: boolean
   onStopJob?: (job: ChatJob) => Promise<void> | void
   /** Approvals on this row's tool calls; a waiting one rings its square. */
@@ -691,8 +694,10 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   // Stepping walks every square the panel renders, past commentary into the
   // neighbouring activity rows. This row always reads its own current parts.
   const getActivityRows = useContext(ActivityRowsContext)
+  // Where each twin sits: after its launching call's square, or -1 for the end of the row.
+  const launchAt = new Map((rowJobs ?? []).map(job => [job.id, jobLaunchIndex(job.id, allParts)] as const))
   const ownRow = (): SquareRow => rowJobs?.length
-    ? { id: blockId, parts: allParts, jobIds: rowJobs.map(job => job.id) }
+    ? { id: blockId, parts: allParts, jobs: rowJobs.map(job => ({ id: job.id, after: launchAt.get(job.id) ?? -1 })) }
     : { id: blockId, parts: allParts }
   const squareRows = (): readonly SquareRow[] => {
     const rows = getActivityRows?.() ?? []
@@ -722,6 +727,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
     setMinHeight(0)
     select({ rowId: blockId, index: allParts.length + (rowJobs?.indexOf(job) ?? 0), jobId: job.id })
   }
+  const twinOf = (job: ChatJob) => <JobTwin key={`job:${job.id}`} job={job} onOpen={() => openJob(job)} />
 
   const sequence = modalSelection ? squareSequence(squareRows()) : []
   const position = modalSelection ? squarePosition(sequence, modalSelection) : -1
@@ -821,11 +827,12 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
                 {inlineLabel}
               </button>,
             ] : []),
+            ...(rowJobs ?? []).filter(job => launchAt.get(job.id) === positions[i]).map(twinOf),
           ]
         })}
         {trailingOrigins.map(entry =>
           <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)}
-        {drawsJobs && rowJobs?.map(job => <JobTwin key={`job:${job.id}`} job={job} onOpen={() => openJob(job)} />)}
+        {drawsJobs && rowJobs?.filter(job => (launchAt.get(job.id) ?? -1) === -1).map(twinOf)}
       </div>
 
       <PartModal part={modalSelection?.jobId ? undefined : selectedPart} pairedResult={modalSelection?.jobId ? undefined : modalSelection?.result}

@@ -125,18 +125,19 @@ async function main() {
       await settle()
       equal(await friezes(), offFriezes, "frieze integrity: every row's squares, indices, colours and labels unchanged beside twins")
       equal(await rowHeights(), offHeights, "no layout shift: twins in existing rows change no row's height")
-      // The twins sit at the end of the launching message's frieze row, after its squares.
+      // Each twin sits right after the square of the call that launched it: the row reads in launch order.
       const placement = await page.evaluate(() => {
         const node = document.querySelector('[data-slot="job-twin"][data-job-id="covers"]')
         const kids = [...node.parentElement.children]
         return { row: node.closest("[data-message-uid]").getAttribute("data-message-uid"),
-          tail: kids.slice(-2).map(kid => kid.getAttribute("data-job-id")),
-          squaresBefore: kids.slice(0, kids.indexOf(node)).filter(kid => kid.hasAttribute("data-part-index")).length,
+          order: kids.map(kid => kid.getAttribute("data-job-id") ? `job:${kid.getAttribute("data-job-id")}` : kid.getAttribute("aria-label") ?? kid.getAttribute("title") ?? "?"),
           next: node.closest("[data-message-uid]").nextElementSibling?.textContent?.includes("Both are on your GPU") }
       })
       check(placement.row.startsWith("activity:"), `twins are in the launching frieze row: ${placement.row}`)
-      equal(placement.tail, ["covers", "theme"], "in launch order, at the end of the row")
-      equal(placement.squaresBefore, 3, "after the row's three squares (thinking and two shell calls)")
+      equal(placement.order.length, 5, `three squares and two twins: ${JSON.stringify(placement.order)}`)
+      equal(placement.order.filter(item => item.startsWith("job:")), ["job:covers", "job:theme"], "in launch order")
+      equal(placement.order.indexOf("job:covers"), 2, `covers right after the Bash call that launched it: ${JSON.stringify(placement.order)}`)
+      equal(placement.order.indexOf("job:theme"), 4, `theme right after its own Bash call: ${JSON.stringify(placement.order)}`)
       check(placement.next, "and the reply text follows the row")
       check(await gap() < 2, "stuck to the bottom when twins appear")
 

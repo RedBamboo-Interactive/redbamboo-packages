@@ -58,10 +58,10 @@ test("an error without words stays a square", () => {
   assert.equal(isInspectablePart(blank), true)
 })
 
-// Job twins (89efca37): a row's twins follow its squares, wherever the row sits.
+// Job twins (89efca37): a twin no square launched follows the row's squares.
 const withJobs: SquareRow[] = [
   rows[0],
-  { ...rows[1], jobIds: ["covers", "theme"] },
+  { ...rows[1], jobs: [{ id: "covers", after: -1 }, { id: "theme", after: -1 }] },
   { id: "activity:c", parts: [part("tool_use", "Bash"), part("tool_result")] },
 ]
 
@@ -92,5 +92,20 @@ test("a twin keeps its place when its row grows a square, and an index never mat
 })
 
 test("rows without jobs step exactly as before", () => {
-  assert.deepEqual(squareSequence(rows.map(row => ({ ...row, jobIds: [] }))), squareSequence(rows))
+  assert.deepEqual(squareSequence(rows.map(row => ({ ...row, jobs: [] }))), squareSequence(rows))
+})
+
+test("a twin steps right after the square of the call that launched it", () => {
+  // activity:b is [tool_use 0, tool_result 1, image 2, tool_use 3]: covers was launched by 0, theme by none.
+  const placed: SquareRow[] = withJobs.map(row => row.id === "activity:b"
+    ? { ...row, jobs: [{ id: "covers", after: 0 }, { id: "theme", after: -1 }] } : row)
+  assert.deepEqual(squareSequence(placed).slice(3), [
+    { rowId: "activity:b", index: 0 },
+    { rowId: "activity:b", index: 4, jobId: "covers" },
+    { rowId: "activity:b", index: 3 },
+    { rowId: "activity:b", index: 5, jobId: "theme" },
+    { rowId: "activity:c", index: 0 },
+  ])
+  assert.deepEqual(stepSquare(placed, { rowId: "activity:b", index: 0 }, 1), { rowId: "activity:b", index: 4, jobId: "covers" })
+  assert.deepEqual(stepSquare(placed, { rowId: "activity:b", index: 4, jobId: "covers" }, 1), { rowId: "activity:b", index: 3 })
 })
