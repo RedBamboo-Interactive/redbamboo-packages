@@ -7,6 +7,9 @@
  * - single-flight inside a tab, and across tabs through the Web Locks API (with a
  *   localStorage lease as fallback) plus a shared "last renewed at" stamp;
  * - a 401 from /auth/refresh is final only after /auth/me confirms the session is gone;
+ * - a session the server ended (`session_revoked`: signed out from another device, rejected,
+ *   refresh-token reuse) is final at once: no retry, one `onSessionLost("revoked")`;
+ * - `session_upgrade_required` (a badge from before device sessions) renews once and replays;
  * - network errors and 5xx are transient and never end the session;
  * - a global fetch interceptor renews and replays a request that came back 401, once;
  * - proactive renewal about once an hour per browser, also on focus/visibility/online.
@@ -16,7 +19,21 @@
  * Deliberately dependency-free (no relative imports) so it runs under `node --test`.
  */
 
-export type RenewalResult = "renewed" | "gone" | "transient"
+export type RenewalResult = "renewed" | "gone" | "revoked" | "transient"
+
+/** Why the session ended: it could not be renewed, or the server ended it. */
+export type SessionLostReason = "expired" | "revoked"
+
+/** The server's 401 for a device session that has ended. Final: renewing cannot bring it back. */
+export const SESSION_REVOKED_ERROR = "session_revoked"
+/** The server's 401 for a badge issued before device sessions: one renewal replaces it. */
+export const SESSION_UPGRADE_REQUIRED_ERROR = "session_upgrade_required"
+
+/**
+ * Dispatched on `window` (cancelable, `detail: { reason }`) when the browser session ends. A shell that
+ * shows its own signed-out screen calls `preventDefault()`; otherwise the page goes to /login.
+ */
+export const SIGNED_OUT_EVENT = "redsuite:signed-out"
 
 export interface SessionRenewalDeps {
   fetch: (input: string, init?: RequestInit) => Promise<Response>
@@ -24,8 +41,8 @@ export interface SessionRenewalDeps {
   sleep: (ms: number) => Promise<void>
   storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null
   locks: { request: (name: string, cb: () => Promise<unknown>) => Promise<unknown> } | null
-  /** Called at most once when the session truly cannot be renewed. */
-  onSessionLost: () => void
+  /** Called at most once when the session truly cannot be renewed, or the server ended it. */
+  onSessionLost: (reason: SessionLostReason) => void
 }
 
 const STAMP_KEY = "redsuite:session:renewedAt"
@@ -49,6 +66,8 @@ export interface SessionRenewal {
   clearStamp(): void
   /** Same-origin fetch that renews and replays once on 401. */
   wrapFetch(base: typeof fetch): typeof fetch
+  /** The server ended this session (a 4401 WebSocket close, a `session_revoked` answer elsewhere). */
+  reportRevoked(): void
 }
 
 export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
@@ -90,6 +109,7 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
           return "renewed"
         }
         if (res.status === 401) {
+          if ((await errorCode(res)) === SESSION_REVOKED_ERROR) return "revoked"
           // Another tab may have rotated the cookie; only /auth/me knows whether we are still in.
           try {
             const me = await deps.fetch("/auth/me", {
@@ -145,7 +165,7 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
     }
   }
 
-  const loseSession = () => {
+  const loseSession = (reason: SessionLostReason) => {
     stopInternal()
     try {
       deps.storage?.removeItem(STAMP_KEY)
@@ -153,7 +173,7 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
     memoryStamp = null
     if (lost) return
     lost = true
-    deps.onSessionLost()
+    deps.onSessionLost(reason)
   }
 
   const renewSession = (): Promise<RenewalResult> => {
@@ -169,7 +189,8 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
           }
           return attempt()
         })
-        if (result === "gone") loseSession()
+        if (result === "gone") loseSession("expired")
+        else if (result === "revoked") loseSession("revoked")
         else if (active) schedule(result === "transient" ? TRANSIENT_RETRY_MS : undefined)
         return result
       } finally {
@@ -203,6 +224,13 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
     const stamp = lastRenewed()
     if (stamp === null || deps.now() - stamp > renewAfterMs) void renewSession()
     else schedule()
+  }
+
+  function clearStampOnly() {
+    memoryStamp = null
+    try {
+      deps.storage?.removeItem(STAMP_KEY)
+    } catch {}
   }
 
   function stopInternal() {
@@ -244,11 +272,9 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
       if (stamp !== null && deps.now() - stamp < WS_STALE_MS) return undefined
       return renewSession().then(() => undefined)
     },
-    clearStamp() {
-      memoryStamp = null
-      try {
-        deps.storage?.removeItem(STAMP_KEY)
-      } catch {}
+    clearStamp: clearStampOnly,
+    reportRevoked() {
+      loseSession("revoked")
     },
     wrapFetch(base) {
       const wrapped = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -265,7 +291,16 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
           }
         }
         const res = await base(input, init)
-        if (res.status !== 401 || !replay || !active) return res
+        if (res.status !== 401 || !active) return res
+        const code = await errorCode(res.clone())
+        if (code === SESSION_REVOKED_ERROR) {
+          // Ended on the server: renewing would only be refused. Final, once.
+          loseSession("revoked")
+          return res
+        }
+        if (!replay) return res
+        // A badge from before device sessions: a fresh renewal, even right after another one.
+        if (code === SESSION_UPGRADE_REQUIRED_ERROR) clearStampOnly()
         const result = await renewSession()
         if (result === "renewed") return replay()
         if (result === "transient") {
@@ -279,6 +314,17 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
       }
       return wrapped as typeof fetch
     },
+  }
+}
+
+/** The `error` member of a JSON error body, or null. Never throws. */
+export async function errorCode(res: Response): Promise<string | null> {
+  try {
+    if (!(res.headers.get("Content-Type") ?? "").includes("json")) return null
+    const body = (await res.json()) as { error?: unknown } | null
+    return typeof body?.error === "string" ? body.error : null
+  } catch {
+    return null
   }
 }
 
@@ -318,10 +364,11 @@ function browserRenewal(): SessionRenewal {
       }
     })(),
     locks: typeof navigator !== "undefined" && navigator.locks ? navigator.locks : null,
-    onSessionLost: () => {
-      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
-        window.location.href = "/login"
-      }
+    onSessionLost: (reason) => {
+      if (typeof window === "undefined") return
+      const event = new CustomEvent(SIGNED_OUT_EVENT, { cancelable: true, detail: { reason } })
+      if (!window.dispatchEvent(event)) return
+      if (window.location.pathname !== "/login") window.location.href = "/login"
     },
   })
   return singleton
@@ -335,6 +382,8 @@ export const startSessionRenewal = () => {
 export const stopSessionRenewal = () => browserRenewal().stop()
 export const ensureFreshSession = () => browserRenewal().ensureFresh()
 export const clearSessionRenewalStamp = () => browserRenewal().clearStamp()
+/** The server ended this browser's session (for example a 4401 WebSocket close). */
+export const reportSessionRevoked = () => browserRenewal().reportRevoked()
 export const hasSessionRenewalStamp = () => {
   try {
     return !!localStorage.getItem(STAMP_KEY)

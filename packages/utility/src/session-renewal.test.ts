@@ -227,3 +227,75 @@ test("WebSocket reconnect awaits renewal when the badge is stale", async () => {
     g.WebSocket = prev
   }
 })
+
+// ---- device sessions ------------------------------------------------------------------
+
+function lostReasons(extra: Partial<SessionRenewalDeps> = {}, handler: Handler = refreshOk) {
+  const reasons: string[] = []
+  const s = setup(handler, { onSessionLost: (reason) => void reasons.push(reason), ...extra })
+  return { ...s, reasons }
+}
+
+test("session_revoked from /auth/refresh is final at once: no /auth/me, no retry, one loss", async () => {
+  const s = lostReasons({}, (url) => (url === "/auth/refresh" ? json(401, { error: "session_revoked", reason: "refresh-reused" }) : json(200, { id: "u1" })))
+  s.r.start()
+  const first = await s.r.renewSession()
+  const second = await s.r.renewSession()
+
+  assert.equal(first, "revoked")
+  assert.equal(second, "revoked")
+  assert.deepEqual(s.reasons, ["revoked"])
+  assert.equal(s.calls.filter((c) => c === "GET /auth/me").length, 0)
+  assert.equal(s.r.isActive(), false)
+})
+
+test("fetch interceptor: a session_revoked API answer ends the session without renewing", async () => {
+  const s = lostReasons()
+  s.r.start()
+  await s.r.renewSession()
+  let calls = 0
+  const base = (async () => {
+    calls++
+    return json(401, { error: "session_revoked" })
+  }) as unknown as typeof fetch
+  const res = await s.r.wrapFetch(base)("/api/entities")
+
+  assert.equal(res.status, 401)
+  assert.equal(calls, 1)
+  assert.deepEqual(s.reasons, ["revoked"])
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)  // only the start's
+})
+
+test("fetch interceptor: session_upgrade_required renews once even right after a renewal, then replays", async () => {
+  const s = lostReasons()
+  s.r.start()
+  await s.r.renewSession()  // a fresh stamp that would normally skip the network
+  let calls = 0
+  const base = (async () => {
+    calls++
+    return calls === 1 ? json(401, { error: "session_upgrade_required" }) : json(200, { ok: true })
+  }) as unknown as typeof fetch
+  const res = await s.r.wrapFetch(base)("/api/entities")
+
+  assert.equal(res.status, 200)
+  assert.equal(calls, 2)
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 2)
+  assert.deepEqual(s.reasons, [])
+  s.r.stop()
+})
+
+test("reportRevoked (a 4401 close) ends the session once with reason revoked", () => {
+  const s = lostReasons()
+  s.r.start()
+  s.r.reportRevoked()
+  s.r.reportRevoked()
+  assert.deepEqual(s.reasons, ["revoked"])
+  assert.equal(s.r.isActive(), false)
+})
+
+test("an expired session still ends with reason expired", async () => {
+  const s = lostReasons({}, (url) => json(401, url === "/auth/me" ? { error: "unauthorized" } : { error: "invalid_token" }))
+  s.r.start()
+  assert.equal(await s.r.renewSession(), "gone")
+  assert.deepEqual(s.reasons, ["expired"])
+})

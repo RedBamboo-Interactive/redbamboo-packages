@@ -104,7 +104,7 @@ export type { RemoteAccessStatus, RemoteAccessContextValue } from "./remote-acce
 export { buildAppReloadUrl, reloadApp } from "./reload-app"
 
 export { AuthProvider, useAuth } from "./auth-provider"
-export type { AuthUser, AuthContextValue } from "./auth-types"
+export type { AuthDevice, AuthUser, AuthContextValue } from "./auth-types"
 
 export {
   createSessionRenewal,
@@ -112,10 +112,14 @@ export {
   startSessionRenewal,
   stopSessionRenewal,
   ensureFreshSession,
+  reportSessionRevoked,
   installSessionFetchInterceptor,
   uninstallSessionFetchInterceptor,
+  SIGNED_OUT_EVENT,
+  SESSION_REVOKED_ERROR,
+  SESSION_UPGRADE_REQUIRED_ERROR,
 } from "./session-renewal"
-export type { RenewalResult, SessionRenewal, SessionRenewalDeps } from "./session-renewal"
+export type { RenewalResult, SessionLostReason, SessionRenewal, SessionRenewalDeps } from "./session-renewal"
 
 export { useServiceDiscovery } from "./use-service-discovery"
 export type { ServiceManifest, CapabilityInfo, EndpointInfo, ParameterInfo, ProxyInfo } from "./use-service-discovery"
@@ -160,7 +164,7 @@ export type { UseLogStreamOptions, UseLogStreamReturn } from "./use-log-stream"
 export { LogPanel } from "./log-panel"
 export type { LogPanelProps } from "./log-panel"
 
-export { createWebSocket } from "./create-websocket"
+export { createWebSocket, SESSION_REVOKED_CLOSE_CODE } from "./create-websocket"
 export type {
   WsEvent,
   CreateWebSocketOptions,

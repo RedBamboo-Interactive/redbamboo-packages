@@ -123,3 +123,55 @@ test("reconnects and reports recovery after a server-side close", async () => {
     browser.restore()
   }
 })
+
+test("a 4401 close (session revoked) never reconnects, not even on resume", async () => {
+  const browser = installBrowserFakes()
+  try {
+    const revoked: string[] = []
+    const handle = createWebSocket({
+      url: "ws://leaf/ws",
+      reconnectMs: 1,
+      onEvent: () => {},
+      onSessionRevoked: (reason) => void revoked.push(reason),
+    })
+
+    const socket = FakeWebSocket.instances[0] as FakeWebSocket & { onclose: ((e?: { code: number; reason: string }) => void) | null }
+    socket.open()
+    socket.readyState = FakeWebSocket.CLOSED
+    socket.onclose?.({ code: 4401, reason: "session_revoked" })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    browser.document.visibilityState = "visible"
+    browser.document.dispatchEvent(new Event("visibilitychange"))
+    browser.window.dispatchEvent(new Event("online"))
+
+    assert.deepEqual(revoked, ["session_revoked"])
+    assert.equal(FakeWebSocket.instances.length, 1)
+    handle.close()
+  } finally {
+    browser.restore()
+  }
+})
+
+test("any other close code still reconnects", async () => {
+  const browser = installBrowserFakes()
+  try {
+    let revoked = 0
+    const handle = createWebSocket({
+      url: "ws://leaf/ws",
+      reconnectMs: 1,
+      onEvent: () => {},
+      onSessionRevoked: () => void revoked++,
+    })
+    const socket = FakeWebSocket.instances[0] as FakeWebSocket & { onclose: ((e?: { code: number; reason: string }) => void) | null }
+    socket.open()
+    socket.readyState = FakeWebSocket.CLOSED
+    socket.onclose?.({ code: 1001, reason: "Server is stopping" })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    assert.equal(revoked, 0)
+    assert.equal(FakeWebSocket.instances.length, 2)
+    handle.close()
+  } finally {
+    browser.restore()
+  }
+})

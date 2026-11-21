@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { createWebSocket } from "./create-websocket"
-import { ensureFreshSession } from "./session-renewal"
+import { ensureFreshSession, reportSessionRevoked } from "./session-renewal"
 import type { WsEvent } from "./create-websocket"
 import { WsEventContext } from "./ws-events"
 import type { WsEventContextValue } from "./ws-events"
@@ -46,6 +46,7 @@ export function WsEventProvider({
       onVisibilityChange,
       reconnectMs,
       beforeReconnect: ensureFreshSession,
+      onSessionRevoked: reportSessionRevoked,
     })
     return () => handle.close()
   }, [url, onReconnect, onVisibilityChange, reconnectMs])

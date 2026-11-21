@@ -86,3 +86,37 @@ test("an invalid access badge also forces refresh despite a recent stamp", async
   assert.deepEqual(user, owner)
   assert.equal(fixture.cleared(), 1)
 })
+
+test("a badge from before device sessions is renewed once even without a renewal stamp", async () => {
+  const fixture = dependencies([json(401, { error: "session_upgrade_required" }), json(200, owner)], "renewed", false)
+
+  const user = await bootstrapAuthUser(fixture.deps)
+
+  assert.deepEqual(user, owner)
+  assert.deepEqual(fixture.calls, ["/auth/me", "/auth/me"])
+  assert.equal(fixture.cleared(), 1)
+})
+
+test("a revoked session is not renewed at bootstrap", async () => {
+  let renewed = 0
+  const fixture = dependencies([json(401, { error: "session_revoked" })], "renewed")
+  fixture.deps.renewSession = async () => {
+    renewed++
+    return "renewed"
+  }
+
+  const user = await bootstrapAuthUser(fixture.deps)
+
+  assert.equal(user, null)
+  assert.equal(renewed, 0)
+  assert.deepEqual(fixture.calls, ["/auth/me"])
+})
+
+test("/auth/me's device session is passed through", async () => {
+  const pending = { ...owner, device: { sessionId: "dev_01JZ0000000000000000000000", status: "pending" } }
+  const fixture = dependencies([json(200, pending)], "renewed", false)
+
+  const user = await bootstrapAuthUser(fixture.deps)
+
+  assert.deepEqual(user?.device, { sessionId: "dev_01JZ0000000000000000000000", status: "pending" })
+})

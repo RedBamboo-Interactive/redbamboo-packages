@@ -1,6 +1,10 @@
 import type { AuthUser } from "./auth-types"
 import type { RenewalResult } from "./session-renewal"
 
+// Mirrors session-renewal's constants; kept literal so this module needs no runtime import.
+const SESSION_REVOKED_ERROR = "session_revoked"
+const SESSION_UPGRADE_REQUIRED_ERROR = "session_upgrade_required"
+
 const LOCAL_IDENTITY_ID = "local-user"
 
 export interface AuthBootstrapDependencies {
@@ -28,8 +32,12 @@ export async function bootstrapAuthUser(
     cache: "no-store",
   })
   let user = response.ok ? (await response.json()) as AuthUser : null
-  const needsRecovery = hadUserSession
-    && (response.status === 401 || user?.id === LOCAL_IDENTITY_ID)
+  const code = response.status === 401 ? await errorCode(response) : null
+  // Ended on the server: renewing would only be refused.
+  if (code === SESSION_REVOKED_ERROR) return null
+  // A badge from before device sessions is replaced by one renewal, stamp or not.
+  const needsRecovery = code === SESSION_UPGRADE_REQUIRED_ERROR || (hadUserSession
+    && (response.status === 401 || user?.id === LOCAL_IDENTITY_ID))
 
   if (needsRecovery) {
     // A recent stamp can otherwise make renewal incorrectly skip the network
@@ -45,4 +53,14 @@ export async function bootstrapAuthUser(
   }
 
   return user
+}
+
+async function errorCode(res: Response): Promise<string | null> {
+  try {
+    if (!(res.headers.get("Content-Type") ?? "").includes("json")) return null
+    const body = (await res.json()) as { error?: unknown } | null
+    return typeof body?.error === "string" ? body.error : null
+  } catch {
+    return null
+  }
 }

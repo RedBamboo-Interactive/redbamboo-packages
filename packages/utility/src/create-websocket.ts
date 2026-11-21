@@ -1,3 +1,6 @@
+/** The close code the server sends to a device whose session ended. The socket is not reopened. */
+export const SESSION_REVOKED_CLOSE_CODE = 4401
+
 export interface WsEvent {
   type: string
   data: unknown
@@ -16,6 +19,11 @@ export interface CreateWebSocketOptions {
    * session badge so the upgrade is not rejected. May return undefined to reconnect now.
    */
   beforeReconnect?: () => Promise<unknown> | undefined | void
+  /**
+   * The server closed the socket with {@link SESSION_REVOKED_CLOSE_CODE}: this device was signed out.
+   * The handle stops reconnecting for good, including on resume.
+   */
+  onSessionRevoked?: (reason: string) => void
 }
 
 export interface WebSocketHandle {
@@ -27,6 +35,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   let ws: WebSocket | null = null
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   let closed = false
+  let revoked = false
   let hasConnected = false
   let lastResumeReconnectAt = 0
   let reconnectEpoch = 0
@@ -47,7 +56,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   }
 
   function connect() {
-    if (closed) return
+    if (closed || revoked) return
     cleanup()
     const url = typeof opts.url === "function" ? opts.url() : opts.url
     ws = new WebSocket(url)
@@ -67,8 +76,13 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
       }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event?: CloseEvent) => {
       opts.onDisconnect?.()
+      if (event?.code === SESSION_REVOKED_CLOSE_CODE) {
+        revoked = true
+        opts.onSessionRevoked?.(event.reason)
+        return
+      }
       if (!closed) {
         reconnectTimeout = setTimeout(reconnect, reconnectMs)
       }
@@ -80,6 +94,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   }
 
   function reconnect() {
+    if (closed || revoked) return
     const epoch = ++reconnectEpoch
     let pending: Promise<unknown> | undefined | void
     try {
