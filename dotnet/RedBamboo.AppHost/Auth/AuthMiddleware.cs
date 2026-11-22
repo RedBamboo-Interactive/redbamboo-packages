@@ -68,10 +68,13 @@ public sealed class AuthMiddleware
         var cookieTokens = CookieValues(context.Request, _options.CookieName);
         var cookieToken = cookieTokens.FirstOrDefault();
 
-        // A badge in the Authorization header speaks for the request on its own. When it is expired or
-        // invalid the request is refused, never re-read as the cookie's session: an Agent's expired
-        // execution badge sent from a signed-in browser must not quietly become that person's request.
+        // A badge in the Authorization header speaks for the request on its own. A valid one wins. An expired
+        // or invalid one next to a session cookie is refused, never re-read as the cookie's session: an Agent's
+        // expired execution badge sent from a signed-in browser must not quietly become that person's request.
+        // Without a session cookie it falls through as before (LocalDefault on loopback, 401 elsewhere): local
+        // callers that reuse a badge past its lifetime still rely on that, and each is logged (ND-F5).
         // A header that is not a badge (the tunnel secret, read by BearerAuthMiddleware) changes nothing.
+        var invalidHeaderBadge = false;
         if (headerToken is not null && LooksLikeBadge(headerToken))
         {
             var principal = _jwtService.ValidateToken(headerToken);
@@ -88,17 +91,24 @@ public sealed class AuthMiddleware
                 await _next(context);
                 return;
             }
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            context.Response.ContentType = "application/json";
-            await context.Response.WriteAsJsonAsync(new
+            if (cookieTokens.Any(t => !string.IsNullOrEmpty(t)))
             {
-                error = "invalid_token",
-                message = "The Bearer badge is expired or invalid.",
-            });
-            return;
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    error = "invalid_token",
+                    message = "The Bearer badge is expired or invalid.",
+                });
+                return;
+            }
+            invalidHeaderBadge = true;
         }
 
-        foreach (var token in cookieTokens.Prepend(headerToken))
+        // Every valid badge cookie, and among them one that names a device session first: a browser that kept a
+        // badge from before sessions next to its current one must be read as its current session.
+        ClaimsPrincipal? chosen = null;
+        foreach (var token in cookieTokens.Prepend(invalidHeaderBadge ? null : headerToken))
         {
             if (token is null) continue;
             var principal = _jwtService.ValidateToken(token);
@@ -106,12 +116,19 @@ public sealed class AuthMiddleware
             // through the tunnel or from a non-loopback peer. Treated exactly like an invalid badge.
             if (principal is not null && !RequestOrigin.BadgeReachAllows(principal, context))
                 principal = null;
-            if (principal is not null)
+            if (principal is null) continue;
+            if (!string.IsNullOrEmpty(principal.FindFirstValue(SessionClaims.SessionId)))
             {
-                context.User = principal;
-                await ContinueAsync(context);
-                return;
+                chosen = principal;
+                break;
             }
+            chosen ??= principal;
+        }
+        if (chosen is not null)
+        {
+            context.User = chosen;
+            await ContinueAsync(context);
+            return;
         }
 
         if (cookieToken is not null && !optional)
@@ -129,6 +146,7 @@ public sealed class AuthMiddleware
 
         if (IsLocalRequest(context))
         {
+            if (invalidHeaderBadge) StaleHeaderBadges.Report(_logger, context, headerToken!);
             var claims = new[]
             {
                 new Claim("sub", "local-user"),
@@ -212,6 +230,51 @@ public sealed class AuthMiddleware
     }
 
     private static bool IsLocalRequest(HttpContext context) => RequestOrigin.IsLocal(context);
+
+    /// <summary>
+    /// Loopback callers whose Authorization badge had expired (or was invalid) and that still got LocalDefault,
+    /// because no session cookie came with it. That fallback is kept for now (ND-F5) and every caller is logged,
+    /// at most once per 10 minutes per path, subject and app: the path, the user agent and the badge's own
+    /// sub and app claims, read without trusting them. Never the badge.
+    /// </summary>
+    internal static class StaleHeaderBadges
+    {
+        private const int MaxKeys = 512;
+        private static readonly TimeSpan Every = TimeSpan.FromMinutes(10);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset> Last = new();
+
+        /// <summary>For tests: how many times a warning was written.</summary>
+        internal static int Reported;
+
+        public static void Report(ILogger? logger, HttpContext context, string badge)
+        {
+            string sub = "unreadable", app = "none";
+            try
+            {
+                var jwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(badge);
+                sub = Clip(jwt.Subject ?? "none");
+                app = Clip(jwt.Payload.TryGetValue("client_id", out var clientId) ? clientId?.ToString() ?? "none" : "none");
+            }
+            catch (Exception) { }
+            var path = Clip(context.Request.Path.Value ?? "", 120);
+            var key = path + "|" + sub + "|" + app;
+            var now = DateTimeOffset.UtcNow;
+            if (Last.TryGetValue(key, out var at) && now - at < Every) return;
+            if (Last.Count >= MaxKeys) Last.Clear();
+            Last[key] = now;
+            Interlocked.Increment(ref Reported);
+            var agent = Clip(context.Request.Headers.UserAgent.ToString(), 120);
+            logger?.LogWarning(
+                "Expired or invalid Authorization badge from a loopback caller fell back to LocalDefault: {Method} {Path} sub={Sub} app={App} ua={UserAgent}. It should mint a fresh badge (ND-F5).",
+                context.Request.Method, path, sub, app, agent);
+        }
+
+        private static string Clip(string value, int max = 80)
+        {
+            var clean = new string(value.Where(c => !char.IsControl(c)).ToArray());
+            return clean.Length > max ? clean[..max] : clean;
+        }
+    }
 
     /// <summary>A compact JWS: three non-empty dot-separated parts. Shared secrets are never shaped like this.</summary>
     internal static bool LooksLikeBadge(string token)
