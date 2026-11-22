@@ -62,7 +62,7 @@ export const RUN_ON_NODES_PATH = "/compute/nodes"
 export const RUN_ON_AUTOMATIC = "automatic"
 
 /** The tooltip on the read-only row. */
-export const RUN_ON_SINGLE_HINT = "Work runs on this node. Add nodes from Compute › Nodes."
+export const RUN_ON_SINGLE_HINT = "Work runs on this node. Add nodes from Nodes & devices."
 
 const STATUS_WORDS: Record<string, string> = {
   online: "Online",
