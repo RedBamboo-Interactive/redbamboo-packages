@@ -15,11 +15,11 @@ export const PART_COLOR = {
   fallback: "var(--color-text-disabled)",
 } as const
 
-function getEventMeta(part: MessagePart): { color?: string; icon?: string } {
+function getEventMeta(part: MessagePart): { color?: string; failed?: boolean } {
   if (!part.toolInput) return {}
   try {
     const data = JSON.parse(part.toolInput)
-    return { color: data.color ?? undefined, icon: data.icon ?? undefined }
+    return { color: data.color ?? undefined, failed: data.data?.failed === true }
   } catch { return {} }
 }
 
@@ -43,6 +43,8 @@ export function getPartColor(part: MessagePart): string {
   if (part.type === "tool_result") return PART_COLOR.result
   if (isEventPart(part)) {
     const meta = getEventMeta(part)
+    if (part.toolName === "event:agent-note-sent") return meta.failed ? PART_COLOR.error : PART_COLOR.delegation
+    if (part.toolName === "event:agent-note") return PART_COLOR.delegation
     return meta.color ?? PART_COLOR.event
   }
   if (part.type === "tool_use" && part.toolName) {

@@ -18,6 +18,7 @@ import { BackgroundTaskList, BackgroundWorkContext, taskTitle, type BackgroundWo
 import { ActivityItemDialog, ActivityNoteProvider, ActivityShapes, ActivityShapesProvider, type ActivityShape } from "./activity-status-row"
 import { backgroundStopWarning, describeAlsoRunning, findLaunchingSquare, indexBackgroundTasks, orderBackgroundActivity, runningBackgroundTasks as filterRunningTasks, summarizeBackgroundActivity, taskKindWord } from "../lib/background-work"
 import { PART_COLOR, getPartColor } from "../lib/part-colors"
+import { parseEventPart } from "./event-view"
 import { MaintenanceNotice } from "./maintenance-notice"
 import { PendingQuestionLine } from "./pending-question-line"
 import { PermissionApprovalCard } from "./permission-approval-card"
@@ -76,7 +77,7 @@ export function ChatPanel(props: ChatPanelProps) {
     hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
     focusMessageRequest, onFocusMessageResult,
     placeholder, className, header, footer,
-    resolveImageSrc, resolveFileLink, resolveEventLink, loadTranscriptPayload, getTranscriptPayloadMediaUrl, getTranscriptPayloadDownloadUrl,
+    resolveImageSrc, resolveFileLink, resolveEventLink, resolveAgentNote, loadTranscriptPayload, getTranscriptPayloadMediaUrl, getTranscriptPayloadDownloadUrl,
     permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
     prepareOutgoingMessage,
@@ -256,7 +257,7 @@ export function ChatPanel(props: ChatPanelProps) {
       blockIndex={-1}
       isStreaming={false}
       isLastAssistantBlock={false}
-      resolveEventLink={resolveEventLink}
+      resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote}
       resolveEventQueueStatus={resolveEventQueueStatus}
       resolveImageSrc={resolveImageSrc}
       resolveFileLink={resolveFileLink}
@@ -268,6 +269,15 @@ export function ChatPanel(props: ChatPanelProps) {
 
   const renderQueuedGhost = (item: QueuedMessage) => {
     const waitingPart = eventPlacement?.waiting.get(item.id)
+    const event = waitingPart ? parseEventPart(waitingPart) : null
+    const note = event?.key === "agent-note" ? resolveAgentNote?.(event) : undefined
+    const title = typeof event?.data?.title === "string" ? event.data.title : null
+    const delegationLabel = event?.data?.outcome === "completed" ? "Delegation finished" : "Delegation update"
+    let compactEventLabel: string | undefined
+    if (waitingPart && !props.eventRows?.isRow(waitingPart)) {
+      if (event?.key === "agent-note") compactEventLabel = `Note from ${note?.discussion ?? "another discussion"}`
+      if (event?.key === "delegate") compactEventLabel = [delegationLabel, title].filter(Boolean).join(" · ")
+    }
     return (
       <QueuedMessageGhost
         key={`outgoing:${item.id}`}
@@ -277,7 +287,8 @@ export function ChatPanel(props: ChatPanelProps) {
         onSendNow={handleSendQueued}
         onSendEvent={handleSendQueuedEvent}
         eventSend={eventSend}
-        eventContent={waitingPart ? renderWaitingEvent(waitingPart) : undefined}
+        compactEventLabel={compactEventLabel}
+        eventContent={waitingPart && !compactEventLabel ? renderWaitingEvent(waitingPart) : undefined}
         eventDrawsOwnShape={!!waitingPart && !!props.eventRows?.isRow(waitingPart)}
       />
     )
@@ -789,7 +800,7 @@ export function ChatPanel(props: ChatPanelProps) {
         </ActivityNoteProvider>
       </ActivityShapesProvider>
       <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTaskId(null)}
-        resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink}
+        resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote}
         resolveAgentInfo={props.resolveAgentInfo}
         loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
       <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostKey(null)} />
@@ -992,7 +1003,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     onPermissionDecision={onPermissionDecision}
                     resolveImageSrc={resolveImageSrc}
                     resolveFileLink={resolveFileLink}
-                    resolveEventLink={resolveEventLink}
+                    resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote}
                     resolveEventQueueStatus={resolveEventQueueStatus}
                     resolveAgentInfo={props.resolveAgentInfo}
                     loadTranscriptPayload={loadTranscriptPayload}

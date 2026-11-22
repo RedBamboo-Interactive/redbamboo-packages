@@ -9,6 +9,7 @@ import { eventQueueStatus, type EventSendAction } from "./event-queue-status"
 import { NovaEventSquare } from "./nova-event-square"
 import { ContextSquare, extractRawContextXml, parseContextFromMessage } from "./context-card"
 import { stripHiddenMessageEnvelopes } from "../lib/message-content"
+import { PART_COLOR } from "../lib/part-colors"
 
 interface QueuedMessageGhostProps {
   item: QueuedMessage
@@ -18,6 +19,7 @@ interface QueuedMessageGhostProps {
   /** A queued event's send button. It is not a person's message, so it may steer where theirs interrupts. */
   onSendEvent?: (id: string) => void
   eventSend?: EventSendAction
+  compactEventLabel?: string
   /** A waiting event's own row, already projected: its sender and origin, or its dot. */
   eventContent?: ReactNode
   /** The waiting event is a host's row, which has its own bubble: a second one around it reads as a box in a box. */
@@ -29,7 +31,7 @@ interface QueuedMessageGhostProps {
  * dashed border + reduced opacity distinguish it from a delivered message.
  * The whole point of the queue is that this is never invisible.
  */
-export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEvent, eventSend, eventContent, eventDrawsOwnShape }: QueuedMessageGhostProps) {
+export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEvent, eventSend, compactEventLabel, eventContent, eventDrawsOwnShape }: QueuedMessageGhostProps) {
   const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
   // Queued and immediately delivered submissions are the same outgoing message
   // entering the same timeline. The dashed styling communicates queue state;
@@ -38,8 +40,9 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEv
 
   // A waiting event reads as a waiting message does: the same dashed shape, the same status line
   // below it. An event can't be pulled back into a draft, so there is no click to edit.
-  if (eventContent) {
+  if (eventContent || compactEventLabel) {
     const status = eventQueueStatus(item, onCancel, onSendEvent ?? onSendNow, eventSend)
+    const label = status?.label ?? queuedMessageStatusLabel(item, true)
     return (
       <div
         className={`mb-3 ${entranceClass}`}
@@ -49,23 +52,35 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEv
         data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
         data-input-message-uid={item.messageUid}
       >
-        {eventDrawsOwnShape ? eventContent : (
-          <div className="flex justify-end">
-            <div
-              data-slot="queued-event-ghost"
-              className="min-w-0 max-w-[80%] border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90"
-              style={USER_BUBBLE_SHAPE_STYLE}
-            >
-              {eventContent}
+        {compactEventLabel ? (
+          <div data-slot="queued-event-line" className="flex min-w-0 items-center gap-2 px-0.5">
+            <span aria-hidden className="size-2.5 shrink-0 rounded-full border" style={{ borderColor: status?.failed ? PART_COLOR.error : PART_COLOR.delegation }} />
+            <div className={`flex min-w-0 items-baseline text-xs italic ${status?.failed ? "text-red-400" : "text-text-muted"}`} title={`${compactEventLabel} · ${label}`}>
+              <span className="min-w-0 truncate">{compactEventLabel}</span>
+              <span className="shrink-0 whitespace-pre">{" · "}</span>
+              <span className="min-w-0 shrink-0 max-w-[60%] truncate">{label}</span>
             </div>
+            {status && <div className="flex shrink-0 items-center gap-1">{status.actions}</div>}
           </div>
+        ) : (
+          <>
+            {eventDrawsOwnShape ? eventContent : (
+              <div className="flex justify-end">
+                <div
+                  data-slot="queued-event-ghost"
+                  className="min-w-0 max-w-[80%] border border-dashed border-overlay-20 bg-overlay-6 px-4 py-2.5 opacity-60 transition-opacity hover:opacity-90"
+                  style={USER_BUBBLE_SHAPE_STYLE}
+                >
+                  {eventContent}
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-1 mt-1">
+              <span className={`text-[10px] italic mr-1 ${status?.failed ? "text-red-400" : "text-text-disabled"}`}>{label}</span>
+              {status?.actions}
+            </div>
+          </>
         )}
-        <div className="flex items-center justify-end gap-1 mt-1">
-          <span className={`text-[10px] italic mr-1 ${item.deliveryError ? "text-red-400" : "text-text-disabled"}`}>
-            {queuedMessageStatusLabel(item, true)}
-          </span>
-          {status?.actions}
-        </div>
       </div>
     )
   }

@@ -135,9 +135,12 @@ function WaitApp() {
     ...(noSteerCall ? {} : { steer: async (id: string) => { waitTest.actions.push("steer:" + id) } }),
     subscribe: listener => { listeners.add(listener); return () => { listeners.delete(listener) } },
   }), [])
-  const part = (uid: string) => ({ type: "tool_use" as const, toolName: uid === "note" ? "event:agent-note" : "event:weather",
+  const compact = new URLSearchParams(location.search).has("compact")
+  const part = (uid: string) => ({ type: "tool_use" as const,
+    toolName: uid === "note" ? "event:agent-note" : compact ? "event:delegate" : "event:weather",
     messageUid: uid, content: uid, inputPlaced: waitTest.placed || undefined,
-    toolInput: JSON.stringify({ event: uid, label: uid, timestamp: stamp }) })
+    toolInput: JSON.stringify({ event: uid, label: uid, timestamp: stamp,
+      ...(compact && uid === "dot" ? { data: { title: "Worker", outcome: "completed" } } : {}) }) })
   const events = (timestamp: string): MessageBlock[] => [
     { id: "event-note", role: "assistant", timestamp, parts: [part("note")] },
     { id: "event-dot", role: "assistant", timestamp, parts: [part("dot")] },
@@ -147,7 +150,8 @@ function WaitApp() {
   const messages = [before, ...events("2026-09-12T22:01:00Z"), after]
   return <div style={{ width: "100%", height: 700 }}><ChatPanel key={mount} messages={messages} isStreaming={waitTest.streaming}
     supportsSteering={waitTest.steerSupport} sessionId="wait-test" queueTransport={transport} persistQueue={false} queuedEventsWait
-    eventRows={{ isRow: candidate => candidate.toolName === "event:agent-note",
+    resolveAgentNote={event => event.key === "agent-note" ? { lead: "Note from Nova in", discussion: "Another thread", avatarUrl: null } : undefined}
+    eventRows={compact ? undefined : { isRow: candidate => candidate.toolName === "event:agent-note",
       render: (candidate, { queueStatus, waiting }) => <div data-slot="test-note-row" data-has-status={!!queueStatus} data-waiting={!!waiting}>Nova, from elsewhere: {candidate.content}</div> }} />
   </div>
 }

@@ -30,6 +30,23 @@ export interface ParsedEvent {
   inlineLabel?: boolean
 }
 
+export interface AgentNotePresentation {
+  lead: string
+  discussion: string
+  avatarUrl: string | null
+  discussionHref?: string
+  onOpenDiscussion?: () => void
+}
+
+export type ResolveAgentNote = (event: ParsedEvent) => AgentNotePresentation | undefined
+
+export function agentNoteTime(timestamp?: string): string | undefined {
+  if (!timestamp) return undefined
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime()) ? undefined
+    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+}
+
 export function parseEventPart(part: MessagePart): ParsedEvent | null {
   if (part.type !== "tool_use" || !part.toolName?.startsWith("event:")) return null
   let payload: Record<string, unknown> = {}

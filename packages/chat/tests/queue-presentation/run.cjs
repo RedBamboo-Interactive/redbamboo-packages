@@ -190,6 +190,32 @@ async function main() {
       results.push({ scenario: "queued-event-waits-then-places-once", width, passed: true })
       await wait.close()
 
+      const compact = await browser.newPage({ viewport: { width, height: 850 } })
+      await compact.goto(origin + "?wait&compact")
+      await compact.getByText("Text after", { exact: true }).waitFor()
+      await compact.evaluate(() => waitTest.apply({ states: { note: "pending", dot: "pending" } }))
+      const compactLines = compact.locator('[data-slot="queued-event-line"]')
+      await compactLines.nth(1).waitFor()
+      assert.equal(await compact.locator('[data-slot="queued-event-ghost"]').count(), 0)
+      assert.match(await compactLines.nth(0).innerText(), /Note from Another thread · Queued, sends after this turn/)
+      assert.match(await compactLines.nth(1).innerText(), /Delegation finished · Worker · Queued, sends after this turn/)
+      for (const row of await compactLines.all()) {
+        assert.equal(await row.getByRole("button", { name: "Send queued event now" }).count(), 1)
+        assert.equal(await row.getByRole("button", { name: "Cancel queued event" }).count(), 1)
+      }
+      await compact.evaluate(() => waitTest.apply({ states: { note: "delivered", dot: "delivered" } }))
+      await compactLines.first().getByText(/Delivering update/).waitFor()
+      assert.equal(await compactLines.first().getByRole("button").count(), 0)
+      assert.equal(await compact.locator('[data-slot="queued-event-ghost"]').count(), 0)
+      await compact.evaluate(() => waitTest.apply({ placed: true }))
+      await compactLines.first().waitFor({ state: "detached" })
+      const marker = compact.getByRole("button", { name: /^Note from Nova in Another thread · / })
+      assert.equal(await marker.count(), 1)
+      await marker.click()
+      await compact.getByRole("dialog").getByText("note", { exact: true }).waitFor()
+      results.push({ scenario: "compact-note-and-callback-queue", width, passed: true })
+      await compact.close()
+
       // A transport without the new call keeps today's button even where the session can steer.
       const plain = await browser.newPage({ viewport: { width, height: 850 } })
       await plain.goto(origin + "?wait&nosteercall")

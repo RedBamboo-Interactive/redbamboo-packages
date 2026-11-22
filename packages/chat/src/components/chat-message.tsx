@@ -13,6 +13,9 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
   ImageLightbox,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   copyTextToClipboard,
   useContextMenuEnabled,
   useContextTarget,
@@ -27,7 +30,7 @@ import { stripHiddenMessageEnvelopes } from "../lib/message-content"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { LazyToolOutput } from "./lazy-tool-output"
-import { parseEventPart, EventView, type ParsedEvent } from "./event-view"
+import { agentNoteTime, parseEventPart, EventView, type ParsedEvent, type ResolveAgentNote } from "./event-view"
 import { isEventPart, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
 import { PART_COLOR, getPartColor, getSpinnerColor, isBackgroundRunning } from "../lib/part-colors"
@@ -143,6 +146,7 @@ interface ChatMessageProps {
    * isn't linkable — the affordance is hidden in that case.
    */
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  resolveAgentNote?: ResolveAgentNote
   resolveEventQueueStatus?: ResolveEventQueueStatus
   /** Agent identity for event senders, e.g. the portrait on an Agent note. */
   resolveAgentInfo?: ResolveAgentInfo
@@ -214,6 +218,7 @@ export const ChatMessage = memo(function ChatMessage({
   resolveImageSrc,
   resolveFileLink,
   resolveEventLink,
+  resolveAgentNote,
   resolveEventQueueStatus,
   resolveAgentInfo,
   loadTranscriptPayload,
@@ -549,7 +554,7 @@ export const ChatMessage = memo(function ChatMessage({
           ) : (
             <div key={i} className="msg-enter-ai">
               <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} awaitingApproval={approvals}
-                {...(twins ? { rowJobs: twins, drawsJobs: i === lastFrieze, onStopJob } : {})} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+                {...(twins ? { rowJobs: twins, drawsJobs: i === lastFrieze, onStopJob } : {})} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
               {friezeApprovals(group.parts).map(approvalCard)}
             </div>
           )
@@ -651,7 +656,7 @@ function partLabel(part: MessagePart): string {
 
 type FriezeSelection = { part?: MessagePart; result?: MessagePart; rowId: string; index: number; jobId?: string }
 
-function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApproval, rowJobs, drawsJobs = false, onStopJob, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApproval, rowJobs, drawsJobs = false, onStopJob, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
   parts: MessagePart[]
   allParts: MessagePart[]
@@ -671,6 +676,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  resolveAgentNote?: ResolveAgentNote
   resolveEventQueueStatus?: ResolveEventQueueStatus
   resolveAgentInfo?: ResolveAgentInfo
   loadTranscriptPayload?: TranscriptPayloadLoader
@@ -798,24 +804,38 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
           const event = isEventPart(part)
           const queueStatus = resolveEventQueueStatus?.(part)
           const squareEvent = usesSquareEventMarker(part)
-          const inlineLabel = event ? eventInlineLabel(part) : null
+          const parsed = event ? parseEventPart(part) : null
+          const note = parsed ? resolveAgentNote?.(parsed) : undefined
+          const time = note ? agentNoteTime(parsed?.timestamp) : undefined
+          const label = note ? [note.lead + " " + note.discussion, time].filter(Boolean).join(" · ") : partLabel(part)
+          const inlineLabel = parsed?.inlineLabel ? parsed.label : null
           const approvalId = part.type === "tool_use" ? part.toolUseId ?? part.messageId : undefined
           const waitingApproval = !!approvalId && awaitingApproval?.get(approvalId)?.outcome === null
-          return [
-            ...originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />),
+          const marker = (
             <button
-              key={`part:${i}`}
+              type="button"
               onClick={() => handleClick(part)}
               className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}`}
               style={{ backgroundColor: queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part) }}
-              title={part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
-              aria-label={queueStatus ? `${partLabel(part)}: ${queueStatus.label}` : part.task ? `${partLabel(part)}: ${part.task.status}` : partLabel(part)}
+              title={note ? undefined : part.task ? `${label}: ${part.task.status}` : label}
+              aria-label={queueStatus ? `${label}: ${queueStatus.label}` : part.task ? `${label}: ${part.task.status}` : label}
               data-input-message-uid={event ? part.messageUid : undefined}
+              data-slot={note ? "agent-note-marker" : undefined}
+              data-direction={note ? (squareEvent ? "sent" : "received") : undefined}
               data-part-index={positions[i]}
               data-tool-use-id={part.toolUseId}
               data-task-status={part.task?.status}
               data-awaiting-approval={waitingApproval || undefined}
-            />,
+            />
+          )
+          return [
+            ...originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />),
+            note ? (
+              <Tooltip key={`part:${i}`}>
+                <TooltipTrigger render={marker} />
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            ) : <button key={`part:${i}`} {...marker.props} />,
             ...(inlineLabel ? [
               <button
                 key={`label:${i}`}
@@ -837,7 +857,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
 
       <PartModal part={modalSelection?.jobId ? undefined : selectedPart} pairedResult={modalSelection?.jobId ? undefined : modalSelection?.result}
         job={modalSelection?.jobId ? selectedJob : undefined} onStopJob={stopJob}
-        open={!!selected && !jobGone} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+        open={!!selected && !jobGone} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
     </>
   )
 }
@@ -922,6 +942,7 @@ interface PartModalProps {
   resolveFileLink?: (filePath: string, opts?: { line?: number }) => (() => void) | undefined
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
+  resolveAgentNote?: ResolveAgentNote
   resolveEventQueueStatus?: ResolveEventQueueStatus
   resolveAgentInfo?: ResolveAgentInfo
   loadTranscriptPayload?: TranscriptPayloadLoader
@@ -1008,7 +1029,7 @@ export function PartModal(props: PartModalProps) {
 /** The squares' dialog width, shared by a twin's summary while stepping. */
 const SQUARE_DIALOG_MAX_WIDTH = "min(42rem, calc(100vw - 2rem))"
 
-function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
+function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
   breadcrumb?: React.ReactNode
   background?: React.ReactNode
 }) {
@@ -1050,6 +1071,49 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
   const openFile = toolFile ? resolveFileLink?.(toolFile.path, { line: toolFile.line }) : undefined
 
   if (event) {
+    const note = resolveAgentNote?.(event)
+    if (note) {
+      const avatar = resolveChatMediaSrc(note.avatarUrl ?? undefined, resolveImageSrc)
+      const time = agentNoteTime(event.timestamp)
+      const posted = agentNoteTime(event.postedAt)
+      const failed = event.key === "agent-note-sent" && event.data?.failed === true
+      const onOpenDiscussion: React.MouseEventHandler<HTMLAnchorElement> = e => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !note.onOpenDiscussion) return
+        e.preventDefault()
+        onClose()
+        note.onOpenDiscussion()
+      }
+      return (
+        <Dialog open={open} onOpenChange={value => { if (!value) onClose() }}>
+          <DialogContent motion="snappy" onKeyDown={onKeyDown} className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0" style={{ minHeight: heldHeight("70vh") }}>
+            <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0" data-slot="agent-note-dialog-header">
+              <span aria-hidden className={`size-3 shrink-0 ${usesSquareEventMarker(part) ? "rounded-[2px]" : "rounded-full"}`} style={{ backgroundColor: getPartColor(part) }} />
+              {avatar && <img src={avatar} alt="" className="size-5 shrink-0 rounded-full object-cover" />}
+              <div className="min-w-0 flex-1 mr-7">
+                <DialogTitle className="text-sm break-words">
+                  {note.lead} {note.discussionHref
+                    ? <a href={note.discussionHref} onClick={onOpenDiscussion} className="underline underline-offset-2 hover:text-contrast">{note.discussion}</a>
+                    : note.discussion}
+                </DialogTitle>
+                {time && <p className="text-[10px] font-mono text-text-muted">{time}{posted && posted !== time && ` · Posted ${posted}`}</p>}
+              </div>
+              {navigation && <div className="mr-7 shrink-0"><PartNavigationControls navigation={navigation} /></div>}
+            </DialogHeader>
+            <EventQueueStatusBar status={resolveEventQueueStatus?.(part)} />
+            <div data-slot="agent-note-body" className="overflow-y-auto p-4 flex-1 min-h-0 break-words font-serif text-sm leading-relaxed markdown-body">
+              {failed && <p className="font-sans text-xs text-red-400">Not delivered</p>}
+              <MarkdownRenderer content={event.text} resolveImageSrc={resolveImageSrc} resolveFileLink={resolveFileLink} />
+            </div>
+            {note.discussionHref && (
+              <div className="border-t border-border-subtle px-4 py-3 text-sm">
+                <a href={note.discussionHref} onClick={onOpenDiscussion} className="underline underline-offset-2 hover:brightness-125" style={{ color: PART_COLOR.delegation }}>Open that discussion</a>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )
+    }
+
     const sender = eventSender(event, resolveAgentInfo)
     const senderAvatar = sender ? resolveChatMediaSrc(sender.avatarUrl, resolveImageSrc) : undefined
     const senderDiscussion = typeof event.data?.discussionId === "string" ? event.data.discussionId : null
@@ -1420,12 +1484,6 @@ function formatTimestamp(iso: string): string {
       hour: "2-digit", minute: "2-digit", second: "2-digit",
     })
   } catch { return iso }
-}
-
-/** A name the host wants shown beside the marker: it has no presentation that identifies it. */
-function eventInlineLabel(part: MessagePart): string | null {
-  const event = parseEventPart(part)
-  return event?.inlineLabel && event.label ? event.label : null
 }
 
 /** The Agent that sent an event, when the event names one and the host knows it. */

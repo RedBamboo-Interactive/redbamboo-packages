@@ -867,6 +867,7 @@ export interface ChatPanelProps {
    * isn't linkable — the affordance is hidden in that case.
    */
   resolveEventLink?: (event: import("./components/event-view").ParsedEvent) => (() => void) | undefined
+  resolveAgentNote?: import("./components/event-view").ResolveAgentNote
   /** Fetch transcript bytes on demand. Closed tool modals never call it. */
   loadTranscriptPayload?: TranscriptPayloadLoader
   /** Browser-displayable URL for binary transcript media such as generated images. */
