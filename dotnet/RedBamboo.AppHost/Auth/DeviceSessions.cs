@@ -13,6 +13,25 @@ public static class SessionClaims
     public const string SessionId = "sid";
 }
 
+/// <summary>
+/// A request whose Authorization badge was expired or invalid and that went on as its session cookie (AuthMiddleware,
+/// as before 0.1.50). The marked principal is the cookie's: hosts judge it as a cookie session, and it is never
+/// person-present, because the caller meant to speak as its own badge.
+/// </summary>
+public static class HeaderBadgeFallback
+{
+    public const string Claim = "header_badge_ignored";
+
+    public static bool Applied(System.Security.Claims.ClaimsPrincipal user)
+        => user.HasClaim(claim => claim.Type == Claim);
+
+    internal static void Mark(System.Security.Claims.ClaimsPrincipal user)
+    {
+        if (!Applied(user) && user.Identity is System.Security.Claims.ClaimsIdentity identity)
+            identity.AddClaim(new System.Security.Claims.Claim(Claim, "true"));
+    }
+}
+
 /// <summary>How a device session began. Recorded by the host's <see cref="IDeviceSessionHooks"/>.</summary>
 public static class SignInMethods
 {

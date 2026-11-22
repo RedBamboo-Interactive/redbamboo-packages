@@ -68,11 +68,14 @@ public sealed class AuthMiddleware
         var cookieTokens = CookieValues(context.Request, _options.CookieName);
         var cookieToken = cookieTokens.FirstOrDefault();
 
-        // A badge in the Authorization header speaks for the request on its own. A valid one wins. An expired
-        // or invalid one next to a session cookie is refused, never re-read as the cookie's session: an Agent's
-        // expired execution badge sent from a signed-in browser must not quietly become that person's request.
-        // Without a session cookie it falls through as before (LocalDefault on loopback, 401 elsewhere): local
-        // callers that reuse a badge past its lifetime still rely on that, and each is logged (ND-F5).
+        // A badge in the Authorization header speaks for the request on its own: a valid one wins. An expired or
+        // invalid one is ignored and the request falls through, as it did before 0.1.50:
+        // - to a valid session cookie, which the host's device gate still judges (a revoked session stays
+        //   refused). That principal is marked (HeaderBadgeFallback): it is never person-present, and the gate
+        //   reads it as a cookie session. Browser code holds only app badges of the cookie's own user, and could
+        //   drop the header to get the cookie anyway, so this grants nothing a page could not already do.
+        //   Logged, rate-limited (ND-F7).
+        // - without one, to LocalDefault on loopback (ND-F5, logged) and 401 elsewhere.
         // A header that is not a badge (the tunnel secret, read by BearerAuthMiddleware) changes nothing.
         var invalidHeaderBadge = false;
         if (headerToken is not null && LooksLikeBadge(headerToken))
@@ -89,17 +92,6 @@ public sealed class AuthMiddleware
             if (optional)
             {
                 await _next(context);
-                return;
-            }
-            if (cookieTokens.Any(t => !string.IsNullOrEmpty(t)))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsJsonAsync(new
-                {
-                    error = "invalid_token",
-                    message = "The Bearer badge is expired or invalid.",
-                });
                 return;
             }
             invalidHeaderBadge = true;
@@ -126,6 +118,11 @@ public sealed class AuthMiddleware
         }
         if (chosen is not null)
         {
+            if (invalidHeaderBadge)
+            {
+                HeaderBadgeFallback.Mark(chosen);
+                StaleHeaderBadges.Report(_logger, context, headerToken!, StaleHeaderBadges.SessionCookie);
+            }
             context.User = chosen;
             await ContinueAsync(context);
             return;
@@ -146,7 +143,7 @@ public sealed class AuthMiddleware
 
         if (IsLocalRequest(context))
         {
-            if (invalidHeaderBadge) StaleHeaderBadges.Report(_logger, context, headerToken!);
+            if (invalidHeaderBadge) StaleHeaderBadges.Report(_logger, context, headerToken!, StaleHeaderBadges.LocalDefault);
             var claims = new[]
             {
                 new Claim("sub", "local-user"),
@@ -246,27 +243,40 @@ public sealed class AuthMiddleware
         /// <summary>For tests: how many times a warning was written.</summary>
         internal static int Reported;
 
-        public static void Report(ILogger? logger, HttpContext context, string badge)
+        public const string LocalDefault = "LocalDefault";
+        public const string SessionCookie = "the session cookie";
+
+        public static void Report(ILogger? logger, HttpContext context, string badge, string fallback)
         {
             string sub = "unreadable", app = "none";
             try
             {
                 var jwt = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(badge);
                 sub = Clip(jwt.Subject ?? "none");
-                app = Clip(jwt.Payload.TryGetValue("client_id", out var clientId) ? clientId?.ToString() ?? "none" : "none");
+                // The app: a service badge's client_id, or an execution badge's app (read, never trusted).
+                if (jwt.Payload.TryGetValue("client_id", out var clientId) && clientId is not null)
+                    app = Clip(clientId.ToString() ?? "none");
+                else if (ExecutionIdentityClaims.TryRead(new ClaimsPrincipal(new ClaimsIdentity(jwt.Claims)), out var identity, out _)
+                    && identity is not null)
+                    app = Clip(identity.App.Id);
             }
             catch (Exception) { }
             var path = Clip(context.Request.Path.Value ?? "", 120);
-            var key = path + "|" + sub + "|" + app;
+            var key = fallback + "|" + path + "|" + sub + "|" + app;
             var now = DateTimeOffset.UtcNow;
             if (Last.TryGetValue(key, out var at) && now - at < Every) return;
             if (Last.Count >= MaxKeys) Last.Clear();
             Last[key] = now;
             Interlocked.Increment(ref Reported);
             var agent = Clip(context.Request.Headers.UserAgent.ToString(), 120);
-            logger?.LogWarning(
-                "Expired or invalid Authorization badge from a loopback caller fell back to LocalDefault: {Method} {Path} sub={Sub} app={App} ua={UserAgent}. It should mint a fresh badge (ND-F5).",
-                context.Request.Method, path, sub, app, agent);
+            if (fallback == SessionCookie)
+                logger?.LogWarning(
+                    "Expired or invalid Authorization badge ignored; the request went on as its session cookie: {Method} {Path} sub={Sub} app={App} ua={UserAgent}. It should mint a fresh badge (ND-F7).",
+                    context.Request.Method, path, sub, app, agent);
+            else
+                logger?.LogWarning(
+                    "Expired or invalid Authorization badge from a loopback caller fell back to LocalDefault: {Method} {Path} sub={Sub} app={App} ua={UserAgent}. It should mint a fresh badge (ND-F5).",
+                    context.Request.Method, path, sub, app, agent);
         }
 
         private static string Clip(string value, int max = 80)
