@@ -79,8 +79,24 @@ const jobs = [
   normalizeChatJob({ id: "theme", capability: "music-gen", providerName: "Suno", name: "Mossbound theme", status: "Queued", stage: "admitted", queuedAt: "2026-10-19T07:13:00Z" }),
 ]
 
+const noteDiscussionTitle = "A long initiative title with enough words to wrap across several lines on a small screen"
+const noteMessages: MessageBlock[] = [{
+  id: "note-turn", role: "assistant", timestamp: stamp,
+  parts: ["agent-note", "agent-note-sent"].map(key => ({
+    type: "tool_use", toolName: `event:${key}`, content: "A note with **Markdown**.",
+    toolInput: JSON.stringify({ event: "A note with **Markdown**.", timestamp: stamp, postedAt: later }),
+  })),
+}]
+
 function App() {
   const withJobs = params.has("jobs")
+  if (params.has("notes")) return <div style={{ width: "100%", height: "100vh" }}>
+    <ChatPanel messages={noteMessages} isStreaming={false} sessionId="part-navigation-notes" persistQueue={false}
+      resolveAgentNote={event => ({
+        lead: event.key === "agent-note-sent" ? "Note to Nova in" : "Note from Nova in",
+        discussion: noteDiscussionTitle, avatarUrl: null, discussionHref: "/another-discussion",
+      })} />
+  </div>
   return <div style={{ width: "100%", height: "100vh" }}>
     <ChatPanel messages={withJobs ? [...messages, ...secondTurn] : messages} isStreaming={false} sessionId="part-navigation" persistQueue={false}
       resolveFileLink={() => () => {}}

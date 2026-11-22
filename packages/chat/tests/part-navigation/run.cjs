@@ -206,6 +206,32 @@ async function main() {
       assert.equal(await anyDialog.count(), 0, "a right-click on a twin opens nothing")
       await page.keyboard.press("Escape")
 
+      await page.goto(`${origin}?notes`)
+      const noteHeader = dialog.locator('[data-slot="agent-note-dialog-header"]')
+      const noteTitle = noteHeader.getByRole("heading")
+      const discussion = noteTitle.getByRole("link")
+      await page.getByRole("button", { name: /^Note from Nova in/ }).click()
+      for (const [direction, index] of [["from", 1], ["to", 2]]) {
+        await counter.getByText(`${index} / 2`, { exact: true }).waitFor()
+        assert.match(await noteTitle.innerText(), new RegExp(`^Note ${direction} Nova in`))
+        assert.equal(await discussion.getAttribute("title"), await discussion.innerText())
+        const layout = await discussion.evaluate(link => ({
+          width: link.clientWidth, scrollWidth: link.scrollWidth, overflow: getComputedStyle(link).textOverflow,
+        }))
+        assert.ok(layout.width > 50 && layout.scrollWidth > layout.width && layout.overflow === "ellipsis", "long title is visibly truncated")
+        await settle()
+        const [heading, pager, close] = await Promise.all([
+          noteTitle.boundingBox(), counter.boundingBox(), dialog.getByRole("button", { name: "Close", exact: true }).boundingBox(),
+        ])
+        assert.ok(heading.height <= 21 && heading.y + heading.height < pager.y, "one title line above the pager")
+        assert.ok(heading.x + heading.width < close.x, "title leaves room for Close")
+        if (index === 1) await counter.getByRole("button", { name: "Next activity" }).click()
+      }
+      await page.keyboard.press("ArrowLeft")
+      await counter.getByText("1 / 2", { exact: true }).waitFor()
+      await page.keyboard.press("Escape")
+      await dialog.waitFor({ state: "detached" })
+
       assert.deepEqual(errors, [], `browser exceptions at ${width}px`)
       results.push({ width, passed: true })
       await page.close()

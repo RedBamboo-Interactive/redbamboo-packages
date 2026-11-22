@@ -1086,18 +1086,23 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
       return (
         <Dialog open={open} onOpenChange={value => { if (!value) onClose() }}>
           <DialogContent motion="snappy" onKeyDown={onKeyDown} className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0" style={{ minHeight: heldHeight("70vh") }}>
-            <DialogHeader className="flex-row items-center gap-2.5 px-4 py-3 border-b border-border-subtle shrink-0" data-slot="agent-note-dialog-header">
-              <span aria-hidden className={`size-3 shrink-0 ${usesSquareEventMarker(part) ? "rounded-[2px]" : "rounded-full"}`} style={{ backgroundColor: getPartColor(part) }} />
-              {avatar && <img src={avatar} alt="" className="size-5 shrink-0 rounded-full object-cover" />}
-              <div className="min-w-0 flex-1 mr-7">
-                <DialogTitle className="text-sm break-words">
-                  {note.lead} {note.discussionHref
-                    ? <a href={note.discussionHref} onClick={onOpenDiscussion} className="underline underline-offset-2 hover:text-contrast">{note.discussion}</a>
-                    : note.discussion}
-                </DialogTitle>
-                {time && <p className="text-[10px] font-mono text-text-muted">{time}{posted && posted !== time && ` · Posted ${posted}`}</p>}
+            <DialogHeader className="grid shrink-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1 border-b border-border-subtle py-3 pl-4 pr-12" data-slot="agent-note-dialog-header">
+              <div className="flex items-center gap-2.5">
+                <span aria-hidden className={`size-3 shrink-0 ${usesSquareEventMarker(part) ? "rounded-[2px]" : "rounded-full"}`} style={{ backgroundColor: getPartColor(part) }} />
+                {avatar && <img src={avatar} alt="" className="size-5 shrink-0 rounded-full object-cover" />}
               </div>
-              {navigation && <div className="mr-7 shrink-0"><PartNavigationControls navigation={navigation} /></div>}
+              <DialogTitle className="flex min-w-0 items-baseline gap-1 text-sm leading-5">
+                <span className="max-w-[55%] shrink-0 truncate">{note.lead}</span>{" "}
+                {note.discussionHref
+                  ? <a href={note.discussionHref} onClick={onOpenDiscussion} title={note.discussion} className="min-w-0 truncate underline underline-offset-2 hover:text-contrast">{note.discussion}</a>
+                  : <span title={note.discussion} className="min-w-0 truncate">{note.discussion}</span>}
+              </DialogTitle>
+              {(time || navigation) && (
+                <div className="col-start-2 flex min-w-0 items-center justify-between gap-2">
+                  {time && <p className="min-w-0 truncate font-mono text-[10px] text-text-muted">{time}{posted && posted !== time && ` · Posted ${posted}`}</p>}
+                  {navigation && <div className="ml-auto shrink-0"><PartNavigationControls navigation={navigation} /></div>}
+                </div>
+              )}
             </DialogHeader>
             <EventQueueStatusBar status={resolveEventQueueStatus?.(part)} />
             <div data-slot="agent-note-body" className="overflow-y-auto p-4 flex-1 min-h-0 break-words font-serif text-sm leading-relaxed markdown-body">
