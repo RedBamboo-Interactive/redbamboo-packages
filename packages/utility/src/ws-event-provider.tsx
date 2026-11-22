@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { createWebSocket } from "./create-websocket"
-import { ensureFreshSession, reportSessionRevoked, SIGNED_IN_EVENT } from "./session-renewal"
+import { prepareSocketReconnect, reportSessionRevoked, SIGNED_IN_EVENT } from "./session-renewal"
 import type { WsEvent } from "./create-websocket"
 import { WsEventContext } from "./ws-events"
 import type { WsEventContextValue } from "./ws-events"
@@ -45,7 +45,7 @@ export function WsEventProvider({
       onReconnect,
       onVisibilityChange,
       reconnectMs,
-      beforeReconnect: ensureFreshSession,
+      beforeReconnect: prepareSocketReconnect,
       onSessionRevoked: reportSessionRevoked,
     })
     // Signed in again without a reload: a socket a 4401 close stopped connects again.

@@ -88,6 +88,13 @@ export interface SessionRenewal {
   isActive(): boolean
   /** Whether the badge may have expired; used before WebSocket reconnects. */
   ensureFresh(): Promise<void> | undefined
+  /**
+   * For {@link CreateWebSocketOptions.beforeReconnect}: when the previous attempt never opened (the server refused
+   * the upgrade, as the device gate does a badge from before device sessions), the once-per-session upgrade
+   * renewal ({@link renewForUpgrade}); otherwise {@link ensureFresh}. Spent once, so a socket that keeps failing
+   * rotates nothing more.
+   */
+  prepareSocketReconnect(context?: { previousAttemptOpened: boolean }): Promise<void> | undefined
   /** Forget the renewal stamp (logout). */
   clearStamp(): void
   /** Same-origin fetch that renews and replays once on 401. */
@@ -298,7 +305,7 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
     teardown = null
   }
 
-  return {
+  const renewal: SessionRenewal = {
     renewSession,
     renewForUpgrade,
     start() {
@@ -332,13 +339,21 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
       if (stamp !== null && deps.now() - stamp < WS_STALE_MS) return undefined
       return renewSession().then(() => undefined)
     },
+    prepareSocketReconnect(context) {
+      if (!active) return undefined
+      if (context && !context.previousAttemptOpened)
+        return renewForUpgrade().then(() => undefined, () => undefined)
+      return renewal.ensureFresh()
+    },
     clearStamp: clearStampOnly,
     reportRevoked() {
       loseSession("revoked")
     },
     wrapFetch(base) {
       const wrapped = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-        const eligible = active && isRenewable(input)
+        // A request that carries its own badge (an execution token) speaks for that badge, not this session: its
+        // 401 is the caller's to handle (execution-token re-mints), never a reason to renew or end the session.
+        const eligible = active && isRenewable(input) && !carriesAuthorization(input, init)
         let replay: (() => Promise<Response>) | null = null
         if (eligible) {
           if (typeof Request !== "undefined" && input instanceof Request) {
@@ -386,6 +401,7 @@ export function createSessionRenewal(deps: SessionRenewalDeps): SessionRenewal {
       return wrapped as typeof fetch
     },
   }
+  return renewal
 }
 
 /** The `error` member of a JSON error body, or null. Never throws. */
@@ -421,6 +437,16 @@ export function isKernelRoute(input: RequestInfo | URL): boolean {
     if (path.startsWith("/auth/")) return true
     if (!path.startsWith("/api/")) return false
     return !["/api/apps/", "/api/extensions/", "/api/public/"].some((prefix) => path.startsWith(prefix))
+  } catch {
+    return false
+  }
+}
+
+/** Whether the request sets its own Authorization header. */
+function carriesAuthorization(input: RequestInfo | URL, init?: RequestInit): boolean {
+  try {
+    if (init?.headers && new Headers(init.headers).has("Authorization")) return true
+    return typeof Request !== "undefined" && input instanceof Request && input.headers.has("Authorization")
   } catch {
     return false
   }
@@ -475,6 +501,9 @@ export const startSessionRenewal = () => {
 }
 export const stopSessionRenewal = () => browserRenewal().stop()
 export const ensureFreshSession = () => browserRenewal().ensureFresh()
+/** {@link SessionRenewal.prepareSocketReconnect} of the browser singleton, for `beforeReconnect`. */
+export const prepareSocketReconnect = (context?: { previousAttemptOpened: boolean }) =>
+  browserRenewal().prepareSocketReconnect(context)
 export const clearSessionRenewalStamp = () => browserRenewal().clearStamp()
 /** The server ended this browser's session (for example a 4401 WebSocket close). */
 export const reportSessionRevoked = () => browserRenewal().reportRevoked()

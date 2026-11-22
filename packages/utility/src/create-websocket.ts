@@ -33,8 +33,10 @@ export interface CreateWebSocketOptions {
   /**
    * Awaited before every reconnect (not the first connect). Used to renew an expired
    * session badge so the upgrade is not rejected. May return undefined to reconnect now.
+   * `previousAttemptOpened` is false when the last socket closed without ever opening (the
+   * server refused the upgrade, or was unreachable).
    */
-  beforeReconnect?: () => Promise<unknown> | undefined | void
+  beforeReconnect?: (context: { previousAttemptOpened: boolean }) => Promise<unknown> | undefined | void
   /**
    * The server closed the socket with {@link SESSION_REVOKED_CLOSE_CODE}: this device was signed out.
    * The handle stops reconnecting, including on resume, until {@link WebSocketHandle.rearm}.
@@ -63,6 +65,8 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
   // Closes since the socket was last open: a socket the server keeps refusing (signed out, or down)
   // is retried less and less often instead of every few seconds.
   let failures = 0
+  // Whether the socket created last opened before it closed.
+  let lastAttemptOpened = true
 
   function cleanup() {
     if (ws) {
@@ -84,8 +88,10 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
     cleanup()
     const url = typeof opts.url === "function" ? opts.url() : opts.url
     ws = new WebSocket(url)
+    lastAttemptOpened = false
 
     ws.onopen = () => {
+      lastAttemptOpened = true
       failures = 0
       if (hasConnected && opts.onReconnect) opts.onReconnect()
       hasConnected = true
@@ -124,7 +130,7 @@ export function createWebSocket(opts: CreateWebSocketOptions): WebSocketHandle {
     const epoch = ++reconnectEpoch
     let pending: Promise<unknown> | undefined | void
     try {
-      pending = opts.beforeReconnect?.()
+      pending = opts.beforeReconnect?.({ previousAttemptOpened: lastAttemptOpened })
     } catch {
       pending = undefined
     }

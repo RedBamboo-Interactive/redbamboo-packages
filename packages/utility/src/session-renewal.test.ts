@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { createSessionRenewal, isKernelRoute, type SessionRenewalDeps } from "./session-renewal.ts"
 import { createWebSocket } from "./create-websocket.ts"
+import { createExecutionTokenClient } from "./execution-token.ts"
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>
 
@@ -498,4 +499,124 @@ test("ND-F4: isKernelRoute trusts /auth and the kernel API, not extension namesp
     "/assets/x.js", "https://elsewhere.example/api/entities", new URL("http://localhost/api/apps/x")])
     assert.equal(isKernelRoute(no), false, String(no))
   assert.equal(isKernelRoute(new URL("http://localhost/api/entities")), true)
+})
+
+// ---- K1 review ----------------------------------------------------------------------------------------------
+
+test("a 401 on a request that carries its own Authorization badge never renews or ends the session", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+  s.advance(60_000)
+  for (const error of ["invalid_token", "session_revoked", "session_upgrade_required"]) {
+    let calls = 0
+    const base = (async () => (calls++, json(401, { error }))) as unknown as typeof fetch
+    const res = await s.r.wrapFetch(base)("/api/entities", { headers: { Authorization: "Bearer exec.badge.here" } })
+    assert.equal(res.status, 401, error)
+    assert.equal(calls, 1, error)  // the caller re-mints its badge; no replay with the same one
+  }
+  const viaRequest = await s.r.wrapFetch((async () => json(401, { error: "invalid_token" })) as unknown as typeof fetch)(
+    new Request("http://localhost/api/entities", { headers: { Authorization: "Bearer exec.badge.here" } }))
+  assert.equal(viaRequest.status, 401)
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 0)
+  assert.deepEqual(s.reasons, [])
+  assert.equal(s.r.isActive(), true)
+})
+
+test("a socket whose upgrade was refused upgrades the session once, then reconnects; an open one only stays fresh", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+
+  assert.equal(s.r.prepareSocketReconnect({ previousAttemptOpened: true }), undefined)  // fresh stamp: reconnect now
+  await s.r.prepareSocketReconnect({ previousAttemptOpened: false })
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)
+  await s.r.prepareSocketReconnect({ previousAttemptOpened: false })
+  await s.r.prepareSocketReconnect({ previousAttemptOpened: false })
+  assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)  // the same once-per-session upgrade
+})
+
+test("sid-less tabs reconnecting after a restart: the session upgrades and the socket opens", async (t) => {
+  // The kernel came back with the device gate: the old badge's /ws upgrade is refused until a renewal.
+  let upgraded = false
+  const s = lostReasons({}, (url) => {
+    if (url === "/auth/refresh") { upgraded = true; return json(200, { expiresIn: 3600 }) }
+    return json(200, { id: "u1" })
+  })
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+
+  class GateWs {
+    static instances: GateWs[] = []
+    onopen: (() => void) | null = null
+    onclose: ((e?: unknown) => void) | null = null
+    onerror: unknown
+    onmessage: unknown
+    url: string
+    constructor(url: string) {
+      this.url = url
+      GateWs.instances.push(this)
+      const ok = upgraded
+      setTimeout(() => (ok ? this.onopen?.() : this.onclose?.({ code: 1006 })), 0)
+    }
+    close() {}
+  }
+  const g = globalThis as Record<string, unknown>
+  const prev = g.WebSocket
+  g.WebSocket = GateWs
+  const connects: number[] = []
+  const tabs = [0, 1].map((tab) => createWebSocket({
+    url: "ws://x/ws",
+    reconnectMs: 1,
+    beforeReconnect: s.r.prepareSocketReconnect,
+    onConnect: () => void connects.push(tab),
+    onEvent: () => {},
+  }))
+  try {
+    for (let i = 0; i < 50 && connects.length < 2; i++) await new Promise((r) => setTimeout(r, 20))
+    assert.deepEqual([...connects].sort(), [0, 1])
+    assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 1)  // one upgrade for both tabs
+    assert.deepEqual(s.reasons, [])
+  } finally {
+    for (const tab of tabs) tab.close()
+    g.WebSocket = prev
+  }
+})
+
+test("an execution badge the server rejects is re-minted by its client, through the session's wrapped fetch", async (t) => {
+  const s = lostReasons()
+  t.after(() => s.r.stop())
+  s.deps.storage!.setItem("redsuite:session:renewedAt", String(s.deps.now()))
+  s.r.start()
+  let mints = 0
+  const attached: string[] = []
+  const base = (async (url: string, init?: RequestInit) => {
+    if (url === "/api/auth/execution-token") {
+      mints++
+      return json(200, { accessToken: `exec-${mints}`, tokenType: "Bearer", expiresAt: new Date(Date.now() + 300_000).toISOString(), identity: null })
+    }
+    const badge = new Headers(init?.headers).get("Authorization") ?? ""
+    attached.push(badge)
+    return badge === "Bearer exec-1" ? json(401, { error: "invalid_token" }) : new Response(null, { status: 204 })
+  }) as unknown as typeof fetch
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window")
+  const previousFetch = Object.getOwnPropertyDescriptor(globalThis, "fetch")
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { origin: "http://localhost:18804" } } })
+  Object.defineProperty(globalThis, "fetch", { configurable: true, value: s.r.wrapFetch(base) })
+  try {
+    const res = await createExecutionTokenClient("nova").fetch("/api/test")
+    assert.equal(res.status, 204)
+    assert.equal(mints, 2)
+    assert.deepEqual(attached, ["Bearer exec-1", "Bearer exec-2"])
+    assert.equal(s.calls.filter((c) => c === "POST /auth/refresh").length, 0)
+    assert.deepEqual(s.reasons, [])
+  } finally {
+    for (const [name, d] of [["window", previousWindow], ["fetch", previousFetch]] as const) {
+      if (d) Object.defineProperty(globalThis, name, d)
+      else delete (globalThis as Record<string, unknown>)[name]
+    }
+  }
 })

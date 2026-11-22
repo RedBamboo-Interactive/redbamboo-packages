@@ -246,3 +246,41 @@ test("a refused socket backs off, and one that opens starts again from the base"
     browser.restore()
   }
 })
+
+test("beforeReconnect learns whether the previous attempt ever opened", async () => {
+  class OpenOnceWs {
+    static instances: OpenOnceWs[] = []
+    onopen: (() => void) | null = null
+    onclose: ((e?: unknown) => void) | null = null
+    onerror: unknown
+    onmessage: unknown
+    url: string
+    constructor(url: string) {
+      this.url = url
+      OpenOnceWs.instances.push(this)
+    }
+    close() {}
+  }
+  const g = globalThis as Record<string, unknown>
+  const prev = g.WebSocket
+  g.WebSocket = OpenOnceWs
+  const seen: boolean[] = []
+  const handle = createWebSocket({
+    url: "ws://x/ws",
+    reconnectMs: 1,
+    beforeReconnect: (context) => void seen.push(context.previousAttemptOpened),
+    onEvent: () => {},
+  })
+  try {
+    OpenOnceWs.instances[0].onopen?.()
+    OpenOnceWs.instances[0].onclose?.({ code: 1006 })
+    await new Promise((r) => setTimeout(r, 30))
+    assert.equal(OpenOnceWs.instances.length, 2)
+    OpenOnceWs.instances[1].onclose?.({ code: 1006 })  // refused: never opened
+    await new Promise((r) => setTimeout(r, 60))
+    assert.deepEqual(seen.slice(0, 2), [true, false])
+  } finally {
+    handle.close()
+    g.WebSocket = prev
+  }
+})

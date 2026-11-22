@@ -110,6 +110,7 @@ export {
   createSessionRenewal,
   renewSession,
   renewSessionForUpgrade,
+  prepareSocketReconnect,
   isKernelRoute,
   startSessionRenewal,
   stopSessionRenewal,

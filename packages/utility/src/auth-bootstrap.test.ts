@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { bootstrapAuthUser, type AuthBootstrapDependencies } from "./auth-bootstrap.ts"
+import { AuthUnavailableError, bootstrapAuthUser, bootstrapAuthUserWithRetry, type AuthBootstrapDependencies } from "./auth-bootstrap.ts"
 
 function json(status: number, body: unknown = {}) {
   return new Response(JSON.stringify(body), {
@@ -173,4 +173,47 @@ test("ND-F4: once the upgrade is spent, the bootstrap signs out instead of rotat
   assert.equal(plain, 0)
   assert.equal(fixture.cleared(), 0)
   assert.deepEqual(fixture.calls, ["/auth/me"])
+})
+
+// ---- K1 review: a server that cannot answer is not a sign-out ---------------------------------------------
+
+test("a 503 device_sessions_unavailable from /auth/me is unavailable, never signed out", async () => {
+  const fixture = dependencies([json(503, { error: "device_sessions_unavailable" })], "renewed", true)
+  await assert.rejects(bootstrapAuthUser(fixture.deps), (error: unknown) =>
+    error instanceof AuthUnavailableError && error.status === 503 && error.code === "device_sessions_unavailable")
+  assert.equal(fixture.cleared(), 0)
+})
+
+test("a network failure on /auth/me is unavailable", async () => {
+  const fixture = dependencies([], "renewed", true)
+  fixture.deps.fetch = async () => { throw new TypeError("Failed to fetch") }
+  await assert.rejects(bootstrapAuthUser(fixture.deps), AuthUnavailableError)
+})
+
+test("a renewal that only failed transiently is unavailable, not a sign-out", async () => {
+  const fixture = dependencies([json(401, { error: "session_upgrade_required" })], "transient", false)
+  fixture.deps.renewForUpgrade = async () => "transient"
+  await assert.rejects(bootstrapAuthUser(fixture.deps), AuthUnavailableError)
+})
+
+test("the bootstrap retries while unavailable with backoff, then shows what the server says", async () => {
+  const sleeps: number[] = []
+  let calls = 0
+  const user = await bootstrapAuthUserWithRetry(async () => {
+    calls++
+    if (calls < 4) throw new AuthUnavailableError(503, "device_sessions_unavailable")
+    return owner
+  }, { sleep: async (ms) => void sleeps.push(ms) })
+  assert.deepEqual(user, owner)
+  assert.deepEqual(sleeps, [1000, 2000, 4000])
+})
+
+test("the bootstrap retry stops when cancelled and rethrows anything that is not unavailability", async () => {
+  let cancelled = false
+  const result = await bootstrapAuthUserWithRetry(async () => {
+    cancelled = true
+    throw new AuthUnavailableError(null, null)
+  }, { sleep: async () => {}, isCancelled: () => cancelled })
+  assert.equal(result, undefined)
+  await assert.rejects(bootstrapAuthUserWithRetry(async () => { throw new SyntaxError("bad json") }, { sleep: async () => {} }), SyntaxError)
 })
