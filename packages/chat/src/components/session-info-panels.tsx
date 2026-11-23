@@ -56,24 +56,6 @@ export function Bar({ pct, color, className }: { pct: number; color?: string; cl
   )
 }
 
-export function ContextRing({ pct, color }: { pct: number; color: string }) {
-  const r = 22
-  const c = 2 * Math.PI * r
-  return (
-    <div className="relative grid size-14 shrink-0 place-items-center" title="Context used" data-slot="session-info-context-ring">
-      <svg viewBox="0 0 52 52" aria-hidden="true" className="absolute inset-0 -rotate-90">
-        <circle cx="26" cy="26" r={r} fill="none" strokeWidth="4" className="stroke-overlay-10" />
-        <circle cx="26" cy="26" r={r} fill="none" strokeWidth="4" strokeLinecap="round" stroke={color}
-          strokeDasharray={`${(pct / 100) * c} ${c}`} />
-      </svg>
-      <div className="text-center leading-none">
-        <div className="text-sm font-semibold text-contrast tabular-nums">{pct}%</div>
-        <div className="mt-0.5 text-[9px] text-text-muted">context</div>
-      </div>
-    </div>
-  )
-}
-
 /** An Overview tile that switches to its tab. */
 export function GlanceTile({ icon, title, value, onClick, slot, children }: {
   icon: string

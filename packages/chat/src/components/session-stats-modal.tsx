@@ -16,7 +16,7 @@ import {
 } from "@redbamboo/ui"
 import { MorphSpinner } from "./morph-spinner"
 import {
-  Bar, Chip, ContextRing, GlanceTile, InstructionsPanel, MemoryPanel, NodeSection, SectionLabel, SkillsPanel,
+  Bar, Chip, GlanceTile, InstructionsPanel, MemoryPanel, NodeSection, SectionLabel, SkillsPanel,
   StatTile, Tile, WorkspaceSection, memorySummary, resolveSkills,
 } from "./session-info-panels"
 import { getSessionResourceHref, type SessionResourceKind } from "../lib/session-resource-links"
@@ -509,7 +509,6 @@ export function SessionStatsModal({
   // The host's own label for the model when it has one, else the id said as a person would.
   const modelFriendly = findOption(modelOptions, currentModelAlias(s.model))?.label ?? findOption(modelOptions, s.model)?.label ?? formatModelName(modelLabel)
   const providerChip = [providerLabel, s.model ? modelFriendly : null].filter(Boolean).join(" · ")
-  const ringColor = usageToneColor(pct ?? 0)
   const link = primaryLink ?? (agent?.href ? { href: agent.href, label: `Open ${agent.name}` } : null)
 
   const usageWindow = providerUsage?.buckets[0]?.windows[0]
@@ -737,7 +736,6 @@ export function SessionStatsModal({
                 )}
               </div>
             </div>
-            {pct != null && <div className="self-end"><ContextRing pct={pct} color={ringColor} /></div>}
           </div>
         </div>
 
