@@ -21,6 +21,7 @@ import {
 } from "./session-info-panels"
 import { getSessionResourceHref, type SessionResourceKind } from "../lib/session-resource-links"
 import { formatProviderUsageWindow, remainingProviderUsage, usageToneColor } from "../lib/provider-usage"
+import { formatModelName } from "../lib/model-name"
 import { formatProviderEffort } from "../lib/provider-effort"
 import { deriveOpenedMemory, deriveUsedSkills } from "../lib/session-info-usage"
 import { ACCESS_LEVEL_DESCRIPTIONS, ACCESS_LEVEL_LABELS, accessLevelChoices, isAccessLevel, type AccessLevelChoice } from "../lib/access-level"
@@ -505,7 +506,9 @@ export function SessionStatsModal({
   const heroSubtitle = subtitle ?? (agent ? s.name : undefined)
   const providerLabel = providerOption?.label ?? providerValue
   const modelLabel = shortModel(s.model)
-  const providerChip = [providerLabel, s.model ? modelLabel : null].filter(Boolean).join(" · ")
+  // The host's own label for the model when it has one, else the id said as a person would.
+  const modelFriendly = findOption(modelOptions, currentModelAlias(s.model))?.label ?? findOption(modelOptions, s.model)?.label ?? formatModelName(modelLabel)
+  const providerChip = [providerLabel, s.model ? modelFriendly : null].filter(Boolean).join(" · ")
   const ringColor = usageToneColor(pct ?? 0)
   const link = primaryLink ?? (agent?.href ? { href: agent.href, label: `Open ${agent.name}` } : null)
 
