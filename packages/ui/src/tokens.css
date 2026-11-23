@@ -1371,10 +1371,10 @@ body {
   to   { transform: translateX(340%); }
 }
 
-/* A highlight passing through a 200%-wide background, left to right. */
-@keyframes job-shimmer {
-  from { background-position: 150% 0; }
-  to   { background-position: -100% 0; }
+/* Move the 40%-wide highlight fully past both edges before it loops. */
+@keyframes job-twin-sweep {
+  from { transform: translateX(-40%); }
+  to   { transform: translateX(100%); }
 }
 
 .job-hairline-indeterminate {
@@ -1382,8 +1382,8 @@ body {
   animation: job-hairline-slide 1.6s ease-in-out infinite;
 }
 
-/* A job's twin in the frieze: two squares and their gap (23 x 10), filled
-   left to right with --job-twin-p over a 26% tint of --job-twin-c. The fill
+/* A job's square in the frieze fills left to right with --job-twin-p
+   over a 26% tint of --job-twin-c. The fill
    is a registered property, so each new value glides in (lerp-like ease-out,
    like the frieze's own motion) and a new target mid-glide carries on from
    where it is. --job-twin-edge is an inset outline, kept by the glow. */
@@ -1410,14 +1410,19 @@ body {
   --job-twin-edge: inset 0 0 0 1px color-mix(in srgb, var(--job-twin-c) 55%, transparent);
 }
 
-/* Running: the frieze's wobble at the twin's own size (not the in-flight
-   square's 1.25 scale, too big on a wide shape) and a faint breathing glow. */
+/* Running: a faint breathing glow. With real progress, add the frieze's wobble. */
 @keyframes job-twin-glow {
   0%, 100% { box-shadow: var(--job-twin-edge), 0 0 0 0 transparent; }
   50% { box-shadow: var(--job-twin-edge), 0 0 3px 0 color-mix(in srgb, var(--job-twin-c) 75%, transparent); }
 }
 
 .job-twin[data-job-state="running"] {
+  animation:
+    square-spawn 0.45s ease-out var(--msg-enter-delay, 0ms) both,
+    job-twin-glow 1.2s ease-in-out infinite;
+}
+
+.job-twin[data-job-state="running"][data-job-progress] {
   animation:
     square-spawn 0.45s ease-out var(--msg-enter-delay, 0ms) both,
     square-wobble 0.6s ease-in-out calc(0.45s + var(--msg-enter-delay, 0ms)) infinite,
@@ -1428,9 +1433,8 @@ body {
 .job-twin-sweep {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0 30%, var(--job-twin-c) 30% 60%, transparent 60%);
-  background-size: 200% 100%;
-  animation: job-shimmer 1.1s linear infinite;
+  background: linear-gradient(90deg, var(--job-twin-c) 40%, transparent 40%);
+  animation: job-twin-sweep 1.1s linear infinite;
 }
 
 /* Needs you: solid gold with a soft pulse. */
@@ -1466,7 +1470,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .job-hairline-indeterminate { animation: none; width: 100%; opacity: 0.45; }
   .job-twin,
-  .job-twin[data-job-state] { animation: none; transition: none; }
+  .job-twin[data-job-state],
+  .job-twin[data-job-state][data-job-progress] { animation: none; transition: none; }
   .job-twin-sweep { animation: none; display: none; }
 }
 

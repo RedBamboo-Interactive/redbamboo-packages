@@ -124,7 +124,7 @@ async function main() {
         return { at: kids.indexOf(node), of: kids.length, squaresBefore: kids.slice(0, kids.indexOf(node)).filter(kid => kid.hasAttribute("data-part-index")).length,
           size: [node.offsetWidth, node.offsetHeight] }
       }))
-      assert.deepEqual(twinRow, [{ at: 2, of: 4, squaresBefore: 2, size: [23, 10] }, { at: 3, of: 4, squaresBefore: 2, size: [23, 10] }],
+      assert.deepEqual(twinRow, [{ at: 2, of: 4, squaresBefore: 2, size: [10, 10] }, { at: 3, of: 4, squaresBefore: 2, size: [10, 10] }],
         `twins trail Edit and Bash in the turn's last frieze: ${JSON.stringify(twinRow)}`)
       const at = async (position, title, { job = false } = {}) => {
         await counter.getByText(`${position} / 11`, { exact: true }).waitFor()

@@ -4,13 +4,12 @@ import { PART_COLOR } from "../lib/part-colors"
 import { summarySentence } from "./job-summary"
 
 /**
- * A job in the thread is a twin (89efca37): exactly two tool squares and their
- * gap, 23 x 10, at the end of the frieze row of the message that launched it.
- * Magenta for every kind, like a delegation: work handed to another worker.
+ * A job in the thread uses the same footprint as a tool square, positioned
+ * beside the call that launched it when known. Magenta denotes delegated work.
  *
  * It fills left to right with the job's real progress (gliding to each new
  * value), a short segment sweeps through it while running without real
- * progress, and it dances like an in-flight square while it runs. Queued is an
+ * progress. With real progress it wobbles like an in-flight square. Queued is an
  * outline; done is solid; failed is solid red; needs-you is solid gold with a
  * soft pulse; stopped is grey with the fill it reached. Its size never changes,
  * so a job progressing never moves the row or the thread.
@@ -56,7 +55,7 @@ export function JobTwin({ job, onOpen }: { job: ChatJob; onOpen: () => void }) {
       aria-haspopup="dialog"
       title={label}
       onClick={onOpen}
-      className="job-twin relative block h-2.5 w-[23px] shrink-0 cursor-pointer overflow-hidden rounded-[2px] hover:brightness-125 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="job-twin relative block size-2.5 shrink-0 cursor-pointer overflow-hidden rounded-[2px] hover:brightness-125 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       style={{ ["--job-twin-c" as string]: jobTwinColor(job), ["--job-twin-p" as string]: `${fill}%` } as CSSProperties}
     >
       {job.state === "running" && progress === null && <span aria-hidden="true" className="job-twin-sweep" />}

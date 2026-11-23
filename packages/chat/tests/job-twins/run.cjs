@@ -6,7 +6,7 @@ const { pathToFileURL } = require("node:url")
 const { chromium } = require(require.resolve("playwright", { paths: [path.resolve(__dirname, "../../../testing")] }))
 
 // Mounted shared-Chat fixture for job twins (89efca37; the job cards before
-// them were f6e6c083): a job is a magenta twin at the end of its launching
+// them were f6e6c083): a job is a magenta square in its launching
 // message's frieze row. Transcript purity and no remount, frieze integrity,
 // stick-to-bottom and the reader's anchor while twins appear and progress, the
 // fill's glide, duplicate delivery, older pages, a message without a frieze,
@@ -141,9 +141,9 @@ async function main() {
       check(placement.next, "and the reply text follows the row")
       check(await gap() < 2, "stuck to the bottom when twins appear")
 
-      // One twin per job, two squares and their gap; the state is in its name, a percentage only when real.
+      // One square per job; the state is in its name, a percentage only when real.
       equal(await page.$$eval('[data-slot="job-twin"]', nodes => nodes.map(node => [node.offsetWidth, node.offsetHeight])),
-        [[23, 10], [23, 10], [23, 10]], "every twin is 23 x 10")
+        [[10, 10], [10, 10], [10, 10]], "every job marker is 10 x 10")
       equal(await twin("covers").getAttribute("data-job-progress"), "62", "real progress drives the fill")
       equal(await fillOf("covers"), 62, "filled to 62%")
       check((await twin("covers").getAttribute("aria-label")).includes("Launch covers: 62% done"), "and is in its name")
@@ -154,7 +154,21 @@ async function main() {
       check((await page.$eval('[data-job-id="theme"]', el => getComputedStyle(el).boxShadow)).includes("inset"), "queued: an outline")
       equal(await animationsOf("theme"), "square-spawn", "queued: still (spawned like a square, no loop)")
       equal(await animationsOf("covers"), "square-spawn, square-wobble, job-twin-glow", "running: the frieze's wobble at its own size and a glow")
-      equal(await twin("early").locator(".job-twin-sweep").count(), 1, "no real progress: a segment sweeps through the tint")
+      equal(await animationsOf("early"), "square-spawn, job-twin-glow", "indeterminate jobs do not wobble against the sweep")
+      const sweep = await twin("early").locator(".job-twin-sweep").evaluate(async element => {
+        const [animation] = element.getAnimations()
+        animation.pause()
+        await animation.ready
+        const { duration } = animation.effect.getTiming()
+        const offsets = [0, 0.25, 0.5, 0.75, 0.999, 1].map(fraction => {
+          animation.currentTime = duration * fraction
+          return new DOMMatrixReadOnly(getComputedStyle(element).transform).m41 / element.offsetWidth
+        })
+        animation.play()
+        return offsets
+      })
+      check(sweep.slice(1, -1).every((offset, index) => offset > sweep[index]), "the sweep moves forward until it wraps")
+      check(sweep[0] <= -0.4 && sweep[4] >= 0.99 && sweep[5] === sweep[0], "both sides of the wrap clip the highlight")
       equal(await twin("covers").locator(".job-twin-sweep").count(), 0, "real progress: no sweep")
       equal(await page.locator('[data-slot="job-twin"] [aria-live], [data-slot="job-twin"][aria-live]').count(), 0, "no live-region chatter")
       equal(await page.locator('[data-slot="job-twin"] a, [data-slot="job-twin"] [data-job-menu]').count(), 0, "a twin is only a twin: no link, no menu")
@@ -204,7 +218,7 @@ async function main() {
       equal(shapes.map(shape => shape.key), ["host:d1", "host:job:early", "host:job:covers", "host:job:theme"], "the delegation keeps its place, jobs follow in launch order")
       equal(shapes[0].size, [10, 10], "the delegation is still a circle")
       check(shapes[0].round !== "2px", "and round")
-      equal(shapes.slice(1).map(shape => shape.size), [[23, 10], [23, 10], [23, 10]], "running jobs are twins in the row")
+      equal(shapes.slice(1).map(shape => shape.size), [[10, 10], [10, 10], [10, 10]], "running jobs are squares in the activity row")
       check(shapes.slice(1).every(shape => shape.colour === "rgb(236, 72, 153)" && shape.label.endsWith("(job)")), `magenta, labelled as jobs: ${JSON.stringify(shapes)}`)
       equal(shapes.map(shape => shape.running), [true, true, true, false], "running ones dance, the queued one is still")
       await shot("activity-row")
@@ -226,7 +240,7 @@ async function main() {
       const midway = await fillOf("covers")
       check(midway > 61.5 && midway < 79.5, `the fill eases toward 80%: ${midway}`)
       await page.waitForFunction(() => parseFloat(getComputedStyle(document.querySelector('[data-slot="job-twin"][data-job-id="covers"]')).getPropertyValue("--job-twin-p")) > 79.9, null, { timeout: 3000 })
-      equal(await sizeOf("covers"), [23, 10], "progressing never resizes it")
+      equal(await sizeOf("covers"), [10, 10], "progressing never resizes it")
       const after = (await calls()).slice(before)
       equal(after, ["get covers"], "six frames, one single-job read")
       check(!(await twin("covers").getAttribute("aria-label")).includes("Injected"), "never rendered from the payload")
@@ -304,7 +318,7 @@ async function main() {
       await page.waitForFunction(() => document.querySelector('[data-job-id="early"]')?.getAttribute("data-job-state") === "failed")
       await settle()
       const topAfter = await anchorTop()
-      equal(await sizeOf("early"), [23, 10], "the twin above changed state and kept its size")
+      equal(await sizeOf("early"), [10, 10], "the twin above changed state and kept its size")
       check(earlyAboveView, "the changing twin is above the reader's viewport")
       check(Math.abs(topAfter - topBefore) <= 1, `reader's anchor did not move: ${topBefore} -> ${topAfter}`)
 
@@ -446,8 +460,8 @@ async function main() {
       check((await gallery("g-w").getAttribute("aria-label")).includes("Starting up"), "stage in words while waiting")
       equal(await gallery("g-n").evaluate(el => getComputedStyle(el).animationName), "square-spawn, job-twin-pulse", "needs you: a soft pulse")
       equal(await gallery("g-n").evaluate(el => getComputedStyle(el).getPropertyValue("--job-twin-c").trim()), await token("--color-accent-gold"), "needs you: gold")
-      equal(await page.$$eval('[data-gallery] [data-slot="job-twin"]', nodes => nodes.map(node => [node.offsetWidth, node.offsetHeight]).filter(([w, h]) => w !== 23 || h !== 10)), [],
-        "every state is 23 x 10")
+      equal(await page.$$eval('[data-gallery] [data-slot="job-twin"]', nodes => nodes.map(node => [node.offsetWidth, node.offsetHeight]).filter(([w, h]) => w !== 10 || h !== 10)), [],
+        "every state is square")
       // One finished image: the summary shows it large, and opens it in the lightbox.
       await gallery("g-c").click()
       const gallerySummary = page.locator('[data-slot="job-summary"]')

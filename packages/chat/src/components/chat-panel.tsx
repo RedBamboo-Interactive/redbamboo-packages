@@ -741,12 +741,12 @@ export function ChatPanel(props: ChatPanelProps) {
       running: item.running,
       onOpen: () => setOpenHostKey(item.key),
     })),
-    // A running job is a twin here too, and opens the same summary as its twin in the thread.
+    // The job square opens the same summary from the status row and the thread.
     ...activeJobs.map(job => ({
       key: `host:job:${job.id}`,
       label: `${job.title} (job)`,
       color: PART_COLOR.delegation,
-      shape: "twin" as const,
+      shape: "square" as const,
       running: job.state === "running",
       onOpen: () => setOpenJobId(job.id),
     })),
