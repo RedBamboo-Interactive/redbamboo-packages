@@ -21,7 +21,7 @@ function formatResetForToast(value?: string | null): string | undefined {
   }).format(date)
 }
 
-export function SessionInfoButton({ stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions, loadProviderUsage, onConfigChange, onAccessLevelChange, fullAccessEnabled, fullAccessSettingsHref, open: controlledOpen, onOpenChange, children }: SessionInfoButtonProps) {
+export function SessionInfoButton({ stats, loadProviderUsage, open: controlledOpen, onOpenChange, children, ...modalProps }: SessionInfoButtonProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
   const open = controlledOpen ?? uncontrolledOpen
   const [providerUsage, setProviderUsage] = useState<ProviderUsageSnapshot | null>(null)
@@ -102,21 +102,12 @@ export function SessionInfoButton({ stats, messages, agent, modelOptions, effort
       </button>
 
       <SessionStatsModal
+        {...modalProps}
         open={open}
         onOpenChange={setOpen}
         stats={stats}
-        messages={messages}
-        agent={agent}
-        modelOptions={modelOptions}
-        effortOptions={effortOptions}
-        qualityTierOptions={qualityTierOptions}
-        providerOptions={providerOptions}
         providerUsage={providerUsage}
         providerUsageLoading={providerUsageLoading}
-        onConfigChange={onConfigChange}
-        onAccessLevelChange={onAccessLevelChange}
-        fullAccessEnabled={fullAccessEnabled}
-        fullAccessSettingsHref={fullAccessSettingsHref}
       >
         {children}
       </SessionStatsModal>

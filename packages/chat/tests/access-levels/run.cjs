@@ -66,6 +66,8 @@ async function main() {
     })
     const openModal = async page => {
       await trigger(page).click()
+      // Permissions live on the Settings tab of the Info modal.
+      await page.getByRole("tab", { name: "Settings" }).click()
       await row(page).waitFor()
     }
 

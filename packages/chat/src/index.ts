@@ -70,6 +70,14 @@ export type {
   ProviderUsageLoader,
   ContextIndicatorProps,
   SessionInfoButtonProps,
+  SessionInfoSkill,
+  SessionInfoSkills,
+  SessionInfoNode,
+  SessionInfoWorkspace,
+  SessionInfoMood,
+  SessionInfoMemory,
+  SessionInfoInstructions,
+  SessionInfoWorkingOn,
 } from "./types"
 
 export { ChatPanel } from "./components/chat-panel"
@@ -88,6 +96,9 @@ export type { AgentNotePresentation, ResolveAgentNote, ParsedEvent, EventViewPro
 export { ToolCallCard } from "./components/tool-call-card"
 export { ContextIndicator, SessionInfoButton } from "./components/context-indicator"
 export { SessionStatsModal, getContextPercent, getMaxContext } from "./components/session-stats-modal"
+export { deriveOpenedMemory, deriveUsedSkills, skillKey } from "./lib/session-info-usage"
+export type { MemoryAccess, OpenedMemoryFile, UsedSkill } from "./lib/session-info-usage"
+export { sessionInfoNodeFrom } from "./lib/session-info-sources"
 export {
   claimProviderUsageAlerts,
   formatProviderUsageWindow,

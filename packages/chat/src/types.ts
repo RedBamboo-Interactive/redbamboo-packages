@@ -480,6 +480,88 @@ export interface SessionAgentInfo {
   href?: string | null
 }
 
+/** One skill the agent has, for the Info modal's Skills tab. */
+export interface SessionInfoSkill {
+  id: string
+  name: string
+  /** What the conversation calls it (a `Skill` call's `skill`, the folder of its SKILL.md). Defaults to the name. */
+  slug?: string
+  /** A Phosphor class, for example `ph-bold ph-waveform`. */
+  icon?: string | null
+  description?: string | null
+}
+
+export interface SessionInfoSkills {
+  items: SessionInfoSkill[]
+  /** Where the host manages the skills (the agent entity). The "Manage" link shows only with it. */
+  manageHref?: string | null
+  manageLabel?: string
+}
+
+/** The node a session runs on. Every field is optional but the name: what the host does not know is not shown. */
+export interface SessionInfoNode {
+  id?: string | null
+  name: string
+  /** A node icon name and colour token, drawn by NodeIcon. */
+  icon?: string | null
+  color?: string | null
+  os?: string | null
+  /** For example `desktop`, `laptop`. */
+  chassis?: string | null
+  /** Human text for the platform, for example "Windows 11 · x64 desktop". */
+  platformLabel?: string | null
+  online?: boolean | null
+  agentVersion?: string | null
+  /** The folder the session works in on this node. */
+  folder?: string | null
+  /** True when this is the only node, so every session runs on it. */
+  onlyNode?: boolean
+}
+
+/** The workspace (an agent's) or repository (a code session's) the conversation works in. */
+export interface SessionInfoWorkspace {
+  kind: "workspace" | "repository"
+  entity: { id: string; typeSlug: string; name: string; href?: string | null }
+  /** A Phosphor class for the card and the Overview tile. */
+  icon?: string | null
+  subtitle?: string | null
+  /** Overview tile value, for example "Nova Workspace" or "codered · main". */
+  summary: string
+  /** Label-value rows under the card (branch, checkout, worktree, folder). */
+  rows?: { label: string; value: string; mono?: boolean }[]
+}
+
+export interface SessionInfoMood {
+  energy?: string | null
+  vibe?: string | null
+  /** The colour's name. */
+  colorName?: string | null
+  /** A real CSS colour for the swatch; none is drawn without it. */
+  colorValue?: string | null
+  note?: string | null
+}
+
+export interface SessionInfoMemory {
+  mood?: SessionInfoMood | null
+  /** Notes the agent reads at the start of a conversation, from its own protocol. */
+  readAtStart: { path: string; label?: string | null; meta?: string | null }[]
+  /** Folder whose files count as memory when working out what the conversation opened. Default `memory/`. */
+  root?: string
+  /** Opens the memory in the workspace. */
+  workspaceHref?: string | null
+  workspaceLabel?: string
+}
+
+export interface SessionInfoInstructions {
+  files: { path: string; meta?: string | null }[]
+  skillsFolder?: { path: string; count?: number | null } | null
+}
+
+/** A one-line "Working on" summary for the Overview, only when the host has the data. */
+export interface SessionInfoWorkingOn {
+  summary: string
+}
+
 /** One change from the Info modal. Exactly one field is set per call. */
 export interface SessionConfigChange {
   model?: string
@@ -518,7 +600,26 @@ export interface SessionInfoButtonProps {
   fullAccessSettingsHref?: string
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  /** Overview tab, below the tiles: the host's discussion toggles. */
   children?: React.ReactNode
+  /** Second line of the hero. Default: the session name when an agent is shown. */
+  subtitle?: React.ReactNode
+  skills?: SessionInfoSkills | null
+  node?: SessionInfoNode | null
+  workspace?: SessionInfoWorkspace | null
+  /** Memory tab. A host without it hides the tab and its Overview tile. */
+  memory?: SessionInfoMemory | null
+  /** Instructions tab (a code session's rule files). Used when `memory` is absent. */
+  instructions?: SessionInfoInstructions | null
+  workingOn?: SessionInfoWorkingOn | null
+  /** In the Node section, after the node tile: the host's "run on" choice. */
+  nodeExtra?: React.ReactNode
+  /** In the Workspace tab, after the workspace: worktrees, delegations. */
+  workspaceExtra?: React.ReactNode
+  /** Footer link on the right. Default: the agent's `href` as "Open <name>". */
+  primaryLink?: { href: string; label: string } | null
+  /** True when earlier messages are not loaded, so "used in this discussion" lists are partial. */
+  historyPartial?: boolean
 }
 
 /** @deprecated Use SessionInfoButtonProps. */
