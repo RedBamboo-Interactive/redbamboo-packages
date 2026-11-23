@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import type { QueuedMessage } from "../lib/message-queue"
 import { queuedMessageCanRetry, queuedMessageHasNothingToShow, queuedMessageSendBlockedReason, queuedMessageStatusLabel } from "../lib/queue-status"
-import type { ImageAttachment } from "../types"
+import type { FriezeDensity, ImageAttachment } from "../types"
 import { AttachmentCard } from "./attachment-card"
 import { USER_BUBBLE_SHAPE_STYLE } from "./user-bubble-shape"
 import { parseNovaEvent } from "../lib/nova-event"
@@ -13,6 +13,7 @@ import { PART_COLOR } from "../lib/part-colors"
 
 interface QueuedMessageGhostProps {
   item: QueuedMessage
+  friezeDensity?: FriezeDensity
   onCancel: (id: string) => void
   onEdit: (id: string) => void
   onSendNow: (id: string) => void
@@ -31,7 +32,7 @@ interface QueuedMessageGhostProps {
  * dashed border + reduced opacity distinguish it from a delivered message.
  * The whole point of the queue is that this is never invisible.
  */
-export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEvent, eventSend, compactEventLabel, eventContent, eventDrawsOwnShape }: QueuedMessageGhostProps) {
+export function QueuedMessageGhost({ item, friezeDensity, onCancel, onEdit, onSendNow, onSendEvent, eventSend, compactEventLabel, eventContent, eventDrawsOwnShape }: QueuedMessageGhostProps) {
   const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
   // Queued and immediately delivered submissions are the same outgoing message
   // entering the same timeline. The dashed styling communicates queue state;
@@ -96,7 +97,7 @@ export function QueuedMessageGhost({ item, onCancel, onEdit, onSendNow, onSendEv
         data-queue-item-id={item.remoteId ?? item.id}
         data-queue-state={item.remoteState ?? (item.deliveryError ? "failed" : "pending")}
       >
-        <NovaEventSquare event={novaEvent} queueStatus={eventQueueStatus(item, onCancel, onSendEvent ?? onSendNow, eventSend)} />
+        <NovaEventSquare event={novaEvent} friezeDensity={friezeDensity} queueStatus={eventQueueStatus(item, onCancel, onSendEvent ?? onSendNow, eventSend)} />
       </div>
     )
   }

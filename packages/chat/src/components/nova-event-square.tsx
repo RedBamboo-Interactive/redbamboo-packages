@@ -2,6 +2,9 @@ import { EventQueueStatusBar, type EventQueueStatus } from "./event-queue-status
 import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@redbamboo/ui"
 import type { NovaEvent } from "../lib/nova-event"
+import type { FriezeDensity } from "../types"
+import { friezeMarkerColor } from "../lib/frieze-presentation"
+import { FriezeDisclosure } from "./frieze-disclosure"
 
 const EVENT_COLOR = "var(--color-status-live)"
 
@@ -15,25 +18,40 @@ function novaEventIcon(type: string): string {
 
 interface NovaEventSquareProps {
   event: NovaEvent
+  friezeDensity?: FriezeDensity
   /** Pending internal inputs stay compact; their delivery controls live in the details. */
   queueStatus?: EventQueueStatus
 }
 
-export function NovaEventSquare({ event, queueStatus }: NovaEventSquareProps) {
+export function NovaEventSquare({ event, queueStatus, friezeDensity = "detailed" }: NovaEventSquareProps) {
   const [open, setOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const displaySource = event.source.replace(/^automation:/, "")
   const color = queueStatus?.failed ? "var(--color-red-400)" : EVENT_COLOR
   const label = queueStatus ? `${displaySource}: ${queueStatus.label}` : displaySource
 
+  const marker = (
+    <button
+      onClick={() => setOpen(true)}
+      className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
+      style={{
+        backgroundColor: friezeMarkerColor(friezeDensity, color, { failed: queueStatus?.failed }),
+        ...(friezeDensity === "quiet" ? { width: 8, height: 8 } : {}),
+      }}
+      title={label}
+      aria-label={label}
+    />
+  )
+
   return (
     <div className="py-1.5 px-0.5">
-      <button
-        onClick={() => setOpen(true)}
-        className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
-        style={{ backgroundColor: color }}
-        title={label}
-        aria-label={label}
-      />
+      {friezeDensity === "minimal" ? (
+        <>
+          <FriezeDisclosure count={1} eventOnly failed={queueStatus?.failed ? 1 : 0}
+            expanded={expanded} onToggle={() => setExpanded(value => !value)} />
+          {expanded && <div className="flex pt-1">{marker}</div>}
+        </>
+      ) : marker}
 
       <Dialog open={open} onOpenChange={v => { if (!v) setOpen(false) }}>
         <DialogContent motion="snappy" className="max-w-md sm:max-w-lg max-h-[70vh] flex flex-col p-0 gap-0">

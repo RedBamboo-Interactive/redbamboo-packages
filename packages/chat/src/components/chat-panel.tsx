@@ -241,7 +241,7 @@ export function ChatPanel(props: ChatPanelProps) {
   }, [eventQueueByUid, messageQueue.cancel, handleSendQueuedEvent, eventSend])
 
   // The host's marker preference, except where a marker needs attention.
-  const isFriezeMarkerVisible = props.isFriezeMarkerVisible
+  const { isFriezeMarkerVisible, friezeDensity } = props
   const approvalToolUseIds = useMemo(() => new Set(approvals.flatMap(approval => approval.request.toolUseId ? [approval.request.toolUseId] : [])), [approvals])
   const isMarkerShown = useMemo<FriezeMarkerVisibility | undefined>(() => isFriezeMarkerVisible
     ? part => isFriezeMarkerVisible(part) || friezeMarkerNeedsAttention(part, {
@@ -257,6 +257,7 @@ export function ChatPanel(props: ChatPanelProps) {
       blockIndex={-1}
       isStreaming={false}
       isLastAssistantBlock={false}
+      friezeDensity={friezeDensity}
       resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote}
       resolveEventQueueStatus={resolveEventQueueStatus}
       resolveImageSrc={resolveImageSrc}
@@ -282,6 +283,7 @@ export function ChatPanel(props: ChatPanelProps) {
       <QueuedMessageGhost
         key={`outgoing:${item.id}`}
         item={item}
+        friezeDensity={friezeDensity}
         onCancel={messageQueue.cancel}
         onEdit={handleEditQueued}
         onSendNow={handleSendQueued}
@@ -992,6 +994,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     blockIndex={index}
                     isStreaming={isStreaming && isLastAssistant}
                     isLastAssistantBlock={isLastAssistant}
+                    friezeDensity={friezeDensity}
                     permissionMode={permissionMode}
                     onExecutePlan={onExecutePlan}
                     planFileContent={hasExitPlanPart(block) ? planFileContent : null}

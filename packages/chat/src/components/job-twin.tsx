@@ -1,6 +1,7 @@
 import { createContext, useContext, useRef, useSyncExternalStore, type CSSProperties } from "react"
 import { jobProgress, type ChatJob } from "../lib/chat-jobs"
 import { PART_COLOR } from "../lib/part-colors"
+import { friezeMarkerColor } from "../lib/frieze-presentation"
 import { summarySentence } from "./job-summary"
 
 /**
@@ -33,7 +34,7 @@ export function jobTwinLabel(job: ChatJob, now = Date.now()): string {
   return `${job.title}: ${summarySentence(job, jobProgress(job), now)}`
 }
 
-export function JobTwin({ job, onOpen }: { job: ChatJob; onOpen: () => void }) {
+export function JobTwin({ job, onOpen, quiet = false }: { job: ChatJob; onOpen: () => void; quiet?: boolean }) {
   const progress = jobProgress(job)
   // A stopped job keeps the fill it reached: the cancelled record's kept progress, else what this twin last showed.
   const reached = useRef(0)
@@ -43,6 +44,9 @@ export function JobTwin({ job, onOpen }: { job: ChatJob; onOpen: () => void }) {
       : job.state === "queued" ? 0
         : 100
   const label = jobTwinLabel(job)
+  const color = friezeMarkerColor(quiet ? "quiet" : "detailed", jobTwinColor(job), {
+    active: job.state === "running", failed: job.state === "failed", needsAttention: job.state === "needs-you",
+  })
   return (
     <button
       type="button"
@@ -56,7 +60,7 @@ export function JobTwin({ job, onOpen }: { job: ChatJob; onOpen: () => void }) {
       title={label}
       onClick={onOpen}
       className="job-twin relative block size-2.5 shrink-0 cursor-pointer overflow-hidden rounded-[2px] hover:brightness-125 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      style={{ ["--job-twin-c" as string]: jobTwinColor(job), ["--job-twin-p" as string]: `${fill}%` } as CSSProperties}
+      style={{ ["--job-twin-c" as string]: color, ["--job-twin-p" as string]: `${fill}%`, ...(quiet ? { width: 8, height: 8 } : {}) } as CSSProperties}
     >
       {job.state === "running" && progress === null && <span aria-hidden="true" className="job-twin-sweep" />}
     </button>

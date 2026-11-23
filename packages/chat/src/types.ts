@@ -60,6 +60,8 @@ export interface TurnOrigin {
   taskId?: string | null
 }
 
+export type FriezeDensity = "detailed" | "quiet" | "minimal"
+
 export interface MessagePart {
   /** Native tool-call identity of a tool_use and of the tool_result answering it. */
   toolUseId?: string
@@ -1019,6 +1021,8 @@ export interface ChatPanelProps {
    * draw is not rendered. Keep the reference stable.
    */
   isFriezeMarkerVisible?: (part: MessagePart) => boolean
+  /** Display density of the work-step markers. Defaults to Detailed. */
+  friezeDensity?: FriezeDensity
   /**
    * A queued host event behaves like a queued message: it waits below the running turn and enters
    * the conversation where it was processed. Only for a host that sets `inputPlaced` on the event

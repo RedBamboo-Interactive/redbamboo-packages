@@ -7,6 +7,7 @@ export type {
   MessageBlock,
   MessagePart,
   MessagePhase,
+  FriezeDensity,
   BackgroundTaskState,
   BackgroundTaskInfo,
   BackgroundTaskStatus,

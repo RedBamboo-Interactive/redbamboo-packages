@@ -2,7 +2,7 @@ import React from "react"
 import { createRoot } from "react-dom/client"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { normalizeChatJob } from "../../src/lib/chat-jobs"
-import type { MessageBlock, MessagePart, PermissionApprovals } from "../../src/types"
+import type { FriezeDensity, MessageBlock, MessagePart, PermissionApprovals } from "../../src/types"
 import "./fixture.css"
 
 const stamp = "2026-10-19T07:10:00Z"
@@ -88,7 +88,31 @@ const noteMessages: MessageBlock[] = [{
   })),
 }]
 
+const densityMessages: MessageBlock[] = [
+  ...messages.map((block): MessageBlock => ({
+    ...block,
+    parts: block.parts.map(part => part.content === readOutput ? { ...part, content: "Error: file unreadable" } : part),
+  })),
+  ...secondTurn,
+  { id: "ambient", role: "assistant", timestamp: later, parts: [
+    { type: "tool_use", toolName: "event:weather", toolInput: '{"color":"var(--color-accent-gold)"}', content: "" },
+    { type: "tool_use", toolName: "event:hidden", content: "" },
+  ] },
+  { id: "legacy", role: "user", timestamp: later, parts: [
+    { type: "text", content: '<nova-event source="Automation" type="http-check">Ping</nova-event>' },
+  ] },
+  { id: "hidden", role: "assistant", timestamp: later, parts: [{ type: "tool_use", toolName: "event:hidden", content: "" }] },
+]
+
 function App() {
+  const density = params.get("density")
+  if (density) return <div style={{ width: "100%", height: "100vh" }}>
+    <ChatPanel messages={densityMessages} isStreaming={false} sessionId="frieze-density" persistQueue={false}
+      friezeDensity={density === "default" ? undefined : density as FriezeDensity}
+      permissionApprovals={approvals} jobs={jobs}
+      isFriezeMarkerVisible={part => part.toolName !== "Grep" && part.toolName !== "event:hidden"} />
+  </div>
+
   const withJobs = params.has("jobs")
   if (params.has("notes")) return <div style={{ width: "100%", height: "100vh" }}>
     <ChatPanel messages={noteMessages} isStreaming={false} sessionId="part-navigation-notes" persistQueue={false}

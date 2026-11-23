@@ -22,7 +22,7 @@ import {
   useUiEnvironment,
   type ContextMenuEntry,
 } from "@redbamboo/ui"
-import type { MessageBlock, MessagePart, ImageAttachment, PendingQuestion, PermissionApproval, PermissionDecisionPayload, QuestionAnswerPayload, QuestionOutcome, TranscriptPayloadLoader, TranscriptPayloadRef, AgentDisplayInfo, ResolveAgentInfo } from "../types"
+import type { FriezeDensity, MessageBlock, MessagePart, ImageAttachment, PendingQuestion, PermissionApproval, PermissionDecisionPayload, QuestionAnswerPayload, QuestionOutcome, TranscriptPayloadLoader, TranscriptPayloadRef, AgentDisplayInfo, ResolveAgentInfo } from "../types"
 import { ImageThumbnail, StreamingText, MarkdownRenderer } from "./streaming-text"
 import { resolveChatMediaSrc } from "../lib/media-url"
 import { ContextSquare, parseContextFromMessage, extractRawContextXml } from "./context-card"
@@ -31,7 +31,7 @@ import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { LazyToolOutput } from "./lazy-tool-output"
 import { agentNoteTime, parseEventPart, EventView, type ParsedEvent, type ResolveAgentNote } from "./event-view"
-import { isEventPart, usesSquareEventMarker } from "../lib/event-parts"
+import { isEventBlock, isEventPart, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
 import { PART_COLOR, getPartColor, getSpinnerColor, isBackgroundRunning } from "../lib/part-colors"
 import { findPairedResult, turnOriginOf } from "../lib/background-work"
@@ -56,7 +56,9 @@ import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 import { messageActionEntries, messageMarkdown, partActionEntries } from "../lib/chat-actions"
 import { REWIND_ICON, REWIND_LABEL } from "../lib/conversation-rollback"
 import { jobLaunchIndex, type ChatJob } from "../lib/chat-jobs"
-import { JobTwin, useChatJobsStore, useLiveJob } from "./job-twin"
+import { JobTwin, jobTwinColor, useChatJobsStore, useLiveJob } from "./job-twin"
+import { FriezeDisclosure } from "./frieze-disclosure"
+import { friezeMarkerColor, friezeMarkerFailed, isErrorResult } from "../lib/frieze-presentation"
 import { JobSummaryBody, jobSummaryContentProps } from "./job-summary"
 
 interface TaskNotification {
@@ -123,6 +125,7 @@ interface ChatMessageProps {
   animateEntrance?: boolean
   isStreaming?: boolean
   isLastAssistantBlock?: boolean
+  friezeDensity?: FriezeDensity
   permissionMode?: string
   onExecutePlan?: () => void
   planFileContent?: string | null
@@ -206,6 +209,7 @@ export const ChatMessage = memo(function ChatMessage({
   animateEntrance = true,
   isStreaming,
   isLastAssistantBlock,
+  friezeDensity,
   permissionMode,
   onExecutePlan,
   planFileContent,
@@ -383,7 +387,7 @@ export const ChatMessage = memo(function ChatMessage({
 
     const novaEvent = parseNovaEvent(rawContent)
     if (novaEvent) {
-      return <div {...entranceRowProps}><NovaEventSquare event={novaEvent} /></div>
+      return <div {...entranceRowProps}><NovaEventSquare event={novaEvent} friezeDensity={friezeDensity} /></div>
     }
 
     const contextData = parseContextFromMessage(rawContent)
@@ -553,7 +557,8 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <div key={i} className="msg-enter-ai">
-              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.kind === "frieze" && group.isLive} awaitingApproval={approvals}
+              <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.isLive} awaitingApproval={approvals}
+                density={friezeDensity} eventOnly={friezeDensity === "minimal" && isEventBlock(block)}
                 {...(twins ? { rowJobs: twins, drawsJobs: i === lastFrieze, onStopJob } : {})} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
               {friezeApprovals(group.parts).map(approvalCard)}
             </div>
@@ -656,10 +661,12 @@ function partLabel(part: MessagePart): string {
 
 type FriezeSelection = { part?: MessagePart; result?: MessagePart; rowId: string; index: number; jobId?: string }
 
-function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApproval, rowJobs, drawsJobs = false, onStopJob, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "detailed", eventOnly = false, awaitingApproval, rowJobs, drawsJobs = false, onStopJob, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
   parts: MessagePart[]
   allParts: MessagePart[]
+  density?: FriezeDensity
+  eventOnly?: boolean
   /** Positions index `allParts`; an origin past the last part trails the frieze. */
   turnOrigins?: readonly ActivityTurnOrigin[]
   isLive?: boolean
@@ -682,6 +689,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
   loadTranscriptPayload?: TranscriptPayloadLoader
   getTranscriptPayloadDownloadUrl?: (ref: TranscriptPayloadRef) => string
 }) {
+  const [expanded, setExpanded] = useState(false)
   const [selected, setSelected] = useState<FriezeSelection | null>(null)
   const retainedSelection = useRef<typeof selected>(null)
   if (selected) retainedSelection.current = selected
@@ -733,7 +741,6 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
     setMinHeight(0)
     select({ rowId: blockId, index: allParts.length + (rowJobs?.indexOf(job) ?? 0), jobId: job.id })
   }
-  const twinOf = (job: ChatJob) => <JobTwin key={`job:${job.id}`} job={job} onOpen={() => openJob(job)} />
 
   const sequence = modalSelection ? squareSequence(squareRows()) : []
   const position = modalSelection ? squarePosition(sequence, modalSelection) : -1
@@ -760,14 +767,46 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
     handledOpen.current = openRequest.nonce
     setMinHeight(0)
     select({ rowId: blockId, index: allParts.indexOf(target) })
-    friezeRef.current?.querySelector(`[data-tool-use-id="${CSS.escape(openRequest.toolUseId)}"]`)
-      ?.scrollIntoView({ block: "center", behavior: "smooth" })
+    const marker = friezeRef.current?.querySelector(`[data-tool-use-id="${CSS.escape(openRequest.toolUseId)}"]`)
+    const targetElement = marker ?? friezeRef.current
+    targetElement?.scrollIntoView({ block: "center", behavior: "smooth" })
   })
 
   // Origins interleave by canonical position: each is drawn before the first
   // square at or after it, and any left over trail the row.
   const squares = parts.filter(p => p.type !== "tool_result")
   const positions = squares.map(part => allParts.indexOf(part))
+  const quiet = density === "quiet"
+  const minimal = density === "minimal"
+  const collapsed = minimal && !expanded
+  const twinOf = (job: ChatJob) => collapsed && job.state !== "needs-you" ? null
+    : <JobTwin key={`job:${job.id}`} job={job} quiet={quiet} onOpen={() => openJob(job)} />
+  const trailingJobs = drawsJobs ? rowJobs?.filter(job => (launchAt.get(job.id) ?? -1) === -1) ?? [] : []
+  const markers = squares.map(part => {
+    // Persisted history omits transient partial flags. An unresolved
+    // compaction in an active turn still animates after reconnect.
+    const compaction = part.type === "tool_use" && part.toolName === CONTEXT_COMPACTION_TOOL_NAME
+    const result = part.type === "tool_use" && (compaction || density !== "detailed")
+      ? findPairedResult(allParts, part) : undefined
+    const turnActive = !!isLive && (!!part.isPartial || (compaction && !result))
+    const backgroundActive = isBackgroundRunning(part)
+    const queueStatus = resolveEventQueueStatus?.(part)
+    const approvalId = part.type === "tool_use" ? part.toolUseId ?? part.messageId : undefined
+    const waitingApproval = !!approvalId && awaitingApproval?.get(approvalId)?.outcome === null
+    const color = queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part)
+    const failed = density !== "detailed" && friezeMarkerFailed(part, result, color, queueStatus?.failed)
+    return { part, turnActive, backgroundActive, queueStatus, waitingApproval, color, failed }
+  })
+  const visibleJobs = minimal
+    ? [...(rowJobs ?? []).filter(job => positions.includes(launchAt.get(job.id) ?? -1)), ...trailingJobs] : []
+  const count = markers.length + visibleJobs.length
+  const failed = minimal
+    ? markers.filter(marker => marker.failed).length + visibleJobs.filter(job => job.state === "failed").length : 0
+  const activeMarker = minimal
+    ? markers.filter(marker => marker.turnActive).at(-1) ?? markers.filter(marker => marker.backgroundActive).at(-1) : undefined
+  const activeJob = visibleJobs.filter(job => job.state === "running").at(-1)
+  const workingColor = activeMarker?.color ?? (activeJob ? jobTwinColor(activeJob)
+    : minimal && isLive && !eventOnly ? PART_COLOR.readOnly : undefined)
   const originsBefore = (i: number) => (turnOrigins ?? []).filter(entry =>
     entry.before <= positions[i]! && entry.before > (i > 0 ? positions[i - 1]! : -1))
   const trailingOrigins = (turnOrigins ?? []).filter(entry => entry.before > (positions.at(-1) ?? -1))
@@ -790,70 +829,74 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, awaitingApp
 
   return (
     <>
-      <div ref={friezeRef} className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5">
-        {squares.flatMap((part, i) => {
-          // Persisted history deliberately omits transient partial flags. An
-          // unresolved compaction pair in an active turn is nevertheless live,
-          // so a reconnect must restore the same animated square as the stream.
-          const unresolvedCompaction = part.type === "tool_use"
-            && part.toolName === CONTEXT_COMPACTION_TOOL_NAME
-            && !findPairedResult(allParts, part)
-          // A launching square keeps moving for as long as its background task
-          // runs, whether or not the main turn is still streaming.
-          const inFlight = (isLive && (!!part.isPartial || unresolvedCompaction)) || isBackgroundRunning(part)
-          const event = isEventPart(part)
-          const queueStatus = resolveEventQueueStatus?.(part)
-          const squareEvent = usesSquareEventMarker(part)
-          const parsed = event ? parseEventPart(part) : null
-          const note = parsed ? resolveAgentNote?.(parsed) : undefined
-          const time = note ? agentNoteTime(parsed?.timestamp) : undefined
-          const label = note ? [note.lead + " " + note.discussion, time].filter(Boolean).join(" · ") : partLabel(part)
-          const inlineLabel = parsed?.inlineLabel ? parsed.label : null
-          const approvalId = part.type === "tool_use" ? part.toolUseId ?? part.messageId : undefined
-          const waitingApproval = !!approvalId && awaitingApproval?.get(approvalId)?.outcome === null
-          const marker = (
-            <button
-              type="button"
-              onClick={() => handleClick(part)}
-              className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}`}
-              style={{ backgroundColor: queueStatus?.failed ? "var(--color-red-400)" : getPartColor(part) }}
-              title={note ? undefined : part.task ? `${label}: ${part.task.status}` : label}
-              aria-label={queueStatus ? `${label}: ${queueStatus.label}` : part.task ? `${label}: ${part.task.status}` : label}
-              data-input-message-uid={event ? part.messageUid : undefined}
-              data-slot={note ? "agent-note-marker" : undefined}
-              data-direction={note ? (squareEvent ? "sent" : "received") : undefined}
-              data-part-index={positions[i]}
-              data-tool-use-id={part.toolUseId}
-              data-task-status={part.task?.status}
-              data-awaiting-approval={waitingApproval || undefined}
-            />
-          )
-          return [
-            ...originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />),
-            note ? (
-              <Tooltip key={`part:${i}`}>
-                <TooltipTrigger render={marker} />
-                <TooltipContent>{label}</TooltipContent>
-              </Tooltip>
-            ) : <button key={`part:${i}`} {...marker.props} />,
-            ...(inlineLabel ? [
+      {(!minimal || count > 0 || !!turnOrigins?.length) && (
+        <div ref={friezeRef} className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5"
+          style={quiet ? { gap: 2.5 } : collapsed ? { columnGap: 8 } : undefined}>
+          {minimal && count > 0 && (
+            <div className={expanded ? "basis-full" : undefined}>
+              <FriezeDisclosure count={count} eventOnly={eventOnly} failed={failed} workingColor={workingColor}
+                expanded={expanded} onToggle={() => setExpanded(value => !value)} />
+            </div>
+          )}
+          {markers.flatMap(({ part, turnActive, backgroundActive, queueStatus, waitingApproval, color, failed }, i) => {
+            const origins = originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)
+            const jobs = (rowJobs ?? []).filter(job => launchAt.get(job.id) === positions[i]).map(twinOf)
+            if (collapsed && !waitingApproval) return [...origins, ...jobs]
+            const inFlight = turnActive || backgroundActive
+            const event = isEventPart(part)
+            const squareEvent = usesSquareEventMarker(part)
+            const parsed = event ? parseEventPart(part) : null
+            const note = parsed ? resolveAgentNote?.(parsed) : undefined
+            const time = note ? agentNoteTime(parsed?.timestamp) : undefined
+            const label = note ? [note.lead + " " + note.discussion, time].filter(Boolean).join(" · ") : partLabel(part)
+            const inlineLabel = parsed?.inlineLabel ? parsed.label : null
+            const marker = (
               <button
-                key={`label:${i}`}
                 type="button"
                 onClick={() => handleClick(part)}
-                data-slot="event-inline-label"
-                className="ml-0.5 mr-1.5 text-[11px] leading-none text-text-muted hover:text-text-secondary cursor-pointer"
-              >
-                {inlineLabel}
-              </button>,
-            ] : []),
-            ...(rowJobs ?? []).filter(job => launchAt.get(job.id) === positions[i]).map(twinOf),
-          ]
-        })}
-        {trailingOrigins.map(entry =>
-          <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)}
-        {drawsJobs && rowJobs?.filter(job => (launchAt.get(job.id) ?? -1) === -1).map(twinOf)}
-      </div>
+                className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}`}
+                style={{
+                  backgroundColor: friezeMarkerColor(density, color, { active: inFlight, failed, needsAttention: waitingApproval }),
+                  ...(quiet ? { width: 8, height: 8 } : {}),
+                }}
+                title={note ? undefined : part.task ? `${label}: ${part.task.status}` : label}
+                aria-label={queueStatus ? `${label}: ${queueStatus.label}` : part.task ? `${label}: ${part.task.status}` : label}
+                data-input-message-uid={event ? part.messageUid : undefined}
+                data-slot={note ? "agent-note-marker" : undefined}
+                data-direction={note ? (squareEvent ? "sent" : "received") : undefined}
+                data-part-index={positions[i]}
+                data-tool-use-id={part.toolUseId}
+                data-task-status={part.task?.status}
+                data-awaiting-approval={waitingApproval || undefined}
+              />
+            )
+            return [
+              ...origins,
+              note ? (
+                <Tooltip key={`part:${i}`}>
+                  <TooltipTrigger render={marker} />
+                  <TooltipContent>{label}</TooltipContent>
+                </Tooltip>
+              ) : <button key={`part:${i}`} {...marker.props} />,
+              ...(inlineLabel ? [
+                <button
+                  key={`label:${i}`}
+                  type="button"
+                  onClick={() => handleClick(part)}
+                  data-slot="event-inline-label"
+                  className="ml-0.5 mr-1.5 text-[11px] leading-none text-text-muted hover:text-text-secondary cursor-pointer"
+                >
+                  {inlineLabel}
+                </button>,
+              ] : []),
+              ...jobs,
+            ]
+          })}
+          {trailingOrigins.map(entry =>
+            <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)}
+          {trailingJobs.map(twinOf)}
+        </div>
+      )}
 
       <PartModal part={modalSelection?.jobId ? undefined : selectedPart} pairedResult={modalSelection?.jobId ? undefined : modalSelection?.result}
         job={modalSelection?.jobId ? selectedJob : undefined} onStopJob={stopJob}
@@ -1065,7 +1108,7 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
   const agentJobHref = isToolUse ? getAgentJobHref(part.toolName, part.toolInput) : undefined
   const resultContent = pairedResult?.content || (isToolUse ? undefined : part.content)
   const resultPayloadRef = pairedResult?.payloadRef || (isToolUse ? undefined : part.payloadRef)
-  const isError = part.type === "error" || (pairedResult?.type === "tool_result" && pairedResult.content?.toLowerCase().startsWith("error"))
+  const isError = part.type === "error" || isErrorResult(pairedResult)
 
   const toolFile = resolveFileLink ? extractToolFile(part) : null
   const openFile = toolFile ? resolveFileLink?.(toolFile.path, { line: toolFile.line }) : undefined
