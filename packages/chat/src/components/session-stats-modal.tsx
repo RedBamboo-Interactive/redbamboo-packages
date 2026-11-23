@@ -679,14 +679,14 @@ export function SessionStatsModal({
             <div className="relative shrink-0">
               {agent ? (
                 agent.avatarUrl ? (
-                  <img src={agent.avatarUrl} alt="" className="size-16 rounded-full object-cover object-top ring-2 ring-primary-a40" />
+                  <img src={agent.avatarUrl} alt="" className="size-16 rounded-full object-cover object-top" />
                 ) : (
-                  <div aria-hidden="true" className="grid size-16 place-items-center rounded-full bg-overlay-6 text-xl font-semibold text-contrast ring-2 ring-primary-a40">
+                  <div aria-hidden="true" className="grid size-16 place-items-center rounded-full bg-overlay-6 text-xl font-semibold text-contrast">
                     {agent.name.slice(0, 1).toUpperCase()}
                   </div>
                 )
               ) : (
-                <div aria-hidden="true" className="grid size-14 place-items-center rounded-xl bg-primary-a15 text-primary ring-1 ring-primary-a30">
+                <div aria-hidden="true" className="grid size-14 place-items-center rounded-xl bg-primary-a15 text-primary">
                   <i className="ph-bold ph-code text-2xl" />
                 </div>
               )}

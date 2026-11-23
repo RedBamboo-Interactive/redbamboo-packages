@@ -255,7 +255,7 @@ export function MemoryPanel({ memory, opened, historyPartial, onNavigate }: {
       {mood && (moodHeadline || mood.colorName) && (
         <Tile className="flex items-center gap-3 p-3" data-slot="session-info-mood">
           {mood.colorValue && (
-            <span aria-hidden="true" className="size-9 shrink-0 rounded-full ring-2 ring-overlay-10" style={{ backgroundColor: mood.colorValue }} />
+            <span aria-hidden="true" className="size-9 shrink-0 rounded-full" style={{ backgroundColor: mood.colorValue }} />
           )}
           <div className="min-w-0 flex-1">
             <div className="text-[11px] text-text-muted">Today's mood{mood.colorName ? ` · ${mood.colorName}` : ""}</div>
