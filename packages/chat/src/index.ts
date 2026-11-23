@@ -78,6 +78,7 @@ export type {
   SessionInfoMemory,
   SessionInfoInstructions,
   SessionInfoWorkingOn,
+  SessionInfoGroup,
 } from "./types"
 
 export { ChatPanel } from "./components/chat-panel"

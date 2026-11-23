@@ -441,7 +441,7 @@ export function SessionStatsModal({
   open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions,
   providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, fullAccessEnabled, fullAccessSettingsHref,
   children, subtitle, skills, node, workspace, memory, instructions, workingOn, nodeExtra, workspaceExtra, primaryLink,
-  historyPartial,
+  historyPartial, titleLeading, group,
 }: Props) {
   const s = stats ?? {} as SessionStats
   const maxContext = getMaxContext(s)
@@ -693,11 +693,26 @@ export function SessionStatsModal({
               )}
             </div>
             <div className="min-w-0 flex-1">
+              {group && (
+                <div className="mb-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-text-muted" data-slot="session-info-group">
+                  {group.icon && <i aria-hidden="true" className={cn(group.icon, "shrink-0 text-xs")} />}
+                  <span className="truncate">{group.name}</span>
+                </div>
+              )}
               <div className="flex items-baseline gap-2">
                 <DialogTitle className="truncate text-lg font-semibold text-contrast">{title}</DialogTitle>
                 {s.status && <span className="shrink-0 text-xs text-text-muted" data-slot="session-info-status">{s.status.toLowerCase()}</span>}
               </div>
-              {heroSubtitle && <p className="truncate text-sm text-text-muted">{heroSubtitle}</p>}
+              {heroSubtitle && (
+                <div className="flex min-w-0 items-center gap-2">
+                  {titleLeading && (
+                    <span className="relative size-5 shrink-0 overflow-hidden rounded-md bg-overlay-6" data-slot="session-info-title-leading">
+                      {titleLeading}
+                    </span>
+                  )}
+                  <p className="truncate text-sm text-text-muted">{heroSubtitle}</p>
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap gap-1.5" data-slot="session-info-chips">
                 {providerChip && (
                   <Chip title="Provider and model">{providerChip}</Chip>

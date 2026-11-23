@@ -557,6 +557,12 @@ export interface SessionInfoInstructions {
   skillsFolder?: { path: string; count?: number | null } | null
 }
 
+/** A named group, shown as the hero's eyebrow. `icon` is a full Phosphor class, for example `ph ph-leaf`. */
+export interface SessionInfoGroup {
+  name: string
+  icon?: string | null
+}
+
 /** A one-line "Working on" summary for the Overview, only when the host has the data. */
 export interface SessionInfoWorkingOn {
   summary: string
@@ -616,6 +622,10 @@ export interface SessionInfoButtonProps {
   nodeExtra?: React.ReactNode
   /** In the Workspace tab, after the workspace: worktrees, delegations. */
   workspaceExtra?: React.ReactNode
+  /** A small visual (about 20 px) leading the second hero line, drawn inside a rounded tile. It must fill its parent (absolute inset-0). */
+  titleLeading?: React.ReactNode
+  /** A quiet eyebrow above the hero's name: the group the conversation belongs to. */
+  group?: SessionInfoGroup | null
   /** Footer link on the right. Default: the agent's `href` as "Open <name>". */
   primaryLink?: { href: string; label: string } | null
   /** True when earlier messages are not loaded, so "used in this discussion" lists are partial. */
