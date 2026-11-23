@@ -8,7 +8,7 @@ import type {
   SessionInfoSkills,
   SessionInfoWorkspace,
 } from "../types"
-import { skillKey, type MemoryAccess, type OpenedMemoryFile, type UsedSkill } from "../lib/session-info-usage"
+import { skillKey, withoutPaths, type MemoryAccess, type OpenedMemoryFile, type UsedSkill } from "../lib/session-info-usage"
 
 /**
  * The pieces of the Info modal's tabs. Everything here is drawn from what the host passed; a piece
@@ -243,6 +243,13 @@ export function MemoryPanel({ memory, opened, historyPartial, onNavigate }: {
 }) {
   const mood = memory.mood
   const moodHeadline = [mood?.energy ? `${mood.energy[0]!.toUpperCase()}${mood.energy.slice(1)} energy` : null, mood?.vibe].filter(Boolean).join(", ")
+  const accessesOf = new Map(opened.map(file => [file.path.toLowerCase(), file.accesses]))
+  const others = withoutPaths(opened, memory.readAtStart.map(note => note.path))
+  const badges = (accesses: readonly MemoryAccess[]) => (
+    <span className="flex shrink-0 gap-1">
+      {accesses.map(access => <Badge key={access} variant="outline">{ACCESS_LABELS[access]}</Badge>)}
+    </span>
+  )
   return (
     <div className="flex flex-col gap-5" data-slot="session-info-memory">
       {mood && (moodHeadline || mood.colorName) && (
@@ -259,21 +266,20 @@ export function MemoryPanel({ memory, opened, historyPartial, onNavigate }: {
       )}
       {memory.readAtStart.length > 0 && (
         <div>
-          <SectionLabel>Read at start</SectionLabel>
-          {memory.readAtStart.map(note => (
-            <FileRow key={note.path} path={note.path} meta={[note.label, note.meta].filter(Boolean).join(" · ") || null} />
-          ))}
+          <SectionLabel>Startup notes</SectionLabel>
+          {memory.readAtStart.map(note => {
+            const accesses = accessesOf.get(note.path.toLowerCase())
+            return (
+              <FileRow key={note.path} path={note.path} meta={[note.label, note.meta].filter(Boolean).join(" · ") || null}
+                badges={accesses ? badges(accesses) : undefined} />
+            )
+          })}
         </div>
       )}
       <div>
         <SectionLabel>Opened in this discussion</SectionLabel>
-        {opened.length > 0 ? opened.map(file => (
-          <FileRow key={file.path} path={file.path} badges={
-            <span className="flex shrink-0 gap-1">
-              {file.accesses.map(access => <Badge key={access} variant="outline">{ACCESS_LABELS[access]}</Badge>)}
-            </span>
-          } />
-        )) : <p className="px-2 text-xs text-text-muted">No memory notes opened in the loaded messages.</p>}
+        {others.length > 0 ? others.map(file => <FileRow key={file.path} path={file.path} badges={badges(file.accesses)} />)
+          : <p className="px-2 text-xs text-text-muted">No other memory notes opened in the loaded messages.</p>}
       </div>
       <PartialHistoryHint show={historyPartial} />
       {memory.workspaceHref && (

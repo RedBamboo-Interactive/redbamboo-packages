@@ -120,3 +120,9 @@ export function deriveOpenedMemory(messages: readonly MessageBlock[], root = "me
   }
   return [...files.values()]
 }
+
+/** The opened notes that are not among `paths` (compared without case): what is shown once, not twice. */
+export function withoutPaths(opened: readonly OpenedMemoryFile[], paths: readonly string[]): OpenedMemoryFile[] {
+  const skip = new Set(paths.map(path => path.toLowerCase()))
+  return opened.filter(file => !skip.has(file.path.toLowerCase()))
+}

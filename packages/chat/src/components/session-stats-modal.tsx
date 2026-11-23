@@ -23,7 +23,7 @@ import { getSessionResourceHref, type SessionResourceKind } from "../lib/session
 import { formatProviderUsageWindow, remainingProviderUsage, usageToneColor } from "../lib/provider-usage"
 import { formatModelName } from "../lib/model-name"
 import { formatProviderEffort } from "../lib/provider-effort"
-import { deriveOpenedMemory, deriveUsedSkills } from "../lib/session-info-usage"
+import { deriveOpenedMemory, deriveUsedSkills, withoutPaths } from "../lib/session-info-usage"
 import { ACCESS_LEVEL_DESCRIPTIONS, ACCESS_LEVEL_LABELS, accessLevelChoices, isAccessLevel, type AccessLevelChoice } from "../lib/access-level"
 
 interface Props extends Omit<SessionInfoButtonProps, "loadProviderUsage" | "open" | "onOpenChange" | "stats"> {
@@ -540,7 +540,7 @@ export function SessionStatsModal({
         )}
         {memory && (
           <GlanceTile slot="session-info-tile-memory" icon="ph-bold ph-brain" title="Memory"
-            value={`${memory.readAtStart.length} notes at start · ${openedMemory.length} opened`} onClick={() => setTab("memory")}>
+            value={`${memory.readAtStart.length} startup notes · ${withoutPaths(openedMemory, memory.readAtStart.map(note => note.path)).length} opened`} onClick={() => setTab("memory")}>
             {memorySummary(memory) && (
               <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
                 {memory.mood?.colorValue && (

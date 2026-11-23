@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import type { MessageBlock, MessagePart } from "../types.ts"
-import { deriveOpenedMemory, deriveUsedSkills, skillKey } from "./session-info-usage.ts"
+import { deriveOpenedMemory, deriveUsedSkills, skillKey, withoutPaths } from "./session-info-usage.ts"
 
 function call(toolName: string, input: Record<string, unknown>): MessagePart {
   return { type: "tool_use", content: "", toolName, toolInput: JSON.stringify(input) }
@@ -111,4 +111,13 @@ test("memory: a different root is honoured and malformed input is skipped", () =
     call("Read", { file_path: "C:/repo/memory/todo.md" }),
   ), "notes")
   assert.deepEqual(opened, [{ path: "notes/todo.md", accesses: ["read"], count: 1 }])
+})
+
+test("memory: startup notes are taken out of the opened list so nothing shows twice", () => {
+  const opened = deriveOpenedMemory(blocks(
+    call("Read", { file_path: "L:/Workspaces/Nova/memory/Index.md" }),
+    call("Read", { file_path: "L:/Workspaces/Nova/memory/catalogue.md" }),
+  ))
+  assert.deepEqual(withoutPaths(opened, ["memory/index.md", "memory/dreaming/mood.md"]).map(file => file.path), ["memory/catalogue.md"])
+  assert.deepEqual(withoutPaths([], ["memory/index.md"]), [])
 })
