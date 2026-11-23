@@ -28,8 +28,19 @@ public class WebSocketRelayAuthTests
         public Task EndAsync(string s, string u, string r) => Task.CompletedTask;
     }
 
-    /// <summary>An upstream /ws that accepts and closes at once, so the relay keeps reconnecting.</summary>
-    private static async Task<(WebApplication App, Func<int> Connects)> StartUpstreamAsync()
+    /// <summary>A clock the test moves by hand.</summary>
+    private sealed class ManualClock : TimeProvider
+    {
+        private long _utcTicks = new DateTimeOffset(2026, 11, 23, 12, 0, 0, TimeSpan.Zero).UtcTicks;
+        public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _utcTicks), TimeSpan.Zero);
+        public void Advance(TimeSpan by) => Interlocked.Add(ref _utcTicks, by.Ticks);
+    }
+
+    /// <summary>
+    /// An upstream /ws that accepts and closes at once, so the relay keeps reconnecting; with <paramref name="hold"/> it keeps
+    /// the connection open until that completes, so the relay cannot reconnect before the test lets it.
+    /// </summary>
+    private static async Task<(WebApplication App, Func<int> Connects)> StartUpstreamAsync(Task? hold = null)
     {
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -41,6 +52,7 @@ public class WebSocketRelayAuthTests
             if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
             Interlocked.Increment(ref connects);
             using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
+            if (hold is not null) await hold;
             await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
         });
         await app.StartAsync();
@@ -118,16 +130,28 @@ public class WebSocketRelayAuthTests
     [Fact]
     public async Task A_relay_whose_badge_expired_closes_with_1008_so_the_browser_reconnects_fresh()
     {
-        var jwt = new JwtService(new JwtOptions { SigningKey = Key, ClockSkew = TimeSpan.Zero });
-        var shortLived = new JwtService(new JwtOptions { SigningKey = Key, AccessTokenLifetime = TimeSpan.FromSeconds(1), ClockSkew = TimeSpan.Zero });
-        var (upstream, connects) = await StartUpstreamAsync();
+        // The badge is checked against a clock the test owns, so it is valid at the upgrade and at the relay's first
+        // check however slow the machine is, and expired at its next one exactly when the test says. (A one-second
+        // badge on the wall clock has a window of 0 to 1 s, whole-second expiry, which a busy machine can use up
+        // before the first check: the relay then closed 1008 without ever connecting upstream.)
+        var clock = new ManualClock();
+        var jwt = new JwtService(new JwtOptions { SigningKey = Key, Time = clock, AccessTokenLifetime = TimeSpan.FromMinutes(5), ClockSkew = TimeSpan.Zero });
+        var upstreamHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (upstream, connects) = await StartUpstreamAsync(upstreamHeld.Task);
         var kernel = await StartKernelAsync(new Hooks(), jwt, upstream.Urls.Single());
         try
         {
             using var client = await ConnectAsync(kernel,
-                shortLived.GenerateBrowserAccessToken("user-1", "u@example.test", "U", ["user"], null, "dev_01JD0000000000000000000000"));
+                jwt.GenerateBrowserAccessToken("user-1", "u@example.test", "U", ["user"], null, "dev_01JD0000000000000000000000"));
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            while (connects() < 1 && watch.Elapsed < TimeSpan.FromSeconds(30)) await Task.Delay(20);
+            Assert.Equal(1, connects());
 
-            var close = await NextClose(client, TimeSpan.FromSeconds(8));
+            // The upstream is still holding the first connection, so the relay cannot have reconnected: expire the badge,
+            // then let the upstream drop. The relay's next step is its check, which must close the browser with 1008.
+            clock.Advance(TimeSpan.FromHours(1));
+            upstreamHeld.SetResult();
+            var close = await NextClose(client, TimeSpan.FromSeconds(30));
 
             Assert.Equal(WebSocketCloseStatus.PolicyViolation, close.CloseStatus);
             Assert.Equal(WebSocketEndpoints.CredentialsExpiredReason, close.CloseStatusDescription);
@@ -135,6 +159,7 @@ public class WebSocketRelayAuthTests
         }
         finally
         {
+            upstreamHeld.TrySetResult();
             await kernel.StopAsync(); await kernel.DisposeAsync();
             await upstream.StopAsync(); await upstream.DisposeAsync();
         }

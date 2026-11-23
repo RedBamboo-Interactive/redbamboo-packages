@@ -23,4 +23,6 @@ public class JwtOptions
     public TimeSpan SessionExecutionTokenLifetime { get; init; } = TimeSpan.FromDays(365);
     public TimeSpan RefreshTokenLifetime { get; init; } = TimeSpan.FromDays(30);
     public TimeSpan ClockSkew { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>The clock badges are issued and checked against; the system clock unless a test moves its own.</summary>
+    public TimeProvider Time { get; init; } = TimeProvider.System;
 }

@@ -78,8 +78,8 @@ public sealed class JwtService
             issuer: _options.Issuer,
             audience: _options.Audience,
             claims: claims,
-            notBefore: DateTime.UtcNow,
-            expires: DateTime.UtcNow.Add(_options.AccessTokenLifetime),
+            notBefore: _options.Time.GetUtcNow().UtcDateTime,
+            expires: _options.Time.GetUtcNow().UtcDateTime.Add(_options.AccessTokenLifetime),
             signingCredentials: credentials
         );
 
@@ -155,8 +155,8 @@ public sealed class JwtService
             issuer: _options.Issuer,
             audience: _options.Audience,
             claims: claims,
-            notBefore: DateTime.UtcNow,
-            expires: DateTime.UtcNow.Add(_options.AccessTokenLifetime),
+            notBefore: _options.Time.GetUtcNow().UtcDateTime,
+            expires: _options.Time.GetUtcNow().UtcDateTime.Add(_options.AccessTokenLifetime),
             signingCredentials: credentials);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
@@ -208,7 +208,7 @@ public sealed class JwtService
             issuer: _options.Issuer,
             audience: _options.Audience,
             claims: claims,
-            notBefore: DateTime.UtcNow,
+            notBefore: _options.Time.GetUtcNow().UtcDateTime,
             expires: expiresAt.UtcDateTime,
             signingCredentials: credentials);
         return new JwtSecurityTokenHandler().WriteToken(token);
@@ -286,6 +286,7 @@ public sealed class JwtService
             ValidAlgorithms = [SecurityAlgorithms.EcdsaSha256],
             IssuerSigningKeyResolver = (_, _, kid, _) => _vault!.ResolveKeys(kid),
             ClockSkew = _options.ClockSkew,
+            LifetimeValidator = LifetimeAgainstOptionsClock,
         };
 
         var principal = handler.ValidateToken(token, parameters, out _);
@@ -315,6 +316,18 @@ public sealed class JwtService
         }
     }
 
+    /// <summary>
+    /// Null (IdentityModel's own check, against the system clock) unless <see cref="JwtOptions.Time"/> was replaced, in which
+    /// case the badge's lifetime is judged against that clock with the same skew.
+    /// </summary>
+    private LifetimeValidator? LifetimeAgainstOptionsClock => ReferenceEquals(_options.Time, TimeProvider.System) ? null : (notBefore, expires, _, _) =>
+    {
+        var now = _options.Time.GetUtcNow().UtcDateTime;
+        if (expires is null) return false;
+        if (notBefore is { } from && from > now + _options.ClockSkew) return false;
+        return expires.Value >= now - _options.ClockSkew;
+    };
+
     private ClaimsPrincipal? ValidateLegacy(string token)
     {
         var handler = new JwtSecurityTokenHandler();
@@ -328,7 +341,8 @@ public sealed class JwtService
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = _signingKey,
-            ClockSkew = _options.ClockSkew
+            ClockSkew = _options.ClockSkew,
+            LifetimeValidator = LifetimeAgainstOptionsClock,
         };
 
         try
