@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { AccessLevel, MessageBlock, SessionStats, PromptCacheUsage, SessionConfigChange, SessionConfigOption, ProviderUsageSnapshot, SessionInfoButtonProps } from "../types"
 import {
   Button,
@@ -475,6 +475,7 @@ export function SessionStatsModal({
   const userMessages = messages.filter(m => m.role === "user").length
   const [updating, setUpdating] = useState(false)
   const [tab, setTab] = useState<InfoTab>("overview")
+  const popupRef = useRef<HTMLDivElement>(null)
   const providerValue = s.providerEntity ?? s.provider
   const providerOption = findOption(providerOptions, providerValue)
   const qualityTierOption = findOption(qualityTierOptions, s.qualityTier)
@@ -697,7 +698,10 @@ export function SessionStatsModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 p-0" style={{ maxWidth: "min(760px, calc(100% - 2rem))" }}>
+      {/* Opening lands focus on the dialog itself: Overview is selected but no tab shows a focus ring
+          (Alt+I is a keyboard open, so focusing the first tab would always draw one). Tab moves in as usual. */}
+      <DialogContent ref={popupRef} initialFocus={popupRef} tabIndex={-1}
+        className="gap-0 p-0" style={{ maxWidth: "min(760px, calc(100% - 2rem))" }}>
         <div className="shrink-0 px-5 pt-5 pb-4" data-slot="session-info-hero">
           <div className="flex items-center gap-4">
             <div className="relative shrink-0">
