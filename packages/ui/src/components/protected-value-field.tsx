@@ -220,7 +220,8 @@ export function ProtectedValueField({
   const revealedLabel = `New ${kind === "credential-file" ? "credential" : kind}`
   const tileIcon = kind === "password" ? "ph-bold ph-password" :
     kind === "credential-file" ? "ph-bold ph-file-lock" : "ph-bold ph-key"
-  const savedAt = status.configured ? formatStamp(updatedAt ?? status.updatedAt) : null
+  // An embedded field sits under a row that already shows the name, badge and saved date.
+  const savedAt = status.configured && !embedded ? formatStamp(updatedAt ?? status.updatedAt) : null
   const lastChecked = verification === "verified" ? formatStamp(checkedAt) : null
   const statusText = [presentation.summary, savedAt && `saved ${savedAt}`, lastChecked && `checked ${lastChecked}`]
     .filter(Boolean).join(" · ")
@@ -232,7 +233,7 @@ export function ProtectedValueField({
   const showRail = Boolean(revealedValue || canVerify && onVerify || onRotate || replaceable && onReplace ||
     allowClear && onClear)
 
-  const verificationBadge = showVerification && (
+  const verificationBadge = showVerification && !embedded && (
     <Badge
       variant={verification === "rejected" ? "destructive" : verification === "verified" ? "default" : "outline"}
       className={cn(verification === "verified" && "bg-accent-teal-a15 text-accent-teal")}
@@ -263,11 +264,11 @@ export function ProtectedValueField({
           )}
           <div className="min-w-0 flex-1">
             {!embedded && (
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 {editing ? (
-                  <label htmlFor={inputId} className="truncate text-sm font-medium text-foreground">{title}</label>
+                  <label htmlFor={inputId} className="min-w-0 break-words text-sm font-medium text-foreground">{title}</label>
                 ) : (
-                  <span className="truncate text-sm font-medium text-foreground">{title}</span>
+                  <span className="min-w-0 break-words text-sm font-medium text-foreground">{title}</span>
                 )}
                 {verificationBadge}
               </div>
@@ -277,20 +278,19 @@ export function ProtectedValueField({
               aria-live="polite"
               title={checkedTitle}
               className={cn(
-                "flex min-w-0 items-center gap-1 text-xs",
+                "flex min-w-0 items-start gap-1 text-xs",
                 !embedded && "mt-0.5",
                 presentation.tone === "danger" ? "text-destructive" : "text-muted-foreground",
               )}
             >
-              <Icon name={presentation.icon} className="shrink-0 text-[11px]" aria-hidden="true" />
-              <span className="truncate">{statusText}</span>
+              <Icon name={presentation.icon} className="mt-[3px] shrink-0 text-[11px]" aria-hidden="true" />
+              <span className="min-w-0">{statusText}</span>
             </p>
-            {embedded && verificationBadge && <div className="mt-1">{verificationBadge}</div>}
-          </div>
+                      </div>
           {status.configured && !editing && (
             <span
               aria-hidden="true"
-              className="hidden shrink-0 rounded-md bg-overlay-6 px-2 py-0.5 font-mono text-[11px] text-text-muted @min-[360px]/protected:inline"
+              className="hidden shrink-0 rounded-md bg-overlay-6 px-2 py-0.5 font-mono text-[11px] text-text-muted @min-[520px]/protected:inline"
             >
               ••••••••••••
             </span>
@@ -530,9 +530,9 @@ function formatStamp(value?: string | null): string | null {
   if (Number.isNaN(date.getTime())) return null
   const now = new Date()
   if (date.toDateString() === now.toDateString()) {
-    return `today, ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    return `today, ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
   }
-  return date.toLocaleDateString([], {
+  return date.toLocaleDateString(undefined, {
     day: "numeric",
     month: "short",
     ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
