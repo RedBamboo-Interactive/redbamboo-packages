@@ -622,7 +622,7 @@ export function SessionStatsModal({
 
       {children && (
         <div>
-          <SectionLabel>This discussion</SectionLabel>
+          <SectionLabel>Behaviour</SectionLabel>
           <div className="flex flex-col gap-2">{children}</div>
         </div>
       )}
