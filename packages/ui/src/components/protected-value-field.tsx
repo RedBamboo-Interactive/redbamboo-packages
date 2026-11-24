@@ -47,6 +47,10 @@ export interface ProtectedValueFieldProps {
    * line, the masked well and the action rail. For lists whose row already shows the name.
    */
   embedded?: boolean
+  /** Names the value in the remove confirmation ("Remove <removeLabel>?"); defaults to `label`. */
+  removeLabel?: string
+  /** Muted line under the remove question, such as how long the value can be restored. */
+  removeNotice?: string
   className?: string
   onReplace?: (value: string) => Promise<void> | void
   onRotate?: () => Promise<void> | void
@@ -89,6 +93,8 @@ export function ProtectedValueField({
   allowClear = true,
   updatedAt,
   embedded = false,
+  removeLabel,
+  removeNotice,
   className,
   onReplace,
   replaceable = onReplace != null,
@@ -436,7 +442,10 @@ export function ProtectedValueField({
           </div>
         ) : allowClear && onClear && confirmClear ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-border bg-destructive-a10 px-3 py-2">
-            <p className="mr-auto text-xs font-medium text-foreground">Remove {title}?</p>
+            <div className="mr-auto min-w-0 flex-1 basis-40 text-xs">
+              <p className="font-medium text-foreground">Remove {removeLabel ?? title}?</p>
+              {removeNotice && <p className="mt-0.5 text-muted-foreground">{removeNotice}</p>}
+            </div>
             <Button type="button" variant="ghost" size="xs" disabled={busy !== null}
               onClick={() => setConfirmClear(false)}>Keep</Button>
             <Button type="button" variant="destructive" size="xs" disabled={busy !== null}
