@@ -1,6 +1,8 @@
 import * as React from "react"
 import { cn } from "../utils"
+import { Badge } from "./badge"
 import { Button } from "./button"
+import { Icon } from "./icon"
 import { Input } from "./input"
 
 export type ProtectedValueProtection = "encrypted" | "hashed" | "pending" | "legacy" | "unknown" | "unavailable"
@@ -18,6 +20,8 @@ export interface ProtectedValueStatus {
   checkedAt?: string | null
   verifiedAt?: string | null
   resultCode?: string | null
+  /** When the saved value last changed. Shown as "saved <date>" in the status line. */
+  updatedAt?: string | null
 }
 
 export type ProtectedValueKind = "secret" | "password" | "token" | "credential-file"
@@ -36,6 +40,13 @@ export interface ProtectedValueFieldProps {
   canVerify?: boolean
   replaceable?: boolean
   allowClear?: boolean
+  /** When the saved value last changed; takes precedence over `status.updatedAt`. */
+  updatedAt?: string | null
+  /**
+   * Drops the card chrome and the icon tile, label and verified badge, leaving the status
+   * line, the masked well and the action rail. For lists whose row already shows the name.
+   */
+  embedded?: boolean
   className?: string
   onReplace?: (value: string) => Promise<void> | void
   onRotate?: () => Promise<void> | void
@@ -76,6 +87,8 @@ export function ProtectedValueField({
   disabled,
   canVerify,
   allowClear = true,
+  updatedAt,
+  embedded = false,
   className,
   onReplace,
   replaceable = onReplace != null,
@@ -83,7 +96,7 @@ export function ProtectedValueField({
   onVerify,
   onClear,
   revealedValue,
-  revealedValueNotice = "Shown only once. Copy it now.",
+  revealedValueNotice = "Shown once. After you leave, nobody can read it again.",
   onRevealedValueCopy,
 }: ProtectedValueFieldProps) {
   const generatedId = React.useId()
@@ -194,16 +207,41 @@ export function ProtectedValueField({
     }
   }
 
+  const closeEditor = () => {
+    setDraft("")
+    setError(null)
+    setEditing(false)
+  }
+
   const verification = status.verification ?? "unverified"
-  const checkedTitle = status.checkedAt
-    ? `Last checked ${new Date(status.checkedAt).toLocaleString()}`
-    : undefined
-  const presentation = protectionPresentation(status.protection)
-  const verificationTone = verification === "verified" ? "success" : verification === "rejected" ? "danger" :
-    verification === "unreachable" ? "warning" : "neutral"
+  const checkedAt = status.verifiedAt ?? status.checkedAt
+  const presentation = protectionPresentation(status.protection, status.configured)
+  const title = label ?? defaultLabels[kind]
   const revealedLabel = `New ${kind === "credential-file" ? "credential" : kind}`
-  const icon = kind === "password" ? "ph-password" :
-    kind === "credential-file" ? "ph-file-lock" : "ph-key"
+  const tileIcon = kind === "password" ? "ph-bold ph-password" :
+    kind === "credential-file" ? "ph-bold ph-file-lock" : "ph-bold ph-key"
+  const savedAt = status.configured ? formatStamp(updatedAt ?? status.updatedAt) : null
+  const lastChecked = verification === "verified" ? formatStamp(checkedAt) : null
+  const statusText = [presentation.summary, savedAt && `saved ${savedAt}`, lastChecked && `checked ${lastChecked}`]
+    .filter(Boolean).join(" · ")
+  // Only a field that can be checked reports a check state; others never say "Not checked".
+  const showVerification = Boolean(canVerify) && status.configured && status.protection !== "hashed"
+  const checkedTitle = checkedAt ? `Last checked ${new Date(checkedAt).toLocaleString()}` : undefined
+  const describedBy = [descriptionId, error ? errorId : undefined].filter(Boolean).join(" ") || undefined
+  const locked = disabled || busy !== null
+  const showRail = Boolean(revealedValue || canVerify && onVerify || onRotate || replaceable && onReplace ||
+    allowClear && onClear)
+
+  const verificationBadge = showVerification && (
+    <Badge
+      variant={verification === "rejected" ? "destructive" : verification === "verified" ? "default" : "outline"}
+      className={cn(verification === "verified" && "bg-accent-teal-a15 text-accent-teal")}
+      title={checkedTitle}
+    >
+      {verification === "verified" && <Icon name="ph-bold ph-seal-check" className="text-[11px]" aria-hidden="true" />}
+      {verificationLabels[verification]}
+    </Badge>
+  )
 
   return (
     <div
@@ -213,48 +251,113 @@ export function ProtectedValueField({
       data-protection={status.protection}
       data-verification={verification}
       data-revealed={revealedValue ? "true" : undefined}
+      data-embedded={embedded ? "true" : undefined}
       className={cn("@container/protected min-w-0 space-y-2", className)}
     >
-      {label && <label htmlFor={inputId} className="text-sm font-medium text-foreground">{label}</label>}
+      <div className={cn("min-w-0 overflow-hidden", !embedded && "rounded-lg border border-border bg-card")}>
+        <div className={cn("flex min-w-0 items-center gap-3", embedded ? "px-3 pb-2.5 pt-1" : "px-3 py-3")}>
+          {!embedded && (
+            <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-a15 text-primary">
+              <Icon name={tileIcon} className="text-base" />
+            </span>
+          )}
+          <div className="min-w-0 flex-1">
+            {!embedded && (
+              <div className="flex min-w-0 items-center gap-2">
+                {editing ? (
+                  <label htmlFor={inputId} className="truncate text-sm font-medium text-foreground">{title}</label>
+                ) : (
+                  <span className="truncate text-sm font-medium text-foreground">{title}</span>
+                )}
+                {verificationBadge}
+              </div>
+            )}
+            <p
+              role="status"
+              aria-live="polite"
+              title={checkedTitle}
+              className={cn(
+                "flex min-w-0 items-center gap-1 text-xs",
+                !embedded && "mt-0.5",
+                presentation.tone === "danger" ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              <Icon name={presentation.icon} className="shrink-0 text-[11px]" aria-hidden="true" />
+              <span className="truncate">{statusText}</span>
+            </p>
+            {embedded && verificationBadge && <div className="mt-1">{verificationBadge}</div>}
+          </div>
+          {status.configured && !editing && (
+            <span
+              aria-hidden="true"
+              className="hidden shrink-0 rounded-md bg-overlay-6 px-2 py-0.5 font-mono text-[11px] text-text-muted @min-[360px]/protected:inline"
+            >
+              ••••••••••••
+            </span>
+          )}
+        </div>
 
-      {editing ? (
-        <div className="rounded-lg border border-input bg-background p-2.5 shadow-sm focus-within:ring-1 focus-within:ring-ring">
-          <div className="flex items-center gap-2">
+        {editing && (
+          <div className="space-y-2 border-t border-border px-3 py-3">
+            {embedded && (
+              <label htmlFor={inputId} className="text-xs text-muted-foreground">{title}</label>
+            )}
             {kind === "credential-file" ? (
-              <textarea
-                id={inputId}
-                rows={4}
-                value={draft}
-                disabled={disabled || busy !== null}
-                spellCheck={false}
-                aria-describedby={[descriptionId, error ? errorId : undefined].filter(Boolean).join(" ") || undefined}
-                placeholder={status.configured ? "Paste replacement credential JSON" : placeholder}
-                className="min-h-20 flex-1 resize-y bg-transparent px-1 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground"
-                onChange={(event) => {
-                  setDraft(event.target.value)
-                  setError(null)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape" && status.configured) {
-                    event.preventDefault()
-                    setDraft("")
-                    setError(null)
-                    setEditing(false)
-                  }
-                }}
-              />
-            ) : (
               <>
+                <textarea
+                  id={inputId}
+                  rows={4}
+                  value={draft}
+                  disabled={locked}
+                  spellCheck={false}
+                  aria-describedby={describedBy}
+                  placeholder={status.configured ? "Paste replacement credential JSON" : placeholder}
+                  className="min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring-a50 disabled:opacity-50"
+                  onChange={(event) => {
+                    setDraft(event.target.value)
+                    setError(null)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape" && status.configured) {
+                      event.preventDefault()
+                      closeEditor()
+                    }
+                  }}
+                />
+                <div className="flex min-w-0 flex-col items-stretch gap-1.5">
+                  <input
+                    type="file"
+                    accept={fileAccept}
+                    disabled={locked}
+                    aria-label="Choose credential file"
+                    className="min-w-0 flex-1 text-[11px] text-muted-foreground file:mr-2 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1 file:text-[11px] file:text-foreground"
+                    onChange={async (event) => {
+                      const file = event.target.files?.[0]
+                      event.target.value = ""
+                      if (!file) return
+                      try {
+                        setDraft(await file.text())
+                        setError(null)
+                      } catch {
+                        setError("Could not read that credential file")
+                      }
+                    }}
+                  />
+                  <span className="text-[11px] text-muted-foreground">Or paste the JSON above.</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
                 <Input
                   id={inputId}
                   type={reveal ? "text" : "password"}
                   value={draft}
-                  disabled={disabled || busy !== null}
+                  disabled={locked}
                   autoComplete={autoComplete}
                   spellCheck={false}
-                  aria-describedby={[descriptionId, error ? errorId : undefined].filter(Boolean).join(" ") || undefined}
+                  aria-describedby={describedBy}
                   placeholder={status.configured ? "Enter a replacement" : placeholder}
-                  className="h-8 flex-1 border-0 bg-transparent px-1 font-mono text-xs shadow-none focus-visible:ring-0"
+                  className="h-8 flex-1 font-mono text-xs"
                   onChange={(event) => setDraft(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && draft) {
@@ -263,9 +366,7 @@ export function ProtectedValueField({
                     }
                     if (event.key === "Escape" && status.configured) {
                       event.preventDefault()
-                      setDraft("")
-                      setError(null)
-                      setEditing(false)
+                      closeEditor()
                     }
                   }}
                 />
@@ -273,183 +374,119 @@ export function ProtectedValueField({
                   type="button"
                   variant="ghost"
                   size="xs"
-                  disabled={disabled || busy !== null || !draft}
+                  disabled={locked || !draft}
                   aria-label={reveal ? "Hide newly entered value" : "Show newly entered value"}
                   onClick={() => setReveal((value) => !value)}
                 >
+                  <Icon name={reveal ? "ph-bold ph-eye-slash" : "ph-bold ph-eye"} aria-hidden="true" />
                   {reveal ? "Hide" : "Show"}
                 </Button>
-              </>
+              </div>
+            )}
+            {status.configured && (
+              <p className="text-[11px] text-muted-foreground">The current value keeps working until you save.</p>
             )}
           </div>
-          {kind === "credential-file" && (
-            <div className="mt-2 flex min-w-0 flex-col items-stretch gap-1.5 border-t border-border/70 pt-2">
-              <input
-                type="file"
-                accept={fileAccept}
-                disabled={disabled || busy !== null}
-                aria-label="Choose credential file"
-                className="min-w-0 flex-1 text-[11px] text-muted-foreground file:mr-2 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1 file:text-[11px] file:text-foreground"
-                onChange={async (event) => {
-                  const file = event.target.files?.[0]
-                  event.target.value = ""
-                  if (!file) return
-                  try {
-                    setDraft(await file.text())
-                    setError(null)
-                  } catch {
-                    setError("Could not read that credential file")
-                  }
-                }}
+        )}
+
+        {revealedValue && !editing && (
+          <div ref={revealedRef} data-slot="protected-value-revealed" className="space-y-2 border-t border-border px-3 py-3">
+            <div className="flex items-center gap-2">
+              <Input
+                ref={revealedValueRef}
+                data-slot="protected-value-revealed-value"
+                readOnly
+                value={revealedValue}
+                spellCheck={false}
+                aria-label={revealedLabel}
+                aria-describedby={revealedNoticeId}
+                className="h-8 flex-1 font-mono text-xs"
+                onFocus={(event) => event.currentTarget.select()}
               />
-              <span className="text-[11px] text-muted-foreground">Or paste the JSON above.</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                data-slot="protected-value-copy"
+                onClick={() => void copyRevealedValue()}
+              >
+                <Icon name={copyState === "copied" ? "ph-bold ph-check" : "ph-bold ph-copy"} aria-hidden="true" />
+                {copyState === "copied" ? "Copied" : "Copy"}
+              </Button>
             </div>
-          )}
-          <div className="mt-2 flex items-center justify-end gap-2">
+            <p id={revealedNoticeId} className="flex items-center gap-1 text-[11px] text-muted-foreground" role="status">
+              <Icon name="ph-bold ph-eye-slash" className="shrink-0 text-[11px]" aria-hidden="true" />
+              {copyState === "failed"
+                ? "Copy is blocked here. The value is selected; copy it manually."
+                : revealedValueNotice}
+            </p>
+          </div>
+        )}
+
+        {editing ? (
+          <div className="flex items-center justify-end gap-1.5 border-t border-border px-2 py-1.5">
             {status.configured && (
+              <Button type="button" variant="ghost" size="xs" disabled={locked} onClick={closeEditor}>
+                Cancel
+              </Button>
+            )}
+            <Button type="button" size="xs" disabled={locked || !draft} onClick={() => void replace()}>
+              {busy === "save" ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        ) : allowClear && onClear && confirmClear ? (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border bg-destructive-a10 px-3 py-2">
+            <p className="mr-auto text-xs font-medium text-foreground">Remove {title}?</p>
+            <Button type="button" variant="ghost" size="xs" disabled={busy !== null}
+              onClick={() => setConfirmClear(false)}>Keep</Button>
+            <Button type="button" variant="destructive" size="xs" disabled={busy !== null}
+              onClick={() => void clear()}>{busy === "clear" ? "Removing..." : "Remove"}</Button>
+          </div>
+        ) : showRail ? (
+          <div className="flex min-w-0 flex-wrap items-center gap-1 border-t border-border px-2 py-1.5">
+            {canVerify && onVerify && (
+              <Button type="button" variant="ghost" size="xs" disabled={locked} onClick={() => void verify()}>
+                <Icon name="ph-bold ph-seal-check" aria-hidden="true" />
+                {busy === "verify" ? "Checking..." : "Verify"}
+              </Button>
+            )}
+            {onRotate ? (
+              <Button type="button" variant="ghost" size="xs" disabled={locked} onClick={() => void rotate()}>
+                <Icon name="ph-bold ph-arrows-clockwise" aria-hidden="true" />
+                {busy === "rotate" ? "Rotating..." : "Rotate"}
+              </Button>
+            ) : replaceable && onReplace ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="xs"
-                disabled={disabled || busy !== null}
+                disabled={locked}
                 onClick={() => {
-                  setDraft("")
-                  setError(null)
-                  setEditing(false)
+                  setConfirmClear(false)
+                  setEditing(true)
                 }}
               >
-                Cancel
+                <Icon name="ph-bold ph-pencil-simple" aria-hidden="true" />
+                Replace
+              </Button>
+            ) : null}
+            <span className="flex-1" />
+            {allowClear && onClear && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={locked}
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => setConfirmClear(true)}
+              >
+                <Icon name="ph-bold ph-trash" aria-hidden="true" />
+                Remove
               </Button>
             )}
-            <Button
-              type="button"
-              size="xs"
-              disabled={disabled || busy !== null || !draft}
-              onClick={() => void replace()}
-            >
-              {busy === "save" ? "Saving..." : status.configured ? "Save replacement" : "Save secret"}
-            </Button>
           </div>
-        </div>
-      ) : (
-        <div className="relative overflow-hidden rounded-lg border border-input bg-background shadow-sm">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-x-0 top-0 h-10 border-b border-primary/10 opacity-50"
-            style={{
-              backgroundImage:
-                "repeating-linear-gradient(115deg, transparent 0 7px, color-mix(in srgb, var(--primary) 10%, transparent) 7px 8px), radial-gradient(circle at 25% 35%, color-mix(in srgb, var(--primary) 18%, transparent) 0 1px, transparent 1.5px)",
-              backgroundSize: "auto, 11px 11px",
-            }}
-          />
-          <div className="relative min-w-0 px-3 py-2.5">
-            <div className="flex min-w-0 items-center gap-3">
-              <div aria-hidden="true" className="flex shrink-0 items-center gap-2 text-primary/75">
-                <i className={cn("ph-bold text-base", icon)} />
-                <span className="hidden font-mono text-[9px] tracking-[0.16em] @min-[140px]/protected:inline">
-                  VX/7Q/K9
-                </span>
-              </div>
-              <div
-                className={cn(
-                  "sr-only text-xs font-medium @min-[185px]/protected:not-sr-only @min-[185px]/protected:min-w-0 @min-[185px]/protected:flex-1 @min-[185px]/protected:text-right",
-                  presentation.textClass,
-                )}
-                role="status"
-                aria-live="polite"
-              >
-                {presentation.summary}
-              </div>
-            </div>
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
-              <StatusPill tone={presentation.tone}>{presentation.detail}</StatusPill>
-              {status.protection !== "hashed" && (
-                <StatusPill title={checkedTitle} tone={verificationTone}>
-                  {verificationLabels[verification]}
-                </StatusPill>
-              )}
-            </div>
-            {revealedValue && (
-              <div ref={revealedRef} data-slot="protected-value-revealed" className="mt-2 space-y-2">
-                <Input
-                  ref={revealedValueRef}
-                  data-slot="protected-value-revealed-value"
-                  readOnly
-                  value={revealedValue}
-                  spellCheck={false}
-                  aria-label={revealedLabel}
-                  aria-describedby={revealedNoticeId}
-                  className="font-mono text-xs"
-                  onFocus={(event) => event.currentTarget.select()}
-                />
-                <p id={revealedNoticeId} className="text-[11px] text-amber-600 dark:text-amber-400" role="status">
-                  {copyState === "failed"
-                    ? "Copy is blocked here. The value is selected; copy it manually."
-                    : revealedValueNotice}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {(revealedValue || canVerify && onVerify || onRotate || replaceable && onReplace || allowClear && onClear) && (
-            <div className="relative flex min-w-0 flex-wrap items-center justify-end gap-1 border-t border-border/70 bg-muted/15 px-2 py-1.5">
-              {revealedValue && (
-                <Button type="button" variant="ghost" size="xs" className="mr-auto"
-                  data-slot="protected-value-copy"
-                  onClick={() => void copyRevealedValue()}>
-                  <i className={cn("ph-bold", copyState === "copied" ? "ph-check" : "ph-copy")} aria-hidden="true" />
-                  {copyState === "copied" ? "Copied" : `Copy ${kind === "credential-file" ? "credential" : kind}`}
-                </Button>
-              )}
-              {canVerify && onVerify && (
-                <Button type="button" variant="ghost" size="xs" disabled={disabled || busy !== null}
-                  onClick={() => void verify()}>
-                  {busy === "verify" ? "Checking..." : "Verify"}
-                </Button>
-              )}
-              {onRotate && (
-                <Button type="button" variant="ghost" size="xs" disabled={disabled || busy !== null}
-                  onClick={() => void rotate()}>
-                  {busy === "rotate" ? "Rotating..." : "Rotate"}
-                </Button>
-              )}
-              {replaceable && onReplace && (
-                <Button type="button" variant="ghost" size="xs" disabled={disabled || busy !== null}
-                  onClick={() => {
-                    setConfirmClear(false)
-                    setEditing(true)
-                  }}>
-                  Replace
-                </Button>
-              )}
-              {allowClear && onClear && !confirmClear && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  disabled={disabled || busy !== null}
-                  aria-label="Clear saved value"
-                  title="Clear saved value"
-                  className="text-muted-foreground hover:text-destructive"
-                  onClick={() => setConfirmClear(true)}
-                >
-                  <i className="ph-bold ph-trash" aria-hidden="true" />
-                </Button>
-              )}
-            </div>
-          )}
-
-          {allowClear && onClear && confirmClear && (
-            <div className="relative flex items-center justify-end gap-2 border-t border-border/70 bg-muted/25 px-3 py-2 text-xs text-destructive">
-              <span className="mr-auto">Remove this saved value?</span>
-              <Button type="button" variant="ghost" size="xs" disabled={busy !== null}
-                onClick={() => setConfirmClear(false)}>Keep</Button>
-              <Button type="button" variant="destructive" size="xs" disabled={busy !== null}
-                onClick={() => void clear()}>{busy === "clear" ? "Clearing..." : "Remove"}</Button>
-            </div>
-          )}
-        </div>
-      )}
+        ) : null}
+      </div>
 
       {description && <p id={descriptionId} className="text-xs text-muted-foreground">{description}</p>}
       {error && <p id={errorId} className="text-xs text-destructive" role="alert">{error}</p>}
@@ -457,50 +494,47 @@ export function ProtectedValueField({
   )
 }
 
-function protectionPresentation(protection: ProtectedValueProtection): {
+const defaultLabels: Record<ProtectedValueKind, string> = {
+  secret: "Secret",
+  password: "Password",
+  token: "Token",
+  "credential-file": "Credential file",
+}
+
+function protectionPresentation(protection: ProtectedValueProtection, configured: boolean): {
   summary: string
-  detail: string
+  icon: string
   tone: "secure" | "warning" | "danger"
-  textClass: string
 } {
+  if (!configured) return { summary: "Nothing saved yet", icon: "ph-bold ph-lock-simple-open", tone: "warning" }
   switch (protection) {
     case "hashed":
-      return { summary: "Password is set", detail: "One-way hash", tone: "secure", textClass: "text-foreground" }
+      return { summary: "Password is set · one-way hash", icon: "ph-bold ph-lock-simple", tone: "secure" }
     case "pending":
-      return { summary: "Ready to apply", detail: "Not stored yet", tone: "warning", textClass: "text-amber-600 dark:text-amber-400" }
+      return { summary: "Ready to apply · not stored yet", icon: "ph-bold ph-warning", tone: "warning" }
     case "legacy":
-      return { summary: "Saved value needs protection", detail: "Legacy storage", tone: "warning", textClass: "text-amber-600 dark:text-amber-400" }
+      return { summary: "Saved value needs protection · legacy storage", icon: "ph-bold ph-warning", tone: "warning" }
     case "unavailable":
-      return { summary: "Secure storage unavailable", detail: "Not protected", tone: "danger", textClass: "text-destructive" }
+      return { summary: "Secure storage unavailable · not protected", icon: "ph-bold ph-warning", tone: "danger" }
     case "unknown":
-      return { summary: "Storage status unavailable", detail: "Protection unknown", tone: "warning", textClass: "text-amber-600 dark:text-amber-400" }
+      return { summary: "Storage status unavailable", icon: "ph-bold ph-warning", tone: "warning" }
     default:
-      return { summary: "Stored securely", detail: "Encrypted", tone: "secure", textClass: "text-foreground" }
+      return { summary: "Encrypted on this machine", icon: "ph-bold ph-lock-simple", tone: "secure" }
   }
 }
 
-function StatusPill({
-  children,
-  tone,
-  title,
-}: {
-  children: React.ReactNode
-  tone: "neutral" | "secure" | "success" | "warning" | "danger"
-  title?: string
-}) {
-  return (
-    <span
-      title={title}
-      className={cn(
-        "inline-flex h-5 items-center rounded-full border px-2 text-[10px] font-medium",
-        tone === "neutral" && "border-border bg-muted/50 text-muted-foreground",
-        tone === "secure" && "border-primary/25 bg-primary/10 text-primary",
-        tone === "success" && "border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-        tone === "warning" && "border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-        tone === "danger" && "border-destructive/25 bg-destructive/10 text-destructive",
-      )}
-    >
-      {children}
-    </span>
-  )
+/** "today, 14:41", "23 Nov", or "23 Nov 2025"; empty or unparsable input yields null. */
+function formatStamp(value?: string | null): string | null {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const now = new Date()
+  if (date.toDateString() === now.toDateString()) {
+    return `today, ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+  }
+  return date.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  })
 }

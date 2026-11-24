@@ -56,13 +56,13 @@ try {
   assert.equal(await value.getAttribute("data-slot"), "protected-value-revealed-value")
   assert.equal(await value.getAttribute("readonly"), "")
   const noticeId = await value.getAttribute("aria-describedby")
-  assert.equal(await page.locator(`[id="${noticeId}"]`).textContent(), "Shown only once. Copy it now.")
+  assert.equal(await page.locator(`[id="${noticeId}"]`).textContent(), "Shown once. After you leave, nobody can read it again.")
   await page.waitForFunction(() => document.activeElement?.getAttribute("data-slot") === "protected-value-revealed-value")
   await page.waitForFunction(() => {
     const box = document.querySelector('[data-slot="protected-value-revealed"]').getBoundingClientRect()
     return box.top >= 0 && box.bottom <= window.innerHeight
   })
-  await field.getByText("Stored securely").waitFor()
+  await field.getByText("Encrypted on this machine").waitFor()
   await rotate.waitFor()
   await page.getByTestId("token-field").screenshot({ path: path.join(outputDir, "revealed-light.png") })
 

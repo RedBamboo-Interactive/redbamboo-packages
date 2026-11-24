@@ -197,7 +197,7 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
     id: "protected-value-field",
     packageName: "@redbamboo/ui",
     exports: ["ProtectedValueField"],
-    description: "Write-only secret, password, token, or credential-file field that reports storage protection and verification, with replace, rotate, verify, clear, and one-time reveal of a newly issued value.",
+    description: "Write-only secret, password, token, or credential-file field that reports storage protection and verification, with replace, rotate, verify, remove, and one-time reveal of a newly issued value. Renders as a card with an icon tile, status line (protection, saved and checked dates) and an action rail; embedded drops the card chrome for list rows.",
     tags: ["secret", "password", "token", "credential", "api-key", "rotate", "reveal", "one-time", "copy", "settings"],
     useWhen: [
       "A setting holds a secret that must never be read back, only replaced, rotated, verified, or cleared.",
@@ -206,7 +206,7 @@ export const UI_COMPONENT_CATALOG: readonly UiComponentDescriptor[] = [
     avoidWhen: [
       "The value is not sensitive and can be shown and edited normally; use Input.",
     ],
-    variants: ["kind:secret", "kind:password", "kind:token", "kind:credential-file", "revealed-value"],
+    variants: ["kind:secret", "kind:password", "kind:token", "kind:credential-file", "revealed-value", "embedded"],
     selectors: [
       '[data-slot="protected-value-field"]',
       '[data-slot="protected-value-revealed"]',
