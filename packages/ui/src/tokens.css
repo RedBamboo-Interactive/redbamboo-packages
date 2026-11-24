@@ -540,6 +540,19 @@
   box-shadow: inset 0 0 0 1px var(--cozy-glass-line);
 }
 
+/* Most surfaces paint `bg-card` without marking themselves a card (grouped
+   lists, field cards, plugin panels), so the class is the hook too: same
+   glass tint, and their own border and dividers turn into the glass edge
+   instead of an opaque line. */
+:root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"]) .bg-card {
+  background-color: rgb(from var(--contrast) r g b / 0.05);
+}
+:root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"]) .bg-card:is(.border, .border-border),
+:root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"]) .bg-card.divide-border > *,
+:root[data-cozy] :is([data-slot="dock-center-host"], [data-slot="dock-panel-surface"]) .bg-card .border-border {
+  border-color: var(--cozy-glass-line);
+}
+
 /* Floating surfaces (menus, popovers, selects, dialogs, sheets, toasts, the
    command palette) are glass too, tinted from the popover colour and
    blurred like the cards. Every one of them paints `bg-popover`, including
