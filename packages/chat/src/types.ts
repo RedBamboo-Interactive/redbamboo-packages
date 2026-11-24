@@ -373,6 +373,19 @@ export interface HandsFreeContextValue {
 
 // --- Session stats / context indicator ---
 
+export interface PromptCacheCounts {
+  inputTokens: number
+  cachedInputTokens: number
+}
+
+export interface PromptCacheUsage {
+  session?: PromptCacheCounts | null
+  /** Session counts cover only requests with comparable measurements. */
+  partial?: boolean
+  /** One provider request, which may be part of a user turn. */
+  latestRequest?: PromptCacheCounts | null
+}
+
 export interface SessionStats {
   name?: string | null
   jobHash?: string | null
@@ -386,6 +399,7 @@ export interface SessionStats {
   messageCount?: number
   outputTokens?: number | null
   cachedInputTokens?: number | null
+  promptCache?: PromptCacheUsage | null
   contextTokens?: number | null
   contextWindow?: number | null
   effort?: string | null

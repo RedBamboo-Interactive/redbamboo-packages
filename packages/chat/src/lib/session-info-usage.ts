@@ -1,5 +1,20 @@
-import type { MessageBlock } from "../types"
+import type { MessageBlock, PromptCacheCounts } from "../types"
 import { getEffectiveToolName } from "./tool-semantics.ts"
+
+const cachePercent = new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 1 })
+
+export function formatPromptCacheCounts(counts?: PromptCacheCounts | null): string | null {
+  if (!counts) return null
+  const { cachedInputTokens: cached, inputTokens: input } = counts
+  if (!Number.isSafeInteger(cached) || !Number.isSafeInteger(input) || cached < 0 || input <= 0 || cached > input)
+    return null
+
+  const ratio = cached / input
+  const rate = ratio > 0 && ratio < 0.001 ? `<${cachePercent.format(0.001)}`
+    : ratio > 0.999 && cached < input ? `>${cachePercent.format(0.999)}`
+    : cachePercent.format(ratio)
+  return `${rate} · ${cached.toLocaleString()} / ${input.toLocaleString()} tokens`
+}
 
 /**
  * What a conversation has used so far, read from the tool calls of the messages the client has loaded.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import type { AccessLevel, MessageBlock, SessionStats, SessionConfigChange, SessionConfigOption, ProviderUsageSnapshot, SessionInfoButtonProps } from "../types"
+import type { AccessLevel, MessageBlock, SessionStats, PromptCacheUsage, SessionConfigChange, SessionConfigOption, ProviderUsageSnapshot, SessionInfoButtonProps } from "../types"
 import {
   Button,
   Dialog,
@@ -23,7 +23,7 @@ import { getSessionResourceHref, type SessionResourceKind } from "../lib/session
 import { formatProviderUsageWindow, remainingProviderUsage, usageToneColor } from "../lib/provider-usage"
 import { formatModelName } from "../lib/model-name"
 import { formatProviderEffort } from "../lib/provider-effort"
-import { deriveOpenedMemory, deriveUsedSkills, withoutPaths } from "../lib/session-info-usage"
+import { deriveOpenedMemory, deriveUsedSkills, formatPromptCacheCounts, withoutPaths } from "../lib/session-info-usage"
 import { ACCESS_LEVEL_DESCRIPTIONS, ACCESS_LEVEL_LABELS, accessLevelChoices, isAccessLevel, type AccessLevelChoice } from "../lib/access-level"
 
 interface Props extends Omit<SessionInfoButtonProps, "loadProviderUsage" | "open" | "onOpenChange" | "stats"> {
@@ -101,6 +101,31 @@ function formatReset(value?: string | null): string | null {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date)
+}
+
+function PromptCacheBlock({ usage }: { usage?: PromptCacheUsage | null }) {
+  const session = formatPromptCacheCounts(usage?.session)
+  const latest = formatPromptCacheCounts(usage?.latestRequest)
+  return (
+    <div data-slot="session-info-prompt-cache">
+      <SectionLabel>Prompt cache</SectionLabel>
+      <dl className="space-y-2 text-xs">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+          <dt className="text-text-muted">{session && usage?.partial ? "Measured requests" : "Session"}</dt>
+          <dd className="tabular-nums">{session ?? "Unavailable"}</dd>
+        </div>
+        {latest && (
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <dt className="text-text-muted">Latest provider request</dt>
+            <dd className="tabular-nums">{latest}</dd>
+          </div>
+        )}
+      </dl>
+      {session && usage?.partial && (
+        <p className="mt-1 text-[11px] text-text-muted">Session coverage is incomplete.</p>
+      )}
+    </div>
+  )
 }
 
 function ProviderUsageBlock({ usage, loading }: { usage?: ProviderUsageSnapshot | null; loading?: boolean }) {
@@ -660,12 +685,12 @@ export function SessionStatsModal({
       <div className="grid grid-cols-2 gap-2.5 min-[560px]:grid-cols-3">
         <StatTile label="Context" value={formatTokens(getContextTokens(s) || null)} sub={getContextTokens(s) ? `/ ${formatTokens(maxContext)}` : undefined} />
         <StatTile label="Output" value={formatTokens(s.outputTokens)} />
-        {s.cachedInputTokens != null && <StatTile label="Cached input" value={formatTokens(s.cachedInputTokens)} />}
         <StatTile label="Messages" value={String(s.messageCount || messages.length)} sub={`${userMessages} from you`} />
         <StatTile label="Tool calls" value={String(toolCalls)} />
         {s.costUsd != null && <StatTile label={s.costEstimated ? "Est. standard API cost" : "Cost"} value={formatCost(s.costUsd)} />}
         {duration && <StatTile label="Duration" value={duration} />}
       </div>
+      <PromptCacheBlock usage={s.promptCache} />
       <ProviderUsageBlock usage={providerUsage} loading={providerUsageLoading} />
     </div>
   )
