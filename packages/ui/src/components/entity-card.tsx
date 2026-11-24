@@ -318,7 +318,7 @@ export function EntityCard({
         width === "half" && "w-full sm:w-1/2",
         width === "full" && "w-full",
         variant === "outlined"
-          ? "overflow-hidden rounded-md border border-overlay-6 bg-overlay-4/50"
+          ? "overflow-hidden rounded-md border border-overlay-6 bg-overlay-3"
           : "border-overlay-6",
         active && variant === "outlined" && "bg-overlay-6",
         active && variant === "row" && "border-l-2 border-primary bg-overlay-6 pl-[calc(0.75rem_-_2px)]",

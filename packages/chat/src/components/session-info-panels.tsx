@@ -40,7 +40,7 @@ export function Chip({ icon, children, className, title, style }: {
 }) {
   return (
     <span title={title} style={style}
-      className={cn("inline-flex h-6 max-w-full items-center gap-1.5 rounded-md bg-overlay-6 px-2 text-xs text-text-default", className)}>
+      className={cn("inline-flex h-6 max-w-full items-center gap-1.5 rounded-md bg-overlay-6 px-2 text-xs text-foreground", className)}>
       {icon && <i aria-hidden="true" className={cn(icon, "text-[13px]")} />}
       <span className="truncate">{children}</span>
     </span>
@@ -113,7 +113,7 @@ function FileRow({ path, meta, badges, icon = "ph-bold ph-file-text" }: {
   return (
     <div className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-overlay-6">
       <i aria-hidden="true" className={cn(icon, "shrink-0 text-sm text-text-muted")} />
-      <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-text-default" title={path}>{path}</code>
+      <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-foreground" title={path}>{path}</code>
       {meta && <span className="hidden shrink-0 text-[11px] text-text-muted min-[480px]:inline">{meta}</span>}
       {badges}
     </div>
@@ -154,7 +154,7 @@ export function resolveSkills(skills: SessionInfoSkills, used: readonly UsedSkil
 function SkillRow({ skill }: { skill: ResolvedSkill }) {
   return (
     <div className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-overlay-6" data-slot="session-info-skill" data-skill={skill.slug ?? skill.name}>
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-overlay-6 text-text-default">
+      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-overlay-6 text-foreground">
         <i aria-hidden="true" className={cn(skill.icon || DEFAULT_SKILL_ICON, "text-base")} />
       </span>
       <div className="min-w-0 flex-1">
@@ -357,8 +357,8 @@ export function WorkspaceSection({ workspace, onNavigate, label }: {
           {workspace.rows.map(row => (
             <InfoRow key={row.label} label={row.label}>
               {row.mono
-                ? <code className="truncate font-mono text-xs text-text-default" title={row.value}>{row.value}</code>
-                : <span className="truncate text-xs text-text-default" title={row.value}>{row.value}</span>}
+                ? <code className="truncate font-mono text-xs text-foreground" title={row.value}>{row.value}</code>
+                : <span className="truncate text-xs text-foreground" title={row.value}>{row.value}</span>}
             </InfoRow>
           ))}
         </div>

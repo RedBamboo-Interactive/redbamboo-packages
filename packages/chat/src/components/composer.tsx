@@ -562,7 +562,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
                   <img
                     src={attachment.previewUrl || attachment.downloadUrl}
                     alt={attachment.name}
-                    className={`h-16 w-16 object-cover rounded-md border ${attachment.state === "error" ? "border-red-500-a60" : "border-overlay-10"}`}
+                    className={`h-16 w-16 object-cover rounded-md border ${attachment.state === "error" ? "border-destructive/60" : "border-overlay-10"}`}
                   />
                   {attachment.state === "uploading" && (
                     <div className="absolute inset-0 rounded-md bg-black/50 flex items-center justify-center"><i className="ph-bold ph-spinner animate-spin text-white" /></div>

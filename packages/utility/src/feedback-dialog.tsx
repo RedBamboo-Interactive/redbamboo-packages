@@ -117,7 +117,7 @@ function FeedbackDialog({ app, customMetadata, onSubmit, open, onOpenChange }: F
             data-slot="feedback-description"
             autoFocus
             maxLength={10000}
-            className="w-full min-h-[160px] rounded-lg border border-input bg-transparent px-3 py-2.5 text-sm leading-relaxed transition-colors outline-none resize-y placeholder:text-muted-foreground focus-visible:border-foreground-a20 dark:bg-input-a30"
+            className="w-full min-h-[160px] rounded-lg border border-input bg-transparent px-3 py-2.5 text-sm leading-relaxed transition-colors outline-none resize-y placeholder:text-muted-foreground focus-visible:border-foreground/20 dark:bg-input-a30"
             placeholder="What's on your mind?"
             value={description}
             onChange={(event) => setDescription(event.target.value)}

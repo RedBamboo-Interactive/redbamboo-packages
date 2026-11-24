@@ -172,7 +172,7 @@ export function BackgroundTaskPanel({ part }: { part: MessagePart }) {
         <p className="text-xs text-text-muted">{progress.lastActivity}</p>
       )}
       {task.summary && !running && (
-        <p className="text-xs text-text-secondary whitespace-pre-wrap">{task.summary}</p>
+        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{task.summary}</p>
       )}
       {task.status === "lost" && (
         <p className="text-xs text-text-disabled">The provider process ended while this task was running.</p>

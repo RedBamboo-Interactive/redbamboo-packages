@@ -550,7 +550,7 @@ export const ChatMessage = memo(function ChatMessage({
               key={i}
               role="alert"
               data-chat-turn-error=""
-              className="msg-enter-ai my-1.5 flex items-start gap-1.5 rounded-md border border-red-500-a40 bg-red-500-a10 px-2.5 py-1.5 text-xs leading-relaxed text-red-400"
+              className="msg-enter-ai my-1.5 flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive-a10 px-2.5 py-1.5 text-xs leading-relaxed text-red-400"
             >
               <i aria-hidden="true" className="ph-bold ph-warning mt-[3px] shrink-0" />
               <span className="min-w-0 whitespace-pre-wrap break-words">{group.parts[0].content}</span>
@@ -886,7 +886,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
                   type="button"
                   onClick={() => handleClick(part)}
                   data-slot="event-inline-label"
-                  className="ml-0.5 mr-1.5 text-[11px] leading-none text-text-muted hover:text-text-secondary cursor-pointer"
+                  className="ml-0.5 mr-1.5 text-[11px] leading-none text-text-muted hover:text-muted-foreground cursor-pointer"
                 >
                   {inlineLabel}
                 </button>,
@@ -1669,13 +1669,13 @@ function MessageMetadata({ block, inline, trigger = true, open: openProp, onOpen
                 ))}
                 <button
                   onClick={() => setShowRaw(!showRaw)}
-                  className="text-[10px] text-accent hover:text-accent-hover mt-2 cursor-pointer flex items-center gap-1"
+                  className="text-[10px] text-accent hover:text-primary mt-2 cursor-pointer flex items-center gap-1"
                 >
                   <i className={`${showRaw ? "ph-bold ph-caret-down" : "ph-bold ph-caret-right"} text-[8px]`} />
                   {showRaw ? "Hide" : "Show"} raw context
                 </button>
                 {showRaw && (
-                  <pre className="text-[10px] font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-2.5 py-2 mt-1.5 leading-relaxed max-h-48 overflow-y-auto">
+                  <pre className="text-[10px] font-mono whitespace-pre-wrap break-all text-muted-foreground bg-overlay-4 rounded-md px-2.5 py-2 mt-1.5 leading-relaxed max-h-48 overflow-y-auto">
                     {novaCtxFromXml.body}
                   </pre>
                 )}
@@ -1741,7 +1741,7 @@ function FoldedMetaRow({ label, value }: { label: string; value: string }) {
         aria-expanded={open}
         onClick={() => setOpen(!open)}
         title={open ? "Show less" : "Show all"}
-        className={`min-w-0 text-text-secondary text-right cursor-pointer hover:text-text-primary ${open ? "whitespace-pre-wrap break-words" : "truncate"}`}
+        className={`min-w-0 text-muted-foreground text-right cursor-pointer hover:text-text-primary ${open ? "whitespace-pre-wrap break-words" : "truncate"}`}
       >
         {value}
       </button>
@@ -1753,7 +1753,7 @@ function MetaRow({ label, value, mono }: { label: string; value: string; mono?: 
   return (
     <div className="flex justify-between items-baseline gap-4 text-xs">
       <span className="text-text-muted shrink-0">{label}</span>
-      <span className={`text-text-secondary text-right break-all ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
+      <span className={`text-muted-foreground text-right break-all ${mono ? "font-mono text-[11px]" : ""}`}>{value}</span>
     </div>
   )
 }

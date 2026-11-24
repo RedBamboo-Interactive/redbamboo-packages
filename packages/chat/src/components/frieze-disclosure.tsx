@@ -15,7 +15,7 @@ export function FriezeDisclosure({ count, eventOnly, failed, workingColor, expan
       data-slot="frieze-disclosure"
       aria-expanded={expanded}
       onClick={onToggle}
-      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-text-disabled hover:text-text-secondary focus-visible:outline-2 focus-visible:outline-ring"
+      className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-text-disabled hover:text-muted-foreground focus-visible:outline-2 focus-visible:outline-ring"
     >
       {workingColor
         ? <span aria-hidden="true" className="size-2 shrink-0 rounded-[2px] square-jiggle" style={{ backgroundColor: workingColor }} />

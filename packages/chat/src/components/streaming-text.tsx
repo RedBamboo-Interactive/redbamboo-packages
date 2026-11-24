@@ -35,7 +35,7 @@ type FileLinkResolver = (
   opts?: { line?: number; column?: number },
 ) => (() => void) | undefined
 
-const AUTHORED_LINK_CLASS_NAME = "inline-flex max-w-full items-center gap-1 rounded-md border border-overlay-10 bg-overlay-4 px-1.5 py-0.5 font-sans text-[0.85em] text-text-secondary no-underline align-baseline transition-colors hover:border-overlay-30 hover:bg-overlay-6"
+const AUTHORED_LINK_CLASS_NAME = "inline-flex max-w-full items-center gap-1 rounded-md border border-overlay-10 bg-overlay-4 px-1.5 py-0.5 font-sans text-[0.85em] text-muted-foreground no-underline align-baseline transition-colors hover:border-overlay-30 hover:bg-overlay-6"
 
 // Module-level lightbox state shared across all StreamingText/MarkdownRenderer instances
 let lightboxState: { src: string; alt: string; type: "image" | "video" } | null = null

@@ -938,7 +938,7 @@ export function ChatPanel(props: ChatPanelProps) {
               <button
                 onClick={revealEarlier}
                 disabled={isLoadingEarlier}
-                className="w-full flex items-center gap-3 py-2 mb-2 text-[11px] text-text-muted hover:text-text-secondary transition-colors cursor-pointer"
+                className="w-full flex items-center gap-3 py-2 mb-2 text-[11px] text-text-muted hover:text-muted-foreground transition-colors cursor-pointer"
                 title="Show earlier messages"
               >
                 <span className="h-px flex-1 bg-overlay-6" />

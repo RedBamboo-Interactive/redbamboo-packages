@@ -19,7 +19,7 @@ export function StoredMessageContext({ text }: { text: string }) {
         data-slot="message-context-toggle"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1.5 text-[10px] text-text-muted uppercase tracking-wider cursor-pointer hover:text-text-secondary"
+        className="w-full flex items-center gap-1.5 text-[10px] text-text-muted uppercase tracking-wider cursor-pointer hover:text-muted-foreground"
       >
         <i className={`ph-bold ${open ? "ph-caret-down" : "ph-caret-right"} text-[8px]`} />
         <span>Injected context</span>
@@ -35,7 +35,7 @@ export function StoredMessageContext({ text }: { text: string }) {
               type="button"
               data-slot="message-context-raw-toggle"
               onClick={() => setRaw(!raw)}
-              className="text-[10px] text-accent hover:text-accent-hover cursor-pointer"
+              className="text-[10px] text-accent hover:text-primary cursor-pointer"
             >
               {raw ? "Show sections" : "Show exact text"}
             </button>
@@ -56,7 +56,7 @@ function ContextSectionView({ section }: { section: MessageContextSection }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-text-secondary cursor-pointer hover:text-text-primary text-left"
+        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-muted-foreground cursor-pointer hover:text-text-primary text-left"
       >
         <i className={`ph-bold ${open ? "ph-caret-down" : "ph-caret-right"} text-[8px] text-text-muted shrink-0`} />
         <span className="min-w-0 truncate">{section.title}</span>
@@ -71,7 +71,7 @@ function ContextText({ text, tall, ...rest }: { text: string; tall?: boolean; "d
   return (
     <pre
       {...rest}
-      className={`text-[11px] font-mono whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-text-secondary px-2.5 pb-2 leading-relaxed overflow-y-auto ${tall ? "max-h-[50svh] bg-overlay-4 rounded-md pt-2" : "max-h-64"}`}
+      className={`text-[11px] font-mono whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-muted-foreground px-2.5 pb-2 leading-relaxed overflow-y-auto ${tall ? "max-h-[50svh] bg-overlay-4 rounded-md pt-2" : "max-h-64"}`}
     >
       {text}
     </pre>

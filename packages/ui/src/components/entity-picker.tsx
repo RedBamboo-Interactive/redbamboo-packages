@@ -406,7 +406,7 @@ function EntityRefPlaceholder({
       data-status={status}
       aria-busy={status === "loading" || undefined}
       title={status === "error" ? `Could not load this ${typeLabel}; retrying` : undefined}
-      className="flex items-center gap-3 rounded-md border border-overlay-6 bg-overlay-4/50 px-3 py-2"
+      className="flex items-center gap-3 rounded-md border border-overlay-6 bg-overlay-3 px-3 py-2"
     >
       <span className={cn("min-w-0 flex-1 truncate font-mono text-xs text-text-muted", status === "loading" && "opacity-60")}>
         {reference}

@@ -567,7 +567,7 @@ export function SessionStatsModal({
             {node && (
               <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-text-muted">
                 <NodeIcon icon={node.icon} color={node.color} os={node.os} className="text-xs" />
-                <span className="shrink-0 text-text-default">{node.name}</span>
+                <span className="shrink-0 text-foreground">{node.name}</span>
                 {node.folder && <code className="truncate font-mono" title={node.folder}>{node.folder}</code>}
               </span>
             )}
@@ -589,7 +589,7 @@ export function SessionStatsModal({
           <SectionLabel>Working on</SectionLabel>
           <Tile className="flex items-center gap-2.5" data-slot="session-info-working-on">
             <i aria-hidden="true" className="ph-bold ph-git-diff text-sm text-text-muted" />
-            <span className="flex-1 text-xs text-text-default">{workingOn.summary}</span>
+            <span className="flex-1 text-xs text-foreground">{workingOn.summary}</span>
           </Tile>
         </div>
       )}
@@ -729,7 +729,7 @@ export function SessionStatsModal({
                 )}
                 {node && (
                   <span title={`Runs on ${node.name}`} data-slot="session-info-node-chip"
-                    className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md bg-overlay-6 px-2 text-xs text-text-default">
+                    className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md bg-overlay-6 px-2 text-xs text-foreground">
                     <NodeIcon icon={node.icon} color={node.color} os={node.os} />
                     <span className="truncate">{node.name}</span>
                   </span>

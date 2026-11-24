@@ -36,7 +36,7 @@ export function ActivityText({ label, title, onOpen, className = "" }: ActivityN
   if (!onOpen) return <span className={`truncate min-w-0 ${className}`} title={title}>{label}</span>
   return (
     <button type="button" onClick={onOpen} title={title} data-slot="activity-open"
-      className={`flex min-w-0 items-center gap-1 cursor-pointer hover:text-text-secondary transition-colors text-left ${className}`}>
+      className={`flex min-w-0 items-center gap-1 cursor-pointer hover:text-muted-foreground transition-colors text-left ${className}`}>
       <span className="truncate">{label}</span>
       <i aria-hidden className="ph-bold ph-caret-right text-[9px] opacity-60 shrink-0" />
     </button>

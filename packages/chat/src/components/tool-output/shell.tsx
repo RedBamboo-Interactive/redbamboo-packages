@@ -46,7 +46,7 @@ export function ShellOutputView({ content }: { content: string }) {
         {visible => (
           <div className="rounded-md bg-black/40 px-3 py-2 font-mono text-xs whitespace-pre-wrap break-all">
             {visible.split("\n").map((line, i) => (
-              <div key={i} className={dims[i] ? "text-text-disabled" : "text-text-secondary"}>
+              <div key={i} className={dims[i] ? "text-text-disabled" : "text-muted-foreground"}>
                 {line || " "}
               </div>
             ))}

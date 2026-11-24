@@ -83,7 +83,7 @@ export function ContextSquare({ context, rawXml }: ContextSquareProps) {
                 className="max-h-48 rounded-md border border-overlay-10 object-cover object-top"
               />
             )}
-            <pre className="text-xs font-mono whitespace-pre-wrap break-all text-text-secondary bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
+            <pre className="text-xs font-mono whitespace-pre-wrap break-all text-muted-foreground bg-overlay-4 rounded-md px-3 py-2.5 leading-relaxed">
               {rawXml || formatContextBlock(context)}
             </pre>
           </div>
@@ -122,7 +122,7 @@ export function PendingContextAttachment({ context, onDismiss }: PendingContextA
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <i className="ph-bold ph-eye text-[11px]" style={{ color: app.color }} aria-hidden="true" />
-          <span className="truncate text-xs font-medium text-text-secondary">What I see</span>
+          <span className="truncate text-xs font-medium text-muted-foreground">What I see</span>
         </div>
         <p className="mt-0.5 truncate text-[10px] text-text-muted">
           <span style={{ color: app.color }}>{app.label}</span>

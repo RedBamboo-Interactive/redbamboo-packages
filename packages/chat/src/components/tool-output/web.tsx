@@ -47,7 +47,7 @@ export function WebSearchOutputView({ content }: { content: string }) {
               const nextHasUrl = i + 1 < lines.length && URL_PATTERN.test(lines[i + 1])
               if (!line.trim()) return <div key={i} className="h-1.5" />
               return (
-                <p key={i} className={nextHasUrl ? "font-medium text-text-primary font-serif" : "text-text-secondary font-serif"}>
+                <p key={i} className={nextHasUrl ? "font-medium text-text-primary font-serif" : "text-muted-foreground font-serif"}>
                   {line}
                 </p>
               )

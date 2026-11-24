@@ -61,7 +61,7 @@ export function PermissionApprovalCard({ approval, onDecide, className }: {
         className={cn("my-1.5 flex w-full max-w-xl min-w-0 items-center gap-2 rounded-md border border-overlay-10 bg-overlay-4 px-3 py-1.5 text-xs", className)}
       >
         <i aria-hidden="true" className={`ph-bold ${icon} shrink-0 ${tone}`} />
-        <span className="shrink-0 font-medium text-text-secondary">{label}</span>
+        <span className="shrink-0 font-medium text-muted-foreground">{label}</span>
         <span aria-hidden="true" className="shrink-0 text-text-muted">·</span>
         <span className="shrink-0 font-mono text-text-muted">{request.toolName}</span>
         {summary && <code className="min-w-0 truncate font-mono text-text-muted" title={summary}>{summary}</code>}

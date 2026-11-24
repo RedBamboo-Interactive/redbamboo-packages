@@ -82,7 +82,7 @@ function AppHeader({ brand, brandSlot, navigation, children, breadcrumb, classNa
       <span className="flex-1 min-w-0" />
       {breadcrumb && (
         <div data-slot="app-header-breadcrumbs" className="app-header-crumbs flex items-center justify-end gap-3 min-w-0 max-w-[45%] overflow-hidden">
-          <span className="h-4 w-px bg-border-a60 shrink-0" />
+          <span className="h-4 w-px bg-border/60 shrink-0" />
           {breadcrumb}
         </div>
       )}

@@ -462,7 +462,7 @@ function DelegationEventView({ event, resolveEventLink, onNavigate }: {
             <button
               type="button"
               onClick={() => { onNavigate?.(); openDelegation() }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-overlay-10 hover:text-contrast"
+              className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-overlay-10 hover:text-contrast"
               title="Open Code session"
             >
               <i className="ph-bold ph-arrow-square-out text-[11px]" />
@@ -494,7 +494,7 @@ function AgentNoteEventView({ event, resolveImageSrc, resolveEventLink, onNaviga
         <button
           type="button"
           onClick={() => { onNavigate?.(); openSender() }}
-          className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-overlay-10 hover:text-contrast"
+          className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-overlay-10 hover:text-contrast"
           title="Open the sender's discussion"
         >
           <i className="ph-bold ph-arrow-square-out text-[11px]" />
@@ -634,7 +634,7 @@ function MailEventView({ event }: { event: ParsedEvent }) {
           href={gmailHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-overlay-10 hover:text-contrast"
+          className="inline-flex items-center gap-1.5 rounded-md bg-overlay-6 px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-overlay-10 hover:text-contrast"
           title={kind === "new-mail" ? "Open this conversation in Gmail" : "Open your Gmail inbox"}
         >
           <i className="ph-bold ph-arrow-square-out text-[11px]" />

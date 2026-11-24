@@ -23,7 +23,7 @@ export function AttachmentCard({ attachment, onRemove, onRetry, compact = false 
     <div
       data-slot="attachment-card"
       className={`group/attachment flex min-w-0 items-center gap-2 rounded-md border px-2 py-1.5 ${compact ? "max-w-56" : "max-w-72"} ${
-        draft?.state === "error" ? "border-red-500-a40 bg-red-500-a10" : "border-overlay-10 bg-overlay-6"
+        draft?.state === "error" ? "border-destructive/40 bg-destructive-a10" : "border-overlay-10 bg-overlay-6"
       }`}
       title={draft?.error || attachment.name}
     >
@@ -37,7 +37,7 @@ export function AttachmentCard({ attachment, onRemove, onRetry, compact = false 
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-text-secondary">{attachment.name}</div>
+        <div className="truncate text-xs font-medium text-muted-foreground">{attachment.name}</div>
         <div className={`truncate text-[10px] ${draft?.state === "error" ? "text-red-400" : "text-text-muted"}`}>
           {draft?.state === "uploading" ? "Uploading…" : draft?.state === "error" ? draft.error || "Upload failed" : `${typeLabel} · ${formatAttachmentSize(attachment.size)}`}
         </div>

@@ -95,7 +95,7 @@ export function GrepOutputView({ content, toolInput, resolvers }: {
             {matches.map((match, i) => (
               <div key={i} className="flex gap-2">
                 <LineNumber path={path} line={match.line} resolvers={resolvers} />
-                <span className="whitespace-pre-wrap break-all min-w-0 text-text-secondary">
+                <span className="whitespace-pre-wrap break-all min-w-0 text-muted-foreground">
                   <HighlightedMatch text={match.text} highlighter={highlighter} />
                 </span>
               </div>

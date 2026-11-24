@@ -61,12 +61,12 @@ export function ShareDialog({ open, onOpenChange, shareUrl, loading, error, titl
                 <input
                   readOnly
                   value={shareUrl}
-                  className="flex-1 text-xs bg-overlay-6 border border-overlay-10 rounded-md px-3 py-2 text-text-secondary font-mono select-all outline-none focus:border-accent-primary/50"
+                  className="flex-1 text-xs bg-overlay-6 border border-overlay-10 rounded-md px-3 py-2 text-muted-foreground font-mono select-all outline-none focus:border-primary/50"
                   onFocus={(e) => e.target.select()}
                 />
                 <button
                   onClick={handleCopy}
-                  className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-md bg-accent-primary/15 text-accent-primary hover:bg-accent-primary/25 transition-colors"
+                  className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-md bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
                 >
                   <i className={`ph-bold ${copied ? "ph-check" : "ph-copy"} text-sm`} />
                   {copied ? "Copied" : "Copy"}
