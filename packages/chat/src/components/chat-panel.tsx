@@ -871,8 +871,10 @@ export function ChatPanel(props: ChatPanelProps) {
   const previousRowJobs = rowJobsRef.current
   const rowJobs = new Map<string, readonly ChatJob[]>()
   for (const [key, list] of placedJobs ?? []) {
+    const visible = props.hideJobMarkers ? list.filter(job => isActiveJob(job) || job.state === "failed") : list
+    if (visible.length === 0) continue
     const previous = previousRowJobs.get(key)
-    rowJobs.set(key, previous && previous.length === list.length && previous.every((job, index) => job === list[index]) ? previous : list)
+    rowJobs.set(key, previous && previous.length === visible.length && previous.every((job, index) => job === visible[index]) ? previous : visible)
   }
   rowJobsRef.current = rowJobs
   activityRowsRef.current = timelineRows

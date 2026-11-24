@@ -1023,6 +1023,8 @@ export interface ChatPanelProps {
   isFriezeMarkerVisible?: (part: MessagePart) => boolean
   /** Display density of the work-step markers. Defaults to Detailed. */
   friezeDensity?: FriezeDensity
+  /** Hide settled job squares in the timeline. Active and failed job squares still show. */
+  hideJobMarkers?: boolean
   /**
    * A queued host event behaves like a queued message: it waits below the running turn and enters
    * the conversation where it was processed. Only for a host that sets `inputPlaced` on the event

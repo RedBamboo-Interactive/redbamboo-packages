@@ -3,7 +3,7 @@ import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@redbamboo/ui"
 import type { NovaEvent } from "../lib/nova-event"
 import type { FriezeDensity } from "../types"
-import { friezeMarkerColor } from "../lib/frieze-presentation"
+import { friezeMarkerPaint } from "../lib/frieze-presentation"
 import { FriezeDisclosure } from "./frieze-disclosure"
 
 const EVENT_COLOR = "var(--color-status-live)"
@@ -30,12 +30,14 @@ export function NovaEventSquare({ event, queueStatus, friezeDensity = "detailed"
   const color = queueStatus?.failed ? "var(--color-red-400)" : EVENT_COLOR
   const label = queueStatus ? `${displaySource}: ${queueStatus.label}` : displaySource
 
+  const paint = friezeMarkerPaint(friezeDensity, color, { failed: queueStatus?.failed })
   const marker = (
     <button
       onClick={() => setOpen(true)}
-      className="w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn"
+      className={`w-2.5 h-2.5 rounded-[2px] transition-all duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer square-spawn${paint.highlight ? " quiet-frieze-marker" : ""}`}
       style={{
-        backgroundColor: friezeMarkerColor(friezeDensity, color, { failed: queueStatus?.failed }),
+        backgroundColor: paint.color,
+        ...paint.highlight,
         ...(friezeDensity === "quiet" ? { width: 8, height: 8 } : {}),
       }}
       title={label}

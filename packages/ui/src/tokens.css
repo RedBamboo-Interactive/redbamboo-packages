@@ -1281,6 +1281,16 @@ body {
   animation-delay: var(--msg-enter-delay, 0ms);
 }
 
+.quiet-frieze-marker:focus-visible {
+  --frieze-marker-highlight: var(--frieze-marker-accent);
+}
+
+@media (hover: hover) {
+  .quiet-frieze-marker:hover {
+    --frieze-marker-highlight: var(--frieze-marker-accent);
+  }
+}
+
 @keyframes square-jiggle {
   0%, 100% { transform: scale(1.25) rotate(0deg); }
   25% { transform: scale(1.25) rotate(-4deg) translate(-0.4px, -0.3px); }

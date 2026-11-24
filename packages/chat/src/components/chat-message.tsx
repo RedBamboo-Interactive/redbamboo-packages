@@ -58,7 +58,7 @@ import { REWIND_ICON, REWIND_LABEL } from "../lib/conversation-rollback"
 import { jobLaunchIndex, type ChatJob } from "../lib/chat-jobs"
 import { JobTwin, jobTwinColor, useChatJobsStore, useLiveJob } from "./job-twin"
 import { FriezeDisclosure } from "./frieze-disclosure"
-import { friezeMarkerColor, friezeMarkerFailed, isErrorResult } from "../lib/frieze-presentation"
+import { friezeMarkerFailed, friezeMarkerPaint, isErrorResult } from "../lib/frieze-presentation"
 import { JobSummaryBody, jobSummaryContentProps } from "./job-summary"
 
 interface TaskNotification {
@@ -850,13 +850,15 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
             const time = note ? agentNoteTime(parsed?.timestamp) : undefined
             const label = note ? [note.lead + " " + note.discussion, time].filter(Boolean).join(" · ") : partLabel(part)
             const inlineLabel = parsed?.inlineLabel ? parsed.label : null
+            const paint = friezeMarkerPaint(density, color, { active: inFlight, failed, needsAttention: waitingApproval })
             const marker = (
               <button
                 type="button"
                 onClick={() => handleClick(part)}
-                className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}`}
+                className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}${paint.highlight ? " quiet-frieze-marker" : ""}`}
                 style={{
-                  backgroundColor: friezeMarkerColor(density, color, { active: inFlight, failed, needsAttention: waitingApproval }),
+                  backgroundColor: paint.color,
+                  ...paint.highlight,
                   ...(quiet ? { width: 8, height: 8 } : {}),
                 }}
                 title={note ? undefined : part.task ? `${label}: ${part.task.status}` : label}

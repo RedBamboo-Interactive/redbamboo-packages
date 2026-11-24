@@ -79,6 +79,13 @@ const jobs = [
   normalizeChatJob({ id: "theme", capability: "music-gen", providerName: "Suno", name: "Mossbound theme", status: "Queued", stage: "admitted", queuedAt: "2026-10-19T07:13:00Z" }),
 ]
 
+const jobMarkerFixtures = [
+  normalizeChatJob({ id: "published", capability: "image-gen", status: "Completed", progress: 1,
+    queuedAt: "2026-10-19T07:14:00Z", startedAt: "2026-10-19T07:14:00Z", completedAt: "2026-10-19T07:14:20Z" }),
+  normalizeChatJob({ id: "failed-render", capability: "image-gen", status: "Failed",
+    queuedAt: "2026-10-19T07:15:00Z" }),
+]
+
 const noteDiscussionTitle = "A long initiative title with enough words to wrap across several lines on a small screen"
 const noteMessages: MessageBlock[] = [{
   id: "note-turn", role: "assistant", timestamp: stamp,
@@ -109,7 +116,8 @@ function App() {
   if (density) return <div style={{ width: "100%", height: "100vh" }}>
     <ChatPanel messages={densityMessages} isStreaming={false} sessionId="frieze-density" persistQueue={false}
       friezeDensity={density === "default" ? undefined : density as FriezeDensity}
-      permissionApprovals={approvals} jobs={jobs}
+      permissionApprovals={approvals} jobs={params.has("job-markers") ? [...jobs, ...jobMarkerFixtures] : jobs}
+      hideJobMarkers={params.has("hide-jobs")}
       isFriezeMarkerVisible={part => part.toolName !== "Grep" && part.toolName !== "event:hidden"} />
   </div>
 
