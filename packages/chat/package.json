@@ -94,6 +94,7 @@
     "test:artifacts-panel": "node tests/artifacts-panel/run.cjs",
     "test:job-twins": "node tests/job-twins/run.cjs",
     "test:leaf-menu": "node tests/leaf-menu/run.cjs",
+    "test:host-blocks": "node tests/host-blocks/run.cjs",
     "test:rollback": "node tests/rollback/run.cjs",
     "test:access-levels": "node tests/access-levels/run.cjs",
     "clean": "rimraf dist"
