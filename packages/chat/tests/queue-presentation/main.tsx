@@ -156,4 +156,31 @@ function WaitApp() {
   </div>
 }
 
-createRoot(document.getElementById("root")!).render(new URLSearchParams(location.search).has("wait") ? <WaitApp /> : new URLSearchParams(location.search).has("events") ? <EventApp /> :new URLSearchParams(location.search).has("links") ? <LinkProbe /> : <App />)
+const outboxTest = {
+  submissions: [] as { text: string; options: SendOptions }[],
+  remount: () => {},
+}
+;(window as unknown as { outboxTest: typeof outboxTest }).outboxTest = outboxTest
+
+/** 1df298f5: a refused first message left only in the browser outbox, then the page reloads. */
+function OutboxApp() {
+  const [mount, setMount] = useState(0)
+  outboxTest.remount = () => setMount(value => value + 1)
+  const transport = useMemo<ChatQueueTransport>(() => ({
+    list: async () => ({ items: [], queue: { depth: 0, state: "empty" } }),
+    cancel: async () => { throw new Error("unused") },
+    retry: async () => { throw new Error("unused") }, sendNow: async () => {},
+    subscribe: () => () => {},
+  }), [])
+  const send = async (text: string, options?: SendOptions) => {
+    outboxTest.submissions.push({ text, options: options! })
+    return { disposition: "delivered", messageUid: options?.messageUid }
+  }
+  return <div style={{ width: "100%", height: 700 }}><ChatPanel key={mount} messages={[]} isStreaming={false}
+    onSend={(text, _images, options) => send(text, options)}
+    onSendInput={(parts, _attachments, options) => send(parts.filter(part => part.type === "text").map(part => part.text).join(" "), options)}
+    header={<div data-slot="outbox-header">Nova-like header</div>}
+    onInterrupt={() => {}} sessionId="outbox-test" queueTransport={transport} /></div>
+}
+
+createRoot(document.getElementById("root")!).render(new URLSearchParams(location.search).has("outbox") ? <OutboxApp /> : new URLSearchParams(location.search).has("wait") ? <WaitApp /> : new URLSearchParams(location.search).has("events") ? <EventApp /> :new URLSearchParams(location.search).has("links") ? <LinkProbe /> : <App />)

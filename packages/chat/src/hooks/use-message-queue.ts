@@ -129,8 +129,15 @@ export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, d
     void migrateLegacyOutbox(storage, sessionId, item =>
       onDrainRef.current(item.text, item.images, item.attachments, remoteSubmissionOptions(item)),
       () => refreshRemoteMessageQueue(sessionId),
+      // A record the server refused, or could not confirm, is shown as failed with its text,
+      // never kept only in storage where a reload would hide it. A view that already holds
+      // the same item (this tab, before a remount) keeps its own copy.
+      entries => store.update(previous => [
+        ...previous,
+        ...entries.filter(entry => !previous.some(item => item.id === entry.id)),
+      ]),
     ).catch(() => {})
-  }, [persistQueue, remote, sessionId])
+  }, [persistQueue, remote, sessionId, store])
 
   const drain = useCallback(() => {
     if (remote) return
@@ -272,6 +279,11 @@ export function useMessageQueue({ sessionId, persistQueue = true, isStreaming, d
       if (remote && sessionId && !item.optimistic) {
         const transport = getRemoteMessageQueueTransport(sessionId)
         if (transport) void transport.cancel(item.remoteId ?? id).catch(() => refreshRemoteMessageQueue(sessionId))
+      }
+      // The text moves to the composer, so its outbox record must not bring it back on reload.
+      if (remote && sessionId) {
+        const storage = getStorage()
+        if (storage) saveQueue(storage, sessionId, loadQueue(storage, sessionId).filter(message => message.id !== id), Date.now())
       }
       store.update(previous => cancelEntry(previous, id))
     }

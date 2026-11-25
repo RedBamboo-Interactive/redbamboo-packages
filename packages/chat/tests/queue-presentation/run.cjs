@@ -89,6 +89,55 @@ async function main() {
         results.push({ scenario, width, passed: true, scope: "deterministic shared ChatPanel fixture" })
         await page.close()
       }
+      // 1df298f5: the exact refused record found in the browser, after a reload.
+      const refused = {
+        id: "q-6852f49a262c41b6b91e7caefe1aa2e0", messageUid: "6852f49a262c41b6b91e7caefe1aa2e0", sessionId: "outbox-test",
+        text: "Make a video like the Cookbook video", delivery: "after-current", appearance: "queue",
+        createdAt: "2026-11-25T18:36:25.644Z", timelineAt: "2026-11-25T18:36:25.644Z", optimistic: true, admissionUncertain: false,
+        deliveryError: "Not sent: an update is waiting to restart Leaf. Your draft is kept on this device. Retry after the update finishes.",
+      }
+      for (const action of ["retry", "edit"]) {
+        const outbox = await browser.newPage({ viewport: { width, height: width === 390 ? 844 : 900 } })
+        const outboxErrors = []
+        outbox.on("pageerror", error => outboxErrors.push(error.message))
+        await outbox.addInitScript(record => {
+          if (!sessionStorage.getItem("seeded")) {
+            localStorage.setItem("rb-chat-queue:outbox-test", JSON.stringify({ items: [record], savedAt: Date.now() }))
+            sessionStorage.setItem("seeded", "1")
+          }
+        }, refused)
+        await outbox.goto(origin + "?outbox")
+        const ghost = outbox.locator('[data-slot="queued-message"][data-queue-state="failed"]')
+        await ghost.waitFor()
+        await ghost.getByText(refused.text).waitFor()
+        await outbox.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)))
+        assert.equal(await outbox.evaluate(() => outboxTest.submissions.length), 0, "a refused record is never re-sent on mount")
+        await outbox.evaluate(() => outboxTest.remount())
+        await outbox.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)))
+        assert.equal(await ghost.count(), 1, "remount shows one failed ghost")
+        assert.equal(await outbox.evaluate(() => outboxTest.submissions.length), 0)
+        if (action === "retry") {
+          await ghost.getByRole("button", { name: "Retry queued message", exact: true }).click()
+          await outbox.waitForFunction(() => outboxTest.submissions.length === 1)
+          const sent = await outbox.evaluate(() => outboxTest.submissions[0])
+          assert.equal(sent.options.idempotencyKey, refused.id, "retry keeps the record's idempotency key")
+          assert.equal(sent.options.messageUid, refused.messageUid)
+          await outbox.waitForFunction(() => !localStorage.getItem("rb-chat-queue:outbox-test"))
+        } else {
+          await ghost.locator("[data-chat-user-bubble]").click()
+          await outbox.waitForFunction(text => document.querySelector("textarea")?.value.includes(text), refused.text)
+          assert.equal(await outbox.evaluate(() => localStorage.getItem("rb-chat-queue:outbox-test")), null, "edit clears the outbox record")
+          await outbox.reload()
+          await outbox.locator("textarea").first().waitFor()
+          await outbox.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)))
+          assert.equal(await outbox.locator('[data-slot="queued-message"]').count(), 0, "the edited text does not come back as a ghost")
+          assert.equal(await outbox.evaluate(() => outboxTest.submissions.length), 0)
+        }
+        assert.deepEqual(outboxErrors, [])
+        await outbox.screenshot({ path: path.join(scratch, `outbox-${action}-${width}.png`), fullPage: true })
+        results.push({ scenario: `refused-outbox-${action}`, width, passed: true })
+        await outbox.close()
+      }
       const events = await browser.newPage({ viewport: { width, height: 850 } })
       const eventErrors = []
       events.on("pageerror", error => eventErrors.push(error.message))
