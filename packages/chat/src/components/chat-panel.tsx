@@ -77,7 +77,7 @@ export function ChatPanel(props: ChatPanelProps) {
     hasEarlierMessages = false, onLoadEarlier, isLoadingEarlier = false,
     focusMessageRequest, onFocusMessageResult,
     placeholder, className, header, footer,
-    resolveImageSrc, resolveFileLink, resolveEventLink, resolveAgentNote, loadTranscriptPayload, getTranscriptPayloadMediaUrl, getTranscriptPayloadDownloadUrl,
+    resolveImageSrc, resolveFileLink, resolveEventLink, resolveAgentNote, renderEventDetails, loadTranscriptPayload, getTranscriptPayloadMediaUrl, getTranscriptPayloadDownloadUrl,
     permissionMode, onTogglePlanMode, onExecutePlan,
     enableImageAttachments, enableFileAttachments, attachmentTransport, draftStorageKey,
     prepareOutgoingMessage,
@@ -260,7 +260,7 @@ export function ChatPanel(props: ChatPanelProps) {
       isStreaming={false}
       isLastAssistantBlock={false}
       friezeDensity={friezeDensity}
-      resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote}
+      resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} renderEventDetails={renderEventDetails}
       resolveEventQueueStatus={resolveEventQueueStatus}
       resolveImageSrc={resolveImageSrc}
       resolveFileLink={resolveFileLink}
@@ -804,7 +804,7 @@ export function ChatPanel(props: ChatPanelProps) {
         </ActivityNoteProvider>
       </ActivityShapesProvider>
       <PartModal part={detachedPart} open={!!detachedPart} onClose={() => setDetachedTaskId(null)}
-        resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote}
+        resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} renderEventDetails={renderEventDetails}
         resolveAgentInfo={props.resolveAgentInfo}
         loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
       <ActivityItemDialog item={shownHostItem} onClose={() => setOpenHostKey(null)} />
@@ -1010,7 +1010,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     onPermissionDecision={onPermissionDecision}
                     resolveImageSrc={resolveImageSrc}
                     resolveFileLink={resolveFileLink}
-                    resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote}
+                    resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} renderEventDetails={renderEventDetails}
                     resolveEventQueueStatus={resolveEventQueueStatus}
                     resolveAgentInfo={props.resolveAgentInfo}
                     loadTranscriptPayload={loadTranscriptPayload}

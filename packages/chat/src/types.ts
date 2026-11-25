@@ -995,6 +995,7 @@ export interface ChatPanelProps {
    */
   resolveEventLink?: (event: import("./components/event-view").ParsedEvent) => (() => void) | undefined
   resolveAgentNote?: import("./components/event-view").ResolveAgentNote
+  renderEventDetails?: import("./components/event-view").RenderEventDetails
   /**
    * The host's own status for an event the session input queue knows nothing about (e.g. an event
    * the host holds for the next turn). It shows exactly like a queued event's status: the marker's

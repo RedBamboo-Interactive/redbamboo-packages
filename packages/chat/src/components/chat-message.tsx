@@ -30,7 +30,7 @@ import { stripHiddenMessageEnvelopes } from "../lib/message-content"
 import { ToolInputView } from "./tool-input-view"
 import { ToolOutputView } from "./tool-output"
 import { LazyToolOutput } from "./lazy-tool-output"
-import { agentNoteTime, parseEventPart, EventView, type ParsedEvent, type ResolveAgentNote } from "./event-view"
+import { agentNoteTime, parseEventPart, EventView, type ParsedEvent, type RenderEventDetails, type ResolveAgentNote } from "./event-view"
 import { isEventBlock, isEventPart, usesSquareEventMarker } from "../lib/event-parts"
 import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-semantics"
 import { PART_COLOR, getPartColor, getSpinnerColor, isBackgroundRunning } from "../lib/part-colors"
@@ -150,6 +150,7 @@ interface ChatMessageProps {
    */
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
   resolveAgentNote?: ResolveAgentNote
+  renderEventDetails?: RenderEventDetails
   resolveEventQueueStatus?: ResolveEventQueueStatus
   /** Agent identity for event senders, e.g. the portrait on an Agent note. */
   resolveAgentInfo?: ResolveAgentInfo
@@ -223,6 +224,7 @@ export const ChatMessage = memo(function ChatMessage({
   resolveFileLink,
   resolveEventLink,
   resolveAgentNote,
+  renderEventDetails,
   resolveEventQueueStatus,
   resolveAgentInfo,
   loadTranscriptPayload,
@@ -559,7 +561,7 @@ export const ChatMessage = memo(function ChatMessage({
             <div key={i} className="msg-enter-ai">
               <PartFrieze blockId={block.id} parts={group.parts} allParts={block.parts} turnOrigins={turnOrigins} isLive={group.isLive} awaitingApproval={approvals}
                 density={friezeDensity} eventOnly={friezeDensity === "minimal" && isEventBlock(block)}
-                {...(twins ? { rowJobs: twins, drawsJobs: i === lastFrieze, onStopJob } : {})} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+                {...(twins ? { rowJobs: twins, drawsJobs: i === lastFrieze, onStopJob } : {})} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} renderEventDetails={renderEventDetails} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
               {friezeApprovals(group.parts).map(approvalCard)}
             </div>
           )
@@ -661,7 +663,7 @@ function partLabel(part: MessagePart): string {
 
 type FriezeSelection = { part?: MessagePart; result?: MessagePart; rowId: string; index: number; jobId?: string }
 
-function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "detailed", eventOnly = false, awaitingApproval, rowJobs, drawsJobs = false, onStopJob, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
+function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "detailed", eventOnly = false, awaitingApproval, rowJobs, drawsJobs = false, onStopJob, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, renderEventDetails, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl }: {
   blockId: string
   parts: MessagePart[]
   allParts: MessagePart[]
@@ -684,6 +686,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
   resolveAgentNote?: ResolveAgentNote
+  renderEventDetails?: RenderEventDetails
   resolveEventQueueStatus?: ResolveEventQueueStatus
   resolveAgentInfo?: ResolveAgentInfo
   loadTranscriptPayload?: TranscriptPayloadLoader
@@ -905,7 +908,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
 
       <PartModal part={modalSelection?.jobId ? undefined : selectedPart} pairedResult={modalSelection?.jobId ? undefined : modalSelection?.result}
         job={modalSelection?.jobId ? selectedJob : undefined} onStopJob={stopJob}
-        open={!!selected && !jobGone} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
+        open={!!selected && !jobGone} onClose={() => setSelected(null)} navigation={navigation} minHeight={minHeight} resolveFileLink={resolveFileLink} resolveImageSrc={resolveImageSrc} resolveEventLink={resolveEventLink} resolveAgentNote={resolveAgentNote} renderEventDetails={renderEventDetails} resolveEventQueueStatus={resolveEventQueueStatus} resolveAgentInfo={resolveAgentInfo} loadTranscriptPayload={loadTranscriptPayload} getTranscriptPayloadDownloadUrl={getTranscriptPayloadDownloadUrl} />
     </>
   )
 }
@@ -991,6 +994,7 @@ interface PartModalProps {
   resolveImageSrc?: (src: string) => string | undefined
   resolveEventLink?: (event: ParsedEvent) => (() => void) | undefined
   resolveAgentNote?: ResolveAgentNote
+  renderEventDetails?: RenderEventDetails
   resolveEventQueueStatus?: ResolveEventQueueStatus
   resolveAgentInfo?: ResolveAgentInfo
   loadTranscriptPayload?: TranscriptPayloadLoader
@@ -1077,7 +1081,7 @@ export function PartModal(props: PartModalProps) {
 /** The squares' dialog width, shared by a twin's summary while stepping. */
 const SQUARE_DIALOG_MAX_WIDTH = "min(42rem, calc(100vw - 2rem))"
 
-function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
+function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, renderEventDetails, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
   breadcrumb?: React.ReactNode
   background?: React.ReactNode
 }) {
@@ -1120,19 +1124,24 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
 
   if (event) {
     const note = resolveAgentNote?.(event)
-    if (note?.renderExchange) {
-      return (
-        <Dialog open={open} onOpenChange={value => { if (!value) onClose() }}>
-          <DialogContent motion="snappy" onKeyDown={onKeyDown} className="gap-0 p-0 sm:max-w-3xl"
-            data-slot="agent-note-exchange-dialog" style={{ minHeight: heldHeight("calc(100svh - 2rem)") }}>
-            {note.renderExchange({
-              open, part, onClose,
-              navigation: navigation ? <PartNavigationControls navigation={navigation} /> : null,
-              queueStatus: <EventQueueStatusBar status={resolveEventQueueStatus?.(part)} />,
-            })}
-          </DialogContent>
-        </Dialog>
-      )
+    if (note?.renderExchange || renderEventDetails) {
+      const slot = {
+        open, part, onClose,
+        navigation: navigation ? <PartNavigationControls navigation={navigation} /> : null,
+        queueStatus: <EventQueueStatusBar status={resolveEventQueueStatus?.(part)} />,
+      }
+      const details = note?.renderExchange?.(slot) ?? renderEventDetails?.(event, slot)
+      if (details != null) {
+        return (
+          <Dialog open={open} onOpenChange={value => { if (!value) onClose() }}>
+            <DialogContent motion="snappy" onKeyDown={onKeyDown} className="gap-0 p-0 sm:max-w-3xl"
+              data-slot={note?.renderExchange ? "agent-note-exchange-dialog" : "event-details-dialog"}
+              style={{ minHeight: heldHeight("calc(100svh - 2rem)") }}>
+              {details}
+            </DialogContent>
+          </Dialog>
+        )
+      }
     }
     if (note) {
       const avatar = resolveChatMediaSrc(note.avatarUrl ?? undefined, resolveImageSrc)

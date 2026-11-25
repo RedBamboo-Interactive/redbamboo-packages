@@ -40,13 +40,18 @@ export interface AgentNotePresentation {
   renderExchange?: (props: AgentNoteExchangeSlot) => ReactNode
 }
 
-export interface AgentNoteExchangeSlot {
+export interface EventDetailsSlot {
   open: boolean
   part: MessagePart
   navigation: ReactNode
   queueStatus: ReactNode
   onClose: () => void
 }
+
+/** Host-owned event content inside the shared activity dialog. */
+export type RenderEventDetails = (event: ParsedEvent, slot: EventDetailsSlot) => ReactNode
+
+export type AgentNoteExchangeSlot = EventDetailsSlot
 
 export type ResolveAgentNote = (event: ParsedEvent) => AgentNotePresentation | undefined
 
