@@ -29,6 +29,8 @@ import { isUnsafeLinkHref, remarkUserText } from "../lib/user-markdown"
 import { rehypeColorSwatches } from "../lib/color-swatch"
 import { rehypeOrderedListMarkers } from "../lib/ordered-list-markers"
 import { codeBlockActionEntries, codeBlockSource, type HastLike } from "../lib/chat-actions"
+import { fencedBlockLanguage, type HastElementLike } from "../lib/host-blocks"
+import { useChatBlockRenderers, type ChatBlockRenderers } from "./host-blocks"
 
 type FileLinkResolver = (
   filePath: string,
@@ -310,13 +312,37 @@ function EntityMarkdownCard({ reference }: { reference: EntityEmbedReference }) 
   )
 }
 
+/**
+ * A fenced block a host renders itself. Its source comes from the syntax tree, as Code Copy's does, so the
+ * transcript, copy and export keep the authored lines.
+ */
+function HostBlock({ node, renderers }: { node: HastElementLike | undefined; renderers: ChatBlockRenderers }) {
+  const language = fencedBlockLanguage(node)
+  const Block = language ? renderers[language] : undefined
+  if (!language || !Block) return null
+  return (
+    <div data-slot="chat-host-block" data-language={language} className="my-2 w-full font-sans">
+      <Block source={codeBlockSource(node)} language={language} />
+    </div>
+  )
+}
+
+function hasHostBlock(node: HastElementLike | undefined, renderers: ChatBlockRenderers): boolean {
+  const language = fencedBlockLanguage(node)
+  return !!language && Object.prototype.hasOwnProperty.call(renderers, language)
+}
+
 function useMarkdownComponents(
   resolveImageSrc: ((src: string) => string | undefined) | undefined,
   resolveFileLink: FileLinkResolver | undefined,
   currentOrigin: string,
+  /** Authored text only: a user-typed message never turns into a host's widget. */
+  hostBlocks = true,
 ) {
   const entityEmbedsEnabled = useEntityInteraction() !== null
   const leafMenu = useContextMenuEnabled()
+  const registered = useChatBlockRenderers()
+  const renderers = hostBlocks && registered && Object.keys(registered).length > 0 ? registered : null
   const resolveRef = useRef(resolveImageSrc)
   resolveRef.current = resolveImageSrc
 
@@ -337,13 +363,17 @@ function useMarkdownComponents(
         ? <EntityMarkdownCard reference={reference} />
         : <p {...props}>{children}</p>
     },
-    // Fenced blocks render as before unless the Leaf context menu is on.
-    ...(leafMenu ? {
-      pre: ({ node, children, ...props }: React.HTMLAttributes<HTMLPreElement> & { node?: unknown }) => (
-        <CodeBlock node={node as HastLike | undefined} {...props}>{children}</CodeBlock>
-      ),
+    // Fenced blocks render as before unless the Leaf context menu is on, or a host renders their language.
+    ...(leafMenu || renderers ? {
+      pre: ({ node, children, ...props }: React.HTMLAttributes<HTMLPreElement> & { node?: unknown }) => {
+        const hast = node as HastElementLike | undefined
+        if (renderers && hasHostBlock(hast, renderers)) return <HostBlock node={hast} renderers={renderers} />
+        return leafMenu
+          ? <CodeBlock node={hast} {...props}>{children}</CodeBlock>
+          : <pre {...props}>{children}</pre>
+      },
     } : {}),
-  }), [currentOrigin, entityEmbedsEnabled, leafMenu, resolveFileLink])
+  }), [currentOrigin, entityEmbedsEnabled, leafMenu, renderers, resolveFileLink])
 }
 
 const CHARS_PER_FRAME = 3
@@ -415,7 +445,7 @@ export function MarkdownRenderer({
   resolveFileLink?: FileLinkResolver
 }) {
   const environment = useUiEnvironment()
-  const mdComponents = useMarkdownComponents(resolveImageSrc, resolveFileLink, environment.window.location.origin)
+  const mdComponents = useMarkdownComponents(resolveImageSrc, resolveFileLink, environment.window.location.origin, !userText)
 
   return (
     <Markdown

@@ -89,6 +89,8 @@ export { ContextSquare, PendingContextAttachment, PendingContextBanner, parseCon
 export type { ContextCardData, ContextSquareProps, PendingContextAttachmentProps, PendingContextBannerProps } from "./components/context-card"
 export { Composer } from "./components/composer"
 export { StreamingText, MarkdownRenderer, MediaLightbox } from "./components/streaming-text"
+export { ChatBlockRenderersProvider } from "./components/host-blocks"
+export type { ChatBlockProps, ChatBlockRenderers } from "./components/host-blocks"
 export { MorphSpinner } from "./components/morph-spinner"
 export { ToolInputView } from "./components/tool-input-view"
 export { ToolOutputView } from "./components/tool-output"
