@@ -859,6 +859,8 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
                 style={{
                   backgroundColor: paint.color,
                   ...paint.highlight,
+                  // Not in the conversation yet: an outline in its own colour until it joins.
+                  ...(queueStatus?.pending ? { backgroundColor: "transparent", boxShadow: `inset 0 0 0 1.5px ${paint.color}` } : {}),
                   ...(quiet ? { width: 8, height: 8 } : {}),
                 }}
                 title={note ? undefined : part.task ? `${label}: ${part.task.status}` : label}
@@ -870,6 +872,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
                 data-tool-use-id={part.toolUseId}
                 data-task-status={part.task?.status}
                 data-awaiting-approval={waitingApproval || undefined}
+                data-pending={queueStatus?.pending || undefined}
               />
             )
             return [

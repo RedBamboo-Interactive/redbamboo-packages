@@ -995,6 +995,12 @@ export interface ChatPanelProps {
    */
   resolveEventLink?: (event: import("./components/event-view").ParsedEvent) => (() => void) | undefined
   resolveAgentNote?: import("./components/event-view").ResolveAgentNote
+  /**
+   * The host's own status for an event the session input queue knows nothing about (e.g. an event
+   * the host holds for the next turn). It shows exactly like a queued event's status: the marker's
+   * label, the status bar in its dialog, and attention visibility. The input queue's status wins.
+   */
+  resolveHostEventStatus?: import("./components/event-queue-status").ResolveEventQueueStatus
   /** Fetch transcript bytes on demand. Closed tool modals never call it. */
   loadTranscriptPayload?: TranscriptPayloadLoader
   /** Browser-displayable URL for binary transcript media such as generated images. */

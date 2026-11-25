@@ -235,10 +235,12 @@ export function ChatPanel(props: ChatPanelProps) {
   }, [eventSteers, messageQueue.queue, messageQueue.steer, handleSendQueued])
 
   const eventQueueByUid = useMemo(() => queuedItemsByInputUid(messageQueue.queue), [messageQueue.queue])
+  const { resolveHostEventStatus } = props
   const resolveEventQueueStatus = useCallback<ResolveEventQueueStatus>(part => {
     const uid = eventInputMessageUid(part)
-    return uid ? eventQueueStatus(eventQueueByUid.get(uid), messageQueue.cancel, handleSendQueuedEvent, eventSend) : undefined
-  }, [eventQueueByUid, messageQueue.cancel, handleSendQueuedEvent, eventSend])
+    const queued = uid ? eventQueueStatus(eventQueueByUid.get(uid), messageQueue.cancel, handleSendQueuedEvent, eventSend) : undefined
+    return queued ?? resolveHostEventStatus?.(part)
+  }, [eventQueueByUid, messageQueue.cancel, handleSendQueuedEvent, eventSend, resolveHostEventStatus])
 
   // The host's marker preference, except where a marker needs attention.
   const { isFriezeMarkerVisible, friezeDensity } = props

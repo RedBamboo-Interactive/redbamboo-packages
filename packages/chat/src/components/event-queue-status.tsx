@@ -7,6 +7,8 @@ export interface EventQueueStatus {
   label: string
   failed: boolean
   actions: ReactNode
+  /** Not in the conversation yet: the marker is drawn hollow until it is. */
+  pending?: boolean
 }
 
 export type ResolveEventQueueStatus = (part: MessagePart) => EventQueueStatus | undefined
