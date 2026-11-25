@@ -40,6 +40,8 @@ export interface ContextMenuItem {
   /** Renders a checkbox item when defined. */
   checked?: boolean
   children?: ContextMenuEntry[]
+  /** Renders children inline under this label instead of opening a submenu. */
+  group?: true
   commandId?: string
   run?: (ctx: ContextMenuRunContext) => void | Promise<void>
   /** Extra attributes for the rendered item (stable `data-*` hooks, `aria-*`). */

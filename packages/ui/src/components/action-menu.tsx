@@ -18,7 +18,9 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuSub,
@@ -79,6 +81,14 @@ function renderEntries(entries: readonly ContextMenuEntry[], ctx: () => ContextM
     if (isContextMenuSeparator(entry)) return <DropdownMenuSeparator key={entry.id} />
     const item: ContextMenuItem = entry
     const run = () => { void item.run?.(ctx()) }
+    if (item.group && item.children?.length) {
+      return (
+        <DropdownMenuGroup key={item.id}>
+          <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</DropdownMenuLabel>
+          {renderEntries(item.children, ctx)}
+        </DropdownMenuGroup>
+      )
+    }
     if (item.children?.length) {
       return (
         <DropdownMenuSub key={item.id}>

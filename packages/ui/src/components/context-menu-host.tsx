@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react"
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { UiEnvironmentProvider, useUiEnvironment } from "../ui-environment"
 import {
   buildContextMenuSections,
@@ -384,8 +384,16 @@ function ContextMenuSheet({ menu, onClose }: { menu: OpenMenu; onClose: () => vo
     onClose()
   }
 
-  const renderItems = (entries: ContextMenuEntry[], target: Element | null) => entries.map((entry) => {
+  const renderItems = (entries: ContextMenuEntry[], target: Element | null): ReactNode => entries.map((entry) => {
     if (isContextMenuSeparator(entry)) return <div key={entry.id} role="separator" className="mx-3 my-1 h-px bg-border" />
+    if (entry.group && entry.children?.length) {
+      return (
+        <div key={entry.id} role="group" aria-label={entry.label}>
+          <div aria-hidden="true" className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{entry.label}</div>
+          {renderItems(entry.children, target)}
+        </div>
+      )
+    }
     return (
       <button
         key={entry.id}
