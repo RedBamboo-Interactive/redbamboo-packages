@@ -1,5 +1,6 @@
 import React from "react"
 import { createRoot } from "react-dom/client"
+import { DialogHeader, DialogTitle } from "@redbamboo/ui"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { normalizeChatJob } from "../../src/lib/chat-jobs"
 import type { FriezeDensity, MessageBlock, MessagePart, PermissionApprovals } from "../../src/types"
@@ -95,6 +96,26 @@ const noteMessages: MessageBlock[] = [{
   })),
 }]
 
+const exchangeMessages: MessageBlock[] = [{
+  id: "exchange-turn", role: "assistant", timestamp: stamp, parts: [
+    ...tool("Read", { file_path: "brief.md" }, readOutput.repeat(8)),
+    noteMessages[0].parts[0],
+    { type: "tool_use", toolName: "event:delegation", content: "Delegated to Code" },
+  ],
+}]
+
+function exchangeDetails(title: string, navigation: React.ReactNode) {
+  return <>
+    <DialogHeader className="shrink-0 px-4 py-3">
+      <DialogTitle>{title}</DialogTitle>
+      {navigation}
+    </DialogHeader>
+    <div role="region" aria-label="Exchange history" className="min-h-0 flex-1 overflow-y-auto p-4">
+      {Array.from({ length: 60 }, (_, index) => <p key={index}>Exchange message {index + 1}</p>)}
+    </div>
+  </>
+}
+
 const densityMessages: MessageBlock[] = [
   ...messages.map((block): MessageBlock => ({
     ...block,
@@ -119,6 +140,16 @@ function App() {
       permissionApprovals={approvals} jobs={params.has("job-markers") ? [...jobs, ...jobMarkerFixtures] : jobs}
       hideJobMarkers={params.has("hide-jobs")}
       isFriezeMarkerVisible={part => part.toolName !== "Grep" && part.toolName !== "event:hidden"} />
+  </div>
+
+  if (params.has("exchanges")) return <div style={{ width: "100%", height: "100vh" }}>
+    <ChatPanel messages={exchangeMessages} isStreaming={false} sessionId="part-navigation-exchanges" persistQueue={false}
+      resolveAgentNote={event => event.key === "agent-note" ? {
+        lead: "Note from Nova in", discussion: noteDiscussionTitle, avatarUrl: null,
+        renderExchange: ({ navigation }) => exchangeDetails("Discussion exchange", navigation),
+      } : undefined}
+      renderEventDetails={(event, { navigation }) => event.key === "delegation"
+        ? exchangeDetails("Delegation exchange", navigation) : null} />
   </div>
 
   const withJobs = params.has("jobs")

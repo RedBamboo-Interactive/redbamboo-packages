@@ -1080,6 +1080,7 @@ export function PartModal(props: PartModalProps) {
 
 /** The squares' dialog width, shared by a twin's summary while stepping. */
 const SQUARE_DIALOG_MAX_WIDTH = "min(42rem, calc(100vw - 2rem))"
+const EXCHANGE_DIALOG_MAX_HEIGHT = "min(70svh, 40rem)"
 
 function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navigation, minHeight, resolveFileLink, resolveImageSrc, resolveEventLink, resolveAgentNote, renderEventDetails, resolveEventQueueStatus, resolveAgentInfo, loadTranscriptPayload, getTranscriptPayloadDownloadUrl, breadcrumb, background }: PartModalProps & {
   breadcrumb?: React.ReactNode
@@ -1136,7 +1137,7 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
           <Dialog open={open} onOpenChange={value => { if (!value) onClose() }}>
             <DialogContent motion="snappy" onKeyDown={onKeyDown} className="gap-0 p-0 sm:max-w-3xl"
               data-slot={note?.renderExchange ? "agent-note-exchange-dialog" : "event-details-dialog"}
-              style={{ minHeight: heldHeight("calc(100svh - 2rem)") }}>
+              style={{ maxHeight: EXCHANGE_DIALOG_MAX_HEIGHT, minHeight: heldHeight(EXCHANGE_DIALOG_MAX_HEIGHT) }}>
               {details}
             </DialogContent>
           </Dialog>

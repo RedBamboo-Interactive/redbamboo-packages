@@ -232,6 +232,35 @@ async function main() {
       await page.keyboard.press("Escape")
       await dialog.waitFor({ state: "detached" })
 
+      const exchangeViewportHeight = width > 1000 ? 1440 : 600
+      await page.setViewportSize({ width, height: exchangeViewportHeight })
+      await page.goto(`${origin}?exchanges`)
+      await page.getByRole("button", { name: "Read", exact: true }).click()
+      await dialog.getByRole("heading", { name: "Read", exact: true }).waitFor()
+      await settle()
+      const maxExchangeHeight = Math.min(exchangeViewportHeight * 0.7, 640)
+      assert.ok((await dialog.boundingBox()).height > maxExchangeHeight, "the previous dialog is taller than an exchange")
+      for (const title of ["Discussion exchange", "Delegation exchange"]) {
+        await page.keyboard.press("ArrowRight")
+        const exchange = page.getByRole("dialog", { name: title, exact: true })
+        const heading = exchange.getByRole("heading", { name: title, exact: true })
+        await heading.waitFor()
+        await settle()
+        const panel = await exchange.boundingBox()
+        assert.ok(panel.height <= maxExchangeHeight + 1, "an exchange caps both natural and carried-forward height")
+        assert.ok(panel.y > 0 && panel.y + panel.height < exchangeViewportHeight, "an exchange leaves room above and below")
+        const headingTop = (await heading.boundingBox()).y
+        const history = exchange.getByRole("region", { name: "Exchange history" })
+        assert.ok(await history.evaluate(node => {
+          node.scrollTop = node.scrollHeight
+          return node.clientHeight > 0 && node.scrollTop > 0
+        }), "the history scrolls inside the dialog")
+        assert.equal((await heading.boundingBox()).y, headingTop, "scrolling keeps the exchange header in view")
+      }
+      await page.keyboard.press("Escape")
+      await page.getByRole("dialog").waitFor({ state: "detached" })
+      await page.setViewportSize({ width, height })
+
       const disclosure = page.locator('[data-slot="frieze-disclosure"]')
       const square = page.locator("[data-part-index]")
       const buttonSnapshot = () => square.evaluateAll(nodes => nodes.map(node => node.outerHTML))
