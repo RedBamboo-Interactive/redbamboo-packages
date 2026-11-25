@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace RedBamboo.AppHost.Auth;
@@ -212,7 +213,10 @@ public sealed class AuthMiddleware
         }
 
         context.Items[ExecutionIdentityClaims.HttpContextItemKey] = identity;
-        using var scope = ExecutionContextScope.Push(identity);
+        // Tied to this host: work that captures the scope and outlives the host (a restart
+        // started from this request) must not keep acting as the caller.
+        var lifetime = context.RequestServices?.GetService(typeof(IHostApplicationLifetime)) as IHostApplicationLifetime;
+        using var scope = ExecutionContextScope.PushRequest(identity, lifetime?.ApplicationStopping ?? CancellationToken.None);
         await _next(context);
     }
 

@@ -221,18 +221,49 @@ public static class ExecutionIdentityClaims
     }
 }
 
+/// <summary>
+/// The execution identity of the work in progress. Anything started inside a scope captures it:
+/// Task.Run, timers, a whole restarted host. A request's scope (<see cref="PushRequest"/>) is
+/// therefore tied to the host that served the request: once that host stops, a copy that leaked
+/// into longer-lived work is no longer <see cref="Live"/>. Code that deliberately carries an
+/// identity beyond a request uses <see cref="Push"/>.
+/// </summary>
 public static class ExecutionContextScope
 {
-    private static readonly AsyncLocal<ExecutionIdentity?> CurrentValue = new();
+    private static readonly AsyncLocal<Holder?> CurrentValue = new();
 
-    public static ExecutionIdentity? Current => CurrentValue.Value;
+    /// <summary>The identity in scope, however it got here. Attribution only.</summary>
+    public static ExecutionIdentity? Current => CurrentValue.Value?.Identity;
 
+    /// <summary>
+    /// The identity in scope when it may still act: an explicit scope, or a request scope whose
+    /// host still runs. Null for a request scope captured into work that outlived its host.
+    /// Anything that signs or authorizes on the ambient identity reads this.
+    /// </summary>
+    public static ExecutionIdentity? Live
+        => CurrentValue.Value is { } holder && !holder.HostStopping.IsCancellationRequested
+            ? holder.Identity
+            : null;
+
+    /// <summary>An explicit scope: the caller means the work it carries to act for this identity.</summary>
     public static IDisposable Push(ExecutionIdentity identity)
+        => PushCore(new Holder(identity, CancellationToken.None));
+
+    /// <summary>
+    /// A request's scope, live while <paramref name="hostStopping"/> (the serving host's
+    /// ApplicationStopping) is not cancelled.
+    /// </summary>
+    public static IDisposable PushRequest(ExecutionIdentity identity, CancellationToken hostStopping)
+        => PushCore(new Holder(identity, hostStopping));
+
+    private static IDisposable PushCore(Holder holder)
     {
         var previous = CurrentValue.Value;
-        CurrentValue.Value = identity;
+        CurrentValue.Value = holder;
         return new Restore(() => CurrentValue.Value = previous);
     }
+
+    private sealed record Holder(ExecutionIdentity Identity, CancellationToken HostStopping);
 
     private sealed class Restore(Action restore) : IDisposable
     {
