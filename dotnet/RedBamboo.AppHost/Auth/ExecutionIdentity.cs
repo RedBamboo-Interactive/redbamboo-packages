@@ -256,6 +256,40 @@ public static class ExecutionContextScope
     public static IDisposable PushRequest(ExecutionIdentity identity, CancellationToken hostStopping)
         => PushCore(new Holder(identity, hostStopping));
 
+    /// <summary>
+    /// Runs <paramref name="work"/> detached from everything ambient: work that must not inherit
+    /// its caller's state, such as a host started or restarted from inside a request, or a boot
+    /// sequence. Everything the work starts (hosted services, loops, timers, Task.Run) begins with
+    /// an empty <see cref="ExecutionContext"/>: no scope here, and no other <see cref="AsyncLocal{T}"/>
+    /// of the caller either (compute call contexts, grants, logging scopes). Work that must act for
+    /// someone pushes that identity explicitly inside. The caller gets the work's completion and
+    /// failure back, and its own flow is unchanged.
+    /// <para>
+    /// 2026-11-25: RedLeaf's in-process restart ran from an Agent's request, so the new host and
+    /// every plugin loop it started carried that Agent's execution scope, and the gateway signed
+    /// their Compute calls as the Agent's beneficiary.
+    /// </para>
+    /// </summary>
+    public static Task RunDetachedAsync(Func<Task> work)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        // Flow already suppressed (a caller detaching itself): Task.Run captures nothing anyway,
+        // and SuppressFlow would throw.
+        if (ExecutionContext.IsFlowSuppressed()) return Task.Run(work);
+        // AsyncFlowControl must be undone on the thread that suppressed it: nothing awaits inside.
+        using (ExecutionContext.SuppressFlow())
+            return Task.Run(work);
+    }
+
+    /// <inheritdoc cref="RunDetachedAsync(Func{Task})"/>
+    public static Task<T> RunDetachedAsync<T>(Func<Task<T>> work)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+        if (ExecutionContext.IsFlowSuppressed()) return Task.Run(work);
+        using (ExecutionContext.SuppressFlow())
+            return Task.Run(work);
+    }
+
     private static IDisposable PushCore(Holder holder)
     {
         var previous = CurrentValue.Value;
