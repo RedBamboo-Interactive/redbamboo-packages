@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { eventImage, type EventImage } from "../lib/event-image"
 import { delegationPlacement } from "../lib/delegation-placement"
 import { parseQuotedMails, type QuotedMail } from "../lib/mail-event"
@@ -36,6 +36,16 @@ export interface AgentNotePresentation {
   avatarUrl: string | null
   discussionHref?: string
   onOpenDiscussion?: () => void
+  /** Host-owned note details, rendered in the existing square dialog. */
+  renderExchange?: (props: AgentNoteExchangeSlot) => ReactNode
+}
+
+export interface AgentNoteExchangeSlot {
+  open: boolean
+  part: MessagePart
+  navigation: ReactNode
+  queueStatus: ReactNode
+  onClose: () => void
 }
 
 export type ResolveAgentNote = (event: ParsedEvent) => AgentNotePresentation | undefined

@@ -1117,6 +1117,20 @@ function PartModalView({ part, job, onStopJob, pairedResult, open, onClose, navi
 
   if (event) {
     const note = resolveAgentNote?.(event)
+    if (note?.renderExchange) {
+      return (
+        <Dialog open={open} onOpenChange={value => { if (!value) onClose() }}>
+          <DialogContent motion="snappy" onKeyDown={onKeyDown} className="gap-0 p-0 sm:max-w-3xl"
+            data-slot="agent-note-exchange-dialog" style={{ minHeight: heldHeight("calc(100svh - 2rem)") }}>
+            {note.renderExchange({
+              open, part, onClose,
+              navigation: navigation ? <PartNavigationControls navigation={navigation} /> : null,
+              queueStatus: <EventQueueStatusBar status={resolveEventQueueStatus?.(part)} />,
+            })}
+          </DialogContent>
+        </Dialog>
+      )
+    }
     if (note) {
       const avatar = resolveChatMediaSrc(note.avatarUrl ?? undefined, resolveImageSrc)
       const time = agentNoteTime(event.timestamp)
