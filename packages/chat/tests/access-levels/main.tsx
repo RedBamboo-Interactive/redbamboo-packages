@@ -16,6 +16,7 @@ declare global {
     __decisions: PermissionDecisionPayload[]
     __changes: SessionConfigChange[]
     __emit: (event: ChatEvent) => void
+    __settleInference: () => void
   }
 }
 window.__decisions = []
@@ -32,10 +33,26 @@ let inference: SessionInferenceOptions = {
     { id: "second-model", name: "Second model with an unusually long provider display name", supportedEfforts: ["medium", "xhigh"] },
   ],
 }
+const inferenceListeners = new Set<() => void>()
+window.__settleInference = () => {
+  const pending = inference.pendingChanges?.[0]
+  if (!pending) return
+  inference = { ...inference, effort: pending.effort, pendingChanges: [] }
+  for (const listener of inferenceListeners) listener()
+}
+const subscribeInferenceSettings = (listener: () => void) => {
+  inferenceListeners.add(listener)
+  return () => { inferenceListeners.delete(listener) }
+}
+
 const inferenceSettingsClient: SessionInferenceSettingsClient = {
   load: async () => inference,
   set: async (_id, change) => {
     if (change.effort === "xhigh") throw new Error("This session has pending input.")
+    if (params.get("queueInference") === "1") {
+      inference = { ...inference, pendingChanges: [{ id: "settings-1", state: "pending", ...change }] }
+      return inference
+    }
     inference = { ...inference, ...change, effort: change.model ? "medium" : change.effort }
     return inference
   },
@@ -64,6 +81,7 @@ function ModalFixture() {
         stats={stats}
         messages={[]}
         inferenceSettingsClient={params.get("inference") === "1" ? inferenceSettingsClient : undefined}
+        subscribeInferenceSettings={subscribeInferenceSettings}
         qualityTierOptions={[
           { value: "high", label: "High", color: "#a78bfa", icon: "ph-bold ph-lightning" },
           { value: "low", label: "Low", color: "#38bdf8", icon: "ph-bold ph-feather" },

@@ -174,6 +174,21 @@ async function main() {
       check("phone: Model and Thinking persist accepted selections and show a refusal without losing the current values")
     }
 
+    {
+      const { page, errors, close } = await open("view=modal&host=level-only&inference=1&queueInference=1")
+      await openModal(page)
+      const thinking = page.getByRole("combobox", { name: "Thinking" })
+      await thinking.selectOption("low")
+      await page.getByText("Low queued", { exact: true }).waitFor()
+      assert.equal(await thinking.inputValue(), "high")
+      await page.evaluate(() => window.__settleInference())
+      await page.waitForFunction(() => document.querySelector('select[aria-label="Thinking"]')?.value === "low")
+      assert.equal(await page.getByText("Low queued", { exact: true }).count(), 0)
+      assert.deepEqual(errors, [])
+      await close()
+      check("phone: the active selection stays visible until a queued change settles, then refreshes from live invalidation")
+    }
+
     // ── A refused change keeps the previous level and says why ──
     {
       const { page, errors, close } = await open("view=modal&level=ask&refuse=1")

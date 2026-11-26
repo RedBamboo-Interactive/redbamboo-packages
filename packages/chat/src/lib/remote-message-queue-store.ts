@@ -22,6 +22,7 @@ function queuedMessage(item: ChatQueuedItem, previous: QueuedMessage | undefined
   return {
     ...(previous?.images ? { images: previous.images } : {}),
     id: previous?.id ?? item.clientId ?? item.id,
+    ...(item.kind === "inference-settings" ? { kind: item.kind } : {}),
     remoteId: item.id,
     clientId: item.clientId ?? undefined,
     sessionId: item.sessionId,
@@ -93,7 +94,8 @@ export async function refreshRemoteMessageQueue(sessionId: string): Promise<void
         .map(item => ({ item, previous: entry.store.getSnapshot().queue.find(message => matches(item, message)) }))
         // Delivered receipts remain only when they bridge a bubble already visible in this client.
         // Other clients converge through their transcript without manufacturing old outgoing UI.
-        .filter(({ item, previous }) => item.state !== "cancelled" && (item.state !== "delivered" || previous))
+        .filter(({ item, previous }) => item.state !== "cancelled"
+          && (item.state !== "delivered" || (item.kind !== "inference-settings" && previous)))
         .map(({ item, previous }) => queuedMessage(item, previous, snapshot.queue))
       entry.store.update(previous => {
         const next = [

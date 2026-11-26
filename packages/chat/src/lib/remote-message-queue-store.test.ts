@@ -288,3 +288,23 @@ test("an invalidated pending read cannot overwrite newer delivered state", async
   disconnect()
   resetRemoteMessageQueueStores()
 })
+
+test("an applied settings receipt leaves no outgoing message bridge", async () => {
+  resetRemoteMessageQueueStores()
+  const sessionId = "settings"
+  const store = getRemoteMessageQueueStore(sessionId)
+  const item = {
+    id: "control", kind: "inference-settings" as const, sessionId, sequence: 1, state: "pending" as const,
+    delivery: "after-current" as const, displayContent: "Change Thinking to high", messageUid: "control-uid",
+    createdAt: "2026-11-26T10:00:00Z", updatedAt: "2026-11-26T10:00:00Z", attemptCount: 0,
+  }
+  let snapshot: ChatQueueSnapshot = { items: [item], queue: { depth: 1, state: "waiting_for_session" } }
+  connectRemoteMessageQueue(sessionId, {
+    list: async () => snapshot, cancel: async () => item, retry: async () => item, sendNow: async () => {},
+  })
+  await refreshRemoteMessageQueue(sessionId)
+  assert.equal(store.getSnapshot().queue[0]?.kind, "inference-settings")
+  snapshot = { ...empty, items: [{ ...item, state: "delivered" }] }
+  await refreshRemoteMessageQueue(sessionId)
+  assert.deepEqual(store.getSnapshot().queue, [])
+})

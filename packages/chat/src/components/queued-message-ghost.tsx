@@ -33,6 +33,24 @@ interface QueuedMessageGhostProps {
  * The whole point of the queue is that this is never invisible.
  */
 export function QueuedMessageGhost({ item, friezeDensity, onCancel, onEdit, onSendNow, onSendEvent, eventSend, compactEventLabel, eventContent, eventDrawsOwnShape }: QueuedMessageGhostProps) {
+  if (item.kind === "inference-settings") {
+    return (
+      <div data-slot="queued-inference-settings" data-queue-item-id={item.remoteId ?? item.id}
+        className="mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+        <i aria-hidden="true" className="ph-bold ph-sliders-horizontal" />
+        <span className="min-w-0 break-words">{item.text}</span>
+        <span className={item.deliveryError ? "text-destructive" : undefined}>
+          {item.deliveryError ?? "Queued"}
+        </span>
+        {item.deliveryError && queuedMessageCanRetry(item) && (
+          <button type="button" onClick={() => onSendNow(item.id)} className="hover:text-contrast">Retry</button>
+        )}
+        <button type="button" onClick={() => onCancel(item.id)} className="hover:text-contrast"
+          aria-label="Cancel queued settings change">Cancel</button>
+      </div>
+    )
+  }
+
   const messageAppearance = item.appearance === "message" || item.remoteState === "delivered"
   // Queued and immediately delivered submissions are the same outgoing message
   // entering the same timeline. The dashed styling communicates queue state;

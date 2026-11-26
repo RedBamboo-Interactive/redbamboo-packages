@@ -353,8 +353,9 @@ function ConfigSelect({ label, value, options, onChange, disabled, optionDisable
   )
 }
 
-function InferenceSettingsRows({ client, sessionId, model, effort, fallback }: {
+function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fallback }: {
   client: SessionInferenceSettingsClient
+  subscribe?: SessionInfoButtonProps["subscribeInferenceSettings"]
   sessionId: string
   model?: string | null
   effort?: string | null
@@ -367,14 +368,18 @@ function InferenceSettingsRows({ client, sessionId, model, effort, fallback }: {
 
   useEffect(() => {
     let current = true
-    const startedAt = revision.current
-    client.load(sessionId).then(result => {
-      if (current && revision.current === startedAt) setOptions(result)
-    }).catch(() => {
-      if (current && revision.current === startedAt) setOptions(null)
-    })
-    return () => { current = false }
-  }, [client, sessionId, model, effort])
+    const refresh = () => {
+      const startedAt = ++revision.current
+      client.load(sessionId).then(result => {
+        if (current && revision.current === startedAt) setOptions(result)
+      }).catch(() => {
+        if (current && revision.current === startedAt) setOptions(null)
+      })
+    }
+    refresh()
+    const unsubscribe = subscribe?.(refresh)
+    return () => { current = false; unsubscribe?.() }
+  }, [client, subscribe, sessionId, model, effort])
 
   if (!options?.models.length) return fallback
   const models = options.models.map(({ id, name }) => ({ value: id, label: name }))
@@ -390,11 +395,13 @@ function InferenceSettingsRows({ client, sessionId, model, effort, fallback }: {
 
   async function select(change: SessionInferenceChange) {
     if (saving || change.model === "" || change.effort === "") return
-    revision.current++
+    const startedAt = ++revision.current
     setSaving(true)
     setError(null)
     try {
-      setOptions(await client.set(sessionId, change))
+      const result = await client.set(sessionId, change)
+      if (revision.current === startedAt) setOptions(result)
+      else setOptions(await client.load(sessionId))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't change session settings.")
     } finally {
@@ -410,6 +417,14 @@ function InferenceSettingsRows({ client, sessionId, model, effort, fallback }: {
         <ConfigSelect label="Thinking" slot="session-info-thinking" value={effortValue} options={effortChoices}
           disabled={saving} onChange={effort => select({ effort })} />
       ) : effortValue && <StatRow label="Thinking" value={formatProviderEffort(effortValue) ?? effortValue} />}
+      {options.pendingChanges?.map(operation => (
+        <p key={operation.id} role="status" className={operation.error ? "text-xs text-destructive" : "text-xs text-text-muted"}>
+          {operation.error?.message ?? [
+            operation.model ? formatModelName(operation.model) : null,
+            formatProviderEffort(operation.effort),
+          ].filter(Boolean).join(" · ") + " queued"}
+        </p>
+      ))}
       {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
     </>
   )
@@ -528,7 +543,7 @@ const EMPTY: never[] = []
 
 export function SessionStatsModal({
   open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions,
-  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, inferenceSettingsClient, fullAccessEnabled, fullAccessSettingsHref,
+  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, inferenceSettingsClient, subscribeInferenceSettings, fullAccessEnabled, fullAccessSettingsHref,
   children, subtitle, skills, node, workspace, memory, instructions, workingOn, nodeExtra, workspaceExtra, primaryLink,
   historyPartial, titleLeading, group,
 }: Props) {
@@ -696,7 +711,7 @@ export function SessionStatsModal({
     <div className="min-w-0" data-slot="session-info-settings">
       {providerValue && <EntityStatRow label="Provider" value={providerValue} option={providerOption} />}
       {open && inferenceSettingsClient && s.sessionId ? (
-        <InferenceSettingsRows key={"inference:" + s.sessionId} client={inferenceSettingsClient} sessionId={s.sessionId}
+        <InferenceSettingsRows key={"inference:" + s.sessionId} client={inferenceSettingsClient} subscribe={subscribeInferenceSettings} sessionId={s.sessionId}
           model={s.model} effort={s.effort} fallback={(
             <>
               <StatRow label="Model" value={modelLabel} />

@@ -187,6 +187,7 @@ export interface ChatQueueError {
 }
 
 export interface ChatQueuedItem {
+  kind?: "message" | "inference-settings"
   id: string
   clientId?: string | null
   sessionId: string
@@ -592,7 +593,16 @@ export interface SessionConfigChange {
   accessLevel?: AccessLevel
 }
 
+export interface SessionInferenceOperation {
+  id: string
+  model?: string | null
+  effort?: string | null
+  state: ChatQueuedItem["state"]
+  error?: ChatQueueError | null
+}
+
 export interface SessionInferenceOptions {
+  pendingChanges?: SessionInferenceOperation[]
   model?: string | null
   effort?: string | null
   models: { id: string; name: string; defaultEffort?: string | null; supportedEfforts: string[] }[]
@@ -618,6 +628,7 @@ export interface SessionInfoButtonProps {
   providerOptions?: SessionConfigOption[]
   loadProviderUsage?: ProviderUsageLoader
   inferenceSettingsClient?: SessionInferenceSettingsClient
+  subscribeInferenceSettings?: ChatQueueTransport["subscribe"]
   /**
    * Rejecting keeps the previous selection. For `accessLevel`, the rejection's
    * Error message is shown under the Permissions row, so pass the server's words.

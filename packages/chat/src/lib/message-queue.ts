@@ -2,6 +2,7 @@ import { eventInputMessageUid } from "./event-parts.ts"
 import type { ChatQueuedItem, ChatQueueSummary, ImageAttachment, MessageBlock, MessagePart, SendOptions, UploadedAttachment } from "../types"
 
 export interface QueuedMessage {
+  kind?: ChatQueuedItem["kind"]
   /** Stable presentation identity. For remote items this remains the client id across acknowledgement. */
   id: string
   /** Canonical server queue id used by queue mutation APIs. */
