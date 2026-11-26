@@ -101,8 +101,6 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
             var psi = CreateStartInfo(exe, config.TunnelToken);
 
             _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            _process.OutputDataReceived += OnData;
-            _process.ErrorDataReceived += OnData;
             _process.Exited += OnExited;
 
             try
@@ -112,8 +110,14 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
                     _process.Id,
                     _process.StartTime.ToUniversalTime().Ticks);
                 SaveProcessIdentity(_processIdentity);
-                _process.BeginOutputReadLine();
-                _process.BeginErrorReadLine();
+                var pid = _process.Id;
+                ReadOutput(_process, OnLine, ex => _logger?.LogWarning(
+                        "A cloudflared output line failed to process ({ErrorType})", ex.GetType().Name))
+                    .ContinueWith(
+                        reading => _logger?.LogWarning(
+                            "Reading cloudflared's output (PID {Pid}) ended with an error ({ErrorType})",
+                            pid, reading.Exception?.GetBaseException().GetType().Name),
+                        CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
                 _logger?.LogInformation("Started cloudflared tunnel process (PID {Pid})", _process.Id);
             }
             catch (Exception ex)
@@ -197,14 +201,58 @@ public sealed class CloudflareTunnelService : IAsyncDisposable
         return false;
     }
 
-    private void OnData(object sender, DataReceivedEventArgs e)
-    {
-        if (e.Data == null) return;
+    /// <summary>
+    /// Reads cloudflared's stdout and stderr line by line, each on a dedicated background thread, until both end.
+    /// On Windows, <see cref="Process"/> gives synchronous pipes, so BeginOutputReadLine/BeginErrorReadLine would
+    /// park one thread-pool worker in a blocking ReadFile per stream for the tunnel's whole life, and parked
+    /// workers hold back the pool's other work (N19, 2026-11-26). Killing the process ends both reads. A line
+    /// handler that throws goes to <paramref name="onError"/>, and the reading goes on.
+    /// </summary>
+    internal static Task ReadOutput(Process process, Action<string> onLine, Action<Exception>? onError = null)
+        => Task.WhenAll(
+            ReadLines(process.StandardOutput, onLine, onError, $"cloudflared {process.Id} stdout"),
+            ReadLines(process.StandardError, onLine, onError, $"cloudflared {process.Id} stderr"));
 
+    private static Task ReadLines(StreamReader reader, Action<string> onLine, Action<Exception>? onError, string threadName)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                while (reader.ReadLine() is { } line)
+                {
+                    try
+                    {
+                        onLine(line);
+                    }
+                    catch (Exception ex)
+                    {
+                        try { onError?.Invoke(ex); }
+                        catch { /* Reporting never stops the draining. */ }
+                    }
+                }
+                done.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                done.TrySetException(ex);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = threadName,
+        };
+        thread.Start();
+        return done.Task;
+    }
+
+    private void OnLine(string line)
+    {
         if (Status == TunnelStatus.Starting &&
-            (e.Data.Contains("Registered tunnel connection", StringComparison.OrdinalIgnoreCase) ||
-             e.Data.Contains("Connection registered", StringComparison.OrdinalIgnoreCase) ||
-             Regex.IsMatch(e.Data, @"connection [a-f0-9-]+ registered", RegexOptions.IgnoreCase)))
+            (line.Contains("Registered tunnel connection", StringComparison.OrdinalIgnoreCase) ||
+             line.Contains("Connection registered", StringComparison.OrdinalIgnoreCase) ||
+             Regex.IsMatch(line, @"connection [a-f0-9-]+ registered", RegexOptions.IgnoreCase)))
         {
             _logger?.LogInformation("Cloudflare tunnel connection registered");
             SetStatus(TunnelStatus.Running, null);
