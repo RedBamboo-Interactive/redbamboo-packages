@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { AccessLevel, MessageBlock, SessionStats, PromptCacheUsage, SessionConfigChange, SessionConfigOption, SessionInferenceSettingsClient, SessionInferenceOptions, SessionInferenceChange, ProviderUsageSnapshot, SessionInfoButtonProps } from "../types"
+import type { AccessLevel, MessageBlock, SessionStats, PromptCacheUsage, SessionConfigChange, SessionConfigOption, SessionInferenceSettingsClient, SessionInferenceOptions, SessionInferenceChange, ProviderUsageSnapshot, SessionInfoButtonProps, SessionNodeSettings, SessionNodeDestination, SessionNodeMoveReceipt, SessionNodeSettingsClient } from "../types"
 import {
   Button,
   Dialog,
@@ -440,6 +440,117 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
   )
 }
 
+function nodeChoiceKey(choice: SessionNodeDestination): string {
+  return JSON.stringify([choice.nodeId, choice.sessionRuntime])
+}
+
+function NodeSettingsRow({ client, subscribe, sessionId }: {
+  client: SessionNodeSettingsClient
+  subscribe?: SessionInfoButtonProps["subscribeInferenceSettings"]
+  sessionId: string
+}) {
+  const [settings, setSettings] = useState<SessionNodeSettings | null>(null)
+  const [operation, setOperation] = useState<SessionNodeMoveReceipt | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const retry = useRef<{ selection: string; generation: number; key: string; previewed: boolean } | null>(null)
+  const revision = useRef(0)
+
+  useEffect(() => {
+    let current = true
+    const refresh = () => {
+      const at = ++revision.current
+      client.load(sessionId).then(result => {
+        if (current && at === revision.current) setSettings(result)
+      }).catch(() => {})
+    }
+    refresh()
+    const unsubscribe = subscribe?.(refresh)
+    return () => { current = false; unsubscribe?.() }
+  }, [client, subscribe, sessionId])
+
+  useEffect(() => {
+    if (!operation || operation.state === "delivered" || operation.state === "failed" || operation.state === "cancelled") return
+    let current = true
+    const interval = window.setInterval(async () => {
+      try {
+        const next = await client.receipt(sessionId, operation.id)
+        if (!current) return
+        if (next.state === "delivered" || next.state === "failed" || next.state === "cancelled") {
+          const at = ++revision.current
+          const settings = await client.load(sessionId).catch(() => null)
+          if (!current) return
+          if (settings && at === revision.current) setSettings(settings)
+        }
+        setOperation(next)
+      } catch { /* keep the admitted operation visible until the connection returns */ }
+    }, 2000)
+    return () => { current = false; window.clearInterval(interval) }
+  }, [client, operation, sessionId])
+
+  if (!settings) return null
+  const selected = nodeChoiceKey(settings.active)
+  const isPending = operation?.state === "pending" || operation?.state === "delivering"
+  const choices = [settings.active, ...settings.destinations]
+  const options = choices.map(choice => ({
+    value: nodeChoiceKey(choice),
+    label: choices.some(other => other !== choice && other.name === choice.name)
+      ? choice.name + (choice.sessionRuntime ? " · " + choice.sessionRuntime.workspace : " · Local")
+      : choice.name,
+  }))
+
+  async function select(selection: string) {
+    if (!settings || saving || isPending || selection === selected) return
+    const target = settings.destinations.find(choice => nodeChoiceKey(choice) === selection)
+    if (!target) return
+    const generation = settings.generation
+    const previous = retry.current
+    const attempt = previous?.selection === selection && previous.generation === generation
+      ? previous : { selection, generation, key: crypto.randomUUID(), previewed: false }
+    retry.current = attempt
+    setSaving(true)
+    setError(null)
+    try {
+      if (!attempt.previewed) {
+        await client.preview(sessionId, generation, target, attempt.key)
+        attempt.previewed = true
+      }
+      const result = await client.move(sessionId, generation, target, attempt.key)
+      retry.current = null
+      setOperation(result)
+      const at = ++revision.current
+      const next = await client.load(sessionId).catch(() => null)
+      if (next && at === revision.current) setSettings(next)
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Couldn't change the session node.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      {settings.destinations.length > 0
+        ? <ConfigSelect label="Node" slot="session-info-node" value={selected} options={options}
+            disabled={!settings.canMove || saving || isPending} onChange={select} />
+        : <StatRow label="Node" value={settings.active.name} />}
+      {isPending && <p role="status" className="text-xs text-text-muted">Node change queued</p>}
+      {settings.state === "held" && (
+        <p role="status" data-slot="session-info-node-hold" className="text-xs text-text-muted">
+          {settings.reason === "binding_activation_pending"
+            ? "Waiting for this node to activate."
+            : "This node is unavailable."} {settings.destinations.length > 0 && "Choose another node to continue."}
+        </p>
+      )}
+      {(error || operation?.state === "failed" || operation?.state === "cancelled") && (
+        <p role="alert" className="text-xs text-destructive">
+          {error ?? operation?.error?.message ?? "The node change didn't complete."}
+        </p>
+      )}
+    </>
+  )
+}
+
 const CAP_TITLE = "Above the limit this session was started with"
 const FULL_OFF_TITLE = "Full access is turned off in Settings"
 
@@ -553,7 +664,7 @@ const EMPTY: never[] = []
 
 export function SessionStatsModal({
   open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions,
-  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, inferenceSettingsClient, subscribeInferenceSettings, fullAccessEnabled, fullAccessSettingsHref,
+  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, inferenceSettingsClient, nodeSettingsClient, subscribeInferenceSettings, fullAccessEnabled, fullAccessSettingsHref,
   children, subtitle, skills, node, workspace, memory, instructions, workingOn, nodeExtra, workspaceExtra, primaryLink,
   historyPartial, titleLeading, group,
 }: Props) {
@@ -720,6 +831,10 @@ export function SessionStatsModal({
   const settings = (
     <div className="min-w-0" data-slot="session-info-settings">
       {providerValue && <EntityStatRow label="Provider" value={providerValue} option={providerOption} />}
+      {open && nodeSettingsClient && s.sessionId && (
+        <NodeSettingsRow key={"node:" + s.sessionId} client={nodeSettingsClient}
+          subscribe={subscribeInferenceSettings} sessionId={s.sessionId} />
+      )}
       {open && inferenceSettingsClient && s.sessionId ? (
         <InferenceSettingsRows key={"inference:" + s.sessionId} client={inferenceSettingsClient} subscribe={subscribeInferenceSettings} sessionId={s.sessionId}
           model={s.model} effort={s.effort} fallback={(

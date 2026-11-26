@@ -624,6 +624,34 @@ export interface SessionInferenceSettingsClient {
   set: (sessionId: string, change: SessionInferenceChange) => Promise<SessionInferenceOptions>
 }
 
+export interface SessionNodeDestination {
+  nodeId: string
+  name: string
+  sessionRuntime?: { id: string; workspace: string; revision: string; providerInstanceId: string } | null
+}
+
+export interface SessionNodeSettings {
+  generation: number
+  active: SessionNodeDestination
+  state: "idle" | "busy" | "held"
+  reason?: string | null
+  canMove: boolean
+  destinations: SessionNodeDestination[]
+}
+
+export interface SessionNodeMoveReceipt {
+  id: string
+  state: ChatQueuedItem["state"]
+  error?: ChatQueueError | null
+}
+
+export interface SessionNodeSettingsClient {
+  load: (sessionId: string) => Promise<SessionNodeSettings>
+  preview: (sessionId: string, generation: number, destination: SessionNodeDestination, key: string) => Promise<void>
+  move: (sessionId: string, generation: number, destination: SessionNodeDestination, key: string) => Promise<SessionNodeMoveReceipt>
+  receipt: (sessionId: string, operationId: string) => Promise<SessionNodeMoveReceipt>
+}
+
 export interface SessionInfoButtonProps {
   stats: SessionStats | null
   messages: MessageBlock[]
@@ -634,6 +662,7 @@ export interface SessionInfoButtonProps {
   providerOptions?: SessionConfigOption[]
   loadProviderUsage?: ProviderUsageLoader
   inferenceSettingsClient?: SessionInferenceSettingsClient
+  nodeSettingsClient?: SessionNodeSettingsClient
   subscribeInferenceSettings?: ChatQueueTransport["subscribe"]
   /**
    * Rejecting keeps the previous selection. For `accessLevel`, the rejection's

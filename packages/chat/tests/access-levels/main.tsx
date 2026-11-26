@@ -4,7 +4,7 @@ import { Toaster } from "@redbamboo/ui"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { SessionInfoButton } from "../../src/components/context-indicator"
 import { processStreamEvent } from "../../src/lib/process-stream-event"
-import type { AccessLevel, ChatEvent, MessageBlock, PermissionDecisionPayload, QuestionState, SessionConfigChange, SessionInferenceOptions, SessionInferenceSettingsClient, SessionStats } from "../../src/types"
+import type { AccessLevel, ChatEvent, MessageBlock, PermissionDecisionPayload, QuestionState, SessionConfigChange, SessionInferenceOptions, SessionInferenceSettingsClient, SessionNodeSettings, SessionNodeSettingsClient, SessionStats } from "../../src/types"
 import "./fixture.css"
 
 // ?view=modal: the Info button and modal. &level= current level, &supported=plan,ask,... , &cap=, &full=off,
@@ -17,6 +17,8 @@ declare global {
     __changes: SessionConfigChange[]
     __emit: (event: ChatEvent) => void
     __settleInference: () => void
+    __settleNodeMove: () => void
+    __nodeChanges: Array<{ phase: string; id: string; generation: number; node: string; key: string }>
   }
 }
 window.__decisions = []
@@ -58,6 +60,33 @@ const inferenceSettingsClient: SessionInferenceSettingsClient = {
   },
 }
 
+const localNode = { nodeId: "local", name: "This computer" }
+const leafUbuntu = { nodeId: "ubuntu", name: "LeafUbuntu",
+  sessionRuntime: { id: "sessions", workspace: "fixture", revision: "pinned", providerInstanceId: "probe" } }
+let placement: SessionNodeSettings = {
+  active: leafUbuntu, generation: 1, state: "held", reason: "node_unavailable", canMove: true, destinations: [localNode],
+}
+let nodeMoveSettled = false
+window.__nodeChanges = []
+window.__settleNodeMove = () => {
+  placement = { active: localNode, generation: 2, state: "idle", canMove: true, destinations: [leafUbuntu] }
+  nodeMoveSettled = true
+  for (const listener of inferenceListeners) listener()
+}
+const nodeSettingsClient: SessionNodeSettingsClient = {
+  load: async () => placement,
+  preview: async (id, generation, destination, key) => {
+    window.__nodeChanges.push({ phase: "preview", id, generation, node: destination.nodeId, key })
+  },
+  move: async (id, generation, destination, key) => {
+    window.__nodeChanges.push({ phase: "apply", id, generation, node: destination.nodeId, key })
+    if (params.get("loseNodeReply") === "1" && window.__nodeChanges.filter(change => change.phase === "apply").length === 1)
+      throw new Error("Connection interrupted. Retry the same change.")
+    return { id: "node-operation", state: "pending" }
+  },
+  receipt: async (_session, id) => ({ id, state: nodeMoveSettled ? "delivered" : "pending" }),
+}
+
 function ModalFixture() {
   const [stats, setStats] = useState<SessionStats>({
     sessionId: "session-1",
@@ -81,6 +110,7 @@ function ModalFixture() {
         stats={stats}
         messages={[]}
         inferenceSettingsClient={params.get("inference") === "1" ? inferenceSettingsClient : undefined}
+        nodeSettingsClient={params.get("nodeMove") === "1" ? nodeSettingsClient : undefined}
         subscribeInferenceSettings={subscribeInferenceSettings}
         qualityTierOptions={[
           { value: "high", label: "High", color: "#a78bfa", icon: "ph-bold ph-lightning" },

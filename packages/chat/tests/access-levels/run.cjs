@@ -175,6 +175,39 @@ async function main() {
     }
 
     {
+      const { page, errors, close } = await open("view=modal&host=level-only&inference=1&nodeMove=1&loseNodeReply=1")
+      await openModal(page)
+      const node = page.getByRole("combobox", { name: "Node" })
+      await node.waitFor()
+      assert.equal(await node.isEnabled(), true)
+      await page.getByText("This node is unavailable. Choose another node to continue.", { exact: true }).waitFor()
+      assert.equal(await page.getByRole("combobox", { name: "Model" }).isVisible(), true)
+      assert.equal(await page.getByRole("combobox", { name: "Thinking" }).isVisible(), true)
+      await page.getByRole("dialog").screenshot({ path: path.join(shots, "change-node-held-session-info.png") })
+
+      await node.selectOption({ label: "This computer" })
+      await page.getByText("Connection interrupted. Retry the same change.", { exact: true }).waitFor()
+      assert.equal(await node.locator("option:checked").textContent(), "LeafUbuntu")
+      await node.selectOption({ label: "This computer" })
+      await page.getByText("Node change queued", { exact: true }).waitFor()
+      assert.equal(await node.isDisabled(), true)
+      const changes = await page.evaluate(() => window.__nodeChanges)
+      assert.deepEqual(changes.map(({ key, ...change }) => change), [
+        { phase: "preview", id: "session-1", generation: 1, node: "local" },
+        { phase: "apply", id: "session-1", generation: 1, node: "local" },
+        { phase: "apply", id: "session-1", generation: 1, node: "local" },
+      ])
+      assert.equal(new Set(changes.map(change => change.key)).size, 1, "the ambiguous apply retries the same exact key")
+      await page.evaluate(() => window.__settleNodeMove())
+      await page.getByText("Node change queued", { exact: true }).waitFor({ state: "hidden" })
+      assert.equal(await node.isEnabled(), true)
+      assert.equal(await node.locator("option:checked").textContent(), "This computer")
+      assert.deepEqual(errors, [])
+      await close()
+      check("phone: Node redirects a held destination, keeps its queued state, and retries the exact operation after a lost response")
+    }
+
+    {
       const { page, errors, close } = await open("view=modal&host=level-only&inference=1&queueInference=1")
       await openModal(page)
       const thinking = page.getByRole("combobox", { name: "Thinking" })

@@ -59,6 +59,10 @@ export type {
   SessionStats,
   SessionConfigChange,
   SessionInferenceSettingsClient,
+  SessionNodeSettingsClient,
+  SessionNodeSettings,
+  SessionNodeDestination,
+  SessionNodeMoveReceipt,
   SessionInferenceOptions,
   SessionInferenceChange,
   AccessLevel,
@@ -317,3 +321,4 @@ export { ConversationSearchDialog } from "./components/conversation-search"
 export type { ConversationSearchDialogProps, ConversationSearchResult, ConversationSearchSource } from "./components/conversation-search"
 export { sessionSearchPath, sessionSearchSource, toSessionSearchResults } from "./lib/session-search-source"
 export type { SessionSearchHttp, SessionSearchItem, SessionSearchResult } from "./lib/session-search-source"
+export { createSessionNodeSettingsClient } from "./lib/session-node-settings-client"
