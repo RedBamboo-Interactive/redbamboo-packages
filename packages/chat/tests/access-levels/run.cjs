@@ -143,6 +143,37 @@ async function main() {
       check("onAccessLevelChange alone offers the level and leaves Quality read-only")
     }
 
+    {
+      const { page, errors, close } = await open("view=modal&host=level-only&inference=1")
+      await openModal(page)
+      const model = page.getByRole("combobox", { name: "Model" })
+      const thinking = page.getByRole("combobox", { name: "Thinking" })
+      await model.waitFor()
+      await thinking.selectOption("low")
+      await page.waitForFunction(() => {
+        const picker = document.querySelector('select[aria-label="Thinking"]')
+        return picker?.value === "low" && !picker.disabled
+      })
+      await model.selectOption("second-model")
+      await page.waitForFunction(() => {
+        const picker = document.querySelector('select[aria-label="Thinking"]')
+        return picker?.value === "medium" && !picker.disabled
+      })
+      await thinking.selectOption("xhigh")
+      await page.getByText("This session has pending input.", { exact: true }).waitFor()
+      assert.equal(await model.inputValue(), "second-model")
+      assert.equal(await thinking.inputValue(), "medium")
+      assert(await model.evaluate(el => {
+        const dialog = el.closest('[role="dialog"]').getBoundingClientRect()
+        const select = el.getBoundingClientRect()
+        return select.left >= dialog.left && select.right <= dialog.right
+      }), "a long model name fits a phone dialog")
+      assert.deepEqual(errors, [])
+      await shot(page, "inference-settings-phone")
+      await close()
+      check("phone: Model and Thinking persist accepted selections and show a refusal without losing the current values")
+    }
+
     // ── A refused change keeps the previous level and says why ──
     {
       const { page, errors, close } = await open("view=modal&level=ask&refuse=1")

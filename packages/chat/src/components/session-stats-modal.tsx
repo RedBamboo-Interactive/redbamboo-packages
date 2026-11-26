@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { AccessLevel, MessageBlock, SessionStats, PromptCacheUsage, SessionConfigChange, SessionConfigOption, ProviderUsageSnapshot, SessionInfoButtonProps } from "../types"
+import type { AccessLevel, MessageBlock, SessionStats, PromptCacheUsage, SessionConfigChange, SessionConfigOption, SessionInferenceSettingsClient, SessionInferenceOptions, SessionInferenceChange, ProviderUsageSnapshot, SessionInfoButtonProps } from "../types"
 import {
   Button,
   Dialog,
@@ -336,19 +336,82 @@ function ConfigSelect({ label, value, options, onChange, disabled, optionDisable
   }
 
   return (
-    <div className="flex items-center justify-between py-1.5">
+    <div className="flex items-center justify-between py-1.5" data-slot={slot}>
       <span className="text-xs text-text-muted">{label}</span>
       <select
+        aria-label={label}
         value={value}
         onChange={e => onChange(e.target.value)}
         disabled={disabled}
-        className="bg-overlay-6 border border-overlay-10 rounded px-2 py-0.5 text-xs text-contrast outline-none focus:border-overlay-20 disabled:opacity-50"
+        className="min-w-0 max-w-[70%] truncate bg-overlay-6 border border-overlay-10 rounded px-2 py-0.5 text-xs text-contrast outline-none focus:border-overlay-20 disabled:opacity-50"
       >
         {options.map(o => (
           <option key={o.value} value={o.value} className="bg-popover text-popover-foreground">{o.label}</option>
         ))}
       </select>
     </div>
+  )
+}
+
+function InferenceSettingsRows({ client, sessionId, model, effort, fallback }: {
+  client: SessionInferenceSettingsClient
+  sessionId: string
+  model?: string | null
+  effort?: string | null
+  fallback: React.ReactNode
+}) {
+  const [options, setOptions] = useState<SessionInferenceOptions | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const revision = useRef(0)
+
+  useEffect(() => {
+    let current = true
+    const startedAt = revision.current
+    client.load(sessionId).then(result => {
+      if (current && revision.current === startedAt) setOptions(result)
+    }).catch(() => {
+      if (current && revision.current === startedAt) setOptions(null)
+    })
+    return () => { current = false }
+  }, [client, sessionId, model, effort])
+
+  if (!options?.models.length) return fallback
+  const models = options.models.map(({ id, name }) => ({ value: id, label: name }))
+  const selectedModel = options.models.find(candidate => candidate.id === options.model)
+  const modelValue = options.model ?? ""
+  if (!selectedModel) models.unshift({ value: modelValue, label: formatModelName(modelValue) || "Provider default" })
+
+  const efforts = selectedModel?.supportedEfforts ?? []
+  const effortValue = options.effort ?? ""
+  const effortChoices = efforts.map(value => ({ value, label: formatProviderEffort(value) ?? value }))
+  if (!effortChoices.some(choice => choice.value === effortValue))
+    effortChoices.unshift({ value: effortValue, label: formatProviderEffort(effortValue) ?? "Model default" })
+
+  async function select(change: SessionInferenceChange) {
+    if (saving || change.model === "" || change.effort === "") return
+    revision.current++
+    setSaving(true)
+    setError(null)
+    try {
+      setOptions(await client.set(sessionId, change))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't change session settings.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <ConfigSelect label="Model" slot="session-info-model" value={modelValue} options={models}
+        disabled={saving} onChange={model => select({ model })} />
+      {efforts.length > 0 ? (
+        <ConfigSelect label="Thinking" slot="session-info-thinking" value={effortValue} options={effortChoices}
+          disabled={saving} onChange={effort => select({ effort })} />
+      ) : effortValue && <StatRow label="Thinking" value={formatProviderEffort(effortValue) ?? effortValue} />}
+      {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+    </>
   )
 }
 
@@ -465,7 +528,7 @@ const EMPTY: never[] = []
 
 export function SessionStatsModal({
   open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions,
-  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, fullAccessEnabled, fullAccessSettingsHref,
+  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, inferenceSettingsClient, fullAccessEnabled, fullAccessSettingsHref,
   children, subtitle, skills, node, workspace, memory, instructions, workingOn, nodeExtra, workspaceExtra, primaryLink,
   historyPartial, titleLeading, group,
 }: Props) {
@@ -632,16 +695,22 @@ export function SessionStatsModal({
   const settings = (
     <div className="min-w-0" data-slot="session-info-settings">
       {providerValue && <EntityStatRow label="Provider" value={providerValue} option={providerOption} />}
-      {hasConfig && modelOptions ? (
-        <ConfigSelect
-          label="Model"
-          value={currentModelAlias(s.model)}
-          options={modelOptions}
-          onChange={v => handleConfigChange({ model: v })}
-          disabled={updating}
-        />
+      {open && inferenceSettingsClient && s.sessionId ? (
+        <InferenceSettingsRows key={"inference:" + s.sessionId} client={inferenceSettingsClient} sessionId={s.sessionId}
+          model={s.model} effort={s.effort} fallback={(
+            <>
+              <StatRow label="Model" value={modelLabel} />
+              {thinking && <StatRow label="Thinking" value={thinking} />}
+            </>
+          )} />
       ) : (
-        <StatRow label="Model" value={modelLabel} />
+        <>
+          {hasConfig && modelOptions ? (
+            <ConfigSelect label="Model" value={currentModelAlias(s.model)} options={modelOptions}
+              onChange={v => handleConfigChange({ model: v })} disabled={updating} />
+          ) : <StatRow label="Model" value={modelLabel} />}
+          {thinking && <StatRow label="Thinking" value={thinking} />}
+        </>
       )}
       {hasConfig && qualityTierOptions && (
         <ConfigSelect
@@ -664,7 +733,6 @@ export function SessionStatsModal({
       {s.qualityTier && !(onConfigChange && qualityTierOptions) && (
         <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
       )}
-      {thinking && <StatRow label="Thinking" value={thinking} />}
       {accessRow}
       {updating && (
         <div className="mt-1 flex items-center gap-1.5 text-[10px] text-text-muted">

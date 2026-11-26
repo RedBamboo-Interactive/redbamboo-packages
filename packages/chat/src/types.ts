@@ -592,6 +592,22 @@ export interface SessionConfigChange {
   accessLevel?: AccessLevel
 }
 
+export interface SessionInferenceOptions {
+  model?: string | null
+  effort?: string | null
+  models: { id: string; name: string; defaultEffort?: string | null; supportedEfforts: string[] }[]
+}
+
+export interface SessionInferenceChange {
+  model?: string
+  effort?: string
+}
+
+export interface SessionInferenceSettingsClient {
+  load: (sessionId: string) => Promise<SessionInferenceOptions>
+  set: (sessionId: string, change: SessionInferenceChange) => Promise<SessionInferenceOptions>
+}
+
 export interface SessionInfoButtonProps {
   stats: SessionStats | null
   messages: MessageBlock[]
@@ -601,6 +617,7 @@ export interface SessionInfoButtonProps {
   qualityTierOptions?: SessionConfigOption[]
   providerOptions?: SessionConfigOption[]
   loadProviderUsage?: ProviderUsageLoader
+  inferenceSettingsClient?: SessionInferenceSettingsClient
   /**
    * Rejecting keeps the previous selection. For `accessLevel`, the rejection's
    * Error message is shown under the Permissions row, so pass the server's words.

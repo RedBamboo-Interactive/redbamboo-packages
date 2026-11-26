@@ -4,7 +4,7 @@ import { Toaster } from "@redbamboo/ui"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { SessionInfoButton } from "../../src/components/context-indicator"
 import { processStreamEvent } from "../../src/lib/process-stream-event"
-import type { AccessLevel, ChatEvent, MessageBlock, PermissionDecisionPayload, QuestionState, SessionConfigChange, SessionStats } from "../../src/types"
+import type { AccessLevel, ChatEvent, MessageBlock, PermissionDecisionPayload, QuestionState, SessionConfigChange, SessionInferenceOptions, SessionInferenceSettingsClient, SessionStats } from "../../src/types"
 import "./fixture.css"
 
 // ?view=modal: the Info button and modal. &level= current level, &supported=plan,ask,... , &cap=, &full=off,
@@ -23,6 +23,23 @@ window.__changes = []
 const params = new URLSearchParams(location.search)
 const view = params.get("view") ?? "modal"
 const stamp = "2026-11-09T10:00:00.000Z"
+
+let inference: SessionInferenceOptions = {
+  model: "first-model",
+  effort: "high",
+  models: [
+    { id: "first-model", name: "First model", supportedEfforts: ["low", "high"] },
+    { id: "second-model", name: "Second model with an unusually long provider display name", supportedEfforts: ["medium", "xhigh"] },
+  ],
+}
+const inferenceSettingsClient: SessionInferenceSettingsClient = {
+  load: async () => inference,
+  set: async (_id, change) => {
+    if (change.effort === "xhigh") throw new Error("This session has pending input.")
+    inference = { ...inference, ...change, effort: change.model ? "medium" : change.effort }
+    return inference
+  },
+}
 
 function ModalFixture() {
   const [stats, setStats] = useState<SessionStats>({
@@ -46,6 +63,7 @@ function ModalFixture() {
       <SessionInfoButton
         stats={stats}
         messages={[]}
+        inferenceSettingsClient={params.get("inference") === "1" ? inferenceSettingsClient : undefined}
         qualityTierOptions={[
           { value: "high", label: "High", color: "#a78bfa", icon: "ph-bold ph-lightning" },
           { value: "low", label: "Low", color: "#38bdf8", icon: "ph-bold ph-feather" },
