@@ -171,6 +171,7 @@ export function ChatPanel(props: ChatPanelProps) {
   )
   // Everything below reads the conversation without the events that aren't in it yet.
   const messages = eventPlacement?.messages ?? sourceMessages
+  const mixedProviders = useMemo(() => new Set(messages.flatMap(block => block.provider ? [block.provider] : [])).size > 1, [messages])
   // A delivered event's receipt holds its place until its canonical record has placed it.
   const settledAgainst = eventPlacement?.placedUids ?? canonicalUserUids
   const settledUids = useMemo(() => messageQueue.queue.flatMap(item => {
@@ -998,6 +999,7 @@ export function ChatPanel(props: ChatPanelProps) {
                     blockIndex={index}
                     isStreaming={isStreaming && isLastAssistant}
                     isLastAssistantBlock={isLastAssistant}
+                    showProvider={mixedProviders && row.ownsSender}
                     friezeDensity={friezeDensity}
                     permissionMode={permissionMode}
                     onExecutePlan={onExecutePlan}

@@ -334,6 +334,7 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
   let msgs = [...messages]
   let idx = streamTargetIndex(msgs)
   const incomingTurnUid = event.messageUid || null
+  if (idx !== -1 && event.provider && msgs[idx].provider && event.provider !== msgs[idx].provider) idx = -1
 
   if (idx !== -1 && incomingTurnUid) {
     const target = msgs[idx]
@@ -374,6 +375,7 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
         ? (priorSegments === 0 ? turnUid : `${turnUid}:segment:${priorSegments}`)
         : `assistant-${Date.now()}-${partIdCounter++}`,
       role: "assistant",
+      ...(event.provider ? { provider: event.provider } : {}),
       parts: [],
       timestamp,
       metadata: turnUid || event.turnOrigin
@@ -388,6 +390,7 @@ function applyEvent(messages: MessageBlock[], event: ChatEvent): MessageBlock[] 
     msgs.push(lastBlock)
   } else {
     lastBlock = { ...msgs[idx], parts: [...msgs[idx].parts] }
+    if (event.provider && !lastBlock.provider) lastBlock.provider = event.provider
     if (event.turnOrigin && !lastBlock.metadata?.[TURN_ORIGIN_KEY])
       lastBlock.metadata = { ...lastBlock.metadata, [TURN_ORIGIN_KEY]: event.turnOrigin }
     msgs[idx] = lastBlock

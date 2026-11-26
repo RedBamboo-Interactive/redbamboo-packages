@@ -10,6 +10,7 @@ import {
 
 export interface PersistedMessage {
   id: number | string
+  provider?: string | null
   role: string
   eventType: string
   content?: string | null
@@ -104,6 +105,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       const userBlock: MessageBlock = {
         id: rec.messageUid || `db-${rec.id}`,
         role: "user",
+        ...(rec.provider ? { provider: rec.provider } : {}),
         parts: [part],
         timestamp: rec.timestamp,
       }
@@ -130,7 +132,8 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
     }
 
     const turnUid = rec.messageUid || null
-    if (!currentBlock || currentBlock.role !== "assistant" || (!!turnUid && currentTurnUid !== turnUid)) {
+    if (!currentBlock || currentBlock.role !== "assistant" || (!!turnUid && currentTurnUid !== turnUid)
+      || (rec.provider && currentBlock.provider && rec.provider !== currentBlock.provider)) {
       // Block identity = uid of the run's first record, matching the id the
       // streaming path assigned when this block was first rendered live. One
       // turn may have several chronological segments around ambient events;
@@ -142,6 +145,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
           ? (segment === 0 ? turnUid : `${turnUid}:segment:${segment}`)
           : `db-${rec.id}`,
         role: "assistant",
+        ...(rec.provider ? { provider: rec.provider } : {}),
         parts: [],
         timestamp: rec.timestamp,
         metadata: turnUid ? { messageUid: turnUid } : undefined,
@@ -149,6 +153,7 @@ export function rebuildBlocks(records: PersistedMessage[]): MessageBlock[] {
       currentTurnUid = turnUid
       blocks.push(currentBlock)
     }
+    if (rec.provider && !currentBlock.provider) currentBlock.provider = rec.provider
     if (rec.turnOrigin && !currentBlock.metadata?.[TURN_ORIGIN_KEY])
       currentBlock.metadata = { ...currentBlock.metadata, [TURN_ORIGIN_KEY]: rec.turnOrigin }
 

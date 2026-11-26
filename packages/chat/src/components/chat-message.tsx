@@ -125,6 +125,7 @@ interface ChatMessageProps {
   animateEntrance?: boolean
   isStreaming?: boolean
   isLastAssistantBlock?: boolean
+  showProvider?: boolean
   friezeDensity?: FriezeDensity
   permissionMode?: string
   onExecutePlan?: () => void
@@ -205,11 +206,19 @@ interface ChatMessageProps {
   onStopJob?: (job: ChatJob) => Promise<void> | void
 }
 
+function messageProviderName(provider: string): string {
+  if (provider === "claude-code") return "Claude Code"
+  if (provider === "codex") return "Codex"
+  if (provider === "opencode") return "OpenCode"
+  return provider
+}
+
 export const ChatMessage = memo(function ChatMessage({
   block,
   animateEntrance = true,
   isStreaming,
   isLastAssistantBlock,
+  showProvider,
   friezeDensity,
   permissionMode,
   onExecutePlan,
@@ -518,6 +527,9 @@ export const ChatMessage = memo(function ChatMessage({
             {senderAvatarUrl && <img src={senderAvatarUrl} alt="" className="w-4 h-4 rounded-full object-cover" />}
             <span className="text-xs text-text-muted font-medium">{senderName}</span>
           </div>
+        )}
+        {showProvider && block.provider && (
+          <div data-slot="message-provider" className="mb-1 text-xs text-text-muted">{messageProviderName(block.provider)}</div>
         )}
         {turnOrigin && <TurnOriginMarker origin={turnOrigin} />}
         {groups.map((group, i) =>
@@ -1646,6 +1658,7 @@ function MessageMetadata({ block, inline, trigger = true, open: openProp, onOpen
             <MetaRow label="Timestamp" value={formatTimestamp(block.timestamp)} />
             <MetaRow label="Message ID" value={block.id} mono />
             <MetaRow label="Role" value={block.role} />
+            {block.provider && <MetaRow label="Provider" value={messageProviderName(block.provider)} />}
             {block.senderAgentId && <MetaRow label="Sender agent" value={block.senderAgentId} mono />}
             {toolUseCount > 0 && <MetaRow label="Tool calls" value={String(toolUseCount)} />}
             {imageCount > 0 && <MetaRow label="Images" value={String(imageCount)} />}

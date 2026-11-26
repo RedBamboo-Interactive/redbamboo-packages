@@ -104,3 +104,14 @@ test("malformed batch metadata cannot invent input identities", () => {
     assert.deepEqual(blocks[0].inputMessageUids, Array.isArray(inputMessageUids) ? ["second"] : undefined)
   }
 })
+
+test("one ordered transcript labels the harness for each turn across a switch and return", () => {
+  const stamp = { role: "assistant", eventType: "text", epoch: "logical", timestamp: "2026-11-26T11:00:00Z" }
+  const first = { ...stamp, id: 1, sequence: 1, messageUid: "a", provider: "claude-code", content: "First" }
+  const middle = { ...stamp, id: 2, sequence: 2, messageUid: "b", provider: "codex", content: "Second" }
+  const last = { ...stamp, id: 3, sequence: 3, messageUid: "c", provider: "claude-code", content: "Third" }
+  const blocks = rebuildBlocks([last, first, middle, { ...middle, id: 4 }])
+  assert.deepEqual(blocks.map(block => [block.id, block.provider, block.parts[0].content]), [
+    ["a", "claude-code", "First"], ["b", "codex", "Second"], ["c", "claude-code", "Third"],
+  ])
+})

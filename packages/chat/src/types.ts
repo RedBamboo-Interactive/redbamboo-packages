@@ -13,6 +13,7 @@ export interface FocusMessageResult extends FocusMessageRequest {
 export interface MessageBlock {
   id: string
   role: "user" | "assistant"
+  provider?: string
   parts: MessagePart[]
   timestamp: string
   metadata?: Record<string, unknown>
@@ -187,7 +188,7 @@ export interface ChatQueueError {
 }
 
 export interface ChatQueuedItem {
-  kind?: "message" | "inference-settings"
+  kind?: "message" | "inference-settings" | "execution-binding"
   id: string
   clientId?: string | null
   sessionId: string
@@ -233,6 +234,7 @@ export interface ChatQueueTransport {
 }
 
 export interface ChatEvent {
+  provider?: string
   /** Thinking starts/deltas are partial; a completed item settles its square. */
   isPartial?: boolean
   /**
@@ -595,6 +597,7 @@ export interface SessionConfigChange {
 
 export interface SessionInferenceOperation {
   id: string
+  provider?: string | null
   model?: string | null
   effort?: string | null
   state: ChatQueuedItem["state"]
@@ -603,12 +606,15 @@ export interface SessionInferenceOperation {
 
 export interface SessionInferenceOptions {
   pendingChanges?: SessionInferenceOperation[]
+  provider?: string | null
+  providers?: { id: string; name: string }[]
   model?: string | null
   effort?: string | null
   models: { id: string; name: string; defaultEffort?: string | null; supportedEfforts: string[] }[]
 }
 
 export interface SessionInferenceChange {
+  provider?: string
   model?: string
   effort?: string
 }

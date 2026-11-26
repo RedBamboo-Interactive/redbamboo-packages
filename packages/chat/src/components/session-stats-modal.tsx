@@ -381,7 +381,8 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
     return () => { current = false; unsubscribe?.() }
   }, [client, subscribe, sessionId, model, effort])
 
-  if (!options?.models.length) return fallback
+  if (!options || (!options.models.length && !options.providers?.length)) return fallback
+  const providers = options.providers?.map(({ id, name }) => ({ value: id, label: name })) ?? []
   const models = options.models.map(({ id, name }) => ({ value: id, label: name }))
   const selectedModel = options.models.find(candidate => candidate.id === options.model)
   const modelValue = options.model ?? ""
@@ -394,7 +395,7 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
     effortChoices.unshift({ value: effortValue, label: formatProviderEffort(effortValue) ?? "Model default" })
 
   async function select(change: SessionInferenceChange) {
-    if (saving || change.model === "" || change.effort === "") return
+    if (saving || change.model === "" || change.effort === "" || change.provider === "") return
     const startedAt = ++revision.current
     setSaving(true)
     setError(null)
@@ -411,8 +412,14 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
 
   return (
     <>
-      <ConfigSelect label="Model" slot="session-info-model" value={modelValue} options={models}
-        disabled={saving} onChange={model => select({ model })} />
+      {providers.length > 1 && options.provider && (
+        <ConfigSelect label="Provider" slot="session-info-provider" value={options.provider} options={providers}
+          disabled={saving} onChange={provider => select({ provider })} />
+      )}
+      {options.models.length > 0
+        ? <ConfigSelect label="Model" slot="session-info-model" value={modelValue} options={models}
+            disabled={saving} onChange={model => select({ model })} />
+        : <StatRow label="Model" value={formatModelName(modelValue) || "Provider default"} />}
       {efforts.length > 0 ? (
         <ConfigSelect label="Thinking" slot="session-info-thinking" value={effortValue} options={effortChoices}
           disabled={saving} onChange={effort => select({ effort })} />
@@ -420,6 +427,7 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
       {options.pendingChanges?.map(operation => (
         <p key={operation.id} role="status" className={operation.error ? "text-xs text-destructive" : "text-xs text-text-muted"}>
           {operation.error?.message ?? [
+            operation.provider ? providers.find(choice => choice.value === operation.provider)?.label ?? operation.provider : null,
             operation.model ? formatModelName(operation.model) : null,
             formatProviderEffort(operation.effort),
           ].filter(Boolean).join(" · ") + " queued"}

@@ -33,7 +33,7 @@ interface QueuedMessageGhostProps {
  * The whole point of the queue is that this is never invisible.
  */
 export function QueuedMessageGhost({ item, friezeDensity, onCancel, onEdit, onSendNow, onSendEvent, eventSend, compactEventLabel, eventContent, eventDrawsOwnShape }: QueuedMessageGhostProps) {
-  if (item.kind === "inference-settings") {
+  if (item.kind === "inference-settings" || item.kind === "execution-binding") {
     return (
       <div data-slot="queued-inference-settings" data-queue-item-id={item.remoteId ?? item.id}
         className="mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
