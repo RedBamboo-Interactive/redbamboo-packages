@@ -382,6 +382,8 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
   }, [client, subscribe, sessionId, model, effort])
 
   if (!options || (!options.models.length && !options.providers?.length)) return fallback
+  // Enable after the signed-owner Provider modal passes live acceptance.
+  const providerPickerEnabled = false
   const providers = options.providers?.map(({ id, name }) => ({ value: id, label: name })) ?? []
   const models = options.models.map(({ id, name }) => ({ value: id, label: name }))
   const selectedModel = options.models.find(candidate => candidate.id === options.model)
@@ -412,7 +414,7 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
 
   return (
     <>
-      {providers.length > 1 && options.provider && (
+      {providerPickerEnabled && providers.length > 1 && options.provider && (
         <ConfigSelect label="Provider" slot="session-info-provider" value={options.provider} options={providers}
           disabled={saving} onChange={provider => select({ provider })} />
       )}
