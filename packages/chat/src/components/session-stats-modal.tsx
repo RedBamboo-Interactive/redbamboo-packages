@@ -5,6 +5,9 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  EntityRefField,
+  type EntityPickerItem,
+  type EntityPickerSource,
   Icon,
   NodeIcon,
   Tabs,
@@ -353,12 +356,64 @@ function ConfigSelect({ label, value, options, onChange, disabled, optionDisable
   )
 }
 
-function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fallback }: {
+function SessionEntitySetting({ label, type, value, currentLabel, options, onChange, disabled, slot }: {
+  label: string
+  type: string
+  value: string
+  currentLabel?: string
+  options: SessionConfigOption[]
+  onChange?: (value: string) => void
+  disabled?: boolean
+  slot?: string
+}) {
+  const toItem = (option: SessionConfigOption): EntityPickerItem => ({
+    entity: { id: option.value || type + "-default", typeSlug: type, name: option.label },
+    visual: { icon: option.icon, iconSvgPath: option.iconSvgPath, color: option.color },
+  })
+  const items = options.map(option => ({ option, item: toItem(option) }))
+  const selected = items.find(entry => entry.option.value === value)?.item
+    ?? toItem({ value, label: currentLabel ?? value })
+  const source: EntityPickerSource = {
+    search: async ({ query, limit }) => {
+      const text = query.trim().toLowerCase()
+      return items
+        .filter(({ option }) => option.label.toLowerCase().includes(text) || option.value.toLowerCase().includes(text))
+        .slice(0, limit)
+        .map(({ item }) => item)
+    },
+    resolve: async ({ id }) => items.find(({ item }) => item.entity.id === id)?.item ?? null,
+  }
+
+  return (
+    <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 py-1.5" data-slot={slot}>
+      <span className="text-xs text-text-muted">{label}</span>
+      <EntityRefField
+        className="w-full min-w-0 max-w-sm justify-self-end"
+        value={selected.entity.id}
+        initialItem={selected}
+        targetType={type}
+        typeLabel={label.toLowerCase()}
+        title={"Select " + label.toLowerCase()}
+        source={source}
+        clearable={false}
+        disabled={disabled || !onChange}
+        onChange={reference => {
+          const next = items.find(({ item }) => item.entity.id === reference)?.option.value
+          if (next !== undefined && value !== next) onChange?.(next)
+        }}
+      />
+    </div>
+  )
+}
+
+function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, providerOptions, providerFallback, fallback }: {
   client: SessionInferenceSettingsClient
   subscribe?: SessionInfoButtonProps["subscribeInferenceSettings"]
   sessionId: string
   model?: string | null
   effort?: string | null
+  providerOptions?: SessionConfigOption[]
+  providerFallback: React.ReactNode
   fallback: React.ReactNode
 }) {
   const [options, setOptions] = useState<SessionInferenceOptions | null>(null)
@@ -382,19 +437,17 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
   }, [client, subscribe, sessionId, model, effort])
 
   if (!options || (!options.models.length && !options.providers?.length)) return fallback
-  // Enable after the signed-owner Provider modal passes live acceptance.
-  const providerPickerEnabled = true
-  const providers = options.providers?.map(({ id, name }) => ({ value: id, label: name })) ?? []
+  const providers = options.providers?.map(({ id, name }) => {
+    const presentation = findOption(providerOptions, id)
+    return { ...presentation, value: id, label: presentation?.label ?? name }
+  }) ?? []
+  const provider = options.provider
   const models = options.models.map(({ id, name }) => ({ value: id, label: name }))
   const selectedModel = options.models.find(candidate => candidate.id === options.model)
   const modelValue = options.model ?? ""
-  if (!selectedModel) models.unshift({ value: modelValue, label: formatModelName(modelValue) || "Provider default" })
-
   const efforts = selectedModel?.supportedEfforts ?? []
   const effortValue = options.effort ?? ""
   const effortChoices = efforts.map(value => ({ value, label: formatProviderEffort(value) ?? value }))
-  if (!effortChoices.some(choice => choice.value === effortValue))
-    effortChoices.unshift({ value: effortValue, label: formatProviderEffort(effortValue) ?? "Model default" })
 
   async function select(change: SessionInferenceChange) {
     if (saving || change.model === "" || change.effort === "" || change.provider === "") return
@@ -414,18 +467,19 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
 
   return (
     <>
-      {providerPickerEnabled && providers.length > 1 && options.provider && (
-        <ConfigSelect label="Provider" slot="session-info-provider" value={options.provider} options={providers}
-          disabled={saving} onChange={provider => select({ provider })} />
+      {provider ? (
+        <SessionEntitySetting label="Provider" type="provider" slot="session-info-provider" value={provider}
+          currentLabel={findOption(providerOptions, provider)?.label ?? provider} options={providers}
+          disabled={saving || providers.length < 2} onChange={provider => select({ provider })} />
+      ) : providerFallback}
+      <SessionEntitySetting label="Model" type="inference-model" slot="session-info-model" value={modelValue}
+        currentLabel={formatModelName(modelValue) || "Provider default"} options={models}
+        disabled={saving || !models.length} onChange={model => select({ model })} />
+      {(efforts.length > 0 || effortValue) && (
+        <SessionEntitySetting label="Thinking" type="reasoning-effort" slot="session-info-thinking" value={effortValue}
+          currentLabel={formatProviderEffort(effortValue) ?? "Model default"} options={effortChoices}
+          disabled={saving || !efforts.length} onChange={effort => select({ effort })} />
       )}
-      {options.models.length > 0
-        ? <ConfigSelect label="Model" slot="session-info-model" value={modelValue} options={models}
-            disabled={saving} onChange={model => select({ model })} />
-        : <StatRow label="Model" value={formatModelName(modelValue) || "Provider default"} />}
-      {efforts.length > 0 ? (
-        <ConfigSelect label="Thinking" slot="session-info-thinking" value={effortValue} options={effortChoices}
-          disabled={saving} onChange={effort => select({ effort })} />
-      ) : effortValue && <StatRow label="Thinking" value={formatProviderEffort(effortValue) ?? effortValue} />}
       {options.pendingChanges?.map(operation => (
         <p key={operation.id} role="status" className={operation.error ? "text-xs text-destructive" : "text-xs text-text-muted"}>
           {operation.error?.message ?? [
@@ -828,28 +882,34 @@ export function SessionStatsModal({
     </div>
   )
 
+  const providerCard = providerValue && (
+    <SessionEntitySetting label="Provider" type="provider" slot="session-info-provider" value={providerValue}
+      options={[{ ...providerOption, value: providerValue, label: providerOption?.label ?? providerValue }]} />
+  )
+  const modelCard = <SessionEntitySetting label="Model" type="inference-model" slot="session-info-model" value={s.model ?? ""}
+    options={[{ value: s.model ?? "", label: modelLabel }]} />
+  const thinkingCard = thinking && <SessionEntitySetting label="Thinking" type="reasoning-effort" slot="session-info-thinking"
+    value={s.effort ?? ""} options={[{ value: s.effort ?? "", label: thinking }]} />
+
   const settings = (
     <div className="min-w-0" data-slot="session-info-settings">
-      {providerValue && <EntityStatRow label="Provider" value={providerValue} option={providerOption} />}
       {open && nodeSettingsClient && s.sessionId && (
         <NodeSettingsRow key={"node:" + s.sessionId} client={nodeSettingsClient}
           subscribe={subscribeInferenceSettings} sessionId={s.sessionId} />
       )}
       {open && inferenceSettingsClient && s.sessionId ? (
         <InferenceSettingsRows key={"inference:" + s.sessionId} client={inferenceSettingsClient} subscribe={subscribeInferenceSettings} sessionId={s.sessionId}
-          model={s.model} effort={s.effort} fallback={(
-            <>
-              <StatRow label="Model" value={modelLabel} />
-              {thinking && <StatRow label="Thinking" value={thinking} />}
-            </>
-          )} />
+          model={s.model} effort={s.effort} providerOptions={providerOptions} providerFallback={providerCard}
+          fallback={<>{providerCard}{modelCard}{thinkingCard}</>} />
       ) : (
         <>
+          {providerCard}
           {hasConfig && modelOptions ? (
-            <ConfigSelect label="Model" value={currentModelAlias(s.model)} options={modelOptions}
-              onChange={v => handleConfigChange({ model: v })} disabled={updating} />
-          ) : <StatRow label="Model" value={modelLabel} />}
-          {thinking && <StatRow label="Thinking" value={thinking} />}
+            <SessionEntitySetting label="Model" type="inference-model" slot="session-info-model" value={currentModelAlias(s.model)}
+              currentLabel={modelLabel} options={modelOptions}
+              onChange={model => handleConfigChange({ model })} disabled={updating} />
+          ) : modelCard}
+          {thinkingCard}
         </>
       )}
       {hasConfig && qualityTierOptions && (

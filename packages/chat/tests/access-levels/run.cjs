@@ -55,6 +55,25 @@ async function main() {
     const row = page => page.locator('[data-slot="access-level-row"]')
     const levelButton = (page, level) => row(page).locator(`button[data-value="${level}"]`)
     const description = page => page.locator('[data-slot="access-level-description"]')
+    const setting = (page, name) => page.locator('[data-slot="session-info-' + name + '"]')
+    const selectedCard = (page, name, id) => setting(page, name).locator('[data-slot="entity-card"][data-entity-id="' + id + '"]')
+    const openPicker = async (page, name, keyboard = false) => {
+      const change = setting(page, name).getByRole("button", { name: /^Change / })
+      if (keyboard) {
+        await change.focus()
+        await page.keyboard.press("Enter")
+      } else {
+        await change.click()
+      }
+      const picker = page.getByRole("dialog", { name: "Select " + name, exact: true })
+      await picker.waitFor()
+      return picker
+    }
+    const choose = async (page, field, name) => {
+      const picker = await openPicker(page, field)
+      await picker.getByRole("button", { name: "Select " + name, exact: true }).click()
+      await picker.waitFor({ state: "hidden" })
+    }
     // Nothing in the row may stick out of the dialog at phone width.
     const fitsDialog = async page => page.evaluate(() => {
       const dialog = document.querySelector('[data-slot="dialog-content"]').getBoundingClientRect()
@@ -146,28 +165,22 @@ async function main() {
     {
       const { page, errors, close } = await open("view=modal&host=level-only&inference=1")
       await openModal(page)
-      const model = page.getByRole("combobox", { name: "Model" })
-      const thinking = page.getByRole("combobox", { name: "Thinking" })
-      await model.waitFor()
-      await thinking.selectOption("low")
-      await page.waitForFunction(() => {
-        const picker = document.querySelector('select[aria-label="Thinking"]')
-        return picker?.value === "low" && !picker.disabled
-      })
-      await model.selectOption("second-model")
-      await page.waitForFunction(() => {
-        const picker = document.querySelector('select[aria-label="Thinking"]')
-        return picker?.value === "medium" && !picker.disabled
-      })
-      await thinking.selectOption("xhigh")
+      await selectedCard(page, "model", "first-model").waitFor()
+      await choose(page, "thinking", "Low")
+      await selectedCard(page, "thinking", "low").waitFor()
+      await choose(page, "model", "Second model with an unusually long provider display name")
+      await selectedCard(page, "thinking", "medium").waitFor()
+      await choose(page, "thinking", "XHigh")
       await page.getByText("This session has pending input.", { exact: true }).waitFor()
-      assert.equal(await model.inputValue(), "second-model")
-      assert.equal(await thinking.inputValue(), "medium")
-      assert(await model.evaluate(el => {
-        const dialog = el.closest('[role="dialog"]').getBoundingClientRect()
-        const select = el.getBoundingClientRect()
-        return select.left >= dialog.left && select.right <= dialog.right
-      }), "a long model name fits a phone dialog")
+      assert.equal(await selectedCard(page, "model", "second-model").count(), 1)
+      assert.equal(await selectedCard(page, "thinking", "medium").count(), 1)
+      const [modelCard, thinkingCard] = await Promise.all([
+        selectedCard(page, "model", "second-model").boundingBox(),
+        selectedCard(page, "thinking", "medium").boundingBox(),
+      ])
+      assert.equal(modelCard.x, thinkingCard.x, "selected cards share a column")
+      assert.equal(modelCard.width, thinkingCard.width, "selected cards share a width")
+      assert(modelCard.x + modelCard.width <= 390, "a long model name fits the phone dialog")
       assert.deepEqual(errors, [])
       await shot(page, "inference-settings-phone")
       await close()
@@ -181,8 +194,8 @@ async function main() {
       await node.waitFor()
       assert.equal(await node.isEnabled(), true)
       await page.getByText("This node is unavailable. Choose another node to continue.", { exact: true }).waitFor()
-      assert.equal(await page.getByRole("combobox", { name: "Model" }).isVisible(), true)
-      assert.equal(await page.getByRole("combobox", { name: "Thinking" }).isVisible(), true)
+      await selectedCard(page, "model", "first-model").waitFor()
+      await selectedCard(page, "thinking", "high").waitFor()
       await page.getByRole("dialog").screenshot({ path: path.join(shots, "change-node-held-session-info.png") })
 
       await node.selectOption({ label: "This computer" })
@@ -210,16 +223,83 @@ async function main() {
     {
       const { page, errors, close } = await open("view=modal&host=level-only&inference=1&queueInference=1")
       await openModal(page)
-      const thinking = page.getByRole("combobox", { name: "Thinking" })
-      await thinking.selectOption("low")
+      await choose(page, "thinking", "Low")
       await page.getByText("Low queued", { exact: true }).waitFor()
-      assert.equal(await thinking.inputValue(), "high")
+      assert.equal(await selectedCard(page, "thinking", "high").count(), 1)
       await page.evaluate(() => window.__settleInference())
-      await page.waitForFunction(() => document.querySelector('select[aria-label="Thinking"]')?.value === "low")
+      await selectedCard(page, "thinking", "low").waitFor()
       assert.equal(await page.getByText("Low queued", { exact: true }).count(), 0)
       assert.deepEqual(errors, [])
       await close()
       check("phone: the active selection stays visible until a queued change settles, then refreshes from live invalidation")
+    }
+
+    {
+      const { page, errors, close } = await open("view=modal&host=level-only&inference=1&queueInference=1")
+      await openModal(page)
+      await selectedCard(page, "provider", "claude-code").waitFor()
+      assert.equal(await setting(page, "provider").count(), 1, "one selected Provider card")
+      const picker = await openPicker(page, "provider", true)
+      await picker.locator('[data-slot="entity-card"][data-selected][data-entity-id="claude-code"]').waitFor()
+      const target = picker.getByRole("button", { name: "Select Codex", exact: true })
+      await target.waitFor()
+      assert.equal(await picker.locator('[data-slot="entity-card"]').count(), 2, "only server-offered providers appear")
+      await picker.screenshot({ path: path.join(shots, "provider-picker-cards-phone.png"), animations: "disabled" })
+      await target.focus()
+      await page.keyboard.press("Enter")
+      await page.getByText("Codex queued", { exact: true }).waitFor()
+      assert.deepEqual(await page.evaluate(() => window.__inferenceChanges), [
+        { id: "session-1", change: { provider: "codex" } },
+      ])
+      assert.equal(await selectedCard(page, "provider", "claude-code").count(), 1)
+      await page.evaluate(() => window.__settleInference())
+      await selectedCard(page, "provider", "codex").waitFor()
+      assert.equal(await page.getByText("Codex queued", { exact: true }).count(), 0)
+      assert.deepEqual(errors, [])
+      await shot(page, "provider-selected-card-phone")
+      await close()
+      check("phone: the standard Provider picker opens by keyboard, offers only eligible cards, and retains its active card until delivery")
+    }
+
+    {
+      const { page, errors, close } = await open("view=modal&host=level-only&inference=1&singleProvider=1")
+      await openModal(page)
+      await selectedCard(page, "provider", "claude-code").waitFor()
+      assert.equal(await setting(page, "provider").getByRole("button", { name: /^Change / }).count(), 0)
+      assert.equal(await setting(page, "provider").locator('[data-slot="entity-ref-field"]').getAttribute("data-disabled"), "true")
+      assert.deepEqual(await page.evaluate(() => window.__inferenceChanges), [])
+      assert.deepEqual(errors, [])
+      await close()
+      check("one offered Provider is shown as a read-only card")
+    }
+
+    {
+      const { page, errors, close } = await open("view=modal&host=level-only&inference=1&retiredProvider=1")
+      await openModal(page)
+      await selectedCard(page, "provider", "opencode").getByText("OpenCode", { exact: true }).waitFor()
+      const picker = await openPicker(page, "provider")
+      await picker.getByRole("button", { name: "Select Claude Code", exact: true }).waitFor()
+      assert.equal(await picker.locator('[data-slot="entity-card"]').count(), 2)
+      assert.equal(await picker.locator('[data-slot="entity-card"][data-entity-id="opencode"]').count(), 0)
+      await picker.getByRole("button", { name: "Select Codex", exact: true }).click()
+      await selectedCard(page, "provider", "codex").waitFor()
+      assert.deepEqual(await page.evaluate(() => window.__inferenceChanges), [{ id: "session-1", change: { provider: "codex" } }])
+      assert.deepEqual(errors, [])
+      await close()
+      check("current Provider outside the server offer list stays visible as a card without becoming an option")
+    }
+
+    {
+      const { page, errors, close } = await open("view=modal&host=level-only&inference=1&sharedProviderMetadata=1")
+      await openModal(page)
+      const picker = await openPicker(page, "provider")
+      const codex = picker.locator('[data-slot="entity-card"][data-entity-id="codex"]')
+      await codex.getByRole("button", { name: "Select Shared display label", exact: true }).click()
+      await selectedCard(page, "provider", "codex").waitFor()
+      assert.deepEqual(await page.evaluate(() => window.__inferenceChanges), [{ id: "session-1", change: { provider: "codex" } }])
+      assert.deepEqual(errors, [])
+      await close()
+      check("shared presentation metadata cannot change the server Provider ID selected or sent")
     }
 
     // ── A refused change keeps the previous level and says why ──

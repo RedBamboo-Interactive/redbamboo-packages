@@ -4,7 +4,7 @@ import { Toaster } from "@redbamboo/ui"
 import { ChatPanel } from "../../src/components/chat-panel"
 import { SessionInfoButton } from "../../src/components/context-indicator"
 import { processStreamEvent } from "../../src/lib/process-stream-event"
-import type { AccessLevel, ChatEvent, MessageBlock, PermissionDecisionPayload, QuestionState, SessionConfigChange, SessionInferenceOptions, SessionInferenceSettingsClient, SessionNodeSettings, SessionNodeSettingsClient, SessionStats } from "../../src/types"
+import type { AccessLevel, ChatEvent, MessageBlock, PermissionDecisionPayload, QuestionState, SessionConfigChange, SessionInferenceChange, SessionInferenceOptions, SessionInferenceSettingsClient, SessionNodeSettings, SessionNodeSettingsClient, SessionStats } from "../../src/types"
 import "./fixture.css"
 
 // ?view=modal: the Info button and modal. &level= current level, &supported=plan,ask,... , &cap=, &full=off,
@@ -15,6 +15,7 @@ declare global {
   interface Window {
     __decisions: PermissionDecisionPayload[]
     __changes: SessionConfigChange[]
+    __inferenceChanges: { id: string; change: SessionInferenceChange }[]
     __emit: (event: ChatEvent) => void
     __settleInference: () => void
     __settleNodeMove: () => void
@@ -23,11 +24,17 @@ declare global {
 }
 window.__decisions = []
 window.__changes = []
+window.__inferenceChanges = []
 const params = new URLSearchParams(location.search)
 const view = params.get("view") ?? "modal"
 const stamp = "2026-11-09T10:00:00.000Z"
 
 let inference: SessionInferenceOptions = {
+  provider: params.get("retiredProvider") === "1" ? "opencode" : "claude-code",
+  providers: [
+    { id: "claude-code", name: "Claude Code" },
+    ...(params.get("singleProvider") === "1" ? [] : [{ id: "codex", name: "Codex" }]),
+  ],
   model: "first-model",
   effort: "high",
   models: [
@@ -39,7 +46,13 @@ const inferenceListeners = new Set<() => void>()
 window.__settleInference = () => {
   const pending = inference.pendingChanges?.[0]
   if (!pending) return
-  inference = { ...inference, effort: pending.effort, pendingChanges: [] }
+  inference = {
+    ...inference,
+    provider: pending.provider ?? inference.provider,
+    model: pending.model ?? inference.model,
+    effort: pending.effort ?? inference.effort,
+    pendingChanges: [],
+  }
   for (const listener of inferenceListeners) listener()
 }
 const subscribeInferenceSettings = (listener: () => void) => {
@@ -49,13 +62,14 @@ const subscribeInferenceSettings = (listener: () => void) => {
 
 const inferenceSettingsClient: SessionInferenceSettingsClient = {
   load: async () => inference,
-  set: async (_id, change) => {
+  set: async (id, change) => {
+    window.__inferenceChanges.push({ id, change })
     if (change.effort === "xhigh") throw new Error("This session has pending input.")
     if (params.get("queueInference") === "1") {
       inference = { ...inference, pendingChanges: [{ id: "settings-1", state: "pending", ...change }] }
       return inference
     }
-    inference = { ...inference, ...change, effort: change.model ? "medium" : change.effort }
+    inference = { ...inference, ...change, effort: change.model ? "medium" : change.effort ?? inference.effort }
     return inference
   },
 }
@@ -112,6 +126,14 @@ function ModalFixture() {
         inferenceSettingsClient={params.get("inference") === "1" ? inferenceSettingsClient : undefined}
         nodeSettingsClient={params.get("nodeMove") === "1" ? nodeSettingsClient : undefined}
         subscribeInferenceSettings={subscribeInferenceSettings}
+        providerOptions={params.get("sharedProviderMetadata") === "1" ? [
+          { value: "different-record-id", aliases: ["claude-code", "codex"], label: "Shared display label", icon: "ph-bold ph-cube" },
+        ] : [
+          { value: "anthropic-direct", aliases: ["claude-code"], label: "Claude Code", icon: "ph-bold ph-sparkle", color: "#d97757" },
+          { value: "codex-default", aliases: ["codex"], label: "Codex", icon: "ph-bold ph-terminal", color: "#10a37f" },
+          { value: "opencode-default", aliases: ["opencode"], label: "OpenCode" },
+          { value: "other-provider", label: "Unavailable provider", icon: "ph-bold ph-cube" },
+        ]}
         qualityTierOptions={[
           { value: "high", label: "High", color: "#a78bfa", icon: "ph-bold ph-lightning" },
           { value: "low", label: "Low", color: "#38bdf8", icon: "ph-bold ph-feather" },
