@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace RedBamboo.AppHost.Logging;
 
 public class FileLogger : IAsyncDisposable
@@ -80,17 +82,48 @@ public class FileLogger : IAsyncDisposable
         CleanupOldFiles();
     }
 
+    /// <summary>
+    /// Keeps the newest <c>_maxFiles</c> daily logs by date, not by name: sorting names kept a file named for a future
+    /// day (written while the clock was wrong) ahead of every real day, forever. Files whose name is not a date are
+    /// not this logger's and are left alone.
+    /// </summary>
     private void CleanupOldFiles()
     {
+        var now = DateTime.Now;
         var files = Directory.GetFiles(_logDirectory, "*.log")
-            .OrderByDescending(f => f)
+            .Select(path => (Path: path, Date: DailyLogDate(path, now)))
+            .Where(file => file.Date is not null)
+            .OrderByDescending(file => file.Date)
+            .ThenByDescending(file => file.Path, StringComparer.Ordinal)
             .Skip(_maxFiles)
             .ToList();
 
-        foreach (var file in files)
+        foreach (var (file, _) in files)
         {
             try { File.Delete(file); }
             catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>
+    /// The day a daily log belongs to: its name, unless that is more than a day ahead. Then its write time, unless
+    /// that is ahead too, in which case nothing places it and it goes first. Null when the name is not a date.
+    /// </summary>
+    internal static DateTime? DailyLogDate(string path, DateTime now)
+    {
+        if (!DateTime.TryParseExact(Path.GetFileNameWithoutExtension(path), "yyyy-MM-dd",
+                CultureInfo.InvariantCulture, DateTimeStyles.None, out var named))
+            return null;
+        var tomorrow = now.AddDays(1);
+        if (named <= tomorrow) return named;
+        try
+        {
+            var written = File.GetLastWriteTime(path);
+            return written <= tomorrow ? written.Date : DateTime.MinValue;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return DateTime.MinValue;
         }
     }
 
