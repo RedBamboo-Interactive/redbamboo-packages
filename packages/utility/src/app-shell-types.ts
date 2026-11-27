@@ -62,6 +62,8 @@ export interface AppShellProps {
   config: AppShellConfig
   headerContent?: ReactNode
   breadcrumb?: ReactNode
+  /** Content rendered after the breadcrumb and before the global menu. */
+  headerActions?: ReactNode
   menuItems?: ReactNode
   children: ReactNode
   className?: string

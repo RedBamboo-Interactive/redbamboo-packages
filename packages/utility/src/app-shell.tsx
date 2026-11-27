@@ -179,6 +179,7 @@ function AppShellInner({
   config,
   headerContent,
   breadcrumb,
+  headerActions,
   menuItems,
   children,
   className,
@@ -253,6 +254,7 @@ function AppShellInner({
           navigation={headerContent}
           onBrandClick={appSwitcherEnabled && !dropdownSwitcher ? openSwitcher : undefined}
         >
+          {headerActions}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
