@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import type { MessageBlock, MessagePart } from "../types.ts"
-import { projectActivityTimeline } from "./activity-timeline.ts"
+import { activityProviderBefore, projectActivityTimeline } from "./activity-timeline.ts"
 import { squareSequence, stepSquare } from "./part-navigation.ts"
 
 let seq = 0
@@ -69,6 +69,34 @@ test("tool results stay beside their calls for modal pairing", () => {
   ])
   assert.equal(rows.length, 1)
   assert.deepEqual(rows[0].block.parts.map(p => p.type), ["tool_use", "tool_result", "tool_use"])
+})
+
+test("provider switches show once at attributed activity, including across a window boundary", () => {
+  const native = (provider: string, ...parts: MessagePart[]) => ({ ...block("assistant", parts), provider })
+  const claude = native("claude-code", part("text", "first"))
+  const otherUser = { ...block("user", [part("text", "question")]), provider: "opencode" }
+  const ambient = native("opencode", eventPart("weather", "weather"))
+  const codex = native("codex", eventPart("weather", "leading event"), part("thinking", "thinking"), part("text", "commentary"))
+  const final = native("codex", part("text", "final"))
+  const older = block("assistant", [part("text", "unattributed legacy reply")])
+  const returnToClaude = native("claude-code", part("text", "back"))
+  const blocks = [claude, otherUser, ambient, codex, final, older, returnToClaude]
+  const switches = (rows: ReturnType<typeof projectActivityTimeline>) => rows.flatMap(row =>
+    row.block.parts.filter(part => part.type === "provider_switch").map(part => part.content))
+
+  const rows = projectActivityTimeline(blocks)
+  assert.deepEqual(switches(rows), ["Claude Code → Codex", "Codex → Claude Code"])
+  const mixedActivity = rows.find(row => row.block.parts.some(part => part.content === "thinking"))
+  assert.deepEqual(mixedActivity?.block.parts.map(part => part.content),
+    ["weather", "leading event", "Claude Code → Codex", "thinking"])
+  const windowed = projectActivityTimeline(blocks.slice(3), 3, undefined, () => false, activityProviderBefore(blocks, 3))
+  assert.deepEqual(switches(windowed), ["Claude Code → Codex", "Codex → Claude Code"])
+  assert.deepEqual(windowed[0].sourceIndices, [3])
+  const afterSwitch = projectActivityTimeline(blocks.slice(4), 4, undefined, undefined, activityProviderBefore(blocks, 4))
+  assert.deepEqual(switches(afterSwitch), ["Codex → Claude Code"])
+  assert.deepEqual(switches(projectActivityTimeline([claude, otherUser, ambient, older])), [])
+  assert.deepEqual(switches(projectActivityTimeline([codex, final])), [])
+  assert.deepEqual(switches(projectActivityTimeline([older, returnToClaude])), [])
 })
 
 test("projection never mutates canonical blocks", () => {

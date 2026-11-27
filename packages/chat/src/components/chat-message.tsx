@@ -36,7 +36,7 @@ import { getEffectiveToolName, getToolActivityCategory } from "../lib/tool-seman
 import { PART_COLOR, getPartColor, getSpinnerColor, isBackgroundRunning } from "../lib/part-colors"
 import { findPairedResult, turnOriginOf } from "../lib/background-work"
 import { BackgroundTaskPanel, ChildFrieze, TurnOriginDot, TurnOriginMarker, childLabel, useBackgroundWork } from "./background-task-view"
-import type { ActivityTurnOrigin } from "../lib/activity-timeline"
+import { messageProviderName, type ActivityTurnOrigin } from "../lib/activity-timeline"
 import { CONTEXT_COMPACTION_TOOL_NAME } from "../lib/chat-status"
 import { resolveQuestionCardContent } from "../lib/question-card"
 import { QuestionCard, type QuestionCardStatus } from "./question-card"
@@ -125,7 +125,6 @@ interface ChatMessageProps {
   animateEntrance?: boolean
   isStreaming?: boolean
   isLastAssistantBlock?: boolean
-  showProvider?: boolean
   friezeDensity?: FriezeDensity
   permissionMode?: string
   onExecutePlan?: () => void
@@ -206,19 +205,11 @@ interface ChatMessageProps {
   onStopJob?: (job: ChatJob) => Promise<void> | void
 }
 
-function messageProviderName(provider: string): string {
-  if (provider === "claude-code") return "Claude Code"
-  if (provider === "codex") return "Codex"
-  if (provider === "opencode") return "OpenCode"
-  return provider
-}
-
 export const ChatMessage = memo(function ChatMessage({
   block,
   animateEntrance = true,
   isStreaming,
   isLastAssistantBlock,
-  showProvider,
   friezeDensity,
   permissionMode,
   onExecutePlan,
@@ -528,9 +519,6 @@ export const ChatMessage = memo(function ChatMessage({
             <span className="text-xs text-text-muted font-medium">{senderName}</span>
           </div>
         )}
-        {showProvider && block.provider && (
-          <div data-slot="message-provider" className="mb-1 text-xs text-text-muted">{messageProviderName(block.provider)}</div>
-        )}
         {turnOrigin && <TurnOriginMarker origin={turnOrigin} />}
         {groups.map((group, i) =>
           group.kind === "text" ? (
@@ -662,6 +650,7 @@ function groupParts(parts: MessagePart[], isLiveBlock: boolean): PartGroup[] {
 
 function partLabel(part: MessagePart): string {
   switch (part.type) {
+    case "provider_switch": return "Provider switched"
     case "thinking": return "Thinking"
     case "tool_use": return part.toolName === CONTEXT_COMPACTION_TOOL_NAME
       ? "Context compaction"
@@ -814,7 +803,8 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
   })
   const visibleJobs = minimal
     ? [...(rowJobs ?? []).filter(job => positions.includes(launchAt.get(job.id) ?? -1)), ...trailingJobs] : []
-  const count = markers.length + visibleJobs.length
+  const providerSwitchCount = squares.filter(part => part.type === "provider_switch").length
+  const count = markers.length - providerSwitchCount + visibleJobs.length
   const failed = minimal
     ? markers.filter(marker => marker.failed).length + visibleJobs.filter(job => job.state === "failed").length : 0
   const activeMarker = minimal
@@ -844,7 +834,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
 
   return (
     <>
-      {(!minimal || count > 0 || !!turnOrigins?.length) && (
+      {(!minimal || count > 0 || providerSwitchCount > 0 || !!turnOrigins?.length) && (
         <div ref={friezeRef} className="flex flex-wrap items-center gap-[3px] py-1.5 px-0.5"
           style={quiet ? { gap: 2.5 } : collapsed ? { columnGap: 8 } : undefined}>
           {minimal && count > 0 && (
@@ -856,14 +846,16 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
           {markers.flatMap(({ part, turnActive, backgroundActive, queueStatus, waitingApproval, color, failed }, i) => {
             const origins = originsBefore(i).map(entry => <TurnOriginDot key={`origin:${entry.turnKey}`} origin={entry.origin} />)
             const jobs = (rowJobs ?? []).filter(job => launchAt.get(job.id) === positions[i]).map(twinOf)
-            if (collapsed && !waitingApproval) return [...origins, ...jobs]
+            const providerSwitch = part.type === "provider_switch"
+            if (collapsed && !waitingApproval && !providerSwitch) return [...origins, ...jobs]
             const inFlight = turnActive || backgroundActive
             const event = isEventPart(part)
             const squareEvent = usesSquareEventMarker(part)
             const parsed = event ? parseEventPart(part) : null
             const note = parsed ? resolveAgentNote?.(parsed) : undefined
             const time = note ? agentNoteTime(parsed?.timestamp) : undefined
-            const label = note ? [note.lead + " " + note.discussion, time].filter(Boolean).join(" · ") : partLabel(part)
+            const label = providerSwitch ? `${partLabel(part)}: ${part.content}`
+              : note ? [note.lead + " " + note.discussion, time].filter(Boolean).join(" · ") : partLabel(part)
             const inlineLabel = parsed?.inlineLabel ? parsed.label : null
             const paint = friezeMarkerPaint(density, color, { active: inFlight, failed, needsAttention: waitingApproval })
             const marker = (
@@ -881,7 +873,7 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
                 title={note ? undefined : part.task ? `${label}: ${part.task.status}` : label}
                 aria-label={queueStatus ? `${label}: ${queueStatus.label}` : part.task ? `${label}: ${part.task.status}` : label}
                 data-input-message-uid={event ? part.messageUid : undefined}
-                data-slot={note ? "agent-note-marker" : undefined}
+                data-slot={providerSwitch ? "provider-switch-marker" : note ? "agent-note-marker" : undefined}
                 data-direction={note ? (squareEvent ? "sent" : "received") : undefined}
                 data-part-index={positions[i]}
                 data-tool-use-id={part.toolUseId}

@@ -6,7 +6,7 @@ import { useMessageQueue } from "../hooks/use-message-queue"
 import { ChatMessage, PartModal, extractPlanFileContent } from "./chat-message"
 import { eventQueueStatus, type EventSendAction, type ResolveEventQueueStatus } from "./event-queue-status"
 import { isEventBlock, eventInputMessageUid } from "../lib/event-parts"
-import { projectActivityTimeline } from "../lib/activity-timeline"
+import { activityProviderBefore, projectActivityTimeline } from "../lib/activity-timeline"
 import { friezeMarkerNeedsAttention, type FriezeMarkerVisibility } from "../lib/frieze-markers"
 import type { SquareRow } from "../lib/part-navigation"
 import { ActivityRowsContext } from "./activity-rows-context"
@@ -171,7 +171,6 @@ export function ChatPanel(props: ChatPanelProps) {
   )
   // Everything below reads the conversation without the events that aren't in it yet.
   const messages = eventPlacement?.messages ?? sourceMessages
-  const mixedProviders = useMemo(() => new Set(messages.flatMap(block => block.provider ? [block.provider] : [])).size > 1, [messages])
   // A delivered event's receipt holds its place until its canonical record has placed it.
   const settledAgainst = eventPlacement?.placedUids ?? canonicalUserUids
   const settledUids = useMemo(() => messageQueue.queue.flatMap(item => {
@@ -865,7 +864,8 @@ export function ChatPanel(props: ChatPanelProps) {
   }
 
   const visibleMessages = startIndex > 0 ? messages.slice(startIndex) : messages
-  const timelineRows = projectActivityTimeline(visibleMessages, startIndex, props.eventRows?.isRow, isMarkerShown)
+  const previousProvider = activityProviderBefore(messages, startIndex)
+  const timelineRows = projectActivityTimeline(visibleMessages, startIndex, props.eventRows?.isRow, isMarkerShown, previousProvider)
   timelineRowsRef.current = timelineRows
   // A job is a twin right after the square of the tool call that launched it; one no loaded
   // result names sits at the end of its block's last frieze row (a row with none gets one). Not rendered: not shown. A row's list keeps its reference while its
@@ -999,7 +999,6 @@ export function ChatPanel(props: ChatPanelProps) {
                     blockIndex={index}
                     isStreaming={isStreaming && isLastAssistant}
                     isLastAssistantBlock={isLastAssistant}
-                    showProvider={mixedProviders && row.ownsSender}
                     friezeDensity={friezeDensity}
                     permissionMode={permissionMode}
                     onExecutePlan={onExecutePlan}

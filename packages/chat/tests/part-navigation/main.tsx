@@ -133,6 +133,20 @@ const densityMessages: MessageBlock[] = [
 ]
 
 function App() {
+  if (params.has("provider-switch")) {
+    const sameProvider = { ...messages[1], provider: "claude-code" }
+    const changed = { ...secondTurn[1], provider: "codex" }
+    const continued: MessageBlock = {
+      ...changed,
+      id: "codex-final",
+      parts: [{ type: "text", phase: "final_answer", content: "Same provider, final reply." }],
+    }
+    return <div style={{ height: "100vh" }}>
+      <ChatPanel messages={[messages[0], sameProvider, secondTurn[0], changed, continued]} isStreaming={false}
+        sessionId="provider-switch" persistQueue={false} friezeDensity={params.has("minimal") ? "minimal" : undefined} />
+    </div>
+  }
+
   const density = params.get("density")
   if (density) return <div style={{ width: "100%", height: "100vh" }}>
     <ChatPanel messages={densityMessages} isStreaming={false} sessionId="frieze-density" persistQueue={false}

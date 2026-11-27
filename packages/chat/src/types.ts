@@ -89,7 +89,7 @@ export interface MessagePart {
   messageUid?: string
   /** A host event part the host put where the turn received it, from its canonical input record. */
   inputPlaced?: boolean
-  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image" | "task"
+  type: "text" | "thinking" | "tool_use" | "tool_result" | "error" | "audio" | "image" | "task" | "provider_switch"
   content: string
   toolName?: string
   toolInput?: string

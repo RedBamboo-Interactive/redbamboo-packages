@@ -101,6 +101,20 @@ async function main() {
       await page.keyboard.press("Escape")
       await dialog.waitFor({ state: "detached" })
 
+      for (const mode of ["", "&minimal"]) {
+        await page.goto(`${origin}?provider-switch${mode}`)
+        const providerSwitch = page.getByRole("button", { name: "Provider switched: Claude Code → Codex" })
+        await providerSwitch.waitFor()
+        assert.equal(await page.locator('[data-slot="provider-switch-marker"]').count(), 1)
+        assert.equal(await page.locator('[data-slot="message-provider"]').count(), 0)
+        assert.equal(await providerSwitch.evaluate(square => square.style.backgroundColor), "var(--color-text-disabled)")
+        await providerSwitch.click()
+        await dialog.getByRole("heading", { name: "Provider switched", exact: true }).waitFor()
+        await dialog.getByText("Claude Code → Codex", { exact: true }).waitFor()
+        await page.keyboard.press("Escape")
+        await dialog.waitFor({ state: "detached" })
+      }
+
       // ── Job twins (89efca37): stops in the same sequence, in their visual place ──
       // Row markers with jobs off, to prove a twin changes nothing else in any row.
       const friezeMarkers = () => page.$$eval('[data-message-uid^="activity:"] .flex.flex-wrap', friezes => friezes.map(frieze =>

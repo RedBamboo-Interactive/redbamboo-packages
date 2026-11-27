@@ -39,6 +39,24 @@ function isVisibleContent(part: MessagePart): boolean {
   )
 }
 
+export function messageProviderName(provider: string): string {
+  if (provider === "claude-code") return "Claude Code"
+  if (provider === "codex") return "Codex"
+  if (provider === "opencode") return "OpenCode"
+  return provider
+}
+
+function isProviderActivity(part: MessagePart): boolean {
+  return !isEventPart(part) && part.type !== "tool_result" && (part.type !== "text" || isVisibleContent(part))
+}
+
+export function activityProviderBefore(blocks: readonly MessageBlock[], index: number): string | undefined {
+  for (let i = index - 1; i >= 0; i--) {
+    const block = blocks[i]
+    if (block.role === "assistant" && block.provider && block.parts.some(isProviderActivity)) return block.provider
+  }
+}
+
 function uniqueIndexes(indexes: number[]): number[] {
   return [...new Set(indexes)]
 }
@@ -71,6 +89,7 @@ export function projectActivityTimeline(
   indexOffset = 0,
   isEventRow?: (part: MessagePart) => boolean,
   isMarkerShown?: FriezeMarkerVisibility,
+  previousProvider?: string,
 ): ActivityTimelineRow[] {
   const rows: ActivityTimelineRow[] = []
   let activityParts: MessagePart[] = []
@@ -171,6 +190,7 @@ export function projectActivityTimeline(
       activitySources.push(sourceIndex)
     }
     const contentBlock = withoutTurnOrigin(block)
+    const provider = block.role === "assistant" ? block.provider : undefined
 
     let contentParts: MessagePart[] = []
     let contentSegment = 0
@@ -191,6 +211,20 @@ export function projectActivityTimeline(
 
     for (let partIndex = 0; partIndex < block.parts.length; partIndex++) {
       const part = block.parts[partIndex]
+      if (provider && provider !== previousProvider && isProviderActivity(part)) {
+        if (previousProvider) {
+          activityFirstBlock ??= block
+          activityAnchor ??= `${block.id}:${partIndex}`
+          activityLastBlock = block
+          activityParts.push({
+            type: "provider_switch",
+            content: `${messageProviderName(previousProvider)} → ${messageProviderName(provider)}`,
+          })
+          activityPartSources.push(sourceIndex)
+          activitySources.push(sourceIndex)
+        }
+        previousProvider = provider
+      }
       if (isVisibleContent(part)) {
         flushActivity()
         contentParts.push(part)
