@@ -383,7 +383,7 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, fa
 
   if (!options || (!options.models.length && !options.providers?.length)) return fallback
   // Enable after the signed-owner Provider modal passes live acceptance.
-  const providerPickerEnabled = false
+  const providerPickerEnabled = true
   const providers = options.providers?.map(({ id, name }) => ({ value: id, label: name })) ?? []
   const models = options.models.map(({ id, name }) => ({ value: id, label: name }))
   const selectedModel = options.models.find(candidate => candidate.id === options.model)
