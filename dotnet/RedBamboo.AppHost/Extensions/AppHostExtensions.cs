@@ -229,6 +229,9 @@ public static class AppHostExtensions
 
         if (telemetry is not null)
         {
+            if (logService is not null)
+                telemetry.Recorder.AttachLog(logService);
+
             if (descriptor is RegistryServiceDescriptor rsd)
                 foreach (var ep in rsd.Registry.GetEndpoints())
                     telemetry.DescribeRoute(ep.Method, ep.Path, ep.Description);

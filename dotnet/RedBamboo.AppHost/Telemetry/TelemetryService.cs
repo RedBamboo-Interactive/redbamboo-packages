@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using Microsoft.Data.Sqlite;
+using RedBamboo.AppHost.Telemetry.FlightRecorder;
 
 namespace RedBamboo.AppHost.Telemetry;
 
@@ -20,6 +21,9 @@ public class TelemetryService : IAsyncDisposable
     /// <summary>Query surface over this service's database, reusable against other apps' databases too.</summary>
     public TelemetryReader Reader { get; }
 
+    /// <summary>Process samples (and their read surface) in this service's database.</summary>
+    public FlightRecorderService Recorder { get; }
+
     public void DescribeRoute(string method, string routePattern, string description)
         => _descriptions[$"{method} {routePattern}"] = description;
 
@@ -39,6 +43,8 @@ public class TelemetryService : IAsyncDisposable
             new BoundedChannelOptions(10_000) { FullMode = BoundedChannelFullMode.DropOldest });
 
         InitializeDatabase();
+        Recorder = new FlightRecorderService(options.FlightRecorder, _connectionString);
+        Recorder.Start();
         _consumerTask = Task.Run(() => ConsumeAsync(_cts.Token));
         _cleanupTask = Task.Run(() => CleanupLoopAsync(_cts.Token));
     }
@@ -46,6 +52,7 @@ public class TelemetryService : IAsyncDisposable
     public void Record(TelemetryEntry entry)
     {
         _channel.Writer.TryWrite(entry);
+        Recorder.ObserveRequest(entry);
         OnEntry?.Invoke(entry);
     }
 
@@ -83,7 +90,11 @@ public class TelemetryService : IAsyncDisposable
         cmd.Parameters.AddWithValue("@cutoff", cutoff.ToString("O"));
         var deleted = cmd.ExecuteNonQuery();
 
-        if (deleted > 0)
+        // The flight recorder's tables keep their own retention, whatever RetentionDays says.
+        var recorderDeleted = Recorder.Store.Cleanup(
+            DateTimeOffset.UtcNow.AddDays(-_options.FlightRecorder.RetentionDays));
+
+        if (deleted > 0 || recorderDeleted > 0)
         {
             using var optimize = conn.CreateCommand();
             optimize.CommandText = "PRAGMA optimize";
@@ -99,6 +110,7 @@ public class TelemetryService : IAsyncDisposable
         _channel.Writer.Complete();
         try { await _consumerTask; } catch (OperationCanceledException) { }
         try { await _cleanupTask; } catch (OperationCanceledException) { }
+        Recorder.Dispose();
         _cts.Dispose();
     }
 
@@ -135,6 +147,7 @@ public class TelemetryService : IAsyncDisposable
         cmd.ExecuteNonQuery();
 
         MigrateSchema(conn);
+        FlightRecorderStore.EnsureSchema(conn);
     }
 
     private static void MigrateSchema(SqliteConnection conn)
