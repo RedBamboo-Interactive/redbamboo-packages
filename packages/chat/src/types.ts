@@ -676,6 +676,8 @@ export interface SessionInfoButtonProps {
    * read-only. Rejecting shows the Error's message under the row.
    */
   onAccessLevelChange?: (level: AccessLevel) => Promise<void>
+  /** Raise this session's cap using the host's signed person action. */
+  onAccessCapRaise?: (cap: AccessLevel) => Promise<void>
   /**
    * Whether Full access is turned on for this install. Only `false` disables
    * the Full option; absent leaves it to `supportedAccessLevels` and the cap.

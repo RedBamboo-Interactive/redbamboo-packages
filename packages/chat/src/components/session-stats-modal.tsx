@@ -605,7 +605,7 @@ function NodeSettingsRow({ client, subscribe, sessionId }: {
   )
 }
 
-const CAP_TITLE = "Above the limit this session was started with"
+const CAP_TITLE = "Above this session's current cap"
 const FULL_OFF_TITLE = "Full access is turned off in Settings"
 
 /**
@@ -613,20 +613,39 @@ const FULL_OFF_TITLE = "Full access is turned off in Settings"
  * the agent do. Full stays visible while it is turned off, so the person learns
  * where it is turned on. A refused change keeps the previous level and says why.
  */
-function AccessLevelRow({ level, choices, onChange, fullAccessSettingsHref, onNavigate }: {
+function AccessLevelRow({ level, cap, choices, onChange, onRaiseCap, fullAccessEnabled, fullAccessSettingsHref, onNavigate }: {
   level: AccessLevel | null
+  cap?: AccessLevel | null
   choices: AccessLevelChoice[]
   onChange?: (level: AccessLevel) => Promise<void>
+  onRaiseCap?: (cap: AccessLevel) => Promise<void>
+  fullAccessEnabled?: boolean
   fullAccessSettingsHref?: string
   onNavigate: () => void
 }) {
   const [choosing, setChoosing] = useState<AccessLevel | null>(null)
+  const [raisingCap, setRaisingCap] = useState(false)
   // A change the server accepted, shown until the host's stats catch up with it.
   const [accepted, setAccepted] = useState<AccessLevel | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { setAccepted(null) }, [level])
   const shown = choosing ?? accepted ?? level
-  const fullOff = choices.some(choice => choice.level === "full" && choice.disabledReason === "full_access_not_enabled")
+  const fullOff = fullAccessEnabled === false && choices.some(choice => choice.level === "full")
+  const aboveCap = choices.filter(choice => choice.disabledReason === "above_session_cap")
+  const nextCap = aboveCap.find(choice => choice.level !== "full" || !fullOff)
+
+  const raiseCap = async () => {
+    if (!nextCap || !onRaiseCap) return
+    setRaisingCap(true)
+    setError(null)
+    try {
+      await onRaiseCap(nextCap.level)
+    } catch (failure) {
+      setError(failure instanceof Error && failure.message ? failure.message : "The session cap didn't change.")
+    } finally {
+      setRaisingCap(false)
+    }
+  }
 
   const choose = async (next: string) => {
     if (!onChange || !isAccessLevel(next)) return
@@ -651,7 +670,7 @@ function AccessLevelRow({ level, choices, onChange, fullAccessSettingsHref, onNa
           value={shown ?? ""}
           options={choices.map(choice => choice.option)}
           onChange={value => void choose(value)}
-          disabled={!!choosing}
+          disabled={!!choosing || raisingCap}
           optionDisabled={value => !!choices.find(choice => choice.level === value)?.disabledReason}
           optionTitle={option => {
             const reason = choices.find(choice => choice.level === option.value)?.disabledReason
@@ -667,6 +686,17 @@ function AccessLevelRow({ level, choices, onChange, fullAccessSettingsHref, onNa
         <p data-slot="access-level-description" className="pb-1 text-right text-[11px] leading-snug text-text-muted">
           {ACCESS_LEVEL_DESCRIPTIONS[shown]}
         </p>
+      )}
+      {!!cap && aboveCap.length > 0 && (
+        <div className="pb-1 text-right text-[11px] leading-snug text-text-muted">
+          <p>This session's cap is {ACCESS_LEVEL_LABELS[cap]}. A signed-in person can raise it.</p>
+          {onRaiseCap && nextCap && (
+            <button type="button" data-slot="raise-access-cap" disabled={raisingCap || !!choosing}
+              onClick={() => void raiseCap()} className="mt-0.5 text-primary underline-offset-2 hover:underline">
+              {raisingCap ? "Raising cap…" : `Raise cap to ${nextCap.option.label}`}
+            </button>
+          )}
+        </div>
       )}
       {onChange && fullOff && (
         <p className="pb-1 text-right text-[11px] leading-snug">
@@ -718,7 +748,7 @@ const EMPTY: never[] = []
 
 export function SessionStatsModal({
   open, onOpenChange, stats, messages, agent, modelOptions, effortOptions, qualityTierOptions, providerOptions,
-  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, inferenceSettingsClient, nodeSettingsClient, subscribeInferenceSettings, fullAccessEnabled, fullAccessSettingsHref,
+  providerUsage, providerUsageLoading, onConfigChange, onAccessLevelChange, onAccessCapRaise, inferenceSettingsClient, nodeSettingsClient, subscribeInferenceSettings, fullAccessEnabled, fullAccessSettingsHref,
   children, subtitle, skills, node, workspace, memory, instructions, workingOn, nodeExtra, workspaceExtra, primaryLink,
   historyPartial, titleLeading, group,
 }: Props) {
@@ -748,7 +778,10 @@ export function SessionStatsModal({
     <AccessLevelRow
       key={s.sessionId ?? undefined}
       level={accessLevel}
+      cap={s.maxAccessLevel}
       choices={accessChoices}
+      onRaiseCap={onAccessCapRaise}
+      fullAccessEnabled={fullAccessEnabled}
       onChange={onAccessLevelChange ?? (onConfigChange ? level => onConfigChange({ accessLevel: level }) : undefined)}
       fullAccessSettingsHref={fullAccessSettingsHref}
       onNavigate={() => onOpenChange(false)}

@@ -141,6 +141,9 @@ function ModalFixture() {
         {...(params.get("host") === "level-only"
           ? { onAccessLevelChange: (accessLevel: AccessLevel) => onConfigChange({ accessLevel }) }
           : { onConfigChange })}
+        onAccessCapRaise={params.get("raiseCap") === "1" ? async cap => {
+          setStats(current => ({ ...current, maxAccessLevel: cap }))
+        } : undefined}
         fullAccessEnabled={params.get("full") !== "off"}
         fullAccessSettingsHref="#/settings/agent-permissions"
       />

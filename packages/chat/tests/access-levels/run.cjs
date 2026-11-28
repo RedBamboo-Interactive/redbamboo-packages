@@ -140,11 +140,25 @@ async function main() {
       assert.equal(await levelButton(capped.page, "ask").isDisabled(), false)
       assert.equal(await levelButton(capped.page, "auto").isDisabled(), true, "auto is above the cap")
       assert.equal(await levelButton(capped.page, "full").isDisabled(), true, "full is above the cap")
-      assert.match(await levelButton(capped.page, "auto").getAttribute("title"), /limit this session was started with/)
+      assert.match(await levelButton(capped.page, "auto").getAttribute("title"), /current cap/)
       await shot(capped.page, "02-phone-modal-capped")
       assert.deepEqual([...errors, ...capped.errors], [])
+      assert.equal(await capped.page.locator('[data-slot="raise-access-cap"]').count(), 0)
       await capped.close()
       check("only supported levels are offered and levels above the session cap are disabled")
+    }
+
+    {
+      const { page, errors, close } = await open("view=modal&level=ask&cap=ask&raiseCap=1")
+      await openModal(page)
+      await page.getByText("This session's cap is Ask. A signed-in person can raise it.").waitFor()
+      await page.getByRole("button", { name: "Raise cap to Auto", exact: true }).click()
+      await page.getByText("This session's cap is Auto. A signed-in person can raise it.").waitFor()
+      assert.equal(await levelButton(page, "auto").isDisabled(), false)
+      assert.equal(await levelButton(page, "ask").getAttribute("aria-pressed"), "true")
+      assert.deepEqual(errors, [])
+      await close()
+      check("cap action raises the cap and leaves the selected level alone")
     }
 
     // ── A host that can change only the level keeps Quality read-only ──
