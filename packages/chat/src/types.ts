@@ -1189,4 +1189,9 @@ export interface ActivityStatusGroup {
   /** Icon beside that text, like the session's own status icons. */
   icon?: string
   title?: string
+  /**
+   * The key of one of `items` whose details the row's text opens while this group's words are the row's text,
+   * in the same dialog its shape opens. Without it, the text is not a control.
+   */
+  openKey?: string
 }

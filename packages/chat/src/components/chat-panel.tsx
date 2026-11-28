@@ -487,6 +487,8 @@ export function ChatPanel(props: ChatPanelProps) {
       items: hostWork?.items ?? [],
       label: hostWork?.label ? `${hostWork.label} · ${words}` : words,
       ...(hostWork?.label ? (hostWork.icon ? { icon: hostWork.icon } : {}) : { icon: "ph-bold ph-cube" }),
+      // The text still leads with the host's words, so it still opens what they name.
+      ...(hostWork?.label && hostWork.openKey ? { openKey: hostWork.openKey } : {}),
       title: [hostWork?.title ?? hostWork?.label, ...activeJobs.map(job => job.title)].filter(Boolean).join("\n"),
     }
   }, [activeJobs, hostWork])
@@ -793,13 +795,16 @@ export function ChatPanel(props: ChatPanelProps) {
   const backgroundPaused = backgroundSummary?.paused || backgroundSummary?.source === "host"
     && !hostItems.some(item => item.running) && !activeJobs.some(job => job.state === "running")
   const alsoRunning = sessionLine ? describeAlsoRunning(orderedTasks) : null
+  // Host words open the host item they name, when the host says which; the same dialog as its shape.
+  const hostOpenKey = hostActivity?.openKey && hostItems.some(item => item.key === hostActivity.openKey) ? hostActivity.openKey : null
+  const openHostText = hostOpenKey ? () => setOpenHostKey(hostOpenKey) : undefined
   const statusLine = (
     <div data-slot="activity-status-row" className="min-w-0">
       <ActivityShapesProvider value={<ActivityShapes shapes={activityShapes} />}>
         <ActivityNoteProvider value={alsoRunning ? { label: alsoRunning, onOpen: openRunningWork } : null}>
           {sessionLine ?? (backgroundSummary && (
             <ChatStatusLine color={backgroundColor} paused={backgroundPaused} icon={backgroundSummary.icon} label={backgroundSummary.label} title={backgroundSummary.title}
-              onOpen={backgroundSummary.source === "host" ? undefined : openRunningWork} />
+              onOpen={backgroundSummary.source === "host" ? openHostText : openRunningWork} />
           ))}
         </ActivityNoteProvider>
       </ActivityShapesProvider>

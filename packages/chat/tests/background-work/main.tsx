@@ -100,14 +100,15 @@ function App() {
     ? rebuildBlocks(records.slice(0, 1)) : rebuildBlocks(records))
   // ?streaming shows the busy composer, whose Stop must warn about the running tasks.
   // ?host adds delegations; ?hostOnly shows delegations with no background task running;
-  // ?detached drops the transcript so a task's launching square is not loaded.
+  // ?hostOpen makes the host's words open its first item; ?detached drops the transcript so a task's launching
+  // square is not loaded.
   const params = new URLSearchParams(location.search)
   const streaming = params.has("streaming")
   const hostOnly = params.has("hostOnly")
   return <div style={{ width: "100%", height: "100vh" }}>
     <ChatPanel messages={messages} isStreaming={streaming} sessionId="background-work" persistQueue={false}
       backgroundTasks={hostOnly ? [] : backgroundTasks}
-      hostActivity={params.has("host") || hostOnly ? hostActivity : null}
+      hostActivity={params.has("host") || hostOnly ? (params.has("hostOpen") ? { ...hostActivity, openKey: "d1" } : hostActivity) : null}
       onStopBackgroundTask={taskId => { window.__stops.push(taskId) }} />
   </div>
 }

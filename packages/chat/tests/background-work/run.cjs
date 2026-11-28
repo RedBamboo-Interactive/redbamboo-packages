@@ -233,8 +233,22 @@ async function main() {
     await hostPage.screenshot({ path: path.join(shots, "07-delegation-dialog-1440.png") })
     await hostDialog.getByRole("button", { name: "Open in Code" }).click()
     await hostDialog.waitFor({ state: "detached" })
+    // Host words are plain text unless the host names the item they open.
+    assert.equal(await hostRow.locator('[data-slot="activity-open"]').count(), 0)
     await hostPage.close()
     results.push({ delegations: true })
+
+    // Named, the words open that item's details, in the same dialog its shape opens.
+    const openPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+    await openPage.goto(`${origin}?hostOnly&hostOpen`)
+    const openRow = openPage.locator('[data-slot="activity-status-row"]')
+    await openRow.locator('[data-slot="activity-open"]').getByText("2 delegations ongoing…").click()
+    const openDialog = openPage.locator('[data-slot="dialog-content"]')
+    await openDialog.getByRole("heading", { name: "Delegation", exact: true }).waitFor()
+    await openDialog.locator('[data-slot="fixture-delegation"]').getByText("Sentinel shield for Discord and Commons").waitFor()
+    assert.equal(await openPage.locator('[data-slot="dialog-content"]').count(), 1)
+    await openPage.close()
+    results.push({ hostTextOpens: true })
 
     // A task whose launching square is not loaded still opens the same dialog from its live state.
     const detachedPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
