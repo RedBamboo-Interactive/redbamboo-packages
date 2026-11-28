@@ -74,7 +74,8 @@ public class TelemetryReader
         cmd.CommandText = $"""
             SELECT id, timestamp, method, path, route_pattern, status_code,
                    duration_ms, response_size, correlation_id, error, kind,
-                   execution_id, app_id, actor_kind, actor_id, beneficiary_kind, beneficiary_id
+                   execution_id, app_id, actor_kind, actor_id, beneficiary_kind, beneficiary_id,
+                   {(HasDbColumns(conn) ? "db_ms, db_count" : "NULL, NULL")}
             FROM requests {where}
             ORDER BY timestamp DESC
             LIMIT @limit OFFSET @offset
@@ -106,11 +107,27 @@ public class TelemetryReader
                 ActorId = reader.IsDBNull(14) ? null : reader.GetString(14),
                 BeneficiaryKind = reader.IsDBNull(15) ? null : reader.GetString(15),
                 BeneficiaryId = reader.IsDBNull(16) ? null : reader.GetString(16),
+                DbMs = reader.IsDBNull(17) ? null : reader.GetDouble(17),
+                DbCount = reader.IsDBNull(18) ? null : reader.GetInt32(18),
             });
         }
 
         return entries;
     }
+
+    /// <summary>
+    /// The reader also opens other apps' stores (the kernel reads RedCompute's), which may not have
+    /// been migrated yet by a newer AppHost: read the new columns only where they exist.
+    /// </summary>
+    private bool HasDbColumns(SqliteConnection conn)
+    {
+        if (_hasDbColumns) return true;
+        using var pragma = conn.CreateCommand();
+        pragma.CommandText = "SELECT COUNT(*) FROM pragma_table_info('requests') WHERE name IN ('db_ms', 'db_count')";
+        return _hasDbColumns = Convert.ToInt32(pragma.ExecuteScalar()) == 2;
+    }
+
+    private bool _hasDbColumns;
 
     private static void AddExactFilter(List<string> clauses, SqliteCommand command,
         string column, string parameter, string? value)

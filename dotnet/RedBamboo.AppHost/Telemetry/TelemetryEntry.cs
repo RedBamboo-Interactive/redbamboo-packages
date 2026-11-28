@@ -19,6 +19,9 @@ public record TelemetryEntry
     public string? ActorId { get; init; }
     public string? BeneficiaryKind { get; init; }
     public string? BeneficiaryId { get; init; }
+    /// <summary>Summed database command time for the request; null when it ran no command (or nobody measured).</summary>
+    public double? DbMs { get; init; }
+    public int? DbCount { get; init; }
 
     public object ToWireFormat() => new
     {
@@ -39,6 +42,8 @@ public record TelemetryEntry
         actor_id = ActorId,
         beneficiary_kind = BeneficiaryKind,
         beneficiary_id = BeneficiaryId,
+        db_ms = DbMs is { } db ? Math.Round(db, 2) : (double?)null,
+        db_count = DbCount,
     };
 }
 

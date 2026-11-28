@@ -177,6 +177,16 @@ public class TelemetryService : IAsyncDisposable
             alter.ExecuteNonQuery();
         }
 
+        // ADD COLUMN of a nullable column without a default only rewrites the schema text: no table
+        // rewrite, so it is instant on an 18 GB store, and existing rows read the new columns as NULL.
+        foreach (var (column, type) in new[] { ("db_ms", "REAL"), ("db_count", "INTEGER") })
+        {
+            if (columns.Contains(column)) continue;
+            using var alter = conn.CreateCommand();
+            alter.CommandText = $"ALTER TABLE requests ADD COLUMN {column} {type}";
+            alter.ExecuteNonQuery();
+        }
+
         using var index = conn.CreateCommand();
         index.CommandText = "CREATE INDEX IF NOT EXISTS idx_requests_execution ON requests(execution_id)";
         index.ExecuteNonQuery();
@@ -218,11 +228,13 @@ public class TelemetryService : IAsyncDisposable
                 INSERT INTO requests
                     (timestamp, method, path, route_pattern, status_code,
                      duration_ms, response_size, correlation_id, error, kind,
-                     execution_id, app_id, actor_kind, actor_id, beneficiary_kind, beneficiary_id)
+                     execution_id, app_id, actor_kind, actor_id, beneficiary_kind, beneficiary_id,
+                     db_ms, db_count)
                 VALUES
                     (@ts, @method, @path, @route, @status,
                      @duration, @size, @corr, @err, @kind,
-                     @execution, @app, @actorKind, @actor, @beneficiaryKind, @beneficiary)
+                     @execution, @app, @actorKind, @actor, @beneficiaryKind, @beneficiary,
+                     @dbMs, @dbCount)
                 """;
             cmd.Parameters.AddWithValue("@ts", e.Timestamp.ToString("O"));
             cmd.Parameters.AddWithValue("@method", e.Method);
@@ -240,6 +252,8 @@ public class TelemetryService : IAsyncDisposable
             cmd.Parameters.AddWithValue("@actor", (object?)e.ActorId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@beneficiaryKind", (object?)e.BeneficiaryKind ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@beneficiary", (object?)e.BeneficiaryId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@dbMs", (object?)e.DbMs ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@dbCount", (object?)e.DbCount ?? DBNull.Value);
             cmd.ExecuteNonQuery();
         }
 

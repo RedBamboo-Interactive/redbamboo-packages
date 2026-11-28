@@ -16,6 +16,8 @@ public sealed class TelemetryDbPathTests
             var service = new TelemetryService(new TelemetryOptions { AppName = "NotUsedForThePath", DbPath = dbPath });
             Assert.True(Directory.Exists(Path.GetDirectoryName(dbPath)));
             Assert.NotNull(service.Reader);
+            // The flight recorder keeps a connection open until the service is disposed.
+            service.DisposeAsync().AsTask().GetAwaiter().GetResult();
         }
         finally
         {

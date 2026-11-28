@@ -26,10 +26,13 @@ public sealed class TelemetryMiddleware
 
         var sw = Stopwatch.StartNew();
         string? error = null;
+        var db = _telemetry.Options.RecordDatabaseTime ? RequestDbTiming.Begin() : null;
 
         context.Response.OnStarting(() =>
         {
-            context.Response.Headers["Server-Timing"] = $"total;dur={sw.Elapsed.TotalMilliseconds:F1}";
+            context.Response.Headers["Server-Timing"] = db is { Count: > 0 }
+                ? FormattableString.Invariant($"total;dur={sw.Elapsed.TotalMilliseconds:F1}, db;dur={db.Elapsed.TotalMilliseconds:F1}")
+                : FormattableString.Invariant($"total;dur={sw.Elapsed.TotalMilliseconds:F1}");
             return Task.CompletedTask;
         });
 
@@ -45,6 +48,7 @@ public sealed class TelemetryMiddleware
         finally
         {
             sw.Stop();
+            db?.Close();
 
             if (!IsStreamingResponse(context))
             {
@@ -77,6 +81,8 @@ public sealed class TelemetryMiddleware
                     ActorId = execution?.Actor.Id,
                     BeneficiaryKind = execution?.Beneficiary.Kind,
                     BeneficiaryId = execution?.Beneficiary.Id,
+                    DbMs = db is { Count: > 0 } ? db.Elapsed.TotalMilliseconds : null,
+                    DbCount = db is { Count: > 0 } ? db.Count : null,
                 });
             }
         }
