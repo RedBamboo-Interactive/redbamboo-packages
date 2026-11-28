@@ -38,8 +38,10 @@ let inference: SessionInferenceOptions = {
   model: "first-model",
   effort: "high",
   models: [
-    { id: "first-model", name: "First model", supportedEfforts: ["low", "high"] },
-    { id: "second-model", name: "Second model with an unusually long provider display name", supportedEfforts: ["medium", "xhigh"] },
+    { id: "first-model", name: "First model", supportedEfforts: params.has("singleChoices") ? ["high"] : ["low", "high"] },
+    ...(params.has("singleChoices") ? [] : [
+      { id: "second-model", name: "Second model with an unusually long provider display name", supportedEfforts: ["medium", "xhigh"] },
+    ]),
   ],
 }
 const inferenceListeners = new Set<() => void>()
@@ -116,7 +118,7 @@ function ModalFixture() {
     window.__changes.push(change)
     await new Promise(resolve => setTimeout(resolve, 50))
     if (params.get("refuse") === "1") throw new Error("Raising the access level needs you to be present.")
-    if (change.accessLevel) setStats(current => ({ ...current, accessLevel: change.accessLevel }))
+    setStats(current => ({ ...current, ...change }))
   }
   return (
     <div className="flex items-center justify-end gap-2 border-b border-overlay-10 p-2">

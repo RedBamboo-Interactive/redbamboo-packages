@@ -5,9 +5,11 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
-  EntityRefField,
-  type EntityPickerItem,
-  type EntityPickerSource,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
   Icon,
   NodeIcon,
   Tabs,
@@ -268,23 +270,6 @@ function StatRow({ label, value, sub, mono }: { label: string; value: string; su
   )
 }
 
-function EntityStatRow({ label, value, option }: { label: string; value: string; option?: SessionConfigOption }) {
-  return (
-    <div className="flex items-center justify-between py-1.5 gap-3 min-w-0">
-      <span className="text-xs text-text-muted shrink-0">{label}</span>
-      <span
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-right min-w-0 truncate"
-        style={option?.color ? { color: option.color } : undefined}
-      >
-        {(option?.icon || option?.iconSvgPath) && (
-          <Icon name={option.icon} svgPath={option.iconSvgPath} className="size-4 shrink-0" />
-        )}
-        <span className="truncate">{option?.label ?? value}</span>
-      </span>
-    </div>
-  )
-}
-
 function findOption(options: SessionConfigOption[] | undefined, value: string | null | undefined) {
   if (!value) return undefined
   const normalized = value.toLowerCase()
@@ -293,115 +278,62 @@ function findOption(options: SessionConfigOption[] | undefined, value: string | 
     || option.aliases?.some(alias => alias.toLowerCase() === normalized))
 }
 
-function ConfigSelect({ label, value, options, onChange, disabled, optionDisabled, optionTitle, slot }: {
-  label: string
-  value: string
-  options: SessionConfigOption[]
-  onChange: (value: string) => void
-  disabled?: boolean
-  /** One option that can't be chosen, while the others can. */
-  optionDisabled?: (value: string) => boolean
-  optionTitle?: (option: SessionConfigOption) => string
-  slot?: string
-}) {
-  const hasIcons = options.some(o => o.icon || o.iconSvgPath || o.color)
-
-  if (hasIcons) {
-    return (
-      <div className="flex items-center justify-between gap-3 py-1.5" data-slot={slot}>
-        <span className="text-xs text-text-muted shrink-0">{label}</span>
-        <div className="flex flex-wrap items-center justify-end gap-1" role="group" aria-label={label}>
-          {options.map(o => {
-            const active = value === o.value
-            const off = disabled || !!optionDisabled?.(o.value)
-            return (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => !off && onChange(o.value)}
-                disabled={off}
-                aria-pressed={active}
-                data-value={o.value}
-                title={optionTitle?.(o) ?? o.label}
-                className={`inline-flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md transition-colors disabled:opacity-50 ${
-                  active ? "" : "bg-overlay-6 text-text-muted hover:bg-overlay-10 hover:text-contrast"
-                }`}
-                style={active && o.color ? { backgroundColor: `${o.color}20`, color: o.color } : undefined}
-              >
-                {(o.icon || o.iconSvgPath) && <Icon name={o.icon} svgPath={o.iconSvgPath} className="size-3.5" />}
-                {o.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
-
+function SettingValue({ option }: { option: SessionConfigOption }) {
   return (
-    <div className="flex items-center justify-between py-1.5" data-slot={slot}>
-      <span className="text-xs text-text-muted">{label}</span>
-      <select
-        aria-label={label}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        disabled={disabled}
-        className="min-w-0 max-w-[70%] truncate bg-overlay-6 border border-overlay-10 rounded px-2 py-0.5 text-xs text-contrast outline-none focus:border-overlay-20 disabled:opacity-50"
-      >
-        {options.map(o => (
-          <option key={o.value} value={o.value} className="bg-popover text-popover-foreground">{o.label}</option>
-        ))}
-      </select>
-    </div>
+    <>
+      {(option.icon || option.iconSvgPath) && (
+        <Icon name={option.icon} svgPath={option.iconSvgPath} aria-hidden="true"
+          className="size-4 shrink-0" style={option.color ? { color: option.color } : undefined} />
+      )}
+      <span className="min-w-0 truncate">{option.label}</span>
+    </>
   )
 }
 
-function SessionEntitySetting({ label, type, value, currentLabel, options, onChange, disabled, slot }: {
+function SettingChoice({ label, value, current, options = [], onChange, disabled, optionDisabled, optionTitle, slot }: {
   label: string
-  type: string
   value: string
-  currentLabel?: string
-  options: SessionConfigOption[]
+  current?: SessionConfigOption
+  options?: SessionConfigOption[]
   onChange?: (value: string) => void
   disabled?: boolean
-  slot?: string
+  optionDisabled?: (value: string) => boolean
+  optionTitle?: (option: SessionConfigOption) => string
+  slot: string
 }) {
-  const toItem = (option: SessionConfigOption): EntityPickerItem => ({
-    entity: { id: option.value || type + "-default", typeSlug: type, name: option.label },
-    visual: { icon: option.icon, iconSvgPath: option.iconSvgPath, color: option.color },
-  })
-  const items = options.map(option => ({ option, item: toItem(option) }))
-  const selected = items.find(entry => entry.option.value === value)?.item
-    ?? toItem({ value, label: currentLabel ?? value })
-  const source: EntityPickerSource = {
-    search: async ({ query, limit }) => {
-      const text = query.trim().toLowerCase()
-      return items
-        .filter(({ option }) => option.label.toLowerCase().includes(text) || option.value.toLowerCase().includes(text))
-        .slice(0, limit)
-        .map(({ item }) => item)
-    },
-    resolve: async ({ id }) => items.find(({ item }) => item.entity.id === id)?.item ?? null,
-  }
+  // Use exact IDs for selection. Display aliases only supply fallback metadata.
+  const selected = options.find(option => option.value === value) ?? current ?? { value, label: value || "--" }
+  const canChange = !!onChange && !disabled && options.some(option => option.value !== value && !optionDisabled?.(option.value))
 
   return (
-    <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 py-1.5" data-slot={slot}>
+    <div className="grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 py-1" data-slot={slot}>
       <span className="text-xs text-text-muted">{label}</span>
-      <EntityRefField
-        className="w-full min-w-0 max-w-sm justify-self-end"
-        value={selected.entity.id}
-        initialItem={selected}
-        targetType={type}
-        typeLabel={label.toLowerCase()}
-        title={"Select " + label.toLowerCase()}
-        source={source}
-        clearable={false}
-        disabled={disabled || !onChange}
-        onChange={reference => {
-          const next = items.find(({ item }) => item.entity.id === reference)?.option.value
-          if (next !== undefined && value !== next) onChange?.(next)
-        }}
-      />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={label + ": " + selected.label}
+          data-value={value}
+          disabled={!canChange}
+          title={selected.label}
+          className="flex min-h-8 w-full min-w-0 max-w-xs items-center gap-2 justify-self-end rounded-md bg-overlay-6 px-2.5 py-1 text-left text-sm font-medium text-foreground outline-none transition-colors enabled:cursor-pointer enabled:hover:bg-overlay-10 focus-visible:ring-2 focus-visible:ring-primary/50 disabled:opacity-50"
+        >
+          <SettingValue option={selected} />
+          <i aria-hidden="true" className="ph-bold ph-caret-down ml-auto shrink-0 text-[10px] text-text-muted" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={4} aria-label={label}
+          className="w-max min-w-[var(--anchor-width)] max-w-[var(--available-width)] max-h-[var(--available-height)] overflow-y-auto">
+          <DropdownMenuRadioGroup value={value} onValueChange={next => {
+            if (canChange && next !== value) onChange?.(next)
+          }}>
+            {options.map(option => (
+              <DropdownMenuRadioItem key={option.value} value={option.value} data-value={option.value} closeOnClick
+                disabled={optionDisabled?.(option.value)} title={optionTitle?.(option) ?? option.label}
+                className="data-checked:text-primary data-checked:focus:text-primary">
+                <SettingValue option={option} />
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -442,6 +374,7 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, pr
     return { ...presentation, value: id, label: presentation?.label ?? name }
   }) ?? []
   const provider = options.provider
+  const currentProvider = findOption(providerOptions, provider)
   const models = options.models.map(({ id, name }) => ({ value: id, label: name }))
   const selectedModel = options.models.find(candidate => candidate.id === options.model)
   const modelValue = options.model ?? ""
@@ -468,17 +401,17 @@ function InferenceSettingsRows({ client, subscribe, sessionId, model, effort, pr
   return (
     <>
       {provider ? (
-        <SessionEntitySetting label="Provider" type="provider" slot="session-info-provider" value={provider}
-          currentLabel={findOption(providerOptions, provider)?.label ?? provider} options={providers}
-          disabled={saving || providers.length < 2} onChange={provider => select({ provider })} />
+        <SettingChoice label="Provider" slot="session-info-provider" value={provider} options={providers}
+          current={{ ...currentProvider, value: provider, label: currentProvider?.label ?? provider }}
+          disabled={saving} onChange={provider => select({ provider })} />
       ) : providerFallback}
-      <SessionEntitySetting label="Model" type="inference-model" slot="session-info-model" value={modelValue}
-        currentLabel={formatModelName(modelValue) || "Provider default"} options={models}
-        disabled={saving || !models.length} onChange={model => select({ model })} />
+      <SettingChoice label="Model" slot="session-info-model" value={modelValue} options={models}
+        current={{ value: modelValue, label: formatModelName(modelValue) || "Provider default" }}
+        disabled={saving} onChange={model => select({ model })} />
       {(efforts.length > 0 || effortValue) && (
-        <SessionEntitySetting label="Thinking" type="reasoning-effort" slot="session-info-thinking" value={effortValue}
-          currentLabel={formatProviderEffort(effortValue) ?? "Model default"} options={effortChoices}
-          disabled={saving || !efforts.length} onChange={effort => select({ effort })} />
+        <SettingChoice label="Thinking" slot="session-info-thinking" value={effortValue} options={effortChoices}
+          current={{ value: effortValue, label: formatProviderEffort(effortValue) ?? "Model default" }}
+          disabled={saving} onChange={effort => select({ effort })} />
       )}
       {options.pendingChanges?.map(operation => (
         <p key={operation.id} role="status" className={operation.error ? "text-xs text-destructive" : "text-xs text-text-muted"}>
@@ -498,8 +431,9 @@ function nodeChoiceKey(choice: SessionNodeDestination): string {
   return JSON.stringify([choice.nodeId, choice.sessionRuntime])
 }
 
-function NodeSettingsRow({ client, subscribe, sessionId }: {
+function NodeSettingsRow({ client, subscribe, sessionId, fallback }: {
   client: SessionNodeSettingsClient
+  fallback: React.ReactNode
   subscribe?: SessionInfoButtonProps["subscribeInferenceSettings"]
   sessionId: string
 }) {
@@ -542,7 +476,7 @@ function NodeSettingsRow({ client, subscribe, sessionId }: {
     return () => { current = false; window.clearInterval(interval) }
   }, [client, operation, sessionId])
 
-  if (!settings) return null
+  if (!settings) return fallback
   const selected = nodeChoiceKey(settings.active)
   const isPending = operation?.state === "pending" || operation?.state === "delivering"
   const choices = [settings.active, ...settings.destinations]
@@ -584,10 +518,8 @@ function NodeSettingsRow({ client, subscribe, sessionId }: {
 
   return (
     <>
-      {settings.destinations.length > 0
-        ? <ConfigSelect label="Node" slot="session-info-node" value={selected} options={options}
-            disabled={!settings.canMove || saving || isPending} onChange={select} />
-        : <StatRow label="Node" value={settings.active.name} />}
+      <SettingChoice label="Node" slot="session-info-node" value={selected} options={options}
+        disabled={!settings.canMove || saving || isPending} onChange={select} />
       {isPending && <p role="status" className="text-xs text-text-muted">Node change queued</p>}
       {settings.state === "held" && (
         <p role="status" data-slot="session-info-node-hold" className="text-xs text-text-muted">
@@ -663,25 +595,22 @@ function AccessLevelRow({ level, cap, choices, onChange, onRaiseCap, fullAccessE
 
   return (
     <div data-slot="access-level-row" data-access-level={shown ?? undefined}>
-      {onChange ? (
-        <ConfigSelect
-          slot="access-level-select"
-          label="Permissions"
-          value={shown ?? ""}
-          options={choices.map(choice => choice.option)}
-          onChange={value => void choose(value)}
-          disabled={!!choosing || raisingCap}
-          optionDisabled={value => !!choices.find(choice => choice.level === value)?.disabledReason}
-          optionTitle={option => {
-            const reason = choices.find(choice => choice.level === option.value)?.disabledReason
-            return reason === "above_session_cap" ? `${option.label}: ${CAP_TITLE}`
-              : reason === "full_access_not_enabled" ? `${option.label}: ${FULL_OFF_TITLE}`
-              : option.label
-          }}
-        />
-      ) : (
-        <StatRow label="Permissions" value={shown ? ACCESS_LEVEL_LABELS[shown] : "--"} />
-      )}
+      <SettingChoice
+        slot="access-level-select"
+        label="Permissions"
+        value={shown ?? ""}
+        current={shown ? { value: shown, label: ACCESS_LEVEL_LABELS[shown] } : undefined}
+        options={choices.map(choice => choice.option)}
+        onChange={onChange ? choose : undefined}
+        disabled={!!choosing || raisingCap}
+        optionDisabled={value => !!choices.find(choice => choice.level === value)?.disabledReason}
+        optionTitle={option => {
+          const reason = choices.find(choice => choice.level === option.value)?.disabledReason
+          return reason === "above_session_cap" ? option.label + ": " + CAP_TITLE
+            : reason === "full_access_not_enabled" ? option.label + ": " + FULL_OFF_TITLE
+            : option.label
+        }}
+      />
       {shown && (
         <p data-slot="access-level-description" className="pb-1 text-right text-[11px] leading-snug text-text-muted">
           {ACCESS_LEVEL_DESCRIPTIONS[shown]}
@@ -774,7 +703,7 @@ export function SessionStatsModal({
 
   const accessChoices = accessLevelChoices({ supported: s.supportedAccessLevels, max: s.maxAccessLevel, fullAccessEnabled })
   const accessLevel = isAccessLevel(s.accessLevel) ? s.accessLevel : null
-  const accessRow = accessChoices.length > 0 && (
+  const accessRow = (accessLevel || accessChoices.length > 0) && (
     <AccessLevelRow
       key={s.sessionId ?? undefined}
       level={accessLevel}
@@ -787,8 +716,6 @@ export function SessionStatsModal({
       onNavigate={() => onOpenChange(false)}
     />
   )
-
-  const hasConfig = onConfigChange && (modelOptions || effortOptions || qualityTierOptions || accessChoices.length > 0)
 
   const handleConfigChange = async (config: SessionConfigChange) => {
     if (!onConfigChange) return
@@ -915,56 +842,48 @@ export function SessionStatsModal({
     </div>
   )
 
-  const providerCard = providerValue && (
-    <SessionEntitySetting label="Provider" type="provider" slot="session-info-provider" value={providerValue}
-      options={[{ ...providerOption, value: providerValue, label: providerOption?.label ?? providerValue }]} />
+  const nodeSetting = node && (
+    <SettingChoice label="Node" slot="session-info-node" value={node.name} />
   )
-  const modelCard = <SessionEntitySetting label="Model" type="inference-model" slot="session-info-model" value={s.model ?? ""}
-    options={[{ value: s.model ?? "", label: modelLabel }]} />
-  const thinkingCard = thinking && <SessionEntitySetting label="Thinking" type="reasoning-effort" slot="session-info-thinking"
-    value={s.effort ?? ""} options={[{ value: s.effort ?? "", label: thinking }]} />
+  const providerSetting = providerValue && (
+    <SettingChoice label="Provider" slot="session-info-provider" value={providerValue}
+      current={{ ...providerOption, value: providerValue, label: providerLabel ?? providerValue }} />
+  )
+  const modelSetting = <SettingChoice label="Model" slot="session-info-model" value={s.model ?? ""}
+    current={{ value: s.model ?? "", label: modelLabel }} />
+  const thinkingSetting = thinking && <SettingChoice label="Thinking" slot="session-info-thinking"
+    value={s.effort ?? ""} current={{ value: s.effort ?? "", label: thinking }} />
+  const legacyQualityOptions = qualityTierOptions ? undefined : effortOptions
+  const qualityValue = s.qualityTier || ""
 
   const settings = (
     <div className="min-w-0" data-slot="session-info-settings">
-      {open && nodeSettingsClient && s.sessionId && (
-        <NodeSettingsRow key={"node:" + s.sessionId} client={nodeSettingsClient}
+      {open && nodeSettingsClient && s.sessionId ? (
+        <NodeSettingsRow key={"node:" + s.sessionId} client={nodeSettingsClient} fallback={nodeSetting}
           subscribe={subscribeInferenceSettings} sessionId={s.sessionId} />
-      )}
+      ) : nodeSetting}
       {open && inferenceSettingsClient && s.sessionId ? (
         <InferenceSettingsRows key={"inference:" + s.sessionId} client={inferenceSettingsClient} subscribe={subscribeInferenceSettings} sessionId={s.sessionId}
-          model={s.model} effort={s.effort} providerOptions={providerOptions} providerFallback={providerCard}
-          fallback={<>{providerCard}{modelCard}{thinkingCard}</>} />
+          model={s.model} effort={s.effort} providerOptions={providerOptions} providerFallback={providerSetting}
+          fallback={<>{providerSetting}{modelSetting}{thinkingSetting}</>} />
       ) : (
         <>
-          {providerCard}
-          {hasConfig && modelOptions ? (
-            <SessionEntitySetting label="Model" type="inference-model" slot="session-info-model" value={currentModelAlias(s.model)}
-              currentLabel={modelLabel} options={modelOptions}
+          {providerSetting}
+          {onConfigChange && modelOptions ? (
+            <SettingChoice label="Model" slot="session-info-model" value={currentModelAlias(s.model)}
+              current={{ value: s.model ?? "", label: modelLabel }} options={modelOptions}
               onChange={model => handleConfigChange({ model })} disabled={updating} />
-          ) : modelCard}
-          {thinkingCard}
+          ) : modelSetting}
+          {thinkingSetting}
         </>
       )}
-      {hasConfig && qualityTierOptions && (
-        <ConfigSelect
-          label="Quality"
-          value={s.qualityTier || ""}
-          options={qualityTierOptions}
-          onChange={v => handleConfigChange({ qualityTier: v })}
-          disabled={updating}
-        />
-      )}
-      {hasConfig && effortOptions && !qualityTierOptions && (
-        <ConfigSelect
-          label="Quality"
-          value={s.effort || "high"}
-          options={effortOptions}
-          onChange={v => handleConfigChange({ effort: v })}
-          disabled={updating}
-        />
-      )}
-      {s.qualityTier && !(onConfigChange && qualityTierOptions) && (
-        <EntityStatRow label="Quality" value={s.qualityTier} option={qualityTierOption} />
+      {onConfigChange && legacyQualityOptions ? (
+        <SettingChoice label="Quality" slot="session-info-quality" value={s.effort || "high"} options={legacyQualityOptions}
+          onChange={effort => handleConfigChange({ effort })} disabled={updating} />
+      ) : (qualityValue || (onConfigChange && qualityTierOptions)) && (
+        <SettingChoice label="Quality" slot="session-info-quality" value={qualityValue}
+          current={qualityTierOption} options={qualityTierOptions} disabled={updating}
+          onChange={onConfigChange && qualityTierOptions ? qualityTier => handleConfigChange({ qualityTier }) : undefined} />
       )}
       {accessRow}
       {updating && (
