@@ -214,7 +214,7 @@ async function main() {
       check(rowText.includes("1 delegation ongoing… · 3 jobs · Early sketch · Launch covers 62%"), `delegations first, jobs after: ${rowText}`)
       const shapes = await statusRow.locator('[data-activity-key]').evaluateAll(nodes => nodes.map(node => ({
         key: node.getAttribute("data-activity-key"), label: node.getAttribute("aria-label"), size: [node.offsetWidth, node.offsetHeight],
-        round: getComputedStyle(node).borderRadius, colour: node.style.backgroundColor, running: node.hasAttribute("data-running") })))
+        round: getComputedStyle(node).borderRadius, colour: node.firstElementChild.style.backgroundColor, running: node.hasAttribute("data-running") })))
       equal(shapes.map(shape => shape.key), ["host:d1", "host:job:early", "host:job:covers", "host:job:theme"], "the delegation keeps its place, jobs follow in launch order")
       equal(shapes[0].size, [10, 10], "the delegation is still a circle")
       check(shapes[0].round !== "2px", "and round")

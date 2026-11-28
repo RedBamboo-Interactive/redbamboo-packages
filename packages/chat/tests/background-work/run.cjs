@@ -61,7 +61,7 @@ async function main() {
       const state = async id => squareFor(id).evaluate(node => ({
         status: node.getAttribute("data-task-status"),
         jiggle: node.classList.contains("square-jiggle"),
-        color: getComputedStyle(node).backgroundColor,
+        color: getComputedStyle(node.firstElementChild).backgroundColor,
       }))
       const research = await state("toolu_research")
       const map = await state("toolu_map")

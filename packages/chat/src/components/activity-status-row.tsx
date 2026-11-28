@@ -67,8 +67,8 @@ export interface ActivityShape {
 
 /** The shape's footprint: a twin is as wide as two squares and their gap, and never scales up on hover. */
 function shapeClass(shape: ActivityShape["shape"]): string {
-  if (shape === "twin") return "w-[23px] h-2.5 rounded-[2px] hover:brightness-125"
-  return `w-2.5 h-2.5 ${shape === "circle" ? "rounded-full" : "rounded-[2px]"} hover:brightness-125 hover:scale-[1.5]`
+  if (shape === "twin") return "w-[23px] h-2.5 rounded-[2px]"
+  return `w-2.5 h-2.5 ${shape === "circle" ? "rounded-full" : "rounded-[2px]"}`
 }
 
 /** One clickable shape per running agent, background task and host item, in priority order. */
@@ -81,13 +81,15 @@ export function ActivityShapes({ shapes }: { shapes: readonly ActivityShape[] })
           key={shape.key}
           type="button"
           onClick={shape.onOpen}
-          className={`${shapeClass(shape.shape)} transition-colors duration-100 cursor-pointer${shape.running ? " square-wobble" : ""}`}
-          style={{ backgroundColor: shape.color }}
+          className={`activity-marker ${shapeClass(shape.shape)} cursor-pointer${shape.running ? " square-wobble" : ""}`}
+          data-activity-wide={shape.shape === "twin" || undefined}
           title={shape.label}
           aria-label={shape.label}
           data-activity-key={shape.key}
           data-running={shape.running || undefined}
-        />
+        >
+          <span aria-hidden="true" className="activity-marker-visual" style={{ backgroundColor: shape.color }} />
+        </button>
       ))}
     </div>
   )

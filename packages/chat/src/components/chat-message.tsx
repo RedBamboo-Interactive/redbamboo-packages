@@ -864,14 +864,8 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
               <button
                 type="button"
                 onClick={() => handleClick(part)}
-                className={`w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} transition-colors duration-100 hover:brightness-125 hover:scale-[1.5] cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}${paint.highlight ? " quiet-frieze-marker" : ""}`}
-                style={{
-                  backgroundColor: paint.color,
-                  ...paint.highlight,
-                  // Not in the conversation yet: an outline in its own colour until it joins.
-                  ...(queueStatus?.pending ? { backgroundColor: "transparent", boxShadow: `inset 0 0 0 1.5px ${paint.color}` } : {}),
-                  ...(quiet ? { width: 8, height: 8 } : {}),
-                }}
+                className={`activity-marker w-2.5 h-2.5 ${event && !squareEvent ? "rounded-full" : "rounded-[2px]"} cursor-pointer${inFlight ? " square-jiggle" : " square-spawn"}${paint.highlight ? " quiet-frieze-marker" : ""}`}
+                style={{ ...paint.highlight, ...(quiet ? { width: 8, height: 8 } : {}) }}
                 title={note ? undefined : part.task ? `${label}: ${part.task.status}` : label}
                 aria-label={queueStatus ? `${label}: ${queueStatus.label}` : part.task ? `${label}: ${part.task.status}` : label}
                 data-input-message-uid={event ? part.messageUid : undefined}
@@ -882,7 +876,15 @@ function PartFrieze({ blockId, parts, allParts, turnOrigins, isLive, density = "
                 data-task-status={part.task?.status}
                 data-awaiting-approval={waitingApproval || undefined}
                 data-pending={queueStatus?.pending || undefined}
-              />
+              >
+                <span
+                  aria-hidden="true"
+                  className={`activity-marker-visual${waitingApproval ? " ring-2 ring-amber-400 ring-offset-1 ring-offset-background" : ""}`}
+                  style={queueStatus?.pending
+                    ? { boxShadow: `inset 0 0 0 1.5px ${paint.color}` }
+                    : { backgroundColor: paint.color }}
+                />
+              </button>
             )
             return [
               ...origins,
