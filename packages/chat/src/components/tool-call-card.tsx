@@ -33,7 +33,7 @@ export function ToolCallCard({ toolName, toolInput, toolResult, approval, onPerm
       </button>
       {approval && (
         <div className="border-t border-border-subtle px-2">
-          <PermissionApprovalCard approval={approval} onDecide={onPermissionDecision} />
+          <PermissionApprovalCard approval={approval} toolInput={toolInput} onDecide={onPermissionDecision} />
         </div>
       )}
       {expanded && (

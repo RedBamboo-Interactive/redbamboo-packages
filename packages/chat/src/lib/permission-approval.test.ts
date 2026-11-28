@@ -9,6 +9,7 @@ import {
   isPermissionQuestion,
   permissionOutcome,
   readPermissionRequest,
+  permissionApprovalPresentation,
   unanchoredApprovals,
   visibleApprovals,
 } from "./permission-approval.ts"
@@ -231,6 +232,59 @@ test("a sparse permission event is read from its tool fields", () => {
     cwd: null,
     options: ["allow_once", "allow_session", "deny"],
   })
+})
+
+test("the agent's explanation survives reading the request while the full command comes from input", () => {
+  const command = "powershell.exe -File process-fixture.ps1 " + "argument ".repeat(150) + "END_OF_COMMAND"
+  const request = readPermissionRequest(permissionQuestion("t1", "r1", {
+    permission: {
+      toolName: "commandExecution",
+      summary: command.slice(0, 1000),
+      description: "Process the fixture.\n  Report its size.",
+      input: { command },
+    },
+  }))
+
+  assert.equal(request.description, "Process the fixture.\n  Report its size.")
+  const presentation = permissionApprovalPresentation(request)
+  assert.equal(presentation.description, "Process the fixture. Report its size.")
+  assert.equal(presentation.action, command)
+  assert.equal(presentation.detailLabel, "Show full command")
+  assert.equal(presentation.missingCommand, false)
+  assert.equal(presentation.encoded, false)
+})
+
+test("an attached tool input supplies a sparse approval's full command", () => {
+  const command = 'pwsh.exe -EncodedCommand Zml4dHVyZQ=='
+  const request = {
+    toolName: "commandExecution",
+    input: { reason: "Read the synthetic fixture." },
+    summary: "Run a command",
+  }
+  const fallback = permissionApprovalPresentation(request)
+  assert.equal(fallback.missingCommand, true)
+  assert.equal(fallback.detailLabel, "Show command preview")
+  const presentation = permissionApprovalPresentation(request, JSON.stringify({ command }))
+  assert.equal(presentation.description, "Read the synthetic fixture.")
+  assert.equal(presentation.action, command)
+  assert.equal(presentation.encoded, true)
+})
+
+test("encoded content is identified from the proposed action, including a legacy argv command", () => {
+  const argv = ["C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-enc", "Zml4dHVyZQ=="]
+  const presentation = permissionApprovalPresentation({ toolName: "commandExecution", input: { command: argv } })
+  assert.deepEqual(JSON.parse(presentation.action!), argv)
+  assert.equal(presentation.detailLabel, "Show full command arguments")
+  assert.equal(presentation.encoded, true)
+  for (const command of ["base64 --decode fixture.txt", "[Convert]::FromBase64String('Zml4dHVyZQ==')"]) {
+    assert.equal(permissionApprovalPresentation({ toolName: "Bash", input: { command } }).encoded, true)
+  }
+  const ordinary = permissionApprovalPresentation({
+    toolName: "Bash",
+    description: "Read the labels -EncodedCommand and Base64.",
+    input: { command: "node -e '0'" },
+  })
+  assert.equal(ordinary.encoded, false)
 })
 
 test("resolution outcomes read the decision first, then the content", () => {

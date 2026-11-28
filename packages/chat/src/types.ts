@@ -760,8 +760,10 @@ export interface PermissionRequest {
   toolName: string
   /** The transcript tool_use the approval belongs to; the card is drawn on it. */
   toolUseId?: string | null
-  /** The command or file the tool is about to touch, in a line. */
+  /** A provider preview of the proposed command or action. */
   summary?: string | null
+  /** The agent's stated intent, supplied separately from the actual input. */
+  description?: string | null
   /** The tool's input, verbatim. */
   input?: unknown
   cwd?: string | null

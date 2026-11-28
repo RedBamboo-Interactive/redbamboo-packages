@@ -39,10 +39,12 @@ export function readPermissionRequest(event: ChatEvent): PermissionRequest {
   const given = event.permission ?? null
   const toolName = given?.toolName || event.toolName || "Tool"
   const input = given && "input" in given ? given.input : parseInput(event.toolInput)
+  const description = readText(given?.description)
   return {
     toolName,
     toolUseId: given?.toolUseId ?? event.toolUseId ?? event.messageId ?? null,
     summary: given?.summary || summarizeToolInput(toolName, input),
+    ...(description ? { description } : {}),
     input,
     cwd: given?.cwd ?? null,
     options: readOptions(given?.options),
@@ -60,6 +62,65 @@ export function summarizeToolInput(toolName: string, input: unknown): string | n
     if (Array.isArray(value) && value.every(item => typeof item === "string")) return value.join(" ")
   }
   return toolName
+}
+
+function readText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null
+}
+
+function inputFields(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function readCommand(input: unknown, shellTool: boolean): string | string[] | null {
+  const fields = inputFields(input)
+  const command = fields.command ?? fields.cmd ?? (shellTool ? input : null)
+  if (Array.isArray(command) && command.length && command.every(arg => typeof arg === "string")) return command
+  return readText(command)
+}
+
+function containsEncodedCommand(command: string): boolean {
+  const encodedFlag = /(?:^|[\s"'])(?:-|\/)encodedcommand(?=$|[\s:=,"'])/i
+  const powerShell = /(?:^|[\s"'\\/])(?:powershell|pwsh)(?:\.exe)?(?=$|[\s"'])/i
+  const shortEncodedFlag = /(?:^|[\s"'])-(?:e|ec|enc)(?=$|[\s:=,"'])/i
+  const encodedPayload = /\b(?:frombase64string|b64decode|atob)\s*\(|\bbase64(?:\.exe)?\s+(?:--decode\b|-[dD]\b)|\bdata:[^,\s;]*;base64,/i
+  return encodedFlag.test(command) || (powerShell.test(command) && shortEncodedFlag.test(command))
+    || encodedPayload.test(command)
+}
+
+/** Separate the agent's explanation from the exact action supplied for review. */
+export function permissionApprovalPresentation(request: PermissionRequest, toolInput?: string) {
+  const shellTool = /^(?:bash|shell|powershell|terminal|commandExecution)$/i.test(request.toolName)
+  const tool = parseInput(toolInput)
+  const command = readCommand(request.input, shellTool) ?? readCommand(tool, shellTool)
+  const isCommand = shellTool || command !== null
+  const requestFields = inputFields(request.input)
+  const toolFields = inputFields(tool)
+  const statedIntent = readText(request.description) ?? readText(requestFields.description)
+    ?? readText(requestFields.reason) ?? readText(toolFields.description)
+  const preview = readText(request.summary)
+  const exact = Array.isArray(command) ? JSON.stringify(command, null, 2) : command
+  const commandText = Array.isArray(command) ? command.join(" ") : command
+  const fallback = isCommand ? "Run a shell command."
+    : request.toolName === "fileChange" ? "Apply file changes."
+    : request.toolName === "permissions" ? "Grant additional permissions."
+    : `Use the ${request.toolName} tool.`
+  const description = statedIntent && statedIntent.trim() !== commandText?.trim()
+    ? statedIntent.trim().replace(/\s+/g, " ")
+    : null
+  const action = exact ?? (preview === request.toolName || preview === statedIntent ? null : preview)
+  const detailLabel = command !== null
+    ? Array.isArray(command) ? "Show full command arguments" : "Show full command"
+    : isCommand ? "Show command preview" : "Show action details"
+
+  return {
+    description,
+    fallback,
+    action,
+    detailLabel,
+    missingCommand: isCommand && command === null,
+    encoded: isCommand && containsEncodedCommand(commandText ?? preview ?? ""),
+  }
 }
 
 export function approvalKey(request: PermissionRequest, requestId: string | null | undefined): string {

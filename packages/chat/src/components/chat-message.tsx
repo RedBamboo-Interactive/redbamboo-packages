@@ -497,6 +497,8 @@ export const ChatMessage = memo(function ChatMessage({
     <PermissionApprovalCard
       key={approval.key}
       approval={approval}
+      toolInput={block.parts.find(part => part.type === "tool_use"
+        && (part.toolUseId ?? part.messageId) === approval.request.toolUseId)?.toolInput}
       onDecide={onPermissionDecision && approval.requestId
         ? decision => onPermissionDecision({ requestId: approval.requestId, toolUseId: approval.request.toolUseId ?? null, decision })
         : undefined}

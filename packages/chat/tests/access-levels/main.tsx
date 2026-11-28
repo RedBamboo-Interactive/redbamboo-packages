@@ -152,11 +152,15 @@ function ModalFixture() {
 }
 
 const base = { content: null, toolName: null, toolInput: null, toolResult: null, messageId: null, messageUid: null }
-const bashInput = JSON.stringify({ command: "git clean -fdx && rm -rf node_modules/.cache/some/very/long/path/that/wraps/on/a/phone" })
+const inspectCommand = "Get-ChildItem -LiteralPath C:/fixture/" + "long-directory/".repeat(80) + "END_OF_COMMAND"
 const askInput = JSON.stringify({ questions: [{ question: "Which branch should I clean?", header: "Branch", multiSelect: false, options: [{ label: "main" }, { label: "dev" }] }] })
 
 function ChatFixture() {
   const scenario = params.get("scenario") ?? "permission"
+  const encoded = scenario === "encoded"
+  const command = encoded ? "pwsh.exe -EncodedCommand Zml4dHVyZQ==" : inspectCommand
+  const toolName = encoded ? "commandExecution" : "Bash"
+  const toolInput = JSON.stringify({ command })
   const [state, setState] = useState<{ messages: MessageBlock[]; isStreaming: boolean; question: QuestionState }>({
     messages: [{ id: "user-1", role: "user", timestamp: stamp, parts: [{ type: "text", content: "Clean the build please" }] }],
     isStreaming: true,
@@ -191,20 +195,20 @@ function ChatFixture() {
     emit({ ...base, type: "tool_use", toolName: "Read", toolInput: JSON.stringify({ file_path: "package.json" }), messageId: "toolu_read" })
     emit({ ...base, type: "tool_result", content: "{}", toolResult: "{}", messageId: "toolu_read" })
     if (scenario !== "unanchored")
-      emit({ ...base, type: "tool_use", toolName: "Bash", toolInput: bashInput, messageId: "toolu_bash" })
+      emit({ ...base, type: "tool_use", toolName, toolInput, messageId: "toolu_bash" })
     emit({
       ...base,
       type: "question",
       kind: "permission",
       requestId: "req-1",
-      toolName: "Bash",
-      toolInput: bashInput,
+      toolName,
       messageId: scenario === "unanchored" ? "toolu_not_streamed" : "toolu_bash",
       permission: {
-        toolName: "Bash",
+        toolName,
         toolUseId: scenario === "unanchored" ? "toolu_not_streamed" : "toolu_bash",
-        summary: JSON.parse(bashInput).command,
-        input: JSON.parse(bashInput),
+        summary: encoded ? "Run a command" : command.slice(0, 1000),
+        description: "Inspect the fixture directory.",
+        input: encoded ? {} : { command },
         cwd: "T:/Projects/demo",
         options: ["allow_once", "allow_session", "deny"],
       },
