@@ -193,6 +193,8 @@ public static class DiscoveryEndpoints
                     list = "/api/telemetry",
                     stats = "/api/telemetry/stats",
                     process = "/api/telemetry/process",
+                    samples = "/api/telemetry/samples",
+                    stalls = "/api/telemetry/stalls",
                     cleanup = "/api/telemetry/cleanup",
                 };
 
