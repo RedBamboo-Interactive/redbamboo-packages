@@ -795,6 +795,11 @@ export function ChatPanel(props: ChatPanelProps) {
   const backgroundPaused = backgroundSummary?.paused || backgroundSummary?.source === "host"
     && !hostItems.some(item => item.running) && !activeJobs.some(job => job.state === "running")
   const alsoRunning = sessionLine ? describeAlsoRunning(orderedTasks) : null
+  // The session is not working and host work has the words: a first host item that is a square in the spinner's
+  // colour would only repeat it, so its own marker leads the row (its button and painted layer keep the hover).
+  // Items that don't ask for a square (circles, or no shape at all) keep the spinner as they always have.
+  const hostItemLeads = !sessionLine && backgroundSummary?.source === "host"
+    && hostItems[0]?.shape === "square" && hostItems[0].color === backgroundColor
   // Host words open the host item they name, when the host says which; the same dialog as its shape.
   const hostOpenKey = hostActivity?.openKey && hostItems.some(item => item.key === hostActivity.openKey) ? hostActivity.openKey : null
   const openHostText = hostOpenKey ? () => setOpenHostKey(hostOpenKey) : undefined
@@ -803,7 +808,7 @@ export function ChatPanel(props: ChatPanelProps) {
       <ActivityShapesProvider value={<ActivityShapes shapes={activityShapes} />}>
         <ActivityNoteProvider value={alsoRunning ? { label: alsoRunning, onOpen: openRunningWork } : null}>
           {sessionLine ?? (backgroundSummary && (
-            <ChatStatusLine color={backgroundColor} paused={backgroundPaused} icon={backgroundSummary.icon} label={backgroundSummary.label} title={backgroundSummary.title}
+            <ChatStatusLine color={backgroundColor} paused={backgroundPaused} spinner={!hostItemLeads} icon={backgroundSummary.icon} label={backgroundSummary.label} title={backgroundSummary.title}
               onOpen={backgroundSummary.source === "host" ? openHostText : openRunningWork} />
           ))}
         </ActivityNoteProvider>

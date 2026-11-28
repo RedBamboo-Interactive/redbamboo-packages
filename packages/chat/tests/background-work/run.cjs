@@ -238,10 +238,38 @@ async function main() {
     await hostPage.close()
     results.push({ delegations: true })
 
+    // A first host item that is a square in the spinner's colour would only repeat it: its own marker leads,
+    // with its button and painted layer (the hover), and nothing else in front of the words.
+    const statePage = await browser.newPage({ viewport: { width: 400, height: 700 }, deviceScaleFactor: 2 })
+    await statePage.goto(`${origin}?stateLead`)
+    const stateRow = statePage.locator('[data-slot="activity-status-row"]')
+    await stateRow.locator('[data-slot="activity-open"]').getByText("Idle").waitFor()
+    assert.equal(await stateRow.locator('.morph-spinner-wrap').count(), 0, "no spinner repeating the state square")
+    const leading = await stateRow.locator('[data-slot="streaming-status-line"] > *').first()
+      .evaluate(el => ({ slot: el.getAttribute("data-slot"), role: el.getAttribute("role"), label: el.getAttribute("aria-label") }))
+    assert.equal(leading.role, "group", "the shapes lead the line")
+    const stateMarker = stateRow.locator('button.activity-marker[data-activity-key="host:state"]')
+    assert.equal(await stateMarker.locator('.activity-marker-visual').count(), 1)
+    assert.deepEqual(await stateRow.getByRole("group", { name: "Background work" }).getByRole("button")
+      .evaluateAll(nodes => nodes.map(node => node.getAttribute("data-activity-key"))), ["host:state", "host:d1"])
+    await statePage.screenshot({ path: path.join(shots, "08-state-leads-row-400.png") })
+    await stateRow.locator('[data-slot="activity-open"]').click()
+    await statePage.locator('[data-slot="dialog-content"]').locator('[data-slot="fixture-state"]').waitFor()
+    await statePage.keyboard.press("Escape")
+    // While the session works, the spinner is the session's and stays.
+    await statePage.goto(`${origin}?stateLead&streaming`)
+    await stateRow.locator('[data-slot="streaming-status-line"]').waitFor()
+    assert.equal(await stateRow.locator('.morph-spinner-wrap').count(), 1, "a working session keeps its spinner")
+    await statePage.close()
+    results.push({ squareHostItemLeads: true })
+
     // Named, the words open that item's details, in the same dialog its shape opens.
     const openPage = await browser.newPage({ viewport: { width: 1440, height: 900 } })
     await openPage.goto(`${origin}?hostOnly&hostOpen`)
     const openRow = openPage.locator('[data-slot="activity-status-row"]')
+    await openRow.locator('[data-slot="activity-open"]').getByText("2 delegations ongoing…").waitFor()
+    // Circles never repeat the spinner: it stays ahead of them.
+    assert.equal(await openRow.locator('[data-slot="streaming-status-line"] > .morph-spinner-wrap').count(), 1, "the spinner leads circles")
     await openRow.locator('[data-slot="activity-open"]').getByText("2 delegations ongoing…").click()
     const openDialog = openPage.locator('[data-slot="dialog-content"]')
     await openDialog.getByRole("heading", { name: "Delegation", exact: true }).waitFor()

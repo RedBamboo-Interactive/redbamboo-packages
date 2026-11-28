@@ -92,6 +92,17 @@ const hostActivity: ActivityStatusGroup = {
   items: [delegation("d1", "Sentinel shield for Discord and Commons", true), delegation("d2", "Pin bump for release builds", false)],
 }
 
+// A host state that is itself a square in the spinner's colour, as Nova's discussion state: its marker leads the row.
+const stateActivity: ActivityStatusGroup = {
+  label: "Idle",
+  openKey: "state",
+  items: [
+    { key: "state", title: "Status", label: "Idle", color: "rgb(45 212 191)", shape: "square", running: false,
+      renderDetails: () => <div data-slot="fixture-state">The discussion is idle.</div> },
+    delegation("d1", "Sentinel shield for Discord and Commons", true),
+  ],
+}
+
 declare global { interface Window { __stops: string[] } }
 window.__stops = []
 
@@ -100,15 +111,16 @@ function App() {
     ? rebuildBlocks(records.slice(0, 1)) : rebuildBlocks(records))
   // ?streaming shows the busy composer, whose Stop must warn about the running tasks.
   // ?host adds delegations; ?hostOnly shows delegations with no background task running;
-  // ?hostOpen makes the host's words open its first item; ?detached drops the transcript so a task's launching
+  // ?hostOpen makes the host's words open its first item; ?stateLead leads with a square host state (no tasks); ?detached drops the transcript so a task's launching
   // square is not loaded.
   const params = new URLSearchParams(location.search)
   const streaming = params.has("streaming")
   const hostOnly = params.has("hostOnly")
   return <div style={{ width: "100%", height: "100vh" }}>
     <ChatPanel messages={messages} isStreaming={streaming} sessionId="background-work" persistQueue={false}
-      backgroundTasks={hostOnly ? [] : backgroundTasks}
-      hostActivity={params.has("host") || hostOnly ? (params.has("hostOpen") ? { ...hostActivity, openKey: "d1" } : hostActivity) : null}
+      backgroundTasks={hostOnly || params.has("stateLead") ? [] : backgroundTasks}
+      hostActivity={params.has("stateLead") ? stateActivity
+        : params.has("host") || hostOnly ? (params.has("hostOpen") ? { ...hostActivity, openKey: "d1" } : hostActivity) : null}
       onStopBackgroundTask={taskId => { window.__stops.push(taskId) }} />
   </div>
 }

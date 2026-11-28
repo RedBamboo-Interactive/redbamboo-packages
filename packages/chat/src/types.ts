@@ -1173,7 +1173,10 @@ export interface ActivityStatusItem {
   /** Title of its details dialog. */
   title: string
   color: string
-  /** Circles read as events (a delegation is one); squares as tool work; a twin is a job. */
+  /**
+   * Circles read as events (a delegation is one); squares as tool work; a twin is a job. A first item that asks for
+   * "square" in the row spinner's colour leads the row in its place while the session is not working.
+   */
   shape?: "square" | "circle" | "twin"
   /** Moves while true; waiting, blocked or unknown work stays still. */
   running: boolean

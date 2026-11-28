@@ -9,10 +9,12 @@ import { ActivityNote, ActivityText, useActivityShapes } from "./activity-status
  * Spinner and one status text. In the chat panel's status slot it also shows
  * the activity row's shapes between the two.
  */
-export function ChatStatusLine({ color, paused = false, icon, label, title, onOpen }: {
+export function ChatStatusLine({ color, paused = false, spinner = true, icon, label, title, onOpen }: {
   color: string
   /** Still spinner, for work that is only waiting. */
   paused?: boolean
+  /** False when the first shape already says what the spinner would: that shape leads instead. */
+  spinner?: boolean
   icon?: string
   label: string
   title?: string
@@ -22,7 +24,7 @@ export function ChatStatusLine({ color, paused = false, icon, label, title, onOp
   const shapes = useActivityShapes()
   return (
     <div data-slot="streaming-status-line" className="flex items-center gap-2.5 text-text-muted text-sm py-1 min-w-0" title={title}>
-      <MorphSpinner color={color} paused={paused} />
+      {spinner && <MorphSpinner color={color} paused={paused} />}
       {shapes}
       {icon && <i className={`${icon} text-[10px] opacity-60`} />}
       <ActivityText label={label} onOpen={onOpen} />
