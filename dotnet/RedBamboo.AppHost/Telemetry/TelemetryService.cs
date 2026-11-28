@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using Microsoft.Data.Sqlite;
+using RedBamboo.AppHost.Logging;
 using RedBamboo.AppHost.Telemetry.FlightRecorder;
 
 namespace RedBamboo.AppHost.Telemetry;
@@ -14,6 +15,33 @@ public class TelemetryService : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
 
     private readonly Dictionary<string, string> _descriptions = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Rows per DELETE in the retention cleanup, so the write lock is never held for a whole day of rows.</summary>
+    internal const int CleanupChunkRows = 5_000;
+    private static readonly TimeSpan FailureLogInterval = TimeSpan.FromHours(1);
+
+    private LogService? _log;
+    private long _lastWriteFailureLog = long.MinValue;
+    private long _lastCleanupFailureLog = long.MinValue;
+    private int _writeFailures;
+    private long _droppedRows;
+    private int _cleanupFailures;
+
+    /// <summary>Batches the writer could not store since start; each one's rows are dropped and the writer carries on.</summary>
+    public int WriteFailures => Volatile.Read(ref _writeFailures);
+
+    /// <summary>Request rows lost to failed batches since start.</summary>
+    public long DroppedRows => Interlocked.Read(ref _droppedRows);
+
+    /// <summary>Retention cleanups that failed since start; each is retried at the next daily run.</summary>
+    public int CleanupFailures => Volatile.Read(ref _cleanupFailures);
+
+    /// <summary>Where writer, cleanup and flight recorder failures and stall warnings go; until attached they are only counted.</summary>
+    public void AttachLog(LogService log)
+    {
+        _log = log;
+        Recorder.AttachLog(log);
+    }
 
     public event Action<TelemetryEntry>? OnEntry;
     public TelemetryOptions Options => _options;
@@ -77,6 +105,9 @@ public class TelemetryService : IAsyncDisposable
             gc_total_memory_mb = Math.Round(GC.GetTotalMemory(false) / 1024.0 / 1024.0, 1),
             thread_count = proc.Threads.Count,
             uptime_seconds = (int)(DateTime.UtcNow - proc.StartTime.ToUniversalTime()).TotalSeconds,
+            telemetry_write_failures = WriteFailures,
+            telemetry_dropped_rows = DroppedRows,
+            telemetry_cleanup_failures = CleanupFailures,
         };
     }
 
@@ -85,10 +116,23 @@ public class TelemetryService : IAsyncDisposable
         var cutoff = DateTimeOffset.UtcNow.AddDays(-_options.RetentionDays);
         using var conn = new SqliteConnection(_connectionString);
         conn.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "DELETE FROM requests WHERE timestamp < @cutoff";
-        cmd.Parameters.AddWithValue("@cutoff", cutoff.ToString("O"));
-        var deleted = cmd.ExecuteNonQuery();
+
+        // In chunks, each its own transaction, so the request writer gets the lock between them. A single
+        // DELETE of a whole day (1.0 to 1.7 million rows here) holds it for as long as that takes.
+        var deleted = 0;
+        while (true)
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                DELETE FROM requests WHERE id IN
+                    (SELECT id FROM requests WHERE timestamp < @cutoff ORDER BY timestamp LIMIT @chunk)
+                """;
+            cmd.Parameters.AddWithValue("@cutoff", cutoff.ToString("O"));
+            cmd.Parameters.AddWithValue("@chunk", CleanupChunkRows);
+            var chunk = cmd.ExecuteNonQuery();
+            deleted += chunk;
+            if (chunk < CleanupChunkRows || _cts.IsCancellationRequested) break;
+        }
 
         // The flight recorder's tables keep their own retention, whatever RetentionDays says.
         var recorderDeleted = Recorder.Store.Cleanup(
@@ -204,7 +248,7 @@ public class TelemetryService : IAsyncDisposable
                 while (batch.Count < 64 && _channel.Reader.TryRead(out var more))
                     batch.Add(more);
 
-                WriteBatch(batch);
+                WriteBatchOrDrop(batch);
                 batch.Clear();
             }
         }
@@ -212,7 +256,37 @@ public class TelemetryService : IAsyncDisposable
 
         while (_channel.Reader.TryRead(out var remaining))
             batch.Add(remaining);
-        if (batch.Count > 0) WriteBatch(batch);
+        if (batch.Count > 0) WriteBatchOrDrop(batch);
+    }
+
+    /// <summary>
+    /// One failed batch (a lock held past the busy timeout, a full disk) loses that batch, not every row
+    /// until the process restarts: this is the only consumer, and it used to end, silently, on the first
+    /// exception (RedLeaf's telemetry.db has no rows from 14 Nov 00:11Z to 15 Nov 03:10Z and from
+    /// 17 Nov 16:27Z to 19 Nov 23:44Z 2026, each starting about a day after a kernel start).
+    /// </summary>
+    private void WriteBatchOrDrop(List<TelemetryEntry> batch)
+    {
+        try
+        {
+            WriteBatch(batch);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var failures = Interlocked.Increment(ref _writeFailures);
+            var dropped = Interlocked.Add(ref _droppedRows, batch.Count);
+            if (ShouldLog(ref _lastWriteFailureLog))
+                _log?.Warn("telemetry", $"Request telemetry batch of {batch.Count} rows not written ({failures} failed batches, " +
+                    $"{dropped} rows dropped since start): {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static bool ShouldLog(ref long last)
+    {
+        var now = Environment.TickCount64;
+        var previous = Interlocked.Read(ref last);
+        if (previous != long.MinValue && now - previous < (long)FailureLogInterval.TotalMilliseconds) return false;
+        return Interlocked.CompareExchange(ref last, now, previous) == previous;
     }
 
     private void WriteBatch(List<TelemetryEntry> entries)
@@ -264,13 +338,28 @@ public class TelemetryService : IAsyncDisposable
     {
         try
         {
-            Cleanup();
+            CleanupOrLog();
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromHours(24), ct);
-                Cleanup();
+                CleanupOrLog();
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    /// <summary>A failed cleanup is retried the next day instead of ending retention for the life of the process.</summary>
+    internal void CleanupOrLog()
+    {
+        try
+        {
+            Cleanup();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var failures = Interlocked.Increment(ref _cleanupFailures);
+            if (ShouldLog(ref _lastCleanupFailureLog))
+                _log?.Warn("telemetry", $"Telemetry retention cleanup failed ({failures} so far), retried in 24 h: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 }
