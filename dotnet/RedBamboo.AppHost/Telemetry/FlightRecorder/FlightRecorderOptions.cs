@@ -1,8 +1,9 @@
 namespace RedBamboo.AppHost.Telemetry.FlightRecorder;
 
 /// <summary>
-/// The flight recorder: a low-cost process sample every <see cref="SampleInterval"/>, written to the
-/// service's telemetry database so a slow minute can be explained after the fact. On by default.
+/// The flight recorder: a low-cost process sample every <see cref="SampleInterval"/> and a stall
+/// row whenever a self-timing tick runs late, both written to the service's telemetry database
+/// so a slow minute can be explained after the fact. On by default; each half can be switched off.
 /// </summary>
 public sealed class FlightRecorderOptions
 {
@@ -10,6 +11,17 @@ public sealed class FlightRecorderOptions
     public bool ProcessSampler { get; set; } = true;
 
     public TimeSpan SampleInterval { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>Run the two 100 ms self-timing ticks and write <c>stall_events</c> rows.</summary>
+    public bool StallDetector { get; set; } = true;
+
+    public TimeSpan StallTick { get; set; } = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>A tick later than this is a stall.</summary>
+    public TimeSpan StallThreshold { get; set; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>At most this many stall rows per tick kind per minute; the rest are counted, not written.</summary>
+    public int StallRowsPerMinute { get; set; } = 5;
 
     /// <summary>Retention of the flight recorder tables, independent of the request table's.</summary>
     public int RetentionDays { get; set; } = 30;
@@ -20,7 +32,7 @@ public sealed class FlightRecorderOptions
     /// <summary>Child process groups the host owns (RedLeaf: its managed PostgreSQL tree).</summary>
     public List<IProcessGroupProbe> ProcessGroups { get; set; } = [];
 
-    internal bool AnyEnabled => ProcessSampler;
+    internal bool AnyEnabled => ProcessSampler || StallDetector;
 }
 
 /// <summary>Database connection pool occupancy at the moment of a sample.</summary>

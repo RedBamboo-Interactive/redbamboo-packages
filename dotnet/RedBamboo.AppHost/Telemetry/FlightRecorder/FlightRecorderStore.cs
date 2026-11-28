@@ -15,6 +15,7 @@ internal sealed class FlightRecorderStore : IDisposable
     private SqliteConnection? _writer;
     private SqliteCommand? _insertSample;
     private SqliteCommand? _insertGroup;
+    private SqliteCommand? _insertStall;
 
     public FlightRecorderStore(string connectionString) => _connectionString = connectionString;
 
@@ -69,6 +70,18 @@ internal sealed class FlightRecorderStore : IDisposable
             );
             CREATE INDEX IF NOT EXISTS idx_process_group_samples_sample ON process_group_samples(sample_id);
             CREATE INDEX IF NOT EXISTS idx_process_group_samples_timestamp ON process_group_samples(timestamp);
+            CREATE TABLE IF NOT EXISTS stall_events (
+                id INTEGER PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                tick TEXT NOT NULL,
+                lateness_ms REAL NOT NULL,
+                gc_pause_ms REAL NOT NULL,
+                threadpool_pending INTEGER NOT NULL,
+                threadpool_threads INTEGER NOT NULL,
+                thread_count INTEGER,
+                suppressed INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_stall_events_timestamp ON stall_events(timestamp);
             """;
         command.ExecuteNonQuery();
     }
@@ -133,6 +146,66 @@ internal sealed class FlightRecorderStore : IDisposable
         }
 
         transaction.Commit();
+    }
+
+    public void Insert(StallEvent stall)
+    {
+        var connection = Writer();
+        var insert = _insertStall ??= Prepare(connection, "stall_events",
+            ["timestamp", "tick", "lateness_ms", "gc_pause_ms", "threadpool_pending", "threadpool_threads",
+             "thread_count", "suppressed"], "");
+        insert.Transaction = null;
+        var p = insert.Parameters;
+        p[0].Value = Utc(stall.Timestamp);
+        p[1].Value = stall.Tick;
+        p[2].Value = stall.LatenessMs;
+        p[3].Value = stall.GcPauseMs;
+        p[4].Value = stall.ThreadPoolPending;
+        p[5].Value = stall.ThreadPoolThreads;
+        p[6].Value = (object?)stall.ThreadCount ?? DBNull.Value;
+        p[7].Value = stall.Suppressed;
+        insert.ExecuteNonQuery();
+    }
+
+    public List<StallEvent> QueryStalls(DateTimeOffset? since, DateTimeOffset? until, string? tick, int limit, int offset)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        var where = Range(command, since, until);
+        if (tick is not null)
+        {
+            where += (where.Length == 0 ? "WHERE " : " AND ") + "tick = @tick";
+            command.Parameters.AddWithValue("@tick", tick);
+        }
+        command.CommandText = $"""
+            SELECT id, timestamp, tick, lateness_ms, gc_pause_ms, threadpool_pending, threadpool_threads,
+                   thread_count, suppressed
+            FROM stall_events {where}
+            ORDER BY timestamp DESC
+            LIMIT @limit OFFSET @offset
+            """;
+        command.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, MaxPageSize));
+        command.Parameters.AddWithValue("@offset", Math.Max(0, offset));
+
+        var stalls = new List<StallEvent>();
+        using var r = command.ExecuteReader();
+        while (r.Read())
+        {
+            stalls.Add(new StallEvent
+            {
+                Id = r.GetInt64(0),
+                Timestamp = DateTimeOffset.Parse(r.GetString(1)),
+                Tick = r.GetString(2),
+                LatenessMs = r.GetDouble(3),
+                GcPauseMs = r.GetDouble(4),
+                ThreadPoolPending = r.GetInt64(5),
+                ThreadPoolThreads = r.GetInt32(6),
+                ThreadCount = r.IsDBNull(7) ? null : r.GetInt32(7),
+                Suppressed = r.GetInt32(8),
+            });
+        }
+        return stalls;
     }
 
     public List<ProcessSample> QuerySamples(DateTimeOffset? since, DateTimeOffset? until, int limit, int offset)
@@ -244,7 +317,7 @@ internal sealed class FlightRecorderStore : IDisposable
         return deleted;
     }
 
-    private static readonly string[] CleanupTables = ["process_samples", "process_group_samples"];
+    private static readonly string[] CleanupTables = ["process_samples", "process_group_samples", "stall_events"];
 
     /// <summary>Stored and compared as UTC "O" text, so string order is time order.</summary>
     internal static string Utc(DateTimeOffset value) => value.ToUniversalTime().ToString("O");
@@ -317,7 +390,8 @@ internal sealed class FlightRecorderStore : IDisposable
     {
         _insertSample?.Dispose();
         _insertGroup?.Dispose();
-        _insertSample = _insertGroup = null;
+        _insertStall?.Dispose();
+        _insertSample = _insertGroup = _insertStall = null;
         _writer?.Dispose();
         _writer = null;
     }
